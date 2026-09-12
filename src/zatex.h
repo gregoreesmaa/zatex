@@ -45,12 +45,16 @@ typedef struct zatex_layout {
     uint32_t width, height_above, depth_below;
     uint32_t nruns, nrules;
     int32_t status; // 0 ok, 1 unsupported, 2 invalid, 3 too_deep,
-                    // 4 too_long, 5 expansion_limit, 6 no_space
+                    // 4 too_long, 5 expansion_limit, 6 no_space,
+                    // 7 limit (request exceeds engine ceilings below)
     uint32_t err_offset; // byte offset on invalid
 } zatex_layout_t;
 
-// Caps: at most 256 runs / 64 rules per call even when the caller
-// buffers are larger (STATUS_NO_SPACE beyond that).
+// Caps: at most 256 runs / 64 rules per call; larger requests fail
+// with status 7 (limit) without touching the buffers. Status 6
+// (no_space) means need exceeds the smaller of caller buffers and
+// these ceilings: growing caller buffers helps, up to the ceilings.
+// Input is capped at 65536 bytes.
 int32_t zatex_layout_utf8(const char *src, size_t src_len, bool display_mode,
                           const zatex_metrics_t *metrics,
                           zatex_run_t *runs, size_t runs_cap,

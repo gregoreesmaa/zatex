@@ -55,7 +55,7 @@ pub const LayoutError = error{
     TooDeep, // max_nesting_depth exceeded
     TooLong, // max_input_len exceeded
     ExpansionLimit, // max_expand exceeded
-    NoSpace, // caller runs/rules buffers filled
+    NoSpace, // capacity exceeded: caller buffers, or fixed engine pools
     OutOfMemory, // reserved; the core allocates nothing
 };
 

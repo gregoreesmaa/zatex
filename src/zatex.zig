@@ -247,6 +247,76 @@ test "accept: excessive nesting errors TooDeep" {
     );
 }
 
+test "adversarial inputs are total and deterministic" {
+    // Seeded input soup plus structured worst cases: the engine must
+    // always return (never hang or panic) and agree with itself.
+    var runs_a: [64]ir.Run = undefined;
+    var rules_a: [16]ir.Rule = undefined;
+    var glyphs_a: [1024]u16 = undefined;
+    var runs_b: [64]ir.Run = undefined;
+    var rules_b: [16]ir.Rule = undefined;
+    var glyphs_b: [1024]u16 = undefined;
+    var mbuf_a: [2048]u8 = undefined;
+    var mbuf_b: [2048]u8 = undefined;
+    const pieces = [_][]const u8{ "x", "y", "2", "+", "-", "{", "}", "^", "_",
+        "\\frac", "\\sum", "\\alpha", "\\text{a}",
+        "(", ")", " ", "&", "#", "$", "\\left(", "\\", "~", ",", ";" };
+    var prng = std.Random.DefaultPrng.init(0x5EED);
+    var rnd = prng.random();
+    var i: usize = 0;
+    while (i < 1500) : (i += 1) {
+        var buf: [256]u8 = undefined;
+        var len: usize = 0;
+        var k: usize = 0;
+        const n = 1 + rnd.uintLessThan(usize, 24);
+        while (k < n and len < buf.len) : (k += 1) {
+            const pc = pieces[rnd.uintLessThan(usize, pieces.len)];
+            const m = @min(pc.len, buf.len - len);
+            @memcpy(buf[len..][0..m], pc[0..m]);
+            len += m;
+        }
+        const src = buf[0..len];
+        var da = Diag.empty();
+        var db = Diag.empty();
+        const r1 = layoutDiag(src, .{}, testProvider(), &runs_a, &rules_a, &glyphs_a, &da);
+        const r2 = layoutDiag(src, .{}, testProvider(), &runs_b, &rules_b, &glyphs_b, &db);
+        if (r1) |l1| {
+            const l2 = try r2;
+            try std.testing.expectEqual(l1.width, l2.width);
+            try std.testing.expectEqual(l1.runs.len, l2.runs.len);
+            try std.testing.expectEqual(l1.rules.len, l2.rules.len);
+            try std.testing.expectEqual(da.offset, db.offset);
+        } else |e1| {
+            try std.testing.expectError(e1, r2);
+            try std.testing.expect(da.offset <= src.len);
+        }
+        const m1 = mathml(src, .{}, &mbuf_a);
+        const m2 = mathml(src, .{}, &mbuf_b);
+        if (m1) |s1| {
+            const s2 = try m2;
+            try std.testing.expectEqualStrings(s1, s2);
+        } else |e1| {
+            try std.testing.expectError(e1, m2);
+        }
+    }
+    // Structured worst cases with exact errors.
+    var deep: [200]u8 = undefined;
+    @memset(&deep, '{');
+    try std.testing.expectError(error.TooDeep, layoutOk(&deep, .{}, &runs_a, &rules_a, &glyphs_a));
+    var flat: [1401]u8 = undefined;
+    var f: usize = 0;
+    while (f < 700) : (f += 1) {
+        flat[2 * f] = 'x';
+        flat[2 * f + 1] = '+';
+    }
+    flat[1400] = 'x';
+    try std.testing.expectError(error.NoSpace, layoutOk(&flat, .{}, &runs_a, &rules_a, &glyphs_a));
+    // Exponential blowup fills the token pool before the expansion counter trips:
+    // still an error, honestly reported as pool exhaustion.
+    try std.testing.expectError(error.NoSpace, layoutOk("\\def\\a{\\a\\a}\\a", .{}, &runs_a, &rules_a, &glyphs_a));
+    var bad: [4]u8 = .{ 'x', 0xFF, '+', 'y' };
+    if (layoutOk(&bad, .{}, &runs_a, &rules_a, &glyphs_a)) |_| return error.TestUnexpectedResult else |_| {}
+}
 test "accept: user macro expands" {
     var runs_buf: [8]ir.Run = undefined;
     var rules_buf: [4]ir.Rule = undefined;

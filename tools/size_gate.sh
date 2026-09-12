@@ -55,6 +55,7 @@ ptrdiff_t stub_mathml_utf8(const char*, size_t, bool, char*, size_t);
 uint32_t stub_version(void);
 EOF
 cp "$TMP/zatex_stub.h" ./zatex_stub.h
+trap 'rm -rf "$TMP" ./zatex_stub.h' EXIT INT TERM
 cc -O3 -I. -o "$TMP/without" "$TMP/stub.c" -Wl,-dead_strip
 rm ./zatex_stub.h
 

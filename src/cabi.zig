@@ -3,7 +3,7 @@
 //! Reentrant, zero-allocation, no pointers in results: runs reference
 //! the caller's glyph buffer by (start, count) indices, so outputs
 //! stay valid as long as the caller's buffers do. Status codes mirror
-//! `LayoutError`; `err_offset`/`err_message` carry ParseError parity.
+//! `LayoutError`; `err_offset` carries ParseError parity.
 const std = @import("std");
 const zatex = @import("zatex.zig");
 
@@ -51,6 +51,7 @@ pub const STATUS_TOO_DEEP: i32 = 3;
 pub const STATUS_TOO_LONG: i32 = 4;
 pub const STATUS_EXPANSION_LIMIT: i32 = 5;
 pub const STATUS_NO_SPACE: i32 = 6;
+pub const STATUS_LIMIT: i32 = 7;
 
 fn toStatus(e: zatex.LayoutError) i32 {
     return switch (e) {
@@ -143,8 +144,16 @@ export fn zatex_layout_utf8(
     // overlay: layout into stack temporaries, then translate.
     var runs_tmp: [256]zatex.ir.Run = undefined;
     var rules_tmp: [64]zatex.ir.Rule = undefined;
+    // Engine hard ceilings (documented in zatex.h): requests above
+    // them fail STATUS_LIMIT instead of silently depending on how
+    // much the fixed temporaries happen to hold.
+    if (runs_cap > runs_tmp.len or rules_cap > rules_tmp.len) {
+        out.status = STATUS_LIMIT;
+        out.err_offset = 0;
+        return out.status;
+    }
     var diag = zatex.Diag.empty();
-    const l = zatex.layoutInner(src, .{ .display_mode = display_mode }, prov, &runs_tmp, &rules_tmp, glyphs, &diag) catch |e| {
+    const l = zatex.layoutInner(src, .{ .display_mode = display_mode }, prov, runs_tmp[0..runs_cap], rules_tmp[0..rules_cap], glyphs, &diag) catch |e| {
         out.status = toStatus(e);
         out.err_offset = diag.offset;
         return out.status;
@@ -241,6 +250,40 @@ test "cabi reports Invalid with offset" {
     try std.testing.expectEqual(@as(u32, 0), out.err_offset);
 }
 
+test "cabi reports Limit above engine ceilings" {
+    const m: CMetrics = .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = null };
+    var runs: [4]CRun = undefined;
+    var rules: [4]CRule = undefined;
+    var glyphs: [16]u16 = undefined;
+    var big_runs: [300]CRun = undefined;
+    var big_rules: [100]CRule = undefined;
+    var out: CLayout = undefined;
+    const src = "x";
+    const st_runs = zatex_layout_utf8(src.ptr, src.len, false, &m, &big_runs, big_runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+    try std.testing.expectEqual(STATUS_LIMIT, st_runs);
+    const st_rules = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &big_rules, big_rules.len, &glyphs, glyphs.len, &out);
+    try std.testing.expectEqual(STATUS_LIMIT, st_rules);
+    // At-ceiling buffers still serve small formulas.
+    var cap_runs: [256]CRun = undefined;
+    var cap_rules: [64]CRule = undefined;
+    const st_ok = zatex_layout_utf8(src.ptr, src.len, false, &m, &cap_runs, cap_runs.len, &cap_rules, cap_rules.len, &glyphs, glyphs.len, &out);
+    try std.testing.expectEqual(STATUS_OK, st_ok);
+}
+
+test "cabi reports NoSpace when caller buffers overflow" {
+    const m: CMetrics = .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = null };
+    var runs: [8]CRun = undefined;
+    var tiny_runs: [0]CRun = undefined;
+    var rules: [4]CRule = undefined;
+    var tiny_rules: [0]CRule = undefined;
+    var glyphs: [64]u16 = undefined;
+    var out: CLayout = undefined;
+    const src = "\\frac12";
+    const st_runs = zatex_layout_utf8(src.ptr, src.len, false, &m, &tiny_runs, tiny_runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+    try std.testing.expectEqual(STATUS_NO_SPACE, st_runs);
+    const st_rules = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &tiny_rules, tiny_rules.len, &glyphs, glyphs.len, &out);
+    try std.testing.expectEqual(STATUS_NO_SPACE, st_rules);
+}
 test "cabi mathml serializes" {
     var out: [256]u8 = undefined;
     const src = "\\frac12";

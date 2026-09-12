@@ -452,7 +452,7 @@ pub const ParseCtx = struct {
     }
 
     fn allocNode(self: *ParseCtx, n: Node) Error!Idx {
-        if (self.nnodes >= max_nodes) return error.TooDeep;
+        if (self.nnodes >= max_nodes) return error.NoSpace; // pool, not depth
         const id = self.nnodes;
         self.nodes[id] = n;
         self.nnodes += 1;
@@ -460,7 +460,7 @@ pub const ParseCtx = struct {
     }
 
     fn allocKids(self: *ParseCtx, n: usize) Error!u16 {
-        if (n > max_kids - self.nkids) return error.TooDeep;
+        if (n > max_kids - self.nkids) return error.NoSpace; // pool, not depth
         const s = self.nkids;
         self.nkids += @intCast(n);
         return s;
@@ -474,7 +474,7 @@ pub const ParseCtx = struct {
     }
 
     fn allocRow(self: *ParseCtx, r: Row) Error!u16 {
-        if (self.nrows >= max_rows) return error.TooDeep;
+        if (self.nrows >= max_rows) return error.NoSpace; // pool, not depth
         const id = self.nrows;
         self.rows[id] = r;
         self.nrows += 1;
@@ -484,8 +484,8 @@ pub const ParseCtx = struct {
     fn push(self: *ParseCtx, t: Tok) Error!void {
         if (self.npb >= max_pushback) {
             self.err_pos = t.pos;
-            self.err_msg = "macro expansion too large";
-            return error.ExpansionLimit;
+            self.err_msg = "macro expansion too large"; // pool exhaustion surfaces as NoSpace
+            return error.NoSpace;
         }
         self.pb[self.npb] = t;
         self.npb += 1;
@@ -825,7 +825,7 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
     var bdepth: u8 = 0;
     const put = struct {
         fn p(b: *[512]u16, nn: *usize, id: Idx) Error!void {
-            if (nn.* >= 512) return error.TooDeep;
+            if (nn.* >= 512) return error.NoSpace;
             b[nn.*] = id;
             nn.* += 1;
         }
@@ -923,7 +923,7 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                     }
                     const rest = try parseFormula(ctx, depth, frame);
                     // parseFormula consumed the frame end; wrap rest.
-                    if (n >= 512) return error.TooDeep;
+                    if (n >= 512) return error.NoSpace;
                     var nb: [512]u16 = undefined;
                     @memcpy(nb[0..n], buf[0..n]);
                     nb[n] = try ctx.allocNode(.{
@@ -1258,7 +1258,7 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                 }
                 const maybe = try parseAtom(ctx, depth);
                 if (maybe) |id| {
-                    if (n >= 512) return error.TooDeep;
+                    if (n >= 512) return error.NoSpace;
                     buf[n] = id;
                     n += 1;
                 }
@@ -1266,7 +1266,7 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
             else => {
                 const maybe = try parseAtom(ctx, depth);
                 if (maybe) |id| {
-                    if (n >= 512) return error.TooDeep;
+                    if (n >= 512) return error.NoSpace;
                     buf[n] = id;
                     n += 1;
                 }
@@ -1308,7 +1308,7 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
                 }
                 const maybe = try parseAtom(ctx, depth);
                 if (maybe) |id| {
-                    if (n >= 512) return error.TooDeep;
+                    if (n >= 512) return error.NoSpace;
                     buf[n] = id;
                     n += 1;
                 }
@@ -1316,7 +1316,7 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
             else => {
                 const maybe = try parseAtom(ctx, depth);
                 if (maybe) |id| {
-                    if (n >= 512) return error.TooDeep;
+                    if (n >= 512) return error.NoSpace;
                     buf[n] = id;
                     n += 1;
                 }
@@ -2539,7 +2539,7 @@ fn parseSubstack(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
                     }
                     const maybe = try parseAtom(ctx, depth);
                     if (maybe) |id| {
-                        if (n >= 512) return error.TooDeep;
+                        if (n >= 512) return error.NoSpace;
                         buf[n] = id;
                         n += 1;
                     }
@@ -2549,7 +2549,7 @@ fn parseSubstack(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         const cell = try finishGroup(ctx, buf[0..n]);
         const ks = try ctx.allocKids(1);
         ctx.kids[ks] = cell;
-        if (nrow >= 64) return error.TooDeep;
+        if (nrow >= 64) return error.NoSpace;
         rowbuf[nrow] = try ctx.allocRow(.{ .start = ks, .len = 1 });
         nrow += 1;
     }
@@ -2809,7 +2809,7 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     var done = false;
     while (!done) {
         const c = try parseCell(ctx, depth);
-        if (nrowbuf >= 64) return error.TooDeep;
+        if (nrowbuf >= 64) return error.NoSpace;
         // amsmath parity (`\start@aligned`): every second cell of an
         // aligned row opens with an empty group so a leading operator
         // keeps binary spacing (and its MathML row).
@@ -2822,7 +2822,7 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         switch (c.term) {
             .amp => {},
             .newline => {
-                if (nspans >= 64) return error.TooDeep;
+                if (nspans >= 64) return error.NoSpace;
                 spans[nspans] = try stashRow(ctx, rowbuf[0..nrowbuf]);
                 nspans += 1;
                 nrowbuf = 0;
@@ -2847,7 +2847,7 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
                 if (c.term == .right) return ctx.fail(etok.pos, "unexpected '\\right'");
                 // Final row (may be empty after a trailing `\\`).
                 if (nrowbuf > 0 or nspans == 0) {
-                    if (nspans >= 64) return error.TooDeep;
+                    if (nspans >= 64) return error.NoSpace;
                     spans[nspans] = try stashRow(ctx, rowbuf[0..nrowbuf]);
                     nspans += 1;
                     nrowbuf = 0;
