@@ -19,6 +19,15 @@ no untracked float in the contract.
 * **Future emitters** (out of repo by decision) walk the same tree:
   MathML first, SVG later, PNG last. Emitters contain no layout math.
 
+## Stable calling contract (frozen 2026-09-12)
+
+`layout(source, options, provider, runs, rules) LayoutError!Layout` —
+one pass, caller-owned buffers, zero allocations. `options` fields gain
+defaults; `LayoutError` variants are added, never removed;
+`MetricsProvider` callbacks arrive with a `provider_version` bump.
+Hard caps are named constants (`max_input_len`, `max_nesting_depth`,
+`max_expand`). Call-site shape is frozen; only additive growth.
+
 ## Reference rendering
 
 Latin Modern Math is the reference font (Computer Modern look is part of
