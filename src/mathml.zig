@@ -665,11 +665,24 @@ const Writer = struct {
                 self.str("</mo>");
             },
             .accent => |a| {
-                self.str("<mover>");
-                try self.node(a.nucleus, face);
-                self.str("<mo>");
-                self.cp(a.cp);
-                self.str("</mo></mover>");
+                if (a.cp == 0x20DB or a.cp == 0x20DC) {
+                    // Dot accents have no font glyph in KaTeX: the MathML
+                    // fallback renders literal dot runs inside a strut box.
+                    self.str("<mi><mover><mo>");
+                    try self.node(a.nucleus, face);
+                    self.str("</mo><mpadded voffset=\"-0.1ex\">");
+                    self.str("<mstyle scriptlevel=\"0\" displaystyle=\"false\">");
+                    self.str("<mstyle mathsize=\"1em\">");
+                    self.str("<mtext>");
+                    self.str(if (a.cp == 0x20DB) "..." else "....");
+                    self.str("</mtext></mstyle></mstyle></mpadded></mover></mi>");
+                } else {
+                    self.str("<mover>");
+                    try self.node(a.nucleus, face);
+                    self.str("<mo>");
+                    self.cp(a.cp);
+                    self.str("</mo></mover>");
+                }
             },
             .over => |o| try self.over(o, face),
             .style => |s| {
@@ -900,15 +913,22 @@ const Writer = struct {
             // KaTeX `atom` ParseNodes (every symbol group except
             // mathord/textord) render as mo — inner symbols included.
             .Bin, .Rel, .Open, .Close, .Punct, .Op, .Inner => {
-                if (c == 0x22EE) {
+                if (c >= 0x231C and c <= 0x231F) {
+                    // Corner delimiters nest textord-in-mo in KaTeX
+                    // (the inner mi carries mathvariant normal).
+                    self.str("<mo><mi mathvariant=\"normal\">");
+                    self.escCp(c);
+                    self.str("</mi></mo>");
+                } else if (c == 0x22EE) {
                     // `\vdots` is a macro for `\varvdots\rule{0pt}{15pt}`;
-                    // KaTeX renders the rule as a fixed strut.
-                    self.str("<mi>");
+                    // KaTeX renders the rule as a fixed strut inside
+                    // its own mrow (ordgroup parity).
+                    self.str("<mrow><mi>");
                     self.escCp(c);
                     self.str("</mi>");
                     self.str("<mpadded height=\"0em\" voffset=\"0em\">");
                     self.str("<mspace mathbackground=\"black\" width=\"0em\" height=\"1.5em\">");
-                    self.str("</mspace></mpadded>");
+                    self.str("</mspace></mpadded></mrow>");
                 } else {
                     self.str("<mo>");
                     self.escCp(c);
@@ -1244,6 +1264,20 @@ test "not overlays onto the following symbol" {
     try std.testing.expect(std.mem.indexOf(u8, s, "<mo>\xe2\x88\x88\xcc\xb8</mo>") != null);
 }
 
+test "builtin func-ops and textord corners match KaTeX tags" {
+    var pc = parse.ParseCtx.init("\\liminf\\ln\\lnot\\lll\\llcorner");
+    const root = try parse.parse(&pc, false);
+    var out: [512]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    const s = out[0..w.pos];
+    try std.testing.expectEqualStrings(
+        "<mrow><mi>liminf</mi><mo>\u{2061}</mo>" ++
+            "<mi>ln</mi><mo>\u{2061}</mo>" ++
+            "<mi>\u{ac}</mi><mo>\u{22d8}</mo>" ++
+            "<mo><mi mathvariant=\"normal\">\u{231e}</mi></mo></mrow>",
+        s);
+}
 test "verb and text fonts emit variant mtext" {
     var pc = parse.ParseCtx.init("\\verb|x|+\\textbf{ab}");
     const root = try parse.parse(&pc, false);

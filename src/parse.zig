@@ -1110,7 +1110,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     try parseNewCommand(ctx, t, tokNameEq(t.name, "renewcommand"), tokNameEq(t.name, "providecommand"));
                     return null;
                 }
-                if (tokNameEq(t.name, "def")) {
+                if (tokNameEq(t.name, "def") or tokNameEq(t.name, "gdef")) {
                     try subsetGate(false);
                     try parseDef(ctx, t);
                     return null;
@@ -1600,7 +1600,7 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     switch (c) {
         '{' => return ctx.allocNode(.{ .atom = .{ .class = .Open, .font = .rm, .cp = '{' } }),
         '}' => return ctx.allocNode(.{ .atom = .{ .class = .Close, .font = .rm, .cp = '}' } }),
-        '$' => return ctx.fail(t.pos, "can't use '$' in math mode"),
+        '$' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '$' } }),
         '%' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '%' } }),
         '&' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '&' } }),
         '#' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '#' } }),
@@ -2693,7 +2693,7 @@ fn isBuiltin(name: []const u8) bool {
         "phantom", "hphantom", "vphantom", "llap", "rlap", "clap",
         "cancel", "bcancel", "quad", "qquad", "enskip", "hspace", "vspace",
         "kern", "mkern", "mskip", "hskip", "newcommand", "renewcommand",
-        "providecommand", "def", "let", "over", "atop", "choose", "brace",
+        "providecommand", "def", "gdef", "let", "over", "atop", "choose", "brace",
         "brack", "limits", "nolimits", "not", "overset", "underset",
     };
     for (prims) |p| if (tokNameEq(p, name)) return true;
@@ -2930,6 +2930,15 @@ test "unbalanced brace is invalid" {
 
 test "newcommand then use parses" {
     var ctx = ParseCtx.init("\\newcommand{\\f}{x}\\f");
+    const root = try parse(&ctx, false);
+    switch (ctx.nodes[root]) {
+        .group => |g| try std.testing.expectEqual(@as(u16, 1), g.len),
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "gdef defines like def" {
+    var ctx = ParseCtx.init("\\gdef\\g{y}\\g");
     const root = try parse(&ctx, false);
     switch (ctx.nodes[root]) {
         .group => |g| try std.testing.expectEqual(@as(u16, 1), g.len),

@@ -540,6 +540,12 @@
   "expect": "accept"
  },
  {
+  "id": "gdef-basic",
+  "tex": "\\gdef\\g{y}\\g",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "maxexpand-loop",
   "tex": "\\def\\a{\\a}\\a",
   "display": false,
@@ -974,5 +980,107 @@
   "tex": "\\colorbox{#ff}{x}",
   "display": false,
   "expect": "reject"
+ },
+ {
+  "id": "sym-escapes",
+  "tex": "\\#\\%\\&\\$\\_\\{\\}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "comment-basic",
+  "tex": "a% comment\nb",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-0",
+  "tex": "\\Alpha\\Beta\\Chi\\Downarrow\\Epsilon\\Eta\\Finv\\Game\\Im\\Iota\\Join\\Kappa\\Leftarrow\\Leftrightarrow\\Longleftarrow\\Longleftrightarrow\\Longrightarrow\\Mu\\Nu\\Pr\\Re\\Rho\\Rightarrow\\Tau\\Uparrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-1",
+  "tex": "\\Updownarrow\\Upsilon\\Vert\\Zeta\\aleph\\amalg\\angle\\approx\\approxeq\\arccos\\arcsin\\arctan\\arg\\ast\\asymp\\backprime\\backslash\\beth\\bigcap\\bigcup\\bigodot\\bigoplus\\bigotimes\\bigtriangledown\\bigtriangleup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-2",
+  "tex": "\\biguplus\\bigvee\\bigwedge\\bot\\bowtie\\boxdot\\boxminus\\boxplus\\boxtimes\\bullet\\cap\\cdot\\cdotp\\centerdot\\checkmark\\circ\\circledR\\circledS\\clubsuit\\cong\\coprod\\cosh\\cot",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-3",
+  "tex": "\\coth\\csc\\cup\\dag\\dagger\\daleth\\dashv\\ddag\\ddagger\\ddots\\deg\\det\\diamond\\diamondsuit\\digamma\\dim\\div\\doteq\\dots\\downarrow\\ell\\emptyset\\eqcirc\\equiv\\eth",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-4",
+  "tex": "\\exists\\exp\\flat\\forall\\frown\\gcd\\ge\\gets\\gg\\ggg\\gimel\\gtrapprox\\gtrsim\\hbar\\heartsuit\\hom\\hookleftarrow\\hookrightarrow\\hslash\\iiint\\iint\\imath\\inf\\jmath\\ker",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-5",
+  "tex": "\\lVert\\land\\lang\\ldotp\\ldots\\le\\leftarrow\\leftharpoondown\\leftharpoonup\\leftrightarrow\\lessapprox\\lesssim\\lg\\lhd\\liminf\\limsup\\ll\\llcorner\\lll\\ln\\lnot\\longleftarrow\\longleftrightarrow\\longrightarrow\\lor",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-6",
+  "tex": "\\lrcorner\\lvert\\maltese\\mapsto\\max\\measuredangle\\mho\\mid\\min\\models\\mp\\nabla\\natural\\ne\\nearrow\\neg\\nexists\\ni\\nmid\\nwarrow\\odot\\ominus\\oplus\\oslash\\otimes",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-7",
+  "tex": "\\owns\\parallel\\partial\\perp\\pm\\pounds\\prec\\preceq\\prime\\propto\\rVert\\rang\\rhd\\rightarrow\\rightharpoondown\\rightharpoonup\\rightleftharpoons\\rvert\\searrow\\sec\\setminus\\sharp\\sim\\simeq\\sinh",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-8",
+  "tex": "\\smile\\spadesuit\\sphericalangle\\sqcap\\sqcup\\sqsubset\\sqsubseteq\\sqsupset\\sqsupseteq\\star\\subset\\subseteq\\subsetneq\\succ\\succeq\\sup\\supset\\supseteq\\supsetneq\\surd\\swarrow\\tan\\tanh\\textregistered\\times",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gal-9",
+  "tex": "\\top\\triangleleft\\triangleright\\ulcorner\\unlhd\\unrhd\\uparrow\\updownarrow\\uplus\\urcorner\\varnothing\\vdash\\vdots\\vee\\wedge\\wp\\wr\\yen",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-accent-ddddot",
+  "tex": "\\ddddot{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-accent-dddot",
+  "tex": "\\dddot{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-accent-mathring",
+  "tex": "\\mathring{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-accent-widecheck",
+  "tex": "\\widecheck{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-accent-widetilde",
+  "tex": "\\widetilde{x}",
+  "display": false,
+  "expect": "accept"
  }
 ]
