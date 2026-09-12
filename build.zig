@@ -60,4 +60,16 @@ pub fn build(b: *std.Build) void {
     const refhost_tests = b.addTest(.{ .root_module = refhost_mod });
     const run_refhost_tests = b.addRunArtifact(refhost_tests);
     test_step.dependOn(&run_refhost_tests.step);
+
+    // Differential parity against the pinned-KaTeX sweep goldens.
+    const parity_mod = b.addModule("parity", .{
+        .root_source_file = b.path("src/parity.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    parity_mod.addImport("matex", mod);
+    const parity_tests = b.addTest(.{ .root_module = parity_mod });
+    const run_parity_tests = b.addRunArtifact(parity_tests);
+    run_parity_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_parity_tests.step);
 }

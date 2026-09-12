@@ -106,7 +106,7 @@ const greek_upper = [_]Entry{
     .{ .name = "Chi", .sym = S(0x03A7, .Ord) },
     .{ .name = "Psi", .sym = S(0x03A8, .Ord) },
     .{ .name = "Omega", .sym = S(0x03A9, .Ord) },
-    .{ .name = "digamma", .sym = S(0x03DC, .Ord) },
+    .{ .name = "digamma", .sym = S(0x03DD, .Ord) },
 };
 
 const operators = [_]Entry{
@@ -122,7 +122,7 @@ const operators = [_]Entry{
     .{ .name = "bigotimes", .sym = L(0x2A02) },
     .{ .name = "bigodot", .sym = L(0x2A00) },
     .{ .name = "biguplus", .sym = L(0x2A04) },
-    .{ .name = "lim", .sym = L(0x6C) }, // "lim" set as text, cp unused
+    .{ .name = "lim", .sym = .{ .cp = 0x6C, .class = .Op, .func = true, .limits_default = true } },
     // Large operators without limits by default.
     .{ .name = "int", .sym = I(0x222B) },
     .{ .name = "iint", .sym = I(0x222C) },
@@ -188,8 +188,8 @@ const operators = [_]Entry{
     .{ .name = "diamond", .sym = S(0x22C4, .Bin) },
     .{ .name = "bigtriangleup", .sym = S(0x25B3, .Bin) },
     .{ .name = "bigtriangledown", .sym = S(0x25BD, .Bin) },
-    .{ .name = "triangleleft", .sym = S(0x25C1, .Bin) },
-    .{ .name = "triangleright", .sym = S(0x25B7, .Bin) },
+    .{ .name = "triangleleft", .sym = S(0x25C3, .Bin) },
+    .{ .name = "triangleright", .sym = S(0x25B9, .Bin) },
     .{ .name = "lhd", .sym = S(0x22B2, .Bin) },
     .{ .name = "rhd", .sym = S(0x22B3, .Bin) },
     .{ .name = "unlhd", .sym = S(0x22B4, .Bin) },
@@ -197,8 +197,8 @@ const operators = [_]Entry{
     .{ .name = "uplus", .sym = S(0x228E, .Bin) },
     .{ .name = "sqcap", .sym = S(0x2293, .Bin) },
     .{ .name = "sqcup", .sym = S(0x2294, .Bin) },
-    .{ .name = "cdotp", .sym = S(0x00B7, .Bin) },
-    .{ .name = "centerdot", .sym = S(0x00B7, .Bin) },
+    .{ .name = "cdot", .sym = S(0x22C5, .Bin) },
+    .{ .name = "centerdot", .sym = S(0x22C5, .Bin) },
     .{ .name = "land", .sym = S(0x2227, .Bin) },
     .{ .name = "lor", .sym = S(0x2228, .Bin) },
     .{ .name = "boxplus", .sym = S(0x229E, .Bin) },
@@ -220,7 +220,7 @@ const operators = [_]Entry{
     .{ .name = "asymp", .sym = S(0x224D, .Rel) },
     .{ .name = "doteq", .sym = S(0x2250, .Rel) },
     .{ .name = "propto", .sym = S(0x221D, .Rel) },
-    .{ .name = "models", .sym = S(0x22A7, .Rel) },
+    .{ .name = "models", .sym = S(0x22A8, .Rel) },
     .{ .name = "in", .sym = S(0x2208, .Rel) },
     .{ .name = "ni", .sym = S(0x220B, .Rel) },
     .{ .name = "owns", .sym = S(0x220B, .Rel) },
@@ -240,8 +240,8 @@ const operators = [_]Entry{
     .{ .name = "dashv", .sym = S(0x22A3, .Rel) },
     .{ .name = "prec", .sym = S(0x227A, .Rel) },
     .{ .name = "succ", .sym = S(0x227B, .Rel) },
-    .{ .name = "preceq", .sym = S(0x227C, .Rel) },
-    .{ .name = "succeq", .sym = S(0x227D, .Rel) },
+    .{ .name = "preceq", .sym = S(0x2AAF, .Rel) },
+    .{ .name = "succeq", .sym = S(0x2AB0, .Rel) },
     .{ .name = "ll", .sym = S(0x226A, .Rel) },
     .{ .name = "gg", .sym = S(0x226B, .Rel) },
     .{ .name = "lll", .sym = S(0x22D8, .Rel) },
@@ -313,6 +313,9 @@ const operators = [_]Entry{
     .{ .name = "daleth", .sym = S(0x2138, .Ord) },
     .{ .name = "hbar", .sym = S(0x210F, .Ord) },
     .{ .name = "hslash", .sym = S(0x210F, .Ord) },
+    // Dotless i/j, both spellings (KaTeX accepts `\imath` too).
+    .{ .name = "imath", .sym = S(0x0131, .Ord) },
+    .{ .name = "jmath", .sym = S(0x0237, .Ord) },
     .{ .name = "imath", .sym = S(0x0131, .Ord) },
     .{ .name = "jmath", .sym = S(0x0237, .Ord) },
     .{ .name = "ell", .sym = S(0x2113, .Ord) },
@@ -341,6 +344,12 @@ const operators = [_]Entry{
     .{ .name = "P", .sym = S(0x00B6, .Ord) },
     .{ .name = "pounds", .sym = S(0x00A3, .Ord) },
     .{ .name = "yen", .sym = S(0x00A5, .Ord) },
+    // Daggers and bars as ordinary symbols (KaTeX `textord`).
+    // Delimiter uses (`\left\vert`) still resolve via the delim table.
+    .{ .name = "dag", .sym = S(0x2020, .Ord) },
+    .{ .name = "ddag", .sym = S(0x2021, .Ord) },
+    .{ .name = "vert", .sym = S(0x2223, .Ord) },
+    .{ .name = "Vert", .sym = S(0x2225, .Ord) },
     .{ .name = "copyright", .sym = S(0x00A9, .Ord) },
     .{ .name = "textregistered", .sym = S(0x00AE, .Ord) },
     .{ .name = "dots", .sym = S(0x2026, .Inner) },
@@ -350,7 +359,7 @@ const operators = [_]Entry{
     .{ .name = "ddots", .sym = S(0x22F1, .Inner) },
     .{ .name = "colon", .sym = S(0x003A, .Punct) },
     .{ .name = "ldotp", .sym = S(0x002E, .Punct) },
-    .{ .name = "cdotp", .sym = S(0x00B7, .Punct) },
+    .{ .name = "cdotp", .sym = S(0x22C5, .Punct) },
 };
 
 /// ASCII characters with fixed atom classes.
@@ -462,42 +471,45 @@ pub fn degradeBin(prev: ?AtomClass) bool {
 }
 
 /// Delimiter commands: name → codepoint. `.` and `|` are handled by
-/// the parser directly.
-const DelimEntry = struct { name: []const u8, cp: u21 };
+/// the parser directly. `cls` is the KaTeX symbol-table group of a
+/// BARE delimiter (no `\left`): open/close fences, `vert`/`Vert` and
+/// `backslash` (textord), arrows (rel). Sized `\left`/`\big` forms
+/// ignore the class — they always render as mo.
+pub const DelimEntry = struct { name: []const u8, cp: u21, cls: AtomClass };
 
 const delims = [_]DelimEntry{
-        .{ .name = "langle", .cp = 0x27E8 },
-        .{ .name = "rangle", .cp = 0x27E9 },
-        .{ .name = "lvert", .cp = 0x007C },
-        .{ .name = "rvert", .cp = 0x007C },
-        .{ .name = "vert", .cp = 0x007C },
-        .{ .name = "lVert", .cp = 0x2016 },
-        .{ .name = "rVert", .cp = 0x2016 },
-        .{ .name = "Vert", .cp = 0x2016 },
-        .{ .name = "lfloor", .cp = 0x230A },
-        .{ .name = "rfloor", .cp = 0x230B },
-        .{ .name = "lceil", .cp = 0x2308 },
-        .{ .name = "rceil", .cp = 0x2309 },
-        .{ .name = "ulcorner", .cp = 0x231C },
-        .{ .name = "urcorner", .cp = 0x231D },
-        .{ .name = "llcorner", .cp = 0x231E },
-        .{ .name = "lrcorner", .cp = 0x231F },
-        .{ .name = "uparrow", .cp = 0x2191 },
-        .{ .name = "downarrow", .cp = 0x2193 },
-        .{ .name = "updownarrow", .cp = 0x2195 },
-        .{ .name = "Uparrow", .cp = 0x21D1 },
-        .{ .name = "Downarrow", .cp = 0x21D3 },
-        .{ .name = "Updownarrow", .cp = 0x21D5 },
-        .{ .name = "backslash", .cp = 0x005C },
-        .{ .name = "lang", .cp = 0x27E8 },
-        .{ .name = "rang", .cp = 0x27E9 },
+        .{ .name = "langle", .cp = 0x27E8, .cls = .Open },
+        .{ .name = "rangle", .cp = 0x27E9, .cls = .Close },
+        .{ .name = "lvert", .cp = 0x007C, .cls = .Open },
+        .{ .name = "rvert", .cp = 0x007C, .cls = .Close },
+        .{ .name = "vert", .cp = 0x007C, .cls = .Ord },
+        .{ .name = "lVert", .cp = 0x2016, .cls = .Open },
+        .{ .name = "rVert", .cp = 0x2016, .cls = .Close },
+        .{ .name = "Vert", .cp = 0x2016, .cls = .Ord },
+        .{ .name = "lfloor", .cp = 0x230A, .cls = .Open },
+        .{ .name = "rfloor", .cp = 0x230B, .cls = .Close },
+        .{ .name = "lceil", .cp = 0x2308, .cls = .Open },
+        .{ .name = "rceil", .cp = 0x2309, .cls = .Close },
+        .{ .name = "ulcorner", .cp = 0x231C, .cls = .Open },
+        .{ .name = "urcorner", .cp = 0x231D, .cls = .Close },
+        .{ .name = "llcorner", .cp = 0x231E, .cls = .Open },
+        .{ .name = "lrcorner", .cp = 0x231F, .cls = .Close },
+        .{ .name = "uparrow", .cp = 0x2191, .cls = .Rel },
+        .{ .name = "downarrow", .cp = 0x2193, .cls = .Rel },
+        .{ .name = "updownarrow", .cp = 0x2195, .cls = .Rel },
+        .{ .name = "Uparrow", .cp = 0x21D1, .cls = .Rel },
+        .{ .name = "Downarrow", .cp = 0x21D3, .cls = .Rel },
+        .{ .name = "Updownarrow", .cp = 0x21D5, .cls = .Rel },
+        .{ .name = "backslash", .cp = 0x005C, .cls = .Ord },
+        .{ .name = "lang", .cp = 0x27E8, .cls = .Open },
+        .{ .name = "rang", .cp = 0x27E9, .cls = .Close },
 };
 
 /// Every named delimiter, for coverage probes.
 pub const all_delims = delims;
 
-pub fn lookupDelim(name: []const u8) ?u21 {
-    for (delims) |d| if (eq(d.name, name)) return d.cp;
+pub fn lookupDelim(name: []const u8) ?DelimEntry {
+    for (delims) |d| if (eq(d.name, name)) return d;
     return null;
 }
 
@@ -532,6 +544,28 @@ const accents = [_]AccentEntry{
 /// Every named accent, for coverage probes.
 pub const all_accents = accents;
 
+/// Math-mode text accents: control char → spacing accent label
+/// (KaTeX `accent`-group text symbols, allowed in math outside strict
+/// mode). `\t`, `\d`, `\b` have no math-mode accent form.
+pub const MathTextAccent = struct { c: u8, cp: u21 };
+const math_text_accents = [_]MathTextAccent{
+    .{ .c = '\'', .cp = 0x02CA },
+    .{ .c = '`', .cp = 0x02CB },
+    .{ .c = '^', .cp = 0x02C6 },
+    .{ .c = '"', .cp = 0x00A8 },
+    .{ .c = '~', .cp = 0x02DC },
+    .{ .c = '=', .cp = 0x02C9 },
+    .{ .c = '.', .cp = 0x02D9 },
+    .{ .c = 'u', .cp = 0x02D8 },
+    .{ .c = 'v', .cp = 0x02C7 },
+    .{ .c = 'H', .cp = 0x02DD },
+    .{ .c = 'c', .cp = 0x00B8 },
+    .{ .c = 'r', .cp = 0x02DA },
+};
+
+/// Every math-mode text accent label, for coverage probes.
+pub const all_math_text_accents = math_text_accents;
+
 pub fn lookupAccent(name: []const u8) ?Accent {
     for (accents) |a| if (eq(a.name, name)) return .{ .cp = a.cp, .wide = a.wide };
     return null;
@@ -561,6 +595,29 @@ test "unknown names miss" {
     const std = @import("std");
     try std.testing.expect(lookup("nope") == null);
     try std.testing.expect(lookup("") == null);
+}
+
+test "pinned KaTeX codepoints and classes" {
+    const std = @import("std");
+    // Deduplicated `cdotp`, corrected codepoints (KaTeX 0.18.7).
+    try std.testing.expectEqual(@as(u21, 0x22C5), lookup("cdot").?.cp);
+    try std.testing.expectEqual(AtomClass.Bin, lookup("cdot").?.class);
+    try std.testing.expectEqual(@as(u21, 0x22C5), lookup("cdotp").?.cp);
+    try std.testing.expectEqual(AtomClass.Punct, lookup("cdotp").?.class);
+    try std.testing.expectEqual(@as(u21, 0x22C5), lookup("centerdot").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x22A8), lookup("models").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2AAF), lookup("preceq").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2AB0), lookup("succeq").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x25C3), lookup("triangleleft").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x25B9), lookup("triangleright").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x03DD), lookup("digamma").?.cp);
+    // Dotless spellings, daggers, and bars.
+    try std.testing.expectEqual(@as(u21, 0x0131), lookup("imath").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x0237), lookup("jmath").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2020), lookup("dag").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2021), lookup("ddag").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2223), lookup("vert").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2225), lookup("Vert").?.cp);
 }
 
 test "large operators carry limit defaults" {

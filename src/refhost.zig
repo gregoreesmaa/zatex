@@ -99,7 +99,7 @@ test "coverage: every emittable glyph resolves" {
     // against the font's cmap): the core still accepts the commands
     // (KaTeX parity) and providers report glyph 0 (.notdef fallback).
     // The exact set is asserted below so font upgrades fail loudly.
-    const known_missing = [_]u21{ 0x03DC, 0x2132, 0x2141, 0x24C8 };
+    const known_missing = [_]u21{ 0x03DD, 0x2132, 0x2141, 0x24C8, 0x25B9, 0x25C3, 0x02C9, 0x02CA, 0x02CB };
     var misses: usize = 0;
     var known: usize = 0;
     const miss = struct {
@@ -122,6 +122,9 @@ test "coverage: every emittable glyph resolves" {
         if ((try otmath.glyphId(ref.font, d.cp)) == 0) miss(d.cp, &misses, &known, &known_missing);
     }
     for (symbols.all_accents) |a| {
+        if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing);
+    }
+    for (symbols.all_math_text_accents) |a| {
         if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing);
     }
     // Bare fence chars, rule/radical signs, arrows, text precomposes.

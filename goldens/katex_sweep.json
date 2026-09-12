@@ -1,0 +1,1489 @@
+{
+ "katex_version": "0.18.7",
+ "cases": [
+  {
+   "id": "demo-fourier",
+   "tex": "f(x) = \\int_{-\\infty}^\\infty\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>f</mi><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo><mo>=</mo><msubsup><mo>∫</mo><mrow><mo>−</mo><mi mathvariant=\"normal\">∞</mi></mrow><mi mathvariant=\"normal\">∞</mi></msubsup><mover accent=\"true\"><mi>f</mi><mo>^</mo></mover><mo stretchy=\"false\">(</mo><mi>ξ</mi><mo stretchy=\"false\">)</mo><mtext> </mtext><msup><mi>e</mi><mrow><mn>2</mn><mi>π</mi><mi>i</mi><mi>ξ</mi><mi>x</mi></mrow></msup><mtext> </mtext><mi>d</mi><mi>ξ</mi></mrow><annotation encoding=\"application/x-tex\">f(x) = \\int_{-\\infty}^\\infty\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi</annotation></semantics></math>"
+  },
+  {
+   "id": "demo-cfrac",
+   "tex": "\\frac{1}{\\Bigl(\\sqrt{\\phi \\sqrt{5}}-\\phi\\Bigr) e^{\\frac25 \\pi}} = 1+\\frac{e^{-2\\pi}} {1+\\frac{e^{-4\\pi}} {1+\\frac{e^{-6\\pi}} {1+\\frac{e^{-8\\pi}} {1+\\cdots} } } }",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mfrac><mn>1</mn><mrow><mo fence=\"true\" stretchy=\"true\" minsize=\"1.8em\" maxsize=\"1.8em\">(</mo><msqrt><mrow><mi>ϕ</mi><msqrt><mn>5</mn></msqrt></mrow></msqrt><mo>−</mo><mi>ϕ</mi><mo fence=\"true\" stretchy=\"true\" minsize=\"1.8em\" maxsize=\"1.8em\">)</mo><msup><mi>e</mi><mrow><mfrac><mn>2</mn><mn>5</mn></mfrac><mi>π</mi></mrow></msup></mrow></mfrac><mo>=</mo><mn>1</mn><mo>+</mo><mfrac><msup><mi>e</mi><mrow><mo>−</mo><mn>2</mn><mi>π</mi></mrow></msup><mrow><mn>1</mn><mo>+</mo><mfrac><msup><mi>e</mi><mrow><mo>−</mo><mn>4</mn><mi>π</mi></mrow></msup><mrow><mn>1</mn><mo>+</mo><mfrac><msup><mi>e</mi><mrow><mo>−</mo><mn>6</mn><mi>π</mi></mrow></msup><mrow><mn>1</mn><mo>+</mo><mfrac><msup><mi>e</mi><mrow><mo>−</mo><mn>8</mn><mi>π</mi></mrow></msup><mrow><mn>1</mn><mo>+</mo><mo>⋯</mo></mrow></mfrac></mrow></mfrac></mrow></mfrac></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">\\frac{1}{\\Bigl(\\sqrt{\\phi \\sqrt{5}}-\\phi\\Bigr) e^{\\frac25 \\pi}} = 1+\\frac{e^{-2\\pi}} {1+\\frac{e^{-4\\pi}} {1+\\frac{e^{-6\\pi}} {1+\\frac{e^{-8\\pi}} {1+\\cdots} } } }</annotation></semantics></math>"
+  },
+  {
+   "id": "demo-cauchy",
+   "tex": "\\left( \\sum_{k=1}^n a_k b_k \\right)^2 \\leq \\left( \\sum_{k=1}^n a_k^2 \\right) \\left( \\sum_{k=1}^n b_k^2 \\right)",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msup><mrow><mo fence=\"true\">(</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msub><mi>a</mi><mi>k</mi></msub><msub><mi>b</mi><mi>k</mi></msub><mo fence=\"true\">)</mo></mrow><mn>2</mn></msup><mo>≤</mo><mrow><mo fence=\"true\">(</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msubsup><mi>a</mi><mi>k</mi><mn>2</mn></msubsup><mo fence=\"true\">)</mo></mrow><mrow><mo fence=\"true\">(</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msubsup><mi>b</mi><mi>k</mi><mn>2</mn></msubsup><mo fence=\"true\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\left( \\sum_{k=1}^n a_k b_k \\right)^2 \\leq \\left( \\sum_{k=1}^n a_k^2 \\right) \\left( \\sum_{k=1}^n b_k^2 \\right)</annotation></semantics></math>"
+  },
+  {
+   "id": "demo-gauss",
+   "tex": "\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msubsup><mo>∫</mo><mrow><mo>−</mo><mi mathvariant=\"normal\">∞</mi></mrow><mi mathvariant=\"normal\">∞</mi></msubsup><msup><mi>e</mi><mrow><mo>−</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></msup><mi>d</mi><mi>x</mi><mo>=</mo><msqrt><mi>π</mi></msqrt></mrow><annotation encoding=\"application/x-tex\">\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}</annotation></semantics></math>"
+  },
+  {
+   "id": "demo-sumsq",
+   "tex": "\\sum_{i=1}^n i^2 = \\frac{n(n+1)(2n+1)}{6}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msup><mi>i</mi><mn>2</mn></msup><mo>=</mo><mfrac><mrow><mi>n</mi><mo stretchy=\"false\">(</mo><mi>n</mi><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo><mo stretchy=\"false\">(</mo><mn>2</mn><mi>n</mi><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow><mn>6</mn></mfrac></mrow><annotation encoding=\"application/x-tex\">\\sum_{i=1}^n i^2 = \\frac{n(n+1)(2n+1)}{6}</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-x",
+   "tex": "x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">x</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-xyz",
+   "tex": "xyz",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi><mi>y</mi><mi>z</mi></mrow><annotation encoding=\"application/x-tex\">xyz</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-digits",
+   "tex": "0123456789",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mn>0123456789</mn></mrow><annotation encoding=\"application/x-tex\">0123456789</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-greek",
+   "tex": "\\alpha\\beta\\gamma\\delta\\epsilon\\varepsilon\\zeta\\eta\\theta\\vartheta",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>α</mi><mi>β</mi><mi>γ</mi><mi>δ</mi><mi>ϵ</mi><mi>ε</mi><mi>ζ</mi><mi>η</mi><mi>θ</mi><mi>ϑ</mi></mrow><annotation encoding=\"application/x-tex\">\\alpha\\beta\\gamma\\delta\\epsilon\\varepsilon\\zeta\\eta\\theta\\vartheta</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-greek2",
+   "tex": "\\iota\\kappa\\lambda\\mu\\nu\\xi\\pi\\varpi\\rho\\varrho",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>ι</mi><mi>κ</mi><mi>λ</mi><mi>μ</mi><mi>ν</mi><mi>ξ</mi><mi>π</mi><mi>ϖ</mi><mi>ρ</mi><mi>ϱ</mi></mrow><annotation encoding=\"application/x-tex\">\\iota\\kappa\\lambda\\mu\\nu\\xi\\pi\\varpi\\rho\\varrho</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-greek3",
+   "tex": "\\sigma\\varsigma\\tau\\upsilon\\phi\\varphi\\chi\\psi\\omega",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>σ</mi><mi>ς</mi><mi>τ</mi><mi>υ</mi><mi>ϕ</mi><mi>φ</mi><mi>χ</mi><mi>ψ</mi><mi>ω</mi></mrow><annotation encoding=\"application/x-tex\">\\sigma\\varsigma\\tau\\upsilon\\phi\\varphi\\chi\\psi\\omega</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-Greek",
+   "tex": "\\Gamma\\Delta\\Theta\\Lambda\\Xi\\Pi\\Sigma\\Phi\\Psi\\Omega",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">Γ</mi><mi mathvariant=\"normal\">Δ</mi><mi mathvariant=\"normal\">Θ</mi><mi mathvariant=\"normal\">Λ</mi><mi mathvariant=\"normal\">Ξ</mi><mi mathvariant=\"normal\">Π</mi><mi mathvariant=\"normal\">Σ</mi><mi mathvariant=\"normal\">Φ</mi><mi mathvariant=\"normal\">Ψ</mi><mi mathvariant=\"normal\">Ω</mi></mrow><annotation encoding=\"application/x-tex\">\\Gamma\\Delta\\Theta\\Lambda\\Xi\\Pi\\Sigma\\Phi\\Psi\\Omega</annotation></semantics></math>"
+  },
+  {
+   "id": "atom-bin",
+   "tex": "a+b-c*d",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mo>+</mo><mi>b</mi><mo>−</mo><mi>c</mi><mo>∗</mo><mi>d</mi></mrow><annotation encoding=\"application/x-tex\">a+b-c*d</annotation></semantics></math>"
+  },
+  {
+   "id": "atom-rel",
+   "tex": "a=b<c>d\\leq e\\geq f\\neq g",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mo>=</mo><mi>b</mi><mo>&lt;</mo><mi>c</mi><mo>&gt;</mo><mi>d</mi><mo>≤</mo><mi>e</mi><mo>≥</mo><mi>f</mi><mo mathvariant=\"normal\">≠</mo><mi>g</mi></mrow><annotation encoding=\"application/x-tex\">a=b&lt;c&gt;d\\leq e\\geq f\\neq g</annotation></semantics></math>"
+  },
+  {
+   "id": "atom-open",
+   "tex": "(a)[b]",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo stretchy=\"false\">(</mo><mi>a</mi><mo stretchy=\"false\">)</mo><mo stretchy=\"false\">[</mo><mi>b</mi><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">(a)[b]</annotation></semantics></math>"
+  },
+  {
+   "id": "atom-punct",
+   "tex": "a,b;c",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mo separator=\"true\">,</mo><mi>b</mi><mo separator=\"true\">;</mo><mi>c</mi></mrow><annotation encoding=\"application/x-tex\">a,b;c</annotation></semantics></math>"
+  },
+  {
+   "id": "sup",
+   "tex": "x^2",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding=\"application/x-tex\">x^2</annotation></semantics></math>"
+  },
+  {
+   "id": "sub",
+   "tex": "x_1",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mi>x</mi><mn>1</mn></msub></mrow><annotation encoding=\"application/x-tex\">x_1</annotation></semantics></math>"
+  },
+  {
+   "id": "supsub",
+   "tex": "x^2_3",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mi>x</mi><mn>3</mn><mn>2</mn></msubsup></mrow><annotation encoding=\"application/x-tex\">x^2_3</annotation></semantics></math>"
+  },
+  {
+   "id": "sup-group",
+   "tex": "{ab}^{cd}_{ef}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mrow><mi>a</mi><mi>b</mi></mrow><mrow><mi>e</mi><mi>f</mi></mrow><mrow><mi>c</mi><mi>d</mi></mrow></msubsup></mrow><annotation encoding=\"application/x-tex\">{ab}^{cd}_{ef}</annotation></semantics></math>"
+  },
+  {
+   "id": "primes",
+   "tex": "x''^2_1",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mi>x</mi><mn>1</mn><mrow><mo mathvariant=\"normal\">′</mo><mo mathvariant=\"normal\">′</mo><mn>2</mn></mrow></msubsup></mrow><annotation encoding=\"application/x-tex\">x&#x27;&#x27;^2_1</annotation></semantics></math>"
+  },
+  {
+   "id": "prime-only",
+   "tex": "x'",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mi>x</mi><mo mathvariant=\"normal\" lspace=\"0em\" rspace=\"0em\">′</mo></msup></mrow><annotation encoding=\"application/x-tex\">x&#x27;</annotation></semantics></math>"
+  },
+  {
+   "id": "prime-sup",
+   "tex": "x'^2",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mi>x</mi><mrow><mo mathvariant=\"normal\">′</mo><mn>2</mn></mrow></msup></mrow><annotation encoding=\"application/x-tex\">x&#x27;^2</annotation></semantics></math>"
+  },
+  {
+   "id": "group-empty",
+   "tex": "{}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow></mrow><annotation encoding=\"application/x-tex\">{}</annotation></semantics></math>"
+  },
+  {
+   "id": "group-nested",
+   "tex": "{{{x}}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">{{{x}}}</annotation></semantics></math>"
+  },
+  {
+   "id": "frac",
+   "tex": "\\frac12",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mn>1</mn><mn>2</mn></mfrac></mrow><annotation encoding=\"application/x-tex\">\\frac12</annotation></semantics></math>"
+  },
+  {
+   "id": "frac-groups",
+   "tex": "\\frac{1}{2}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mn>1</mn><mn>2</mn></mfrac></mrow><annotation encoding=\"application/x-tex\">\\frac{1}{2}</annotation></semantics></math>"
+  },
+  {
+   "id": "dfrac",
+   "tex": "\\dfrac{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mfrac><mi>a</mi><mi>b</mi></mfrac></mstyle></mrow><annotation encoding=\"application/x-tex\">\\dfrac{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "tfrac",
+   "tex": "\\tfrac{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mfrac><mi>a</mi><mi>b</mi></mfrac></mstyle></mrow><annotation encoding=\"application/x-tex\">\\tfrac{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "cfrac",
+   "tex": "\\cfrac{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mfrac><mi>a</mi><mi>b</mi></mfrac></mstyle></mrow><annotation encoding=\"application/x-tex\">\\cfrac{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "binom",
+   "tex": "\\binom{n}{k}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\binom{n}{k}</annotation></semantics></math>"
+  },
+  {
+   "id": "dbinom",
+   "tex": "\\dbinom{n}{k}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\dbinom{n}{k}</annotation></semantics></math>"
+  },
+  {
+   "id": "over",
+   "tex": "a\\over b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mi>a</mi><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">a\\over b</annotation></semantics></math>"
+  },
+  {
+   "id": "atop",
+   "tex": "{a\\atop b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">{a\\atop b}</annotation></semantics></math>"
+  },
+  {
+   "id": "choose",
+   "tex": "{n\\choose k}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">{n\\choose k}</annotation></semantics></math>"
+  },
+  {
+   "id": "sqrt",
+   "tex": "\\sqrt{2}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msqrt><mn>2</mn></msqrt></mrow><annotation encoding=\"application/x-tex\">\\sqrt{2}</annotation></semantics></math>"
+  },
+  {
+   "id": "sqrt-bare",
+   "tex": "\\sqrt2",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msqrt><mn>2</mn></msqrt></mrow><annotation encoding=\"application/x-tex\">\\sqrt2</annotation></semantics></math>"
+  },
+  {
+   "id": "sqrt-n",
+   "tex": "\\sqrt[3]{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mroot><mi>x</mi><mn>3</mn></mroot></mrow><annotation encoding=\"application/x-tex\">\\sqrt[3]{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "genfrac",
+   "tex": "\\genfrac(){0pt}{1}{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\genfrac(){0pt}{1}{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "sum",
+   "tex": "\\sum_{i=1}^{n} i",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mi>i</mi></mrow><annotation encoding=\"application/x-tex\">\\sum_{i=1}^{n} i</annotation></semantics></math>"
+  },
+  {
+   "id": "sum-display",
+   "tex": "\\sum_{i=1}^{n} i",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mi>i</mi></mrow><annotation encoding=\"application/x-tex\">\\sum_{i=1}^{n} i</annotation></semantics></math>"
+  },
+  {
+   "id": "prod",
+   "tex": "\\prod_{i=1}^{n} i",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>∏</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mi>i</mi></mrow><annotation encoding=\"application/x-tex\">\\prod_{i=1}^{n} i</annotation></semantics></math>"
+  },
+  {
+   "id": "int",
+   "tex": "\\int_0^1 x\\,dx",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>∫</mo><mn>0</mn><mn>1</mn></msubsup><mi>x</mi><mtext> </mtext><mi>d</mi><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\int_0^1 x\\,dx</annotation></semantics></math>"
+  },
+  {
+   "id": "int-display",
+   "tex": "\\int_0^1 x\\,dx",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msubsup><mo>∫</mo><mn>0</mn><mn>1</mn></msubsup><mi>x</mi><mtext> </mtext><mi>d</mi><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\int_0^1 x\\,dx</annotation></semantics></math>"
+  },
+  {
+   "id": "oint",
+   "tex": "\\oint_C f",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mo>∮</mo><mi>C</mi></msub><mi>f</mi></mrow><annotation encoding=\"application/x-tex\">\\oint_C f</annotation></semantics></math>"
+  },
+  {
+   "id": "lim",
+   "tex": "\\lim_{x\\to 0} f(x)",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi>lim</mi><mo>⁡</mo></mrow><mrow><mi>x</mi><mo>→</mo><mn>0</mn></mrow></msub><mi>f</mi><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\lim_{x\\to 0} f(x)</annotation></semantics></math>"
+  },
+  {
+   "id": "lim-display",
+   "tex": "\\lim_{x\\to 0} f(x)",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><munder><mrow><mi>lim</mi><mo>⁡</mo></mrow><mrow><mi>x</mi><mo>→</mo><mn>0</mn></mrow></munder><mi>f</mi><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\lim_{x\\to 0} f(x)</annotation></semantics></math>"
+  },
+  {
+   "id": "sin",
+   "tex": "\\sin x + \\cos^2 y",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>sin</mi><mo>⁡</mo><mi>x</mi><mo>+</mo><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">\\sin x + \\cos^2 y</annotation></semantics></math>"
+  },
+  {
+   "id": "log",
+   "tex": "\\log_{2} n",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi>log</mi><mo>⁡</mo></mrow><mn>2</mn></msub><mi>n</mi></mrow><annotation encoding=\"application/x-tex\">\\log_{2} n</annotation></semantics></math>"
+  },
+  {
+   "id": "limits-force",
+   "tex": "\\int\\limits_0^1 x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>∫</mo><mn>0</mn><mn>1</mn></msubsup><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\int\\limits_0^1 x</annotation></semantics></math>"
+  },
+  {
+   "id": "nolimits",
+   "tex": "\\sum\\nolimits_{i} x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mo>∑</mo><mi>i</mi></msub><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\sum\\nolimits_{i} x</annotation></semantics></math>"
+  },
+  {
+   "id": "displaystyle",
+   "tex": "{\\displaystyle \\sum_i x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"true\"><munder><mo>∑</mo><mi>i</mi></munder><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">{\\displaystyle \\sum_i x}</annotation></semantics></math>"
+  },
+  {
+   "id": "operatorname",
+   "tex": "\\operatorname{sin} x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">sin</mi><mo>⁡</mo><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\operatorname{sin} x</annotation></semantics></math>"
+  },
+  {
+   "id": "operatorname-star",
+   "tex": "\\operatorname*{lim}_{n} x_n",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>n</mi></msub><msub><mi>x</mi><mi>n</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}_{n} x_n</annotation></semantics></math>"
+  },
+  {
+   "id": "leftright",
+   "tex": "\\left(\\frac12\\right)",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\left(\\frac12\\right)</annotation></semantics></math>"
+  },
+  {
+   "id": "leftright-dot",
+   "tex": "\\left.\\frac12\\right|",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mn>1</mn><mn>2</mn></mfrac><mo fence=\"true\">∣</mo></mrow><annotation encoding=\"application/x-tex\">\\left.\\frac12\\right|</annotation></semantics></math>"
+  },
+  {
+   "id": "middle",
+   "tex": "\\left( a \\middle| b \\right)",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mi>a</mi><mo fence=\"true\" lspace=\"0.05em\" rspace=\"0.05em\">|</mo><mi>b</mi><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\left( a \\middle| b \\right)</annotation></semantics></math>"
+  },
+  {
+   "id": "bigl",
+   "tex": "\\bigl(\\frac12\\Bigr)",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">(</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo fence=\"true\" stretchy=\"true\" minsize=\"1.8em\" maxsize=\"1.8em\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\bigl(\\frac12\\Bigr)</annotation></semantics></math>"
+  },
+  {
+   "id": "big-series",
+   "tex": "\\big\\{\\Big[\\bigg(\\Bigg\\langle x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"false\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">{</mo><mo fence=\"false\" stretchy=\"true\" minsize=\"1.8em\" maxsize=\"1.8em\">[</mo><mo fence=\"false\" stretchy=\"true\" minsize=\"2.4em\" maxsize=\"2.4em\">(</mo><mo fence=\"false\" stretchy=\"true\" minsize=\"3em\" maxsize=\"3em\">⟨</mo><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\big\\{\\Big[\\bigg(\\Bigg\\langle x</annotation></semantics></math>"
+  },
+  {
+   "id": "delim-named",
+   "tex": "\\langle a \\rangle + \\lfloor b \\rfloor + \\lceil c \\rceil",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo stretchy=\"false\">⟨</mo><mi>a</mi><mo stretchy=\"false\">⟩</mo><mo>+</mo><mo stretchy=\"false\">⌊</mo><mi>b</mi><mo stretchy=\"false\">⌋</mo><mo>+</mo><mo stretchy=\"false\">⌈</mo><mi>c</mi><mo stretchy=\"false\">⌉</mo></mrow><annotation encoding=\"application/x-tex\">\\langle a \\rangle + \\lfloor b \\rfloor + \\lceil c \\rceil</annotation></semantics></math>"
+  },
+  {
+   "id": "vert",
+   "tex": "|x| + \\|y\\| + \\vert z \\vert",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">∣</mi><mi>x</mi><mi mathvariant=\"normal\">∣</mi><mo>+</mo><mi mathvariant=\"normal\">∥</mi><mi>y</mi><mi mathvariant=\"normal\">∥</mi><mo>+</mo><mi mathvariant=\"normal\">∣</mi><mi>z</mi><mi mathvariant=\"normal\">∣</mi></mrow><annotation encoding=\"application/x-tex\">|x| + \\|y\\| + \\vert z \\vert</annotation></semantics></math>"
+  },
+  {
+   "id": "hat",
+   "tex": "\\hat{x} + \\hat\\xi",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mi>x</mi><mo>^</mo></mover><mo>+</mo><mover accent=\"true\"><mi>ξ</mi><mo>^</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\hat{x} + \\hat\\xi</annotation></semantics></math>"
+  },
+  {
+   "id": "widehat",
+   "tex": "\\widehat{xyz}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mrow><mi>x</mi><mi>y</mi><mi>z</mi></mrow><mo stretchy=\"true\">^</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\widehat{xyz}</annotation></semantics></math>"
+  },
+  {
+   "id": "accents",
+   "tex": "\\check{a}\\grave{a}\\acute{a}\\tilde{a}\\bar{a}\\breve{a}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mi>a</mi><mo>ˇ</mo></mover><mover accent=\"true\"><mi>a</mi><mo>ˋ</mo></mover><mover accent=\"true\"><mi>a</mi><mo>ˊ</mo></mover><mover accent=\"true\"><mi>a</mi><mo>~</mo></mover><mover accent=\"true\"><mi>a</mi><mo>ˉ</mo></mover><mover accent=\"true\"><mi>a</mi><mo>˘</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\check{a}\\grave{a}\\acute{a}\\tilde{a}\\bar{a}\\breve{a}</annotation></semantics></math>"
+  },
+  {
+   "id": "vec-dot",
+   "tex": "\\vec{v} + \\dot{x} + \\ddot{y}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mi>v</mi><mo>⃗</mo></mover><mo>+</mo><mover accent=\"true\"><mi>x</mi><mo>˙</mo></mover><mo>+</mo><mover accent=\"true\"><mi>y</mi><mo>¨</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\vec{v} + \\dot{x} + \\ddot{y}</annotation></semantics></math>"
+  },
+  {
+   "id": "not",
+   "tex": "\\not\\in",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>∉</mo></mrow><annotation encoding=\"application/x-tex\">\\not\\in</annotation></semantics></math>"
+  },
+  {
+   "id": "overline",
+   "tex": "\\overline{AB}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mrow><mi>A</mi><mi>B</mi></mrow><mo stretchy=\"true\">‾</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\overline{AB}</annotation></semantics></math>"
+  },
+  {
+   "id": "underline",
+   "tex": "\\underline{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munder accentunder=\"true\"><mi>x</mi><mo stretchy=\"true\">‾</mo></munder></mrow><annotation encoding=\"application/x-tex\">\\underline{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "braces",
+   "tex": "\\overbrace{a+b}^{n} + \\underbrace{c}_{m}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover><mover><mrow><mi>a</mi><mo>+</mo><mi>b</mi></mrow><mo stretchy=\"true\">⏞</mo></mover><mi>n</mi></mover><mo>+</mo><munder><munder><mi>c</mi><mo stretchy=\"true\">⏟</mo></munder><mi>m</mi></munder></mrow><annotation encoding=\"application/x-tex\">\\overbrace{a+b}^{n} + \\underbrace{c}_{m}</annotation></semantics></math>"
+  },
+  {
+   "id": "arrows-over",
+   "tex": "\\overrightarrow{AB} + \\overleftarrow{CD}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mrow><mi>A</mi><mi>B</mi></mrow><mo stretchy=\"true\">→</mo></mover><mo>+</mo><mover accent=\"true\"><mrow><mi>C</mi><mi>D</mi></mrow><mo stretchy=\"true\">←</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\overrightarrow{AB} + \\overleftarrow{CD}</annotation></semantics></math>"
+  },
+  {
+   "id": "overset",
+   "tex": "\\overset{!}{=} + \\underset{*}{+}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo><mover><mo><mo>=</mo></mo><mo stretchy=\"false\" lspace=\"0em\" rspace=\"0em\">!</mo></mover></mo><mo>+</mo><mo lspace=\"0.22em\" rspace=\"0.22em\"><munder><mo><mo>+</mo></mo><mo lspace=\"0em\" rspace=\"0em\">∗</mo></munder></mo></mrow><annotation encoding=\"application/x-tex\">\\overset{!}{=} + \\underset{*}{+}</annotation></semantics></math>"
+  },
+  {
+   "id": "xarrow",
+   "tex": "\\xleftarrow[sub]{sup} + \\xrightarrow{a} b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munderover><mo stretchy=\"true\" minsize=\"3.0em\">←</mo><mpadded width=\"+0.6em\" lspace=\"0.3em\"><mrow><mi>s</mi><mi>u</mi><mi>b</mi></mrow></mpadded><mpadded width=\"+0.6em\" lspace=\"0.3em\"><mrow><mi>s</mi><mi>u</mi><mi>p</mi></mrow></mpadded></munderover><mo>+</mo><mover><mo stretchy=\"true\" minsize=\"3.0em\">→</mo><mpadded width=\"+0.6em\" lspace=\"0.3em\"><mi>a</mi></mpadded></mover><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">\\xleftarrow[sub]{sup} + \\xrightarrow{a} b</annotation></semantics></math>"
+  },
+  {
+   "id": "matrix",
+   "tex": "\\begin{matrix} a & b \\\\ c & d \\end{matrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.16em\" columnalign=\"center center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{matrix} a &amp; b \\\\ c &amp; d \\end{matrix}</annotation></semantics></math>"
+  },
+  {
+   "id": "pmatrix",
+   "tex": "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mtable rowspacing=\"0.16em\" columnalign=\"center center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mn>1</mn></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mn>2</mn></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mn>3</mn></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mn>4</mn></mstyle></mtd></mtr></mtable><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\begin{pmatrix} 1 &amp; 2 \\\\ 3 &amp; 4 \\end{pmatrix}</annotation></semantics></math>"
+  },
+  {
+   "id": "bmatrix",
+   "tex": "\\begin{bmatrix} x \\\\ y \\end{bmatrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">[</mo><mtable rowspacing=\"0.16em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>x</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>y</mi></mstyle></mtd></mtr></mtable><mo fence=\"true\">]</mo></mrow><annotation encoding=\"application/x-tex\">\\begin{bmatrix} x \\\\ y \\end{bmatrix}</annotation></semantics></math>"
+  },
+  {
+   "id": "vmatrix",
+   "tex": "\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">∣</mo><mtable rowspacing=\"0.16em\" columnalign=\"center center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd></mtr></mtable><mo fence=\"true\">∣</mo></mrow><annotation encoding=\"application/x-tex\">\\begin{vmatrix} a &amp; b \\\\ c &amp; d \\end{vmatrix}</annotation></semantics></math>"
+  },
+  {
+   "id": "array",
+   "tex": "\\begin{array}{cc|c} a & b & c \\\\ \\hline d & e & f \\end{array}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.16em\" columnalign=\"center center center\" columnlines=\"none solid\" columnspacing=\"1em\" rowlines=\"solid\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>e</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>f</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{array}{cc|c} a &amp; b &amp; c \\\\ \\hline d &amp; e &amp; f \\end{array}</annotation></semantics></math>"
+  },
+  {
+   "id": "aligned",
+   "tex": "\\begin{aligned} a &= b + c \\\\ d &= e \\end{aligned}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mi>b</mi><mo>+</mo><mi>c</mi></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>d</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mi>e</mi></mrow></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{aligned} a &amp;= b + c \\\\ d &amp;= e \\end{aligned}</annotation></semantics></math>"
+  },
+  {
+   "id": "alignedat",
+   "tex": "\\begin{alignedat}{2} a &= b & c &= d \\end{alignedat}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left right left\" columnspacing=\"0em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mi>b</mi></mrow></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mi>d</mi></mrow></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{alignedat}{2} a &amp;= b &amp; c &amp;= d \\end{alignedat}</annotation></semantics></math>"
+  },
+  {
+   "id": "cases",
+   "tex": "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>f</mi><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo><mo>=</mo><mrow><mo fence=\"true\">{</mo><mtable rowspacing=\"0.36em\" columnalign=\"left left\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mn>1</mn></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow><mi>x</mi><mo>&gt;</mo><mn>0</mn></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mn>0</mn></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow><mi>x</mi><mo>=</mo><mn>0</mn></mrow></mstyle></mtd></mtr></mtable></mrow></mrow><annotation encoding=\"application/x-tex\">f(x) = \\begin{cases} 1 &amp; x &gt; 0 \\\\ 0 &amp; x = 0 \\end{cases}</annotation></semantics></math>"
+  },
+  {
+   "id": "gathered",
+   "tex": "\\begin{gathered} a \\\\ b \\end{gathered}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"center\" columnspacing=\"0em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>a</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>b</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{gathered} a \\\\ b \\end{gathered}</annotation></semantics></math>"
+  },
+  {
+   "id": "substack",
+   "tex": "\\sum_{\\substack{a \\\\ b}} x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mo>∑</mo><mstyle scriptlevel=\"1\"><mtable rowspacing=\"0.1em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"1\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"1\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr></mtable></mstyle></msub><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\sum_{\\substack{a \\\\ b}} x</annotation></semantics></math>"
+  },
+  {
+   "id": "smallmatrix",
+   "tex": "\\bigl(\\begin{smallmatrix} a & b \\\\ c & d \\end{smallmatrix}\\bigr)",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">(</mo><mstyle scriptlevel=\"1\"><mtable rowspacing=\"0.1em\" columnspacing=\"0.2778em\"><mtr><mtd><mstyle scriptlevel=\"1\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"1\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"1\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"1\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd></mtr></mtable></mstyle><mo fence=\"true\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\bigl(\\begin{smallmatrix} a &amp; b \\\\ c &amp; d \\end{smallmatrix}\\bigr)</annotation></semantics></math>"
+  },
+  {
+   "id": "newcommand",
+   "tex": "\\newcommand{\\f}{x^2}\\f + \\f",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding=\"application/x-tex\">\\newcommand{\\f}{x^2}\\f + \\f</annotation></semantics></math>"
+  },
+  {
+   "id": "newcommand-arg",
+   "tex": "\\newcommand{\\add}[2]{#1+#2}\\add{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mo>+</mo><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">\\newcommand{\\add}[2]{#1+#2}\\add{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "renewcommand",
+   "tex": "\\renewcommand{\\sum}{S}\\sum",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>S</mi></mrow><annotation encoding=\"application/x-tex\">\\renewcommand{\\sum}{S}\\sum</annotation></semantics></math>"
+  },
+  {
+   "id": "providecommand",
+   "tex": "\\providecommand{\\g}{g}\\g",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>g</mi></mrow><annotation encoding=\"application/x-tex\">\\providecommand{\\g}{g}\\g</annotation></semantics></math>"
+  },
+  {
+   "id": "def",
+   "tex": "\\def\\h{x}\\h",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\def\\h{x}\\h</annotation></semantics></math>"
+  },
+  {
+   "id": "def-args",
+   "tex": "\\def\\pair#1#2{(#1,#2)}\\pair{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo stretchy=\"false\">(</mo><mi>a</mi><mo separator=\"true\">,</mo><mi>b</mi><mo stretchy=\"false\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\def\\pair#1#2{(#1,#2)}\\pair{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "let",
+   "tex": "\\let\\c=\\alpha\\c",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>α</mi></mrow><annotation encoding=\"application/x-tex\">\\let\\c=\\alpha\\c</annotation></semantics></math>"
+  },
+  {
+   "id": "maxexpand-loop",
+   "tex": "\\def\\a{\\a}\\a",
+   "display": false,
+   "ours": "ExpansionLimit",
+   "katex_only": true,
+   "katex_ok": false,
+   "katex_pos": null,
+   "katex_error": "KaTeX parse error: Too many expansions: infinite loop or need to increase maxExpand setting"
+  },
+  {
+   "id": "deep-nest",
+   "tex": "{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{x}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+   "display": false,
+   "ours": "TooDeep",
+   "katex_only": true,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{x}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}</annotation></semantics></math>"
+  },
+  {
+   "id": "text",
+   "tex": "\\text{for all } x \\in \\mathbb{R}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>for all </mtext><mi>x</mi><mo>∈</mo><mi mathvariant=\"double-struck\">R</mi></mrow><annotation encoding=\"application/x-tex\">\\text{for all } x \\in \\mathbb{R}</annotation></semantics></math>"
+  },
+  {
+   "id": "fonts",
+   "tex": "\\mathrm{A}\\mathbf{B}\\mathit{C}\\mathbb{D}\\mathcal{E}\\mathscr{F}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">A</mi><mi mathvariant=\"bold\">B</mi><mi>C</mi><mi mathvariant=\"double-struck\">D</mi><mi mathvariant=\"script\">E</mi><mi mathvariant=\"script\">F</mi></mrow><annotation encoding=\"application/x-tex\">\\mathrm{A}\\mathbf{B}\\mathit{C}\\mathbb{D}\\mathcal{E}\\mathscr{F}</annotation></semantics></math>"
+  },
+  {
+   "id": "fonts2",
+   "tex": "\\mathfrak{G}\\mathsf{H}\\mathtt{I}\\boldsymbol{\\alpha}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"fraktur\">G</mi><mi mathvariant=\"sans-serif\">H</mi><mi mathvariant=\"monospace\">I</mi><mi mathvariant=\"bold-italic\">α</mi></mrow><annotation encoding=\"application/x-tex\">\\mathfrak{G}\\mathsf{H}\\mathtt{I}\\boldsymbol{\\alpha}</annotation></semantics></math>"
+  },
+  {
+   "id": "color",
+   "tex": "\\color{red}{x} + y",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"red\"><mi>x</mi><mo>+</mo><mi>y</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\color{red}{x} + y</annotation></semantics></math>"
+  },
+  {
+   "id": "href",
+   "tex": "\\href{https://example.com}{link}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow href=\"https://example.com\"><mi>l</mi><mi>i</mi><mi>n</mi><mi>k</mi></mrow><annotation encoding=\"application/x-tex\">\\href{https://example.com}{link}</annotation></semantics></math>"
+  },
+  {
+   "id": "smash",
+   "tex": "\\smash[t]{x}^{2}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mpadded height=\"0px\"><mi>x</mi></mpadded><mn>2</mn></msup></mrow><annotation encoding=\"application/x-tex\">\\smash[t]{x}^{2}</annotation></semantics></math>"
+  },
+  {
+   "id": "raisebox",
+   "tex": "\\raisebox{2pt}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded voffset=\"2pt\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mtext>x</mtext></mstyle></mpadded></mrow><annotation encoding=\"application/x-tex\">\\raisebox{2pt}{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "spacing",
+   "tex": "a\\,b\\:c\\;d\\!e\\quad f\\qquad g",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mtext> </mtext><mi>b</mi><mtext> </mtext><mi>c</mi><mtext>  </mtext><mi>d</mi><mtext> ⁣</mtext><mi>e</mi><mspace width=\"1em\"/><mi>f</mi><mspace width=\"2em\"/><mi>g</mi></mrow><annotation encoding=\"application/x-tex\">a\\,b\\:c\\;d\\!e\\quad f\\qquad g</annotation></semantics></math>"
+  },
+  {
+   "id": "hspace",
+   "tex": "a\\hspace{1em}b\\kern2pt c",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mspace width=\"1em\"/><mi>b</mi><mspace width=\"0.2em\"/><mi>c</mi></mrow><annotation encoding=\"application/x-tex\">a\\hspace{1em}b\\kern2pt c</annotation></semantics></math>"
+  },
+  {
+   "id": "textaccent",
+   "tex": "\\'e + \\\"o + \\~n",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mi>e</mi><mo>ˊ</mo></mover><mo>+</mo><mover accent=\"true\"><mi>o</mi><mo>¨</mo></mover><mo>+</mo><mover accent=\"true\"><mi>n</mi><mo>˜</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\&#x27;e + \\&quot;o + \\~n</annotation></semantics></math>"
+  },
+  {
+   "id": "boxed",
+   "tex": "\\boxed{x^2}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><menclose notation=\"box\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mstyle scriptlevel=\"0\" displaystyle=\"true\"><msup><mi>x</mi><mn>2</mn></msup></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding=\"application/x-tex\">\\boxed{x^2}</annotation></semantics></math>"
+  },
+  {
+   "id": "phantom",
+   "tex": "\\phantom{x} + y",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mphantom><mi>x</mi></mphantom><mo>+</mo><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">\\phantom{x} + y</annotation></semantics></math>"
+  },
+  {
+   "id": "cancel",
+   "tex": "\\cancel{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><menclose notation=\"updiagonalstrike\"><mi>x</mi></menclose></mrow><annotation encoding=\"application/x-tex\">\\cancel{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "rule",
+   "tex": "\\rule{1em}{2pt}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded height=\"0em\" voffset=\"0em\"><mspace mathbackground=\"black\" width=\"1em\" height=\"0.2em\"></mspace></mpadded></mrow><annotation encoding=\"application/x-tex\">\\rule{1em}{2pt}</annotation></semantics></math>"
+  },
+  {
+   "id": "mathchoice",
+   "tex": "\\mathchoice{a}{b}{c}{d}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">\\mathchoice{a}{b}{c}{d}</annotation></semantics></math>"
+  },
+  {
+   "id": "lap",
+   "tex": "\\llap{x}y",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded lspace=\"-1width\" width=\"0px\"><mtext>x</mtext></mpadded><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">\\llap{x}y</annotation></semantics></math>"
+  },
+  {
+   "id": "rej-unknown",
+   "tex": "\\nope",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 0,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\nope at position 1: \\̲n̲o̲p̲e̲"
+  },
+  {
+   "id": "rej-unbalanced-open",
+   "tex": "{x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 2,
+   "katex_error": "KaTeX parse error: Expected '}', got 'EOF' at end of input: {x"
+  },
+  {
+   "id": "rej-unbalanced-close",
+   "tex": "x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 1,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '}' at position 2: x}̲"
+  },
+  {
+   "id": "rej-double-sup",
+   "tex": "x^2^3",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 3,
+   "katex_error": "KaTeX parse error: Double superscript at position 4: x^2^̲3"
+  },
+  {
+   "id": "rej-double-sup-prime",
+   "tex": "x^2'",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 3,
+   "katex_error": "KaTeX parse error: Double superscript at position 4: x^2'̲"
+  },
+  {
+   "id": "rej-double-sub",
+   "tex": "x_1_2",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 3,
+   "katex_error": "KaTeX parse error: Double subscript at position 4: x_1_̲2"
+  },
+  {
+   "id": "rej-dollar",
+   "tex": "$x$",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 0,
+   "katex_error": "KaTeX parse error: Can't use function '$' in math mode at position 1: $̲x$"
+  },
+  {
+   "id": "rej-amp",
+   "tex": "a & b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 2,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '&' at position 3: a &̲ b"
+  },
+  {
+   "id": "rej-hash",
+   "tex": "#",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 0,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '#' at position 1: #̲"
+  },
+  {
+   "id": "rej-left-unclosed",
+   "tex": "\\left(",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: Expected '\\right', got 'EOF' at end of input: \\left("
+  },
+  {
+   "id": "rej-right-alone",
+   "tex": "x\\right)",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 1,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '\\right' at position 2: x\\̲r̲i̲g̲h̲t̲)"
+  },
+  {
+   "id": "rej-middle-alone",
+   "tex": "\\middle|",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 7,
+   "katex_error": "KaTeX parse error: \\middle without preceding \\left at position 8: \\middle|̲"
+  },
+  {
+   "id": "rej-env-unknown",
+   "tex": "\\begin{nope} x \\end{nope}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: No such environment: nope at position 7: \\begin{̲n̲o̲p̲e̲}̲ x \\end{nope}"
+  },
+  {
+   "id": "rej-env-mismatch",
+   "tex": "\\begin{matrix} x \\end{pmatrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 17,
+   "katex_error": "KaTeX parse error: Mismatch: \\begin{matrix} matched by \\end{pmatrix} at position 18: …egin{matrix} x \\̲e̲n̲d̲{pmatrix}"
+  },
+  {
+   "id": "rej-newcommand-builtin",
+   "tex": "\\newcommand{\\sum}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": null,
+   "katex_error": "KaTeX parse error: \\newcommand{\\sum} attempting to redefine \\sum; use \\renewcommand"
+  },
+  {
+   "id": "rej-renewcommand-missing",
+   "tex": "\\renewcommand{\\nope}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": null,
+   "katex_error": "KaTeX parse error: \\renewcommand{\\nope} when command \\nope does not yet exist; use \\newcommand"
+  },
+  {
+   "id": "rej-declare-op",
+   "tex": "\\DeclareMathOperator{\\Arg}{Arg}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 0,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\DeclareMathOperator at position 1: \\̲D̲e̲c̲l̲a̲r̲e̲M̲a̲t̲h̲O̲p̲e̲r̲a̲t̲o̲r̲{\\Arg}{Arg}"
+  },
+  {
+   "id": "rej-cmd-in-text",
+   "tex": "\\text{\\alpha}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\alpha at position 7: \\text{\\̲a̲l̲p̲h̲a̲}"
+  },
+  {
+   "id": "rej-sup-in-text",
+   "tex": "\\text{a^b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 7,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '^' at position 8: \\text{a^̲b}"
+  },
+  {
+   "id": "verb-basic",
+   "tex": "\\verb|x|",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"monospace\">x</mtext></mrow><annotation encoding=\"application/x-tex\">\\verb|x|</annotation></semantics></math>"
+  },
+  {
+   "id": "rej-ctrl-slash",
+   "tex": "a\\/b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 1,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\/ at position 2: a\\̲/̲b"
+  },
+  {
+   "id": "rej-text-hash",
+   "tex": "\\text{a#b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 7,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '#' at position 8: \\text{a#̲b}"
+  },
+  {
+   "id": "color-prefix",
+   "tex": "\\color{red}x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"red\"><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\color{red}x</annotation></semantics></math>"
+  },
+  {
+   "id": "verb-star",
+   "tex": "\\verb*|a b|",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"monospace\">a␣b</mtext></mrow><annotation encoding=\"application/x-tex\">\\verb*|a b|</annotation></semantics></math>"
+  },
+  {
+   "id": "verb-unclosed",
+   "tex": "\\verb|x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": null,
+   "katex_error": "KaTeX parse error: \\verb ended by end of line instead of matching delimiter"
+  },
+  {
+   "id": "verb-newline",
+   "tex": "\\verb|a\nb|",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": null,
+   "katex_error": "KaTeX parse error: \\verb ended by end of line instead of matching delimiter"
+  },
+  {
+   "id": "verb-in-macro",
+   "tex": "\\newcommand{\\myverb}{\\verb|x|}\\myverb",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"monospace\">x</mtext></mrow><annotation encoding=\"application/x-tex\">\\newcommand{\\myverb}{\\verb|x|}\\myverb</annotation></semantics></math>"
+  },
+  {
+   "id": "color-rest",
+   "tex": "\\color{red}x+y",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"red\"><mi>x</mi><mo>+</mo><mi>y</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\color{red}x+y</annotation></semantics></math>"
+  },
+  {
+   "id": "textcolor",
+   "tex": "\\textcolor{blue}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"blue\"><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\textcolor{blue}{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "color-hex",
+   "tex": "\\color{#f00}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"#f00\"><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\color{#f00}{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "color-macro",
+   "tex": "\\newcommand{\\myred}{red}\\color{\\myred}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"red\"><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\newcommand{\\myred}{red}\\color{\\myred}{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "color-unclosed",
+   "tex": "\\color{red",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 10,
+   "katex_error": "KaTeX parse error: Unexpected end of input in a macro argument, expected '}' at end of input: \\color{red"
+  },
+  {
+   "id": "colorbox",
+   "tex": "\\colorbox{yellow}{a+b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded width=\"+6pt\" height=\"+6pt\" lspace=\"3pt\" voffset=\"3pt\" mathbackground=\"yellow\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mtext>a+b</mtext></mstyle></mpadded></mrow><annotation encoding=\"application/x-tex\">\\colorbox{yellow}{a+b}</annotation></semantics></math>"
+  },
+  {
+   "id": "fcolorbox",
+   "tex": "\\fcolorbox{red}{#ff0}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded width=\"+6pt\" height=\"+6pt\" lspace=\"3pt\" voffset=\"3pt\" style=\"border: 0.04em solid red\" mathbackground=\"#ff0\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mtext>x</mtext></mstyle></mpadded></mrow><annotation encoding=\"application/x-tex\">\\fcolorbox{red}{#ff0}{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "fcolorbox-empty",
+   "tex": "\\fcolorbox{r}{y}{}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded width=\"+6pt\" height=\"+6pt\" lspace=\"3pt\" voffset=\"3pt\" style=\"border: 0.04em solid r\" mathbackground=\"y\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow></mrow></mstyle></mpadded></mrow><annotation encoding=\"application/x-tex\">\\fcolorbox{r}{y}{}</annotation></semantics></math>"
+  },
+  {
+   "id": "textbf",
+   "tex": "\\textbf{a+b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"bold\">a+b</mtext></mrow><annotation encoding=\"application/x-tex\">\\textbf{a+b}</annotation></semantics></math>"
+  },
+  {
+   "id": "textit",
+   "tex": "\\textit{a+b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"italic\">a+b</mtext></mrow><annotation encoding=\"application/x-tex\">\\textit{a+b}</annotation></semantics></math>"
+  },
+  {
+   "id": "textsf",
+   "tex": "\\textsf{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"sans-serif\">x</mtext></mrow><annotation encoding=\"application/x-tex\">\\textsf{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "texttt",
+   "tex": "\\texttt{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"monospace\">x</mtext></mrow><annotation encoding=\"application/x-tex\">\\texttt{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "textrm",
+   "tex": "\\textrm{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>x</mtext></mrow><annotation encoding=\"application/x-tex\">\\textrm{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "textnormal",
+   "tex": "\\textnormal{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>x</mtext></mrow><annotation encoding=\"application/x-tex\">\\textnormal{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "textbf-alpha",
+   "tex": "\\textbf{\\alpha}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 8,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\alpha at position 9: \\textbf{\\̲a̲l̲p̲h̲a̲}"
+  },
+  {
+   "id": "textsl",
+   "tex": "\\textsl{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 0,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\textsl at position 1: \\̲t̲e̲x̲t̲s̲l̲{x}"
+  },
+  {
+   "id": "text-dollar",
+   "tex": "\\text{a$b}",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": false,
+   "katex_pos": 9,
+   "katex_error": "KaTeX parse error: Expected '$', got 'EOF' at position 10: \\text{a$b}̲"
+  },
+  {
+   "id": "text-math",
+   "tex": "\\text{a$b$c}",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle><mtext>c</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{a$b$c}</annotation></semantics></math>"
+  },
+  {
+   "id": "definecolor",
+   "tex": "\\definecolor{foo}{rgb}{1,0,0}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 0,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\definecolor at position 1: \\̲d̲e̲f̲i̲n̲e̲c̲o̲l̲o̲r̲{foo}{rgb}{1,0,…"
+  },
+  {
+   "id": "url",
+   "tex": "\\url{https://example.com/a}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"monospace\" href=\"https://example.com/a\">https://example.com/a</mtext></mrow><annotation encoding=\"application/x-tex\">\\url{https://example.com/a}</annotation></semantics></math>"
+  },
+  {
+   "id": "color-rgb",
+   "tex": "\\color{rgb(1,0,0)}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: Invalid color: 'rgb(1,0,0)' at position 7: \\color{̲r̲g̲b̲(̲1̲,̲0̲,̲0̲)̲}̲{x}"
+  },
+  {
+   "id": "color-badhex",
+   "tex": "\\color{#ff}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: Invalid color: '#ff' at position 7: \\color{̲#̲f̲f̲}̲{x}"
+  },
+  {
+   "id": "color-empty",
+   "tex": "\\color{}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: Invalid color: '' at position 7: \\color{̲}̲{x}"
+  },
+  {
+   "id": "color-space",
+   "tex": "\\color{red green}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: Invalid color: 'red green' at position 7: \\color{̲r̲e̲d̲ ̲g̲r̲e̲e̲n̲}̲{x}"
+  },
+  {
+   "id": "color-nosuch",
+   "tex": "\\color{\\nosuchmacro}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 6,
+   "katex_error": "KaTeX parse error: Invalid color: '\\nosuchmacro' at position 7: \\color{̲\\̲n̲o̲s̲u̲c̲h̲m̲a̲c̲r̲o̲}̲{x}"
+  },
+  {
+   "id": "colorbox-bad",
+   "tex": "\\colorbox{#ff}{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": 9,
+   "katex_error": "KaTeX parse error: Invalid color: '#ff' at position 10: \\colorbox{̲#̲f̲f̲}̲{x}"
+  }
+ ]
+}

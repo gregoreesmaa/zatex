@@ -207,7 +207,10 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             .kind = .{ .rule = {} },
             .invisible = false,
         }),
-        .color => |b| return layoutNode(lc, style, b),
+        .color => |c| return layoutNode(lc, style, c.body),
+        // Native layout has no background channel: render the body
+        // text, like `.text` (the MathML emitter keeps the box).
+        .colorbox => |c| return layoutText(lc, style, .{ .toks = c.body, .fam = parse.FontFam.rm }),
         .href => |h| return layoutNode(lc, style, h.body),
         .htmlwrap => |b| return layoutNode(lc, style, b),
         .phantom => |p| {
@@ -375,7 +378,8 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .mathchoice => return .Ord,
         .space, .vspace, .newline => return null,
         .hline => return null,
-        .color => |b| return classOf(pc, b),
+        .color => |c| return classOf(pc, c.body),
+        .colorbox => return .Ord,
         .href => |h| return classOf(pc, h.body),
         .htmlwrap => |b| return classOf(pc, b),
         .phantom => |p| return classOf(pc, p.body),
@@ -477,45 +481,6 @@ fn layoutOpName(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
 // Scripts, fractions, roots
 // ---------------------------------------------------------------------------
 
-/// Unwrap transparent nodes to find an operator base, if any.
-fn opBase(pc: *const parse.ParseCtx, id: Idx) ?struct {
-    cp: u21,
-    large: bool,
-    func: bool,
-    limits: parse.LimitsMode,
-    lim_def: bool,
-} {
-    var cur = id;
-    while (true) {
-        switch (parse.nodeAt(pc, cur)) {
-            .op => |o| return .{
-                .cp = o.cp,
-                .large = o.large,
-                .func = o.func,
-                .limits = o.limits,
-                .lim_def = o.lim_def,
-            },
-            .style => |s| cur = s.body,
-            .font => |f| cur = f.body,
-            .color => |b| cur = b,
-            .href => |h| cur = h.body,
-            .htmlwrap => |b| cur = b,
-            else => return null,
-        }
-    }
-}
-
-/// Limit-vs-side decision for an operator base (KaTeX: `auto` stacks
-/// above/below in display style for large ops and limit-words, and
-/// goes to the side otherwise; `\limits`/`\nolimits` force it).
-fn useLimits(style: parse.Style, o: anytype) bool {
-    switch (o.limits) {
-        .on => return true,
-        .off => return false,
-        .auto => return style.isDisplay() and (o.large or (o.func and o.lim_def)),
-    }
-}
-
 fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     const size = style.sizeUnits();
     const base = try layoutNode(lc, style, s.base);
@@ -581,8 +546,8 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 }
 
 fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
-    if (opBase(lc.pctx, s.base)) |o| {
-        if (useLimits(style, o)) return layoutLimits(lc, style, s);
+    if (parse.opBase(lc.pctx, s.base)) |o| {
+        if (parse.useLimits(style, o)) return layoutLimits(lc, style, s);
     }
     const size = style.sizeUnits();
     const base = try layoutNode(lc, style, s.base);
@@ -661,14 +626,10 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 
 fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
     const size = style.sizeUnits();
-    const base: parse.Style = switch (f.kind.fstyle) {
-        0 => style,
-        1 => .D,
-        2 => .T,
-        3 => .S,
-    };
-    const num = try layoutNode(lc, base.numerator(), f.num);
-    const den = try layoutNode(lc, base.denominator(), f.den);
+    // Display fractions arrive pre-wrapped in a style node, so the
+    // ambient style already carries the fraction's sizing.
+    const num = try layoutNode(lc, style.numerator(), f.num);
+    const den = try layoutNode(lc, style.denominator(), f.den);
     const nb = lc.boxes[num];
     const dbx = lc.boxes[den];
     var th = f.kind.thick;

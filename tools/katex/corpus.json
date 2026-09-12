@@ -1,0 +1,978 @@
+[
+ {
+  "id": "demo-fourier",
+  "tex": "f(x) = \\int_{-\\infty}^\\infty\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "demo-cfrac",
+  "tex": "\\frac{1}{\\Bigl(\\sqrt{\\phi \\sqrt{5}}-\\phi\\Bigr) e^{\\frac25 \\pi}} = 1+\\frac{e^{-2\\pi}} {1+\\frac{e^{-4\\pi}} {1+\\frac{e^{-6\\pi}} {1+\\frac{e^{-8\\pi}} {1+\\cdots} } } }",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "demo-cauchy",
+  "tex": "\\left( \\sum_{k=1}^n a_k b_k \\right)^2 \\leq \\left( \\sum_{k=1}^n a_k^2 \\right) \\left( \\sum_{k=1}^n b_k^2 \\right)",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "demo-gauss",
+  "tex": "\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "demo-sumsq",
+  "tex": "\\sum_{i=1}^n i^2 = \\frac{n(n+1)(2n+1)}{6}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-x",
+  "tex": "x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-xyz",
+  "tex": "xyz",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-digits",
+  "tex": "0123456789",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-greek",
+  "tex": "\\alpha\\beta\\gamma\\delta\\epsilon\\varepsilon\\zeta\\eta\\theta\\vartheta",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-greek2",
+  "tex": "\\iota\\kappa\\lambda\\mu\\nu\\xi\\pi\\varpi\\rho\\varrho",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-greek3",
+  "tex": "\\sigma\\varsigma\\tau\\upsilon\\phi\\varphi\\chi\\psi\\omega",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Greek",
+  "tex": "\\Gamma\\Delta\\Theta\\Lambda\\Xi\\Pi\\Sigma\\Phi\\Psi\\Omega",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atom-bin",
+  "tex": "a+b-c*d",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atom-rel",
+  "tex": "a=b<c>d\\leq e\\geq f\\neq g",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atom-open",
+  "tex": "(a)[b]",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atom-punct",
+  "tex": "a,b;c",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sup",
+  "tex": "x^2",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sub",
+  "tex": "x_1",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "supsub",
+  "tex": "x^2_3",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sup-group",
+  "tex": "{ab}^{cd}_{ef}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "primes",
+  "tex": "x''^2_1",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "prime-only",
+  "tex": "x'",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "prime-sup",
+  "tex": "x'^2",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "group-empty",
+  "tex": "{}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "group-nested",
+  "tex": "{{{x}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "frac",
+  "tex": "\\frac12",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "frac-groups",
+  "tex": "\\frac{1}{2}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "dfrac",
+  "tex": "\\dfrac{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "tfrac",
+  "tex": "\\tfrac{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cfrac",
+  "tex": "\\cfrac{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "binom",
+  "tex": "\\binom{n}{k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "dbinom",
+  "tex": "\\dbinom{n}{k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "over",
+  "tex": "a\\over b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atop",
+  "tex": "{a\\atop b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "choose",
+  "tex": "{n\\choose k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sqrt",
+  "tex": "\\sqrt{2}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sqrt-bare",
+  "tex": "\\sqrt2",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sqrt-n",
+  "tex": "\\sqrt[3]{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "genfrac",
+  "tex": "\\genfrac(){0pt}{1}{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sum",
+  "tex": "\\sum_{i=1}^{n} i",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sum-display",
+  "tex": "\\sum_{i=1}^{n} i",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "prod",
+  "tex": "\\prod_{i=1}^{n} i",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "int",
+  "tex": "\\int_0^1 x\\,dx",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "int-display",
+  "tex": "\\int_0^1 x\\,dx",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "oint",
+  "tex": "\\oint_C f",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lim",
+  "tex": "\\lim_{x\\to 0} f(x)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lim-display",
+  "tex": "\\lim_{x\\to 0} f(x)",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "sin",
+  "tex": "\\sin x + \\cos^2 y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "log",
+  "tex": "\\log_{2} n",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "limits-force",
+  "tex": "\\int\\limits_0^1 x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "nolimits",
+  "tex": "\\sum\\nolimits_{i} x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "displaystyle",
+  "tex": "{\\displaystyle \\sum_i x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname",
+  "tex": "\\operatorname{sin} x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star",
+  "tex": "\\operatorname*{lim}_{n} x_n",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "leftright",
+  "tex": "\\left(\\frac12\\right)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "leftright-dot",
+  "tex": "\\left.\\frac12\\right|",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "middle",
+  "tex": "\\left( a \\middle| b \\right)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bigl",
+  "tex": "\\bigl(\\frac12\\Bigr)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "big-series",
+  "tex": "\\big\\{\\Big[\\bigg(\\Bigg\\langle x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "delim-named",
+  "tex": "\\langle a \\rangle + \\lfloor b \\rfloor + \\lceil c \\rceil",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "vert",
+  "tex": "|x| + \\|y\\| + \\vert z \\vert",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "hat",
+  "tex": "\\hat{x} + \\hat\\xi",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "widehat",
+  "tex": "\\widehat{xyz}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "accents",
+  "tex": "\\check{a}\\grave{a}\\acute{a}\\tilde{a}\\bar{a}\\breve{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "vec-dot",
+  "tex": "\\vec{v} + \\dot{x} + \\ddot{y}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "not",
+  "tex": "\\not\\in",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overline",
+  "tex": "\\overline{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "underline",
+  "tex": "\\underline{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "braces",
+  "tex": "\\overbrace{a+b}^{n} + \\underbrace{c}_{m}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arrows-over",
+  "tex": "\\overrightarrow{AB} + \\overleftarrow{CD}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overset",
+  "tex": "\\overset{!}{=} + \\underset{*}{+}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xarrow",
+  "tex": "\\xleftarrow[sub]{sup} + \\xrightarrow{a} b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "matrix",
+  "tex": "\\begin{matrix} a & b \\\\ c & d \\end{matrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "pmatrix",
+  "tex": "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bmatrix",
+  "tex": "\\begin{bmatrix} x \\\\ y \\end{bmatrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "vmatrix",
+  "tex": "\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "array",
+  "tex": "\\begin{array}{cc|c} a & b & c \\\\ \\hline d & e & f \\end{array}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "aligned",
+  "tex": "\\begin{aligned} a &= b + c \\\\ d &= e \\end{aligned}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "alignedat",
+  "tex": "\\begin{alignedat}{2} a &= b & c &= d \\end{alignedat}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cases",
+  "tex": "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "gathered",
+  "tex": "\\begin{gathered} a \\\\ b \\end{gathered}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "substack",
+  "tex": "\\sum_{\\substack{a \\\\ b}} x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "smallmatrix",
+  "tex": "\\bigl(\\begin{smallmatrix} a & b \\\\ c & d \\end{smallmatrix}\\bigr)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "newcommand",
+  "tex": "\\newcommand{\\f}{x^2}\\f + \\f",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "newcommand-arg",
+  "tex": "\\newcommand{\\add}[2]{#1+#2}\\add{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "renewcommand",
+  "tex": "\\renewcommand{\\sum}{S}\\sum",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "providecommand",
+  "tex": "\\providecommand{\\g}{g}\\g",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "def",
+  "tex": "\\def\\h{x}\\h",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "def-args",
+  "tex": "\\def\\pair#1#2{(#1,#2)}\\pair{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "let",
+  "tex": "\\let\\c=\\alpha\\c",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "maxexpand-loop",
+  "tex": "\\def\\a{\\a}\\a",
+  "display": false,
+  "ours": "ExpansionLimit",
+  "katex_only": true,
+  "expect": "reject"
+ },
+ {
+  "id": "deep-nest",
+  "tex": "{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{x}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+  "display": false,
+  "ours": "TooDeep",
+  "katex_only": true,
+  "expect": "reject"
+ },
+ {
+  "id": "text",
+  "tex": "\\text{for all } x \\in \\mathbb{R}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "fonts",
+  "tex": "\\mathrm{A}\\mathbf{B}\\mathit{C}\\mathbb{D}\\mathcal{E}\\mathscr{F}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "fonts2",
+  "tex": "\\mathfrak{G}\\mathsf{H}\\mathtt{I}\\boldsymbol{\\alpha}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "color",
+  "tex": "\\color{red}{x} + y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "href",
+  "tex": "\\href{https://example.com}{link}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "smash",
+  "tex": "\\smash[t]{x}^{2}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "raisebox",
+  "tex": "\\raisebox{2pt}{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "spacing",
+  "tex": "a\\,b\\:c\\;d\\!e\\quad f\\qquad g",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "hspace",
+  "tex": "a\\hspace{1em}b\\kern2pt c",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textaccent",
+  "tex": "\\'e + \\\"o + \\~n",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "boxed",
+  "tex": "\\boxed{x^2}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "phantom",
+  "tex": "\\phantom{x} + y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cancel",
+  "tex": "\\cancel{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rule",
+  "tex": "\\rule{1em}{2pt}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathchoice",
+  "tex": "\\mathchoice{a}{b}{c}{d}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap",
+  "tex": "\\llap{x}y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-unknown",
+  "tex": "\\nope",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unbalanced-open",
+  "tex": "{x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unbalanced-close",
+  "tex": "x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-double-sup",
+  "tex": "x^2^3",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-double-sup-prime",
+  "tex": "x^2'",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-double-sub",
+  "tex": "x_1_2",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-dollar",
+  "tex": "$x$",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-amp",
+  "tex": "a & b",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-hash",
+  "tex": "#",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-left-unclosed",
+  "tex": "\\left(",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-right-alone",
+  "tex": "x\\right)",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-middle-alone",
+  "tex": "\\middle|",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-env-unknown",
+  "tex": "\\begin{nope} x \\end{nope}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-env-mismatch",
+  "tex": "\\begin{matrix} x \\end{pmatrix}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-newcommand-builtin",
+  "tex": "\\newcommand{\\sum}{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-renewcommand-missing",
+  "tex": "\\renewcommand{\\nope}{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-declare-op",
+  "tex": "\\DeclareMathOperator{\\Arg}{Arg}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-cmd-in-text",
+  "tex": "\\text{\\alpha}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-sup-in-text",
+  "tex": "\\text{a^b}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "verb-basic",
+  "tex": "\\verb|x|",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-ctrl-slash",
+  "tex": "a\\/b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-text-hash",
+  "tex": "\\text{a#b}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "color-prefix",
+  "tex": "\\color{red}x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "verb-star",
+  "tex": "\\verb*|a b|",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "verb-unclosed",
+  "tex": "\\verb|x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "verb-newline",
+  "tex": "\\verb|a\nb|",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "verb-in-macro",
+  "tex": "\\newcommand{\\myverb}{\\verb|x|}\\myverb",
+  "display": false,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true
+ },
+ {
+  "id": "color-rest",
+  "tex": "\\color{red}x+y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textcolor",
+  "tex": "\\textcolor{blue}{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "color-hex",
+  "tex": "\\color{#f00}{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "color-macro",
+  "tex": "\\newcommand{\\myred}{red}\\color{\\myred}{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "color-unclosed",
+  "tex": "\\color{red",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "colorbox",
+  "tex": "\\colorbox{yellow}{a+b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "fcolorbox",
+  "tex": "\\fcolorbox{red}{#ff0}{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "fcolorbox-empty",
+  "tex": "\\fcolorbox{r}{y}{}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textbf",
+  "tex": "\\textbf{a+b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textit",
+  "tex": "\\textit{a+b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textsf",
+  "tex": "\\textsf{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "texttt",
+  "tex": "\\texttt{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textrm",
+  "tex": "\\textrm{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textnormal",
+  "tex": "\\textnormal{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textbf-alpha",
+  "tex": "\\textbf{\\alpha}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "textsl",
+  "tex": "\\textsl{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "text-dollar",
+  "tex": "\\text{a$b}",
+  "display": false,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true
+ },
+ {
+  "id": "text-math",
+  "tex": "\\text{a$b$c}",
+  "display": false,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true
+ },
+ {
+  "id": "definecolor",
+  "tex": "\\definecolor{foo}{rgb}{1,0,0}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "url",
+  "tex": "\\url{https://example.com/a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "color-rgb",
+  "tex": "\\color{rgb(1,0,0)}{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "color-badhex",
+  "tex": "\\color{#ff}{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "color-empty",
+  "tex": "\\color{}{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "color-space",
+  "tex": "\\color{red green}{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "color-nosuch",
+  "tex": "\\color{\\nosuchmacro}{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "colorbox-bad",
+  "tex": "\\colorbox{#ff}{x}",
+  "display": false,
+  "expect": "reject"
+ }
+]

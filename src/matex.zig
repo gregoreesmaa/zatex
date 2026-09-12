@@ -13,6 +13,11 @@ const engine = @import("layout.zig");
 const mathml_mod = @import("mathml.zig");
 pub const contract = @import("contract.zig");
 
+// C ABI (issue 9): exports + conformance tests ride along with the lib.
+comptime {
+    _ = @import("cabi.zig");
+}
+
 // ---------------------------------------------------------------------------
 // Stable v1 contract. Frozen 2026-09-12: additive-only evolution from here.
 // New fallible conditions join LayoutError, new options gain defaults,
@@ -65,7 +70,8 @@ pub fn layoutDiag(
     return layoutInner(source, options, provider, runs, rules, glyphs, diag);
 }
 
-fn layoutInner(
+/// Shared engine entry for the Zig and C surfaces (see `cabi.zig`).
+pub fn layoutInner(
     source: []const u8,
     options: LayoutOptions,
     provider: MetricsProvider,
@@ -77,6 +83,9 @@ fn layoutInner(
     if (source.len > max_input_len) return error.TooLong;
     var pc = parse.ParseCtx.init(source);
     const root = parse.parse(&pc, options.display_mode) catch |e| {
+        // Offsets match KaTeX `ParseError.position` exactly: the
+        // 0-based byte offset of the offending token (KaTeX's message
+        // text adds 1 for humans; the property is the API contract).
         diag.offset = if (pc.err_pos > source.len) @intCast(source.len) else pc.err_pos;
         diag.message = pc.err_msg;
         return e;
@@ -182,7 +191,27 @@ test "accept: unknown command is Invalid with offset" {
         error.Invalid,
         layoutDiag("\\nope", .{}, testProvider(), &runs_buf, &rules_buf, &glyphs_buf, &diag),
     );
+    // KaTeX parity: `ParseError.position` is the 0-based token start.
     try std.testing.expectEqual(@as(u32, 0), diag.offset);
+}
+
+test "accept: color, verb, and boxes lay out natively" {
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const cases = [_][]const u8{
+        "\\color{red}{x}+y",
+        "\\color{red}x+y",
+        "\\textcolor{blue}{x}",
+        "\\color{#f00}{x}",
+        "\\verb|x|+\\verb*|a b|",
+        "\\colorbox{yellow}{a+b}",
+        "\\fcolorbox{red}{#ff0}{x}",
+        "\\textbf{ab}+\\textit{cd}",
+    };
+    for (cases) |src| {
+        _ = try layoutOk(src, .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    }
 }
 
 test "accept: unbalanced brace is Invalid" {
