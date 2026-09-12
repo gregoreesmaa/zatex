@@ -58,6 +58,7 @@ pub const LayCtx = struct {
     nboxes: u16 = 0,
     bkids: [max_bkids]BKid = undefined,
     nbkids: u16 = 0,
+    pctx: *const parse.ParseCtx,
     provider: contract.MetricsProvider,
     /// Minimum fence height requested by an enclosing `\left..\right`
     /// (consumed by `\middle`), in font units.
@@ -65,8 +66,8 @@ pub const LayCtx = struct {
     /// Nearest enclosing font override (`\mathrm{...}` etc.).
     fam_subst: ?parse.FontFam = null,
 
-    pub fn init(provider: contract.MetricsProvider) LayCtx {
-        return .{ .provider = provider };
+    pub fn init(pctx: *const parse.ParseCtx, provider: contract.MetricsProvider) LayCtx {
+        return .{ .pctx = pctx, .provider = provider };
     }
 
     fn allocBox(self: *LayCtx, b: Box) Error!u16 {
@@ -141,7 +142,7 @@ pub fn layout(
 // ---------------------------------------------------------------------------
 
 fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
-    const n = parse.ctxNodes(id);
+    const n = parse.nodeAt(lc.pctx, id);
     switch (n) {
         .atom => |a| return layoutAtom(lc, style, a.class, effFont(lc, a.font), a.cp),
         .op => |o| return layoutOp(lc, style, o),
@@ -207,7 +208,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             .invisible = false,
         }),
         .color => |b| return layoutNode(lc, style, b),
-        .href => |b| return layoutNode(lc, style, b),
+        .href => |h| return layoutNode(lc, style, h.body),
         .htmlwrap => |b| return layoutNode(lc, style, b),
         .phantom => |p| {
             const b = try layoutNode(lc, style, p.body);
@@ -286,7 +287,7 @@ fn layoutAtom(lc: *LayCtx, style: parse.Style, class: symbols.AtomClass, fam: pa
 
 /// Jennings-style row layout with inter-atom glue and Bin degradation.
 fn layoutGroup(lc: *LayCtx, style: parse.Style, g: parse.Range) Error!u16 {
-    const kids = parse.ctxKids(g);
+    const kids = parse.kidsOf(lc.pctx, g);
     // Count first for a single kids allocation.
     var parts: [512]BKid = undefined;
     var nparts: usize = 0;
@@ -297,7 +298,7 @@ fn layoutGroup(lc: *LayCtx, style: parse.Style, g: parse.Range) Error!u16 {
     var i: usize = 0;
     while (i < kids.len) : (i += 1) {
         const id = kids[i];
-        const cls = classOf(id);
+        const cls = classOf(lc.pctx, id);
         if (cls) |c| {
             var eff = c;
             if (eff == .Bin and symbols.degradeBin(prev)) eff = .Ord;
@@ -350,50 +351,47 @@ fn layoutGroup(lc: *LayCtx, style: parse.Style, g: parse.Range) Error!u16 {
 }
 
 /// Spacing class of a node, or null for transparent glue.
-fn classOf(id: Idx) ?symbols.AtomClass {
-    const n = parse.ctxNodes(id);
+fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
+    const n = parse.nodeAt(pc, id);
     switch (n) {
         .atom => |a| return a.class,
         .op => return .Op,
         .opname => return .Op,
+        // Braced groups act as Ord (TeX Book p.170).
+        .group => return .Ord,
         .frac => return .Inner,
         .sqrt => return .Ord,
-        .supsub => |s| return classOf(s.base),
+        .supsub => |s| return classOf(pc, s.base),
         .delim => return .Inner,
         .middle => return .Rel,
         .big => |b| return b.class,
-        .accent => |a| return classOf(a.nucleus) orelse .Ord,
+        .accent => |a| return classOf(pc, a.nucleus) orelse .Ord,
         .over => return .Ord,
-        .style => |s| return classOf(s.body),
-        .font => |f| return classOf(f.body),
+        .style => |s| return classOf(pc, s.body),
+        .font => |f| return classOf(pc, f.body),
         .text => return .Ord,
         .env => return .Ord,
         .substack => return .Ord,
         .mathchoice => return .Ord,
         .space, .vspace, .newline => return null,
         .hline => return null,
-        .color => |b| return classOf(b),
-        .href => |b| return classOf(b),
-        .htmlwrap => |b| return classOf(b),
-        .phantom => |p| return classOf(p.body),
+        .color => |b| return classOf(pc, b),
+        .href => |h| return classOf(pc, h.body),
+        .htmlwrap => |b| return classOf(pc, b),
+        .phantom => |p| return classOf(pc, p.body),
         .boxed => return .Ord,
-        .cancel => |b| return classOf(b),
-        .lap => |l| return classOf(l.body),
-        .smash => |s| return classOf(s.body),
-        .raisebox => |r| return classOf(r.body),
+        .cancel => |b| return classOf(pc, b),
+        .lap => |l| return classOf(pc, l.body),
+        .smash => |s| return classOf(pc, s.body),
+        .raisebox => |r| return classOf(pc, r.body),
         .rule => return .Ord,
     }
 }
 
 fn layoutOp(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
     if (o.func) {
-        // Word operator in roman; limit-words center their scripts.
-        const size = style.sizeUnits();
-        const w = try layoutWord(lc, size, .rm, o.text);
-        const wb = lc.boxes[w];
-        const has = hasScripts(lc);
-        _ = has;
-        return finishWordOp(lc, style, o, w, wb);
+        // Word operator in roman (`sin`, `lim`, ...).
+        return layoutWord(lc, style.sizeUnits(), .rm, o.text);
     }
     // Single-glyph operator, possibly large.
     const size: u16 = if (o.large and style.isDisplay())
@@ -411,11 +409,6 @@ fn layoutOp(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
         .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = g } },
         .invisible = false,
     });
-}
-
-fn hasScripts(lc: *LayCtx) bool {
-    _ = lc;
-    return false;
 }
 
 /// Lay out word glyphs as a single box; returns the box id.
@@ -457,18 +450,11 @@ fn layoutWord(lc: *LayCtx, size: u16, fam: parse.FontFam, text: []const u8) Erro
     });
 }
 
-fn finishWordOp(lc: *LayCtx, style: parse.Style, o: anytype, w: u16, wb: Box) Error!u16 {
-    _ = style;
-    _ = o;
-    _ = wb;
-    return w;
-}
-
 fn layoutOpName(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
     const size = style.sizeUnits();
     var buf: [64]u8 = undefined;
     var n: usize = 0;
-    const toks = parse.ctxToks(o.toks);
+    const toks = parse.toksOf(lc.pctx, o.toks);
     for (toks) |tk| {
         switch (tk.kind) {
             .char => {
@@ -491,7 +477,113 @@ fn layoutOpName(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
 // Scripts, fractions, roots
 // ---------------------------------------------------------------------------
 
+/// Unwrap transparent nodes to find an operator base, if any.
+fn opBase(pc: *const parse.ParseCtx, id: Idx) ?struct {
+    cp: u21,
+    large: bool,
+    func: bool,
+    limits: parse.LimitsMode,
+    lim_def: bool,
+} {
+    var cur = id;
+    while (true) {
+        switch (parse.nodeAt(pc, cur)) {
+            .op => |o| return .{
+                .cp = o.cp,
+                .large = o.large,
+                .func = o.func,
+                .limits = o.limits,
+                .lim_def = o.lim_def,
+            },
+            .style => |s| cur = s.body,
+            .font => |f| cur = f.body,
+            .color => |b| cur = b,
+            .href => |h| cur = h.body,
+            .htmlwrap => |b| cur = b,
+            else => return null,
+        }
+    }
+}
+
+/// Limit-vs-side decision for an operator base (KaTeX: `auto` stacks
+/// above/below in display style for large ops and limit-words, and
+/// goes to the side otherwise; `\limits`/`\nolimits` force it).
+fn useLimits(style: parse.Style, o: anytype) bool {
+    switch (o.limits) {
+        .on => return true,
+        .off => return false,
+        .auto => return style.isDisplay() and (o.large or (o.func and o.lim_def)),
+    }
+}
+
+fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
+    const size = style.sizeUnits();
+    const base = try layoutNode(lc, style, s.base);
+    const bb = lc.boxes[base];
+    const sc = style.script();
+    var sup: u16 = 0;
+    var sub: u16 = 0;
+    var sw: i32 = 0;
+    var sha: i32 = 0;
+    var sdb: i32 = 0;
+    var uw: i32 = 0;
+    var uha: i32 = 0;
+    var udb: i32 = 0;
+    var has_sup = false;
+    var has_sub = false;
+    if (s.sup != NONE) {
+        sup = try layoutNode(lc, sc, s.sup);
+        const sb = lc.boxes[sup];
+        sw = sb.w;
+        sha = sb.ha;
+        sdb = sb.db;
+        has_sup = true;
+    }
+    if (s.sub != NONE) {
+        sub = try layoutNode(lc, sc, s.sub);
+        const sb = lc.boxes[sub];
+        uw = sb.w;
+        uha = sb.ha;
+        udb = sb.db;
+        has_sub = true;
+    }
+    const gap: i32 = @divTrunc((@as(i32, 150) * size), 1000);
+    var w = bb.w;
+    if (sw > w) w = sw;
+    if (uw > w) w = uw;
+    var parts: [3]BKid = undefined;
+    var nparts: usize = 0;
+    parts[0] = .{ .box = base, .dx = @divTrunc(w - bb.w, 2), .dy = 0 };
+    nparts = 1;
+    var ha = bb.ha;
+    var db = bb.db;
+    if (has_sup) {
+        const sy = bb.ha + gap + sdb;
+        parts[nparts] = .{ .box = sup, .dx = @divTrunc(w - sw, 2), .dy = sy };
+        nparts += 1;
+        ha = sy + sha;
+    }
+    if (has_sub) {
+        const sy = -(bb.db + gap + uha);
+        parts[nparts] = .{ .box = sub, .dx = @divTrunc(w - uw, 2), .dy = sy };
+        nparts += 1;
+        db = -sy + udb;
+    }
+    const sk = try lc.allocKids(nparts);
+    @memcpy(lc.bkids[sk .. sk + nparts], parts[0..nparts]);
+    return lc.allocBox(.{
+        .w = w,
+        .ha = ha,
+        .db = db,
+        .kind = .{ .list = .{ .start = sk, .len = @intCast(nparts) } },
+        .invisible = false,
+    });
+}
+
 fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
+    if (opBase(lc.pctx, s.base)) |o| {
+        if (useLimits(style, o)) return layoutLimits(lc, style, s);
+    }
     const size = style.sizeUnits();
     const base = try layoutNode(lc, style, s.base);
     const bb = lc.boxes[base];
@@ -523,17 +615,17 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         sub_db = sb.db;
         has_sub = true;
     }
-    // Shifts in thousandths of an em (TeX-derived, uniform across sizes).
-    var sup_up: i32 = switch (style) {
+    // Shifts in thousandths of an em (TeX-derived), scaled to size.
+    var sup_mu: i32 = switch (style) {
         .D, .Dc, .T, .Tc => 400,
         .S, .Sc => 350,
         .SS, .SSc => 300,
     };
-    if (style == .Dc or style == .Tc or style == .Sc or style == .SSc) sup_up -= 30;
-    const sub_down: i32 = 260;
+    if (style == .Dc or style == .Tc or style == .Sc or style == .SSc) sup_mu -= 30;
+    const sup_up: i32 = @divTrunc(sup_mu * size, 1000);
+    const sub_down: i32 = @divTrunc((@as(i32, 260) * size), 1000);
     const script_gap: i32 = 60;
     _ = sc_size;
-    _ = size;
     const sx = bb.w + @divTrunc(script_gap * size, 1000);
     var parts: [3]BKid = undefined;
     var nparts: usize = 0;
@@ -581,14 +673,14 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
     const dbx = lc.boxes[den];
     var th = f.kind.thick;
     if (th == 0) th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
-    const axis = @divTrunc(250 * size, 1000);
+    const axis = @divTrunc((@as(i32, 250) * size), 1000);
     const pad: i32 = 120;
     var content = if (nb.w > dbx.w) nb.w else dbx.w;
     content += 2 * pad;
     const gap: i32 = if (3 * th > 100) 3 * th else 100;
     if (!f.kind.bar) {
         // Atop/binom: stack with a fixed gap, no rule.
-        const vgap: i32 = @divTrunc(280 * size, 1000);
+        const vgap: i32 = @divTrunc((@as(i32, 280) * size), 1000);
         const s = try lc.allocKids(2);
         const num_y = vgap + nb.db;
         const den_y = -(vgap + dbx.ha);
@@ -606,15 +698,6 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
     }
     const num_y = axis + gap + nb.db;
     const den_y = -(axis + gap + dbx.ha);
-    const bar = try lc.allocBox(.{
-        .w = content,
-        .ha = axis + @divTrunc(th + 1, 2),
-        .db = -axis + @divTrunc(th, 2),
-        .kind = .{ .rule = {} },
-        .invisible = false,
-    });
-    // Rule box with explicit dims: rebuild as positioned list below.
-    _ = bar;
     const s = try lc.allocKids(3);
     lc.bkids[s] = .{ .box = num, .dx = @divTrunc(content - nb.w, 2), .dy = num_y };
     lc.bkids[s + 1] = .{ .box = den, .dx = @divTrunc(content - dbx.w, 2), .dy = den_y };
@@ -665,10 +748,8 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     const size = style.sizeUnits();
     const rad = try layoutNode(lc, style, s.radicand);
     const rb = lc.boxes[rad];
-    var th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .radical);
-    _ = th;
-    th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
-    const gap = 2 * th + @divTrunc(40 * size, 1000);
+    const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
+    const gap = 2 * th + @divTrunc((@as(i32, 40) * size), 1000);
     // Radical sign, grown through the variant hook when available.
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const g0 = lc.glyphId(font, 0x221A);
@@ -681,8 +762,8 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     const gdb = @divTrunc(ge[1] * size, 1000);
     // Rule sits above the radicand; the radical rises to meet it.
     const rule_top = rb.ha + gap + th;
-    const kern: i32 = @divTrunc(50 * size, 1000);
-    const over: i32 = @divTrunc(40 * size, 1000);
+    const kern: i32 = @divTrunc((@as(i32, 50) * size), 1000);
+    const over: i32 = @divTrunc((@as(i32, 40) * size), 1000);
     const rad_x = gw + kern;
     const content_w = rad_x + rb.w + over;
     const rule_y = rule_top - @divTrunc(th, 2);
@@ -712,7 +793,6 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     if (gtop > ha) ha = gtop;
     const gbot = -(rad_dy - gdb);
     if (gbot > db) db = gbot;
-    var parts_n: usize = 3;
     var total_w = content_w;
     // Optional root index, set small at the upper left.
     if (s.index != NONE) {
@@ -721,14 +801,13 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         // Prepend: shift existing parts right — rebuild with 4 kids.
         const s2 = try lc.allocKids(4);
         const idx_w = @divTrunc(ib.w * 6, 10);
-        lc.bkids[s2] = .{ .box = idx, .dx = 0, .dy = rule_top - ib.db - @divTrunc(100 * size, 1000) };
+        lc.bkids[s2] = .{ .box = idx, .dx = 0, .dy = rule_top - ib.db - @divTrunc((@as(i32, 100) * size), 1000) };
         lc.bkids[s2 + 1] = .{ .box = gb, .dx = idx_w, .dy = rad_dy };
         lc.bkids[s2 + 2] = .{ .box = rad, .dx = idx_w + rad_x, .dy = 0 };
         lc.bkids[s2 + 3] = .{ .box = ruleb, .dx = idx_w + rad_x - kern, .dy = rule_y };
         total_w = idx_w + content_w;
-        const itop = rule_top - @divTrunc(100 * size, 1000) + ib.ha;
+        const itop = rule_top - @divTrunc((@as(i32, 100) * size), 1000) + ib.ha;
         if (itop > ha) ha = itop;
-        parts_n = 4;
         return lc.allocBox(.{
             .w = total_w,
             .ha = ha,
@@ -737,7 +816,6 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
             .invisible = false,
         });
     }
-    _ = parts_n;
     return lc.allocBox(.{
         .w = total_w,
         .ha = ha,
@@ -766,7 +844,7 @@ fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32) Error!u16 {
     var db = @divTrunc(e[1] * size, 1000);
     if (need > 0) {
         // Center the grown fence on the math axis.
-        const axis = @divTrunc(250 * size, 1000);
+        const axis = @divTrunc((@as(i32, 250) * size), 1000);
         const half = @divTrunc(need + 1, 2);
         ha = axis + half;
         db = half - axis;
@@ -782,26 +860,19 @@ fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32) Error!u16 {
 }
 
 fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
-    const size = style.sizeUnits();
     const prev_need = lc.fence_need;
-    // Measure the body first with a provisional need of zero.
+    // Measure pass (middles at natural size), then the real pass with
+    // `\middle` separators grown to the full fence height.
     lc.fence_need = 0;
-    const body = try layoutNode(lc, style, d.body);
-    const bb = lc.boxes[body];
+    const probe = try layoutNode(lc, style, d.body);
+    const pb = lc.boxes[probe];
     const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
     const clear = if (2 * th > 120) 2 * th else 120;
-    const need = bb.ha + bb.db + clear;
+    const need = pb.ha + pb.db + clear;
     lc.fence_need = need;
-    // Re-lay out `\middle` separators at full height: middles were
-    // already laid out during the body pass with need 0 — instead,
-    // size fences AND middles consistently by laying the body out a
-    // second time. (No layout math in emitters; the core may measure
-    // twice — still one pass over caller buffers.)
-    const body2 = try layoutNode(lc, style, d.body);
-    const bb2 = lc.boxes[body2];
-    _ = bb2;
+    const body = try layoutNode(lc, style, d.body);
+    const bb = lc.boxes[body];
     lc.fence_need = prev_need;
-    const axis = @divTrunc(250 * size, 1000);
     const s = try lc.allocKids(3);
     var x: i32 = 0;
     var ha = bb.ha;
@@ -809,21 +880,16 @@ fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
     if (d.left != 0) {
         const f = try layoutFence(lc, style, d.left, need);
         const fb = lc.boxes[f];
-        lc.bkids[s] = .{ .box = f, .dx = 0, .dy = fb.ha - axis - @divTrunc(need + 1, 2) + (fb.ha - (axis + @divTrunc(need + 1, 2))) };
-        // Center: fence box already axis-centered, so dy = 0 relative
-        // to the body baseline... the fence's own baseline differs
-        // from the body baseline. Align centers: fence center should
-        // sit at the axis. dy shifts the fence baseline up by
-        // (fence_center - axis) where fence_center = fb.ha - axis...
-        // Since layoutFence axis-centered the fence, dy = 0.
-        lc.bkids[s].dy = 0;
+        // layoutFence centers grown fences on the math axis, so dy=0
+        // aligns the fence center with the body axis.
+        lc.bkids[s] = .{ .box = f, .dx = 0, .dy = 0 };
         x += fb.w;
         if (fb.ha > ha) ha = fb.ha;
         if (fb.db > db) db = fb.db;
     } else {
-        lc.bkids[s] = .{ .box = body, .dx = 0, .dy = 0 };
+        lc.bkids[s] = .{ .box = try emptyBox(lc), .dx = 0, .dy = 0 };
     }
-    lc.bkids[s + 1] = .{ .box = body2, .dx = x, .dy = 0 };
+    lc.bkids[s + 1] = .{ .box = body, .dx = x, .dy = 0 };
     x += bb.w;
     if (d.right != 0) {
         const f = try layoutFence(lc, style, d.right, need);
@@ -833,20 +899,23 @@ fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
         if (fb.ha > ha) ha = fb.ha;
         if (fb.db > db) db = fb.db;
     } else {
-        const z = try lc.allocBox(.{
-            .w = 0,
-            .ha = 0,
-            .db = 0,
-            .kind = .{ .empty = {} },
-            .invisible = false,
-        });
-        lc.bkids[s + 2] = .{ .box = z, .dx = x, .dy = 0 };
+        lc.bkids[s + 2] = .{ .box = try emptyBox(lc), .dx = x, .dy = 0 };
     }
     return lc.allocBox(.{
         .w = x,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
+        .invisible = false,
+    });
+}
+
+fn emptyBox(lc: *LayCtx) Error!u16 {
+    return lc.allocBox(.{
+        .w = 0,
+        .ha = 0,
+        .db = 0,
+        .kind = .{ .empty = {} },
         .invisible = false,
     });
 }
@@ -879,8 +948,8 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const aw = @divTrunc(adv * size, 1000);
     const aha = @divTrunc(e[0] * size, 1000);
     const adb = @divTrunc(e[1] * size, 1000);
-    const gap: i32 = @divTrunc(120 * size, 1000);
-    const skew = lc.italicCorr(font, lc.glyphId(font, nucleusFirstCp(a.nucleus)));
+    const gap: i32 = @divTrunc((@as(i32, 120) * size), 1000);
+    const skew = lc.italicCorr(font, lc.glyphId(font, nucleusFirstCp(lc.pctx, a.nucleus)));
     const ab = try lc.allocBox(.{
         .w = aw,
         .ha = aha,
@@ -904,18 +973,18 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
 }
 
 /// First codepoint of a nucleus, for italic-correction lookup.
-fn nucleusFirstCp(id: Idx) u21 {
-    const n = parse.ctxNodes(id);
+fn nucleusFirstCp(pc: *const parse.ParseCtx, id: Idx) u21 {
+    const n = parse.nodeAt(pc, id);
     switch (n) {
         .atom => |a| return a.cp,
         .group => |g| {
-            const kids = parse.ctxKids(g);
-            if (kids.len > 0) return nucleusFirstCp(kids[0]);
+            const kids = parse.kidsOf(pc, g);
+            if (kids.len > 0) return nucleusFirstCp(pc, kids[0]);
             return 'x';
         },
-        .supsub => |s| return nucleusFirstCp(s.base),
-        .font => |f| return nucleusFirstCp(f.body),
-        .style => |s| return nucleusFirstCp(s.body),
+        .supsub => |s| return nucleusFirstCp(pc, s.base),
+        .font => |f| return nucleusFirstCp(pc, f.body),
+        .style => |s| return nucleusFirstCp(pc, s.body),
         else => return 'x',
     }
 }
@@ -943,7 +1012,7 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
     const size = style.sizeUnits();
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const th = lc.ruleTh(font, .overline);
-    const gap: i32 = @divTrunc(150 * size, 1000);
+    const gap: i32 = @divTrunc((@as(i32, 150) * size), 1000);
     switch (o.kind) {
         .overline, .underline => {
             const nuc = try layoutNode(lc, style, o.nucleus);
@@ -1059,7 +1128,7 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 const ay = gha + gap + ab.db;
                 lc.bkids[s] = .{ .box = gb, .dx = @divTrunc(w - gw, 2), .dy = gy };
                 lc.bkids[s + 1] = .{ .box = above, .dx = @divTrunc(w - ab.w, 2), .dy = ay };
-                var ha = ay + ab.ha;
+                const ha = ay + ab.ha;
                 var db = gdb;
                 if (has_below) {
                     const by = -(gdb + gap + below_ha);
@@ -1118,7 +1187,7 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     var x: i32 = 0;
     var ha: i32 = 0;
     var db: i32 = 0;
-    const toks = parse.ctxToks(t.toks);
+    const toks = parse.toksOf(lc.pctx, t.toks);
     var i: usize = 0;
     while (i < toks.len) : (i += 1) {
         const tk = toks[i];
@@ -1155,7 +1224,7 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
             else => return error.Invalid,
         }
         if (is_space) {
-            const sw = @divTrunc(333 * size, 1000);
+            const sw = @divTrunc((@as(i32, 333) * size), 1000);
             const kb = try lc.allocBox(.{
                 .w = sw,
                 .ha = 0,
@@ -1209,10 +1278,7 @@ const CellBox = struct {
 
 fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     const size = style.sizeUnits();
-    const cell_style: parse.Style = if (e.kind == .smallmatrix) .S else .T;
-    _ = cell_style;
-    _ = style;
-    const rows = parse.ctxRows(e.rows_start, e.rows_len);
+    const rows = parse.rowsOf(lc.pctx, e.rows_start, e.rows_len);
     // First pass: lay out cells, find column count.
     var cells: [64][8]CellBox = undefined;
     var ncols_per_row: [64]usize = undefined;
@@ -1220,11 +1286,11 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     var ncols: usize = 0;
     for (rows) |r| {
         if (nrows >= 64) return error.NoSpace;
-        const kids = parse.ctxKids(parse.Range{ .start = r.start, .len = r.len });
+        const kids = parse.kidsOf(lc.pctx, parse.Range{ .start = r.start, .len = r.len });
         var c: usize = 0;
         for (kids) |id| {
             if (c >= 8) return error.NoSpace;
-            if (isHline(id)) {
+            if (isHline(lc.pctx, id)) {
                 cells[nrows][c] = .{ .id = 0, .w = 0, .ha = 0, .db = 0, .is_rule = true };
             } else {
                 const b = try layoutNode(lc, if (e.kind == .smallmatrix) parse.Style.S else parse.Style.T, id);
@@ -1247,24 +1313,21 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
         });
     }
     // Column alignment.
-    var align: [8]u8 = undefined; // 0=l 1=c 2=r
+    var col_align: [8]u8 = undefined; // 0=l 1=c 2=r
     var vlines: [9]bool = .{false} ** 9; // vline before col i (ncols = after last)
     switch (e.kind) {
         .array, .alignedat => {
-            const spec = parse.ctxKids(parse.Range{ .start = e.spec_start, .len = e.spec_len });
+            const spec = parse.kidsOf(lc.pctx, parse.Range{ .start = e.spec_start, .len = e.spec_len });
             var col: usize = 0;
-            var pending_vline = false;
             for (spec) |code| {
                 if (code == 3) {
                     if (col <= 8) vlines[col] = true;
-                    pending_vline = true;
-                    _ = pending_vline;
                 } else {
-                    if (col < 8) align[col] = @intCast(code);
+                    if (col < 8) col_align[col] = @intCast(code);
                     col += 1;
                 }
             }
-            while (col < 8) : (col += 1) align[col] = 1;
+            while (col < 8) : (col += 1) col_align[col] = 1;
             if (col != ncols) {
                 // Rows may carry fewer cells (pad) but not more.
                 if (ncols > col) return error.Invalid;
@@ -1273,16 +1336,16 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
         },
         .aligned => {
             var col: usize = 0;
-            while (col < 8) : (col += 1) align[col] = if (col % 2 == 0) 2 else 0;
+            while (col < 8) : (col += 1) col_align[col] = if (col % 2 == 0) 2 else 0;
         },
         .cases => {
-            align[0] = 0;
+            col_align[0] = 0;
             var col: usize = 1;
-            while (col < 8) : (col += 1) align[col] = 0;
+            while (col < 8) : (col += 1) col_align[col] = 0;
         },
         else => {
             var col: usize = 0;
-            while (col < 8) : (col += 1) align[col] = 1;
+            while (col < 8) : (col += 1) col_align[col] = 1;
         },
     }
     // Column widths.
@@ -1294,9 +1357,9 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             if (!cells[r][c].is_rule and cells[r][c].w > colw[c]) colw[c] = cells[r][c].w;
         }
     }
-    const half_sep: i32 = @divTrunc(250 * size, 1000);
-    const row_gap: i32 = if (e.kind == .smallmatrix) @divTrunc(140 * size, 1000) else @divTrunc(280 * size, 1000);
-    const vline_w: i32 = @divTrunc(40 * size, 1000);
+    const half_sep: i32 = @divTrunc((@as(i32, 250) * size), 1000);
+    const row_gap: i32 = if (e.kind == .smallmatrix) @divTrunc((@as(i32, 140) * size), 1000) else @divTrunc((@as(i32, 280) * size), 1000);
+    const vline_w: i32 = @divTrunc((@as(i32, 40) * size), 1000);
     // Total width.
     var total_w: i32 = 0;
     var c: usize = 0;
@@ -1343,7 +1406,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     var parts: [256]BKid = undefined;
     var nparts: usize = 0;
     const emit = struct {
-        fn e(
+        fn put(
             p: *[256]BKid,
             np: *usize,
             id: u16,
@@ -1354,7 +1417,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             p[np.*] = .{ .box = id, .dx = dx, .dy = dy };
             np.* += 1;
         }
-    }.e;
+    }.put;
     // Column x origins.
     var colx: [8]i32 = undefined;
     var cx: i32 = 0;
@@ -1369,14 +1432,12 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     while (r < nrows) : (r += 1) {
         const base = total_h - row_base[r];
         var cc: usize = 0;
-        var only_rule = ncols_per_row[r] == 1 and cells[r][0].is_rule;
-        _ = only_rule;
         while (cc < ncols_per_row[r]) : (cc += 1) {
             const cell = cells[r][cc];
             if (cell.is_rule) {
                 const rb = try lc.allocBox(.{
                     .w = total_w,
-                    .ha = @divTrunc(40 * size + 1, 1000),
+                    .ha = @divTrunc((@as(i32, 40) * size) + 1, 1000),
                     .db = 0,
                     .kind = .{ .rule = {} },
                     .invisible = false,
@@ -1384,7 +1445,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
                 try emit(&parts, &nparts, rb, 0, base);
                 continue;
             }
-            const dx: i32 = switch (align[cc]) {
+            const dx: i32 = switch (col_align[cc]) {
                 0 => colx[cc],
                 2 => colx[cc] + colw[cc] - cell.w,
                 else => colx[cc] + @divTrunc(colw[cc] - cell.w, 2),
@@ -1407,7 +1468,6 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
                 try emit(&parts, &nparts, vb, vx, base);
             }
         }
-        _ = cc;
     }
     const s = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
@@ -1428,13 +1488,13 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     });
 }
 
-fn isHline(id: Idx) bool {
-    const n = parse.ctxNodes(id);
+fn isHline(pc: *const parse.ParseCtx, id: Idx) bool {
+    const n = parse.nodeAt(pc, id);
     switch (n) {
         .hline => return true,
         .group => |g| {
-            const kids = parse.ctxKids(g);
-            return kids.len == 1 and isHline(kids[0]);
+            const kids = parse.kidsOf(pc, g);
+            return kids.len == 1 and isHline(pc, kids[0]);
         },
         else => return false,
     }
@@ -1442,7 +1502,7 @@ fn isHline(id: Idx) bool {
 
 fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
     _ = style;
-    const rows = parse.ctxRows(r.start, r.len);
+    const rows = parse.rowsOf(lc.pctx, r.start, r.len);
     var parts: [128]BKid = undefined;
     var nparts: usize = 0;
     const gap: i32 = 140;
@@ -1453,15 +1513,30 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
     var n: usize = 0;
     for (rows) |row| {
         if (n >= 64) return error.NoSpace;
-        const kids = parse.ctxKids(parse.Range{ .start = row.start, .len = row.len });
-        // Each substack row holds exactly one cell group.
-        const id = if (kids.len == 1) kids[0] else blk: {
-            const s = try lc.allocKids(kids.len);
-            @memcpy(lc.bkids[s .. s + kids.len], kids);
-            _ = s;
-            break :blk kids[0];
+        const kids = parse.kidsOf(lc.pctx, parse.Range{ .start = row.start, .len = row.len });
+        // Each substack row holds exactly one cell group; anything
+        // else (empty trailing rows) packs as a plain row.
+        const b = if (kids.len == 1) try layoutNode(lc, .S, kids[0]) else blk: {
+            const ks = try lc.allocKids(kids.len);
+            var x: i32 = 0;
+            var ha: i32 = 0;
+            var db: i32 = 0;
+            for (kids, 0..) |kid, j| {
+                const cb = try layoutNode(lc, .S, kid);
+                const cbb = lc.boxes[cb];
+                lc.bkids[@as(usize, ks) + j] = .{ .box = cb, .dx = x, .dy = 0 };
+                x += cbb.w;
+                if (cbb.ha > ha) ha = cbb.ha;
+                if (cbb.db > db) db = cbb.db;
+            }
+            break :blk try lc.allocBox(.{
+                .w = x,
+                .ha = ha,
+                .db = db,
+                .kind = .{ .list = .{ .start = ks, .len = @intCast(kids.len) } },
+                .invisible = false,
+            });
         };
-        const b = try layoutNode(lc, .S, id);
         const bb = lc.boxes[b];
         ids[n] = b;
         widths[n] = bb.w;
@@ -1469,7 +1544,9 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
         n += 1;
     }
     var w: i32 = 0;
-    for (widths[0..n]) |cw| if (cw > w) w = cw;
+    for (widths[0..n]) |cw| {
+        if (cw > w) w = cw;
+    }
     // Stack from the top; baseline = first row baseline.
     var y: i32 = 0;
     var k: usize = 0;
@@ -1502,8 +1579,8 @@ fn layoutBoxed(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     const size = style.sizeUnits();
     const b = try layoutNode(lc, style, id);
     const bb = lc.boxes[b];
-    const pad: i32 = @divTrunc(300 * size, 1000);
-    const th: i32 = @divTrunc(40 * size, 1000);
+    const pad: i32 = @divTrunc((@as(i32, 300) * size), 1000);
+    const th: i32 = @divTrunc((@as(i32, 40) * size), 1000);
     const w = bb.w + 2 * pad;
     const ha = bb.ha + pad;
     const db = bb.db + pad;
@@ -1602,40 +1679,11 @@ const EmitCtx = struct {
     open_font: u16 = 0,
     open_size: u16 = 0,
     open_y: i32 = 0,
+    /// Expected pen x for run continuation.
     open_x: i32 = 0,
+    open_run_x: i32 = 0,
     open_start: usize = 0,
     has_open: bool = false,
-
-    fn glyph(self: *EmitCtx, font: u16, size: u16, x: i32, y: i32, g: u16) Error!void {
-        if (!self.has_open or self.open_font != font or self.open_size != size or
-            self.open_y != y or self.open_x != x)
-        {
-            self.closeRun();
-            if (self.nr >= self.runs.len) return error.NoSpace;
-            self.open_font = font;
-            self.open_size = size;
-            self.open_y = y;
-            self.open_x = x;
-            self.open_start = self.ng;
-            self.has_open = true;
-        }
-        if (self.ng >= self.glyphs.len) return error.NoSpace;
-        self.glyphs[self.ng] = g;
-        self.ng += 1;
-        self.open_x = x + 1; // force contiguity check via advance below
-        _ = self.open_x;
-        self.open_x = x;
-        // Track expected next x through the caller's advance: the
-        // walker passes exact pen positions, so contiguity holds when
-        // the caller-observed x matches. Simplify: runs break only on
-        // font/size/baseline change or explicit gaps (handled by the
-        // caller passing x; compare against running pen below).
-        self.open_x = x;
-    }
-
-    fn pen(self: *EmitCtx, x: i32) void {
-        self.open_x = x;
-    }
 
     fn closeRun(self: *EmitCtx) void {
         if (!self.has_open) return;
@@ -1651,8 +1699,6 @@ const EmitCtx = struct {
         }
         self.has_open = false;
     }
-
-    const open_run_x: i32 = 0;
 };
 
 fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
@@ -1670,7 +1716,7 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     ec.open_size = g.size;
                     ec.open_y = base;
                     ec.open_start = ec.ng;
-                    ec.open_run_x_store = x;
+                    ec.open_run_x = x;
                     ec.has_open = true;
                 }
                 if (ec.ng >= ec.glyphs.len) return error.NoSpace;

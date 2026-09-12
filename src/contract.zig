@@ -36,6 +36,10 @@ pub const MetricsProvider = struct {
     glyphId: *const fn (ctx: *const anyopaque, font: u16, codepoint: u21) u16,
     advance: *const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32,
     ruleThickness: *const fn (ctx: *const anyopaque, font: u16, kind: RuleKind) i32,
+    /// [height_above, depth_below] of `glyph` at 1000 units. When null
+    /// the core uses a uniform 700/250 approximation (deterministic;
+    /// hosts with outline metrics should supply the real extents).
+    extents: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16) [2]i32 = null,
     glyphVariant: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16, min_height: i32) u16 = null,
     italicCorrection: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32 = null,
 };

@@ -1,73 +1,40 @@
 //! MaTeX — KaTeX-compatible LaTeX math engine (native Zig).
 //!
-//! Library root. Layout core lands here milestone by milestone (see
-//! GitHub issues); the output contract lives in `ir.zig`.
+//! Library root: public API plus the engine wiring (parse → layout →
+//! IR/MathML). The frozen v1 shapes live in `contract.zig` and are
+//! re-exported here unchanged; the output contract lives in `ir.zig`.
 const std = @import("std");
 const build_options = @import("build_options");
 
 pub const ir = @import("ir.zig");
-
-pub const version: std.SemanticVersion = .{ .major = 0, .minor = 0, .patch = 0 };
-
-pub const Profile = enum { subset, full };
-
-pub const profile: Profile =
-    std.meta.stringToEnum(Profile, build_options.profile) orelse .full;
+pub const parse = @import("parse.zig");
+pub const symbols = @import("symbols.zig");
+const engine = @import("layout.zig");
+const mathml_mod = @import("mathml.zig");
+pub const contract = @import("contract.zig");
 
 // ---------------------------------------------------------------------------
 // Stable v1 contract. Frozen 2026-09-12: additive-only evolution from here.
 // New fallible conditions join LayoutError, new options gain defaults,
 // provider callbacks arrive with a version bump — call-site shapes stay.
+// (Canonical definitions in `contract.zig`; same names, same shapes.)
 // ---------------------------------------------------------------------------
 
-/// Hard caps. Part of the contract, not tunables.
-pub const max_input_len: usize = 64 * 1024;
-pub const max_nesting_depth: u8 = 32;
-pub const max_expand: u32 = 1000; // KaTeX `maxExpand` default parity.
+pub const version = contract.version;
+pub const Profile = contract.Profile;
+pub const max_input_len = contract.max_input_len;
+pub const max_nesting_depth = contract.max_nesting_depth;
+pub const max_expand = contract.max_expand;
+pub const LayoutOptions = contract.LayoutOptions;
+pub const RuleKind = contract.RuleKind;
+pub const provider_version = contract.provider_version;
+pub const MetricsProvider = contract.MetricsProvider;
+pub const LayoutError = contract.LayoutError;
+pub const Diag = contract.Diag;
+pub const FontId = contract.FontId;
 
-/// Layout knobs. Fields gain defaults, never lose them.
-pub const LayoutOptions = struct {
-    display_mode: bool = false,
-};
-
-/// Rule kinds the core may ask a thickness for.
-pub const RuleKind = enum { fraction_bar, radical, overline, underline };
-
-/// Host-supplied font metrics. The core never touches font files: glyph
-/// identity, advances, and rule weights arrive here in integer font
-/// units. `font` is the host's own namespace, opaque to the core.
-pub const provider_version: u32 = 1;
-pub const MetricsProvider = struct {
-    ctx: *const anyopaque,
-    glyphId: *const fn (ctx: *const anyopaque, font: u16, codepoint: u21) u16,
-    advance: *const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32,
-    ruleThickness: *const fn (ctx: *const anyopaque, font: u16, kind: RuleKind) i32,
-};
-
-/// Every failure the engine can ever report. Variants are added, never
-/// removed or repurposed; `OutOfMemory` is reserved (the core allocates
-/// nothing) so the set never reshapes under callers.
-pub const LayoutError = error{
-    Unsupported, // outside subset/profile scope → caller falls back
-    Invalid, // malformed input (KaTeX ParseError parity)
-    TooDeep, // max_nesting_depth exceeded
-    TooLong, // max_input_len exceeded
-    ExpansionLimit, // max_expand exceeded
-    NoSpace, // caller runs/rules buffers filled
-    OutOfMemory, // reserved; the core allocates nothing
-};
-
-/// KaTeX `ParseError` parity: byte offset plus a static message.
-/// Positions are byte offsets into `source`, matching KaTeX's
-/// character offsets for ASCII input.
-pub const Diag = struct {
-    offset: u32,
-    message: []const u8,
-
-    pub fn empty() Diag {
-        return .{ .offset = 0, .message = "" };
-    }
-};
+pub const profile: Profile =
+    std.meta.stringToEnum(Profile, build_options.profile) orelse .full;
 
 /// Reentrant layout path: `glyphs` backs every `Run.glyphs` slice in
 /// the returned `Layout`. Zero heap allocations; `NoSpace` when any
@@ -80,13 +47,8 @@ pub fn layoutFull(
     rules: []ir.Rule,
     glyphs: []u16,
 ) LayoutError!ir.Layout {
-    _ = source;
-    _ = options;
-    _ = provider;
-    _ = runs;
-    _ = rules;
-    _ = glyphs;
-    return error.Unsupported;
+    var diag = Diag.empty();
+    return layoutInner(source, options, provider, runs, rules, glyphs, &diag);
 }
 
 /// Layout with KaTeX-parity diagnostics: on `Invalid`, `diag` carries
@@ -100,22 +62,40 @@ pub fn layoutDiag(
     glyphs: []u16,
     diag: *Diag,
 ) LayoutError!ir.Layout {
-    _ = diag;
-    return layoutFull(source, options, provider, runs, rules, glyphs);
+    return layoutInner(source, options, provider, runs, rules, glyphs, diag);
+}
+
+fn layoutInner(
+    source: []const u8,
+    options: LayoutOptions,
+    provider: MetricsProvider,
+    runs: []ir.Run,
+    rules: []ir.Rule,
+    glyphs: []u16,
+    diag: *Diag,
+) LayoutError!ir.Layout {
+    if (source.len > max_input_len) return error.TooLong;
+    var pc = parse.ParseCtx.init(source);
+    const root = parse.parse(&pc, options.display_mode) catch |e| {
+        diag.offset = if (pc.err_pos > source.len) @intCast(source.len) else pc.err_pos;
+        diag.message = pc.err_msg;
+        return e;
+    };
+    var lc = engine.LayCtx.init(&pc, provider);
+    const style: parse.Style = if (options.display_mode) .D else .T;
+    return engine.layout(&lc, root, style, runs, rules, glyphs);
 }
 
 /// MathML Core serialization of one formula into caller-owned `out`.
 /// Pure structural mapping over the parse tree — no layout math.
 pub fn mathml(source: []const u8, options: LayoutOptions, out: []u8) LayoutError![]const u8 {
-    _ = source;
-    _ = options;
-    _ = out;
-    return error.Unsupported;
+    return mathml_mod.render(source, options, out);
 }
 
 /// Lay out one formula into caller-owned buffers (zero allocations).
-/// v0: nothing renders yet — oversize input errors TooLong, everything
-/// else errors Unsupported so callers fall back in a single pass.
+/// `Run.glyphs` slices borrow a shared 8K-glyph ring that stays valid
+/// until the next `layout` call (documented ctime-style borrow);
+/// prefer `layoutFull` for reentrant use.
 pub fn layout(
     source: []const u8,
     options: LayoutOptions,
@@ -123,12 +103,10 @@ pub fn layout(
     runs: []ir.Run,
     rules: []ir.Rule,
 ) LayoutError!ir.Layout {
-    _ = options;
-    _ = provider;
-    _ = runs;
-    _ = rules;
-    if (source.len > max_input_len) return error.TooLong;
-    return error.Unsupported;
+    const S = struct {
+        var ring: [8192]u16 = undefined;
+    };
+    return layoutFull(source, options, provider, runs, rules, &S.ring);
 }
 
 test "profile option resolves to a known profile" {

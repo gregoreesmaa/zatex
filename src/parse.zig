@@ -9,7 +9,21 @@ const contract = @import("contract.zig");
 const symbols = @import("symbols.zig");
 
 const Error = contract.LayoutError;
-const profile = @import("matex.zig").profile;
+
+/// Read-only AST accessors for the layout core and emitters (the
+/// pools live in `ParseCtx`; these keep that ownership explicit).
+pub fn nodeAt(ctx: *const ParseCtx, id: Idx) Node {
+    return ctx.nodes[id];
+}
+pub fn kidsOf(ctx: *const ParseCtx, r: Range) []const u16 {
+    return ctx.kids[r.start .. r.start + r.len];
+}
+pub fn rowsOf(ctx: *const ParseCtx, start: u16, len: u16) []const Row {
+    return ctx.rows[start .. start + len];
+}
+pub fn toksOf(ctx: *const ParseCtx, r: Range) []const Tok {
+    return ctx.toks[r.start .. r.start + r.len];
+}
 
 pub const Idx = u16;
 pub const NONE: Idx = 0xFFFF;
@@ -212,6 +226,9 @@ pub const Node = union(enum) {
         large: bool,
         func: bool,
         limits: LimitsMode,
+        /// Default limit placement for `auto` (KaTeX: sums/lim yes,
+        /// integrals/sin no).
+        lim_def: bool,
         text: []const u8,
     },
     group: Range,
@@ -254,6 +271,7 @@ pub const Node = union(enum) {
         kind: OverKind,
         nucleus: Idx,
         extra: Idx,
+        under: Idx,
     },
     style: struct {
         style: Style,
@@ -289,7 +307,10 @@ pub const Node = union(enum) {
     /// Color target ignored: the IR has no color channel (see the
     /// `\color` decision in the parser). Layout renders `body`.
     color: Idx,
-    href: Idx,
+    href: struct {
+        body: Idx,
+        target: Range,
+    },
     htmlwrap: Idx,
     phantom: struct {
         body: Idx,
@@ -332,8 +353,8 @@ const Def = struct {
 /// a bounded stack frame (~100 KB total).
 pub const max_nodes: usize = 768;
 pub const max_kids: usize = 2048;
-pub const max_toks: usize = 2048;
-pub const max_pushback: usize = 512;
+pub const max_toks: usize = 1536;
+pub const max_pushback: usize = 384;
 pub const max_defs: usize = 48;
 pub const max_rows: usize = 192;
 
@@ -352,6 +373,9 @@ pub const ParseCtx = struct {
     npb: u16 = 0,
     defs: [max_defs]Def = undefined,
     ndefs: u8 = 0,
+    /// When true, whitespace lexes as `char(' ')` instead of being
+    /// skipped (text-mode captures). Math captures leave it false.
+    keep_spaces: bool = false,
     in_env: u8 = 0,
     in_fence: u8 = 0,
     expansions: u32 = 0,
@@ -422,7 +446,27 @@ pub const ParseCtx = struct {
     }
 
     fn lexRaw(self: *ParseCtx) Error!Tok {
-        self.skipGap();
+        if (self.keep_spaces) {
+            // Skip comments only; collapse whitespace runs to one space.
+            while (self.spos < self.src.len and self.src[self.spos] == '%') {
+                while (self.spos < self.src.len and self.src[self.spos] != '\n') self.spos += 1;
+            }
+            if (self.spos < self.src.len) {
+                const c = self.src[self.spos];
+                if (c == ' ' or c == '\t' or c == '\r' or c == '\n') {
+                    const start: u32 = self.spos;
+                    while (self.spos < self.src.len) {
+                        const d = self.src[self.spos];
+                        if (d != ' ' and d != '\t' and d != '\r' and d != '\n') break;
+                        self.spos += 1;
+                    }
+                    return .{ .kind = .char, .cp = ' ', .pos = start };
+                }
+            }
+            if (self.spos >= self.src.len) return .{ .kind = .end, .pos = @intCast(self.src.len) };
+        } else {
+            self.skipGap();
+        }
         if (self.spos >= self.src.len) return .{ .kind = .end, .pos = @intCast(self.src.len) };
         const start: u32 = self.spos;
         const c = self.src[self.spos];
@@ -739,6 +783,11 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
         }
         if (frame == .bracket and t.kind == .char and t.cp == '[') bdepth += 1;
         switch (t.kind) {
+            .end => {
+                if (frame != .top) return ctx.fail(t.pos, "unexpected end of input");
+                _ = try ctx.next();
+                break;
+            },
             .rbrace => {
                 if (frame != .group) return ctx.fail(t.pos, "unexpected '}'");
                 _ = try ctx.next();
@@ -880,20 +929,41 @@ fn parseGroupOrAtom(ctx: *ParseCtx, depth: u8) Error!Idx {
     }
     // Depth guard: every nesting level passes through here or a group.
     if (depth >= contract.max_nesting_depth) {
-        return ctx.fail(t.pos, "nesting too deep");
+        return tooDeep(ctx, t.pos);
     }
     const maybe = try parseSingle(ctx, depth + 1);
     return maybe orelse ctx.fail(t.pos, "expected argument");
 }
 
+fn tooDeep(ctx: *ParseCtx, pos: u32) Error {
+    ctx.err_pos = pos;
+    ctx.err_msg = "nesting too deep";
+    return error.TooDeep;
+}
+
 fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
     if (depth >= contract.max_nesting_depth) {
         const t = try ctx.peek();
-        return ctx.fail(t.pos, "nesting too deep");
+        return tooDeep(ctx, t.pos);
     }
     const t = try ctx.next();
     switch (t.kind) {
         .char => {
+            // Captured whitespace never reaches math (text captures
+            // own it); guard anyway.
+            if (t.cp == ' ') return null;
+            if (t.cp == '~') {
+                const id: ?Idx = try ctx.allocNode(.{ .space = 333 });
+                return id;
+            }
+            if (t.cp == '\'') {
+                const id: ?Idx = try ctx.allocNode(.{ .atom = .{
+                    .class = .Ord,
+                    .font = .rm,
+                    .cp = 0x2032,
+                } });
+                return id;
+            }
             const cls = symbols.asciiClass(t.cp) orelse .Ord;
             const font: FontFam = if (t.cp >= '0' and t.cp <= '9')
                 .rm
@@ -901,17 +971,45 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                 .mathit
             else
                 .rm;
-            return ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = t.cp } });
+            const id: ?Idx = try ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = t.cp } });
+            return id;
         },
-        .lbrace => return parseFormula(ctx, depth + 1, .group),
+        .lbrace => {
+            const id: ?Idx = try parseFormula(ctx, depth + 1, .group);
+            return id;
+        },
         .sup => return ctx.fail(t.pos, "expected base before '^'"),
         .sub => return ctx.fail(t.pos, "expected base before '_'"),
         .amp => return ctx.fail(t.pos, "unexpected '&'"),
         .rbrace => return ctx.fail(t.pos, "unexpected '}'"),
-        .newline => return ctx.allocNode(.{ .newline = {} }),
+        .newline => {
+            const id: ?Idx = try ctx.allocNode(.{ .newline = {} });
+            return id;
+        },
         .param => return ctx.fail(t.pos, "unexpected '#'"),
+        .marker => return ctx.fail(t.pos, "unexpected input"),
         .end => return ctx.fail(t.pos, "unexpected end of input"),
         .ctrl => {
+            // Macro definitions are side effects (no node).
+            if (t.name.len > 1) {
+                if (tokNameEq(t.name, "newcommand") or tokNameEq(t.name, "renewcommand") or
+                    tokNameEq(t.name, "providecommand"))
+                {
+                    try subsetGate(false);
+                    try parseNewCommand(ctx, t, tokNameEq(t.name, "renewcommand"), tokNameEq(t.name, "providecommand"));
+                    return null;
+                }
+                if (tokNameEq(t.name, "def")) {
+                    try subsetGate(false);
+                    try parseDef(ctx, t);
+                    return null;
+                }
+                if (tokNameEq(t.name, "let")) {
+                    try subsetGate(false);
+                    try parseLet(ctx, t);
+                    return null;
+                }
+            }
             // User macros shadow builtins.
             if (t.name.len > 0 and isMacroName(t)) {
                 if (ctx.findDef(t.name)) |def| {
@@ -919,7 +1017,8 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     return parseSingle(ctx, depth);
                 }
             }
-            return parseCtrl(ctx, depth, t);
+            const id: ?Idx = try parseCtrl(ctx, depth, t);
+            return id;
         },
     }
 }
@@ -976,12 +1075,13 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
         @memcpy(ctx.kids[s .. s + nsup], sup_parts[0..nsup]);
         sup = try ctx.allocNode(.{ .group = .{ .start = s, .len = nsup } });
     }
-    return ctx.allocNode(.{ .supsub = .{
+    const id: ?Idx = try ctx.allocNode(.{ .supsub = .{
         .base = base,
         .sup = sup,
         .sub = sub,
         .prime_sup = prime_made and nsup > 0,
     } });
+    return id;
 }
 
 /// Parse one environment cell: a formula stopping at `&`, `\\`,
@@ -1085,29 +1185,10 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
 // Control-sequence dispatch
 // ---------------------------------------------------------------------------
 
-fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!?Idx {
+fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     // Single-character names (`\%`, `\,`, `\'`, ...).
     if (t.name.len == 1) return parseSingleCharCtrl(ctx, depth, t);
     const name = t.name;
-
-    // Macro definition forms (side effect, no node).
-    if (tokNameEq(name, "newcommand") or tokNameEq(name, "renewcommand") or
-        tokNameEq(name, "providecommand"))
-    {
-        try subsetGate(false);
-        try parseNewCommand(ctx, t, tokNameEq(name, "renewcommand"), tokNameEq(name, "providecommand"));
-        return null;
-    }
-    if (tokNameEq(name, "def")) {
-        try subsetGate(false);
-        try parseDef(ctx, t);
-        return null;
-    }
-    if (tokNameEq(name, "let")) {
-        try subsetGate(false);
-        try parseLet(ctx, t);
-        return null;
-    }
 
     if (tokNameEq(name, "frac")) return parseFracLike(ctx, depth, .{ .bar = true });
     if (tokNameEq(name, "dfrac")) return parseFracLike(ctx, depth, .{ .bar = true, .fstyle = 1 });
@@ -1189,13 +1270,13 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!?Idx {
     }
     if (tokNameEq(name, "href")) {
         try subsetGate(false);
-        _ = try ctx.captureArg();
+        const target = try ctx.captureArg();
         const body = try parseGroupOrAtom(ctx, depth);
-        return ctx.allocNode(.{ .href = body });
+        return ctx.allocNode(.{ .href = .{ .body = body, .target = target } });
     }
     if (tokNameEq(name, "url")) {
         try subsetGate(false);
-        const toks = try ctx.captureArg();
+        const toks = try captureSpacedArg(ctx);
         try checkTextToks(ctx, toks);
         return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .tt } });
     }
@@ -1298,6 +1379,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!?Idx {
                 .large = sym.large_op,
                 .func = sym.func,
                 .limits = .auto,
+                .lim_def = sym.limits_default,
                 .text = text,
             } });
         }
@@ -1314,7 +1396,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!?Idx {
 // Single-character control sequences
 // ---------------------------------------------------------------------------
 
-fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!?Idx {
+fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     const c: u8 = t.name[0];
     switch (c) {
         '{' => return ctx.allocNode(.{ .atom = .{ .class = .Open, .font = .rm, .cp = '{' } }),
@@ -1342,7 +1424,7 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!?Idx {
     return ctx.fail(t.pos, "undefined control sequence");
 }
 
-fn textAccentCp(c: u8) ?u21 {
+pub fn textAccentCp(c: u8) ?u21 {
     return switch (c) {
         '\'' => 0x0301,
         '`' => 0x0300,
@@ -1384,7 +1466,7 @@ fn applyTextAccent(ctx: *ParseCtx, pos: u32, acc: u21, arg: Idx) Error!Idx {
     return ctx.fail(pos, "unsupported accent combination");
 }
 
-fn precompose(acc: u21, base: u21) ?u21 {
+pub fn precompose(acc: u21, base: u21) ?u21 {
     const Key = struct { acc: u21, base: u21, cp: u21 };
     const table: []const Key = &.{
         .{ .acc = 0x0301, .base = 'a', .cp = 0x00E1 }, .{ .acc = 0x0301, .base = 'e', .cp = 0x00E9 },
@@ -1610,7 +1692,6 @@ fn parseBig(ctx: *ParseCtx, name: []const u8, t: Tok) Error!Idx {
     if (rest.len == 1) class = suffixClass(rest[0]) else if (rest.len != 0) {
         return ctx.fail(t.pos, "undefined control sequence");
     }
-    _ = t;
     // Delimiter spec (`.` is not allowed here — KaTeX rejects `\big.`).
     const dt = try ctx.next();
     const cp: u21 = switch (dt.kind) {
@@ -1777,14 +1858,34 @@ fn eq2(a: []const u8, b: []const u8) bool {
 // ---------------------------------------------------------------------------
 
 /// Braced token capture with `\text`-style validation of the braces.
+/// Spaces survive the capture (text mode); the flag is restored after.
 fn parseBracedToks(ctx: *ParseCtx, cmd: Tok, comptime need_brace: bool) Error!Range {
     const pk = try ctx.peek();
     if (pk.kind == .lbrace) {
         _ = try ctx.next();
-        return ctx.captureToBrace(pk.pos);
+        const prev = ctx.keep_spaces;
+        ctx.keep_spaces = true;
+        const r = ctx.captureToBrace(pk.pos) catch |e| {
+            ctx.keep_spaces = prev;
+            return e;
+        };
+        ctx.keep_spaces = prev;
+        return r;
     }
     if (need_brace) return ctx.fail(cmd.pos, "expected '{'");
     return ctx.captureArg();
+}
+
+/// Token capture with spaces preserved (for `\url`).
+fn captureSpacedArg(ctx: *ParseCtx) Error!Range {
+    const prev = ctx.keep_spaces;
+    ctx.keep_spaces = true;
+    const r = ctx.captureArg() catch |e| {
+        ctx.keep_spaces = prev;
+        return e;
+    };
+    ctx.keep_spaces = prev;
+    return r;
 }
 
 fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
@@ -2084,7 +2185,7 @@ fn parseDef(ctx: *ParseCtx, cmd: Tok) Error!void {
         if (q.kind == .char and q.cp == '#') {
             _ = try ctx.next();
             const d = try ctx.next();
-            if (d.kind != .char or d.cp != '1' + nargs) return ctx.fail(d.pos, "parameters must be sequential");
+            if (d.kind != .char or d.cp != '1' + @as(u21, nargs)) return ctx.fail(d.pos, "parameters must be sequential");
             nargs += 1;
             if (nargs > 9) return ctx.fail(d.pos, "too many parameters");
         } else break;
