@@ -50,7 +50,7 @@ fn F(cp: u21) Sym {
 }
 
 /// Lowercase Greek. `\varepsilon` et al are variant forms, same class.
-const greek_lower: []const Entry = &.{
+const greek_lower = [_]Entry{
     .{ .name = "alpha", .sym = S(0x03B1, .Ord) },
     .{ .name = "beta", .sym = S(0x03B2, .Ord) },
     .{ .name = "gamma", .sym = S(0x03B3, .Ord) },
@@ -82,7 +82,7 @@ const greek_lower: []const Entry = &.{
     .{ .name = "omega", .sym = S(0x03C9, .Ord) },
 };
 
-const greek_upper: []const Entry = &.{
+const greek_upper = [_]Entry{
     .{ .name = "Alpha", .sym = S(0x0391, .Ord) },
     .{ .name = "Beta", .sym = S(0x0392, .Ord) },
     .{ .name = "Gamma", .sym = S(0x0393, .Ord) },
@@ -109,7 +109,7 @@ const greek_upper: []const Entry = &.{
     .{ .name = "digamma", .sym = S(0x03DC, .Ord) },
 };
 
-const operators: []const Entry = &.{
+const operators = [_]Entry{
     // Large operators with limits by default.
     .{ .name = "sum", .sym = L(0x2211) },
     .{ .name = "prod", .sym = L(0x220F) },
@@ -387,6 +387,9 @@ pub fn lookup(name: []const u8) ?Sym {
     return null;
 }
 
+/// Every named symbol, for coverage probes and documentation sweeps.
+pub const all_symbols = greek_lower ++ greek_upper ++ operators;
+
 fn eq(a: []const u8, b: []const u8) bool {
     if (a.len != b.len) return false;
     for (a, b) |x, y| if (x != y) return false;
@@ -460,8 +463,9 @@ pub fn degradeBin(prev: ?AtomClass) bool {
 
 /// Delimiter commands: name → codepoint. `.` and `|` are handled by
 /// the parser directly.
-pub fn lookupDelim(name: []const u8) ?u21 {
-    const delims: []const struct { name: []const u8, cp: u21 } = &.{
+const DelimEntry = struct { name: []const u8, cp: u21 };
+
+const delims = [_]DelimEntry{
         .{ .name = "langle", .cp = 0x27E8 },
         .{ .name = "rangle", .cp = 0x27E9 },
         .{ .name = "lvert", .cp = 0x007C },
@@ -487,7 +491,12 @@ pub fn lookupDelim(name: []const u8) ?u21 {
         .{ .name = "backslash", .cp = 0x005C },
         .{ .name = "lang", .cp = 0x27E8 },
         .{ .name = "rang", .cp = 0x27E9 },
-    };
+};
+
+/// Every named delimiter, for coverage probes.
+pub const all_delims = delims;
+
+pub fn lookupDelim(name: []const u8) ?u21 {
     for (delims) |d| if (eq(d.name, name)) return d.cp;
     return null;
 }
@@ -499,8 +508,9 @@ pub const Accent = struct {
     wide: bool,
 };
 
-pub fn lookupAccent(name: []const u8) ?Accent {
-    const accents: []const struct { name: []const u8, cp: u21, wide: bool } = &.{
+const AccentEntry = struct { name: []const u8, cp: u21, wide: bool };
+
+const accents = [_]AccentEntry{
         .{ .name = "hat", .cp = 0x0302, .wide = false },
         .{ .name = "widehat", .cp = 0x0302, .wide = true },
         .{ .name = "check", .cp = 0x030C, .wide = false },
@@ -517,7 +527,12 @@ pub fn lookupAccent(name: []const u8) ?Accent {
         .{ .name = "dddot", .cp = 0x20DB, .wide = false },
         .{ .name = "ddddot", .cp = 0x20DC, .wide = false },
         .{ .name = "mathring", .cp = 0x030A, .wide = false },
-    };
+};
+
+/// Every named accent, for coverage probes.
+pub const all_accents = accents;
+
+pub fn lookupAccent(name: []const u8) ?Accent {
     for (accents) |a| if (eq(a.name, name)) return .{ .cp = a.cp, .wide = a.wide };
     return null;
 }

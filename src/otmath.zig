@@ -296,7 +296,8 @@ fn coverageIndex(b: []const u8, cov_off: usize, glyph: u16) Error!?usize {
 }
 
 /// First vertical variant of `glyph` with advance ≥ `min_advance`
-/// (font units), or `glyph` itself. Powers `\left..\right` growth.
+/// (font units). When nothing is tall enough, the tallest variant
+/// (assemblies are not parsed yet — documented in the IR guide).
 pub fn vertVariant(f: Font, glyph: u16, min_advance: i32) Error!u16 {
     if (f.math_off == 0) return error.UnsupportedTable;
     const b = f.bytes;
@@ -314,13 +315,15 @@ pub fn vertVariant(f: Font, glyph: u16, min_advance: i32) Error!u16 {
     const nvar = try u16be(b, con + 2);
     if (nvar == 0) return glyph;
     const recs = con + 4;
+    var tallest: u16 = glyph;
     var i: usize = 0;
     while (i < nvar) : (i += 1) {
         const vg = try u16be(b, recs + i * 4);
         const av = try u16be(b, recs + i * 4 + 2);
+        tallest = vg;
         if (@as(i32, av) >= min_advance) return vg;
     }
-    return glyph;
+    return tallest;
 }
 
 /// Italic correction in font units (0 when uncovered).
@@ -398,8 +401,8 @@ test "reference paren variants grow monotonically" {
     // min 2000 lands between .v4 (1793) and .v5 (2093) → gid 2455.
     const v5 = try vertVariant(r.font, p0, 2000);
     try std.testing.expectEqual(@as(u16, 2455), v5);
-    // Beyond the tallest (.v7, 2991) keeps the base glyph.
-    try std.testing.expectEqual(p0, try vertVariant(r.font, p0, 100000));
+    // Beyond the tallest (.v7 gid 2499, 2991) falls back to it.
+    try std.testing.expectEqual(@as(u16, 2499), try vertVariant(r.font, p0, 100000));
 }
 
 test "reference italic correction matches ground truth" {

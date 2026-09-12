@@ -949,7 +949,8 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const aha = @divTrunc(e[0] * size, 1000);
     const adb = @divTrunc(e[1] * size, 1000);
     const gap: i32 = @divTrunc((@as(i32, 120) * size), 1000);
-    const skew = lc.italicCorr(font, lc.glyphId(font, nucleusFirstCp(lc.pctx, a.nucleus)));
+    const skew1000 = lc.italicCorr(font, lc.glyphId(font, nucleusFirstCp(lc.pctx, a.nucleus)));
+    const skew = @divTrunc(skew1000 * @as(i32, size), 1000);
     const ab = try lc.allocBox(.{
         .w = aw,
         .ha = aha,

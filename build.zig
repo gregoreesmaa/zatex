@@ -43,4 +43,21 @@ pub fn build(b: *std.Build) void {
     const otmath_tests = b.addTest(.{ .root_module = otmath_mod });
     const run_otmath_tests = b.addRunArtifact(otmath_tests);
     test_step.dependOn(&run_otmath_tests.step);
+
+    // Reference-host probes: core driven by the real font (test-only).
+    const refhost_mod = b.addModule("refhost", .{
+        .root_source_file = b.path("src/refhost.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    refhost_mod.addImport("matex", mod);
+    const otm = b.addModule("otmath_link", .{
+        .root_source_file = b.path("src/otmath.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    refhost_mod.addImport("otmath", otm);
+    const refhost_tests = b.addTest(.{ .root_module = refhost_mod });
+    const run_refhost_tests = b.addRunArtifact(refhost_tests);
+    test_step.dependOn(&run_refhost_tests.step);
 }
