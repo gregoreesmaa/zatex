@@ -1,4 +1,4 @@
-//! MaTeX MathML emitter: AST → MathML Core (thin structural walker).
+//! ZaTeX MathML emitter: AST → MathML Core (thin structural walker).
 //!
 //! No layout math here, ever (AGENTS.md §2): this maps parse nodes to
 //! MathML elements without measuring anything. Positions, sizes, and

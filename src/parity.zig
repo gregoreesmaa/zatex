@@ -16,7 +16,7 @@
 //! scope: this test compares structure, not metrics.
 
 const std = @import("std");
-const matex = @import("matex");
+const zatex = @import("zatex");
 
 const Stub = struct {
     fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
@@ -25,12 +25,12 @@ const Stub = struct {
     fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
         return 500;
     }
-    fn ruleThickness(_: *const anyopaque, _: u16, _: matex.RuleKind) i32 {
+    fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
         return 40;
     }
 };
 
-fn stubProvider() matex.MetricsProvider {
+fn stubProvider() zatex.MetricsProvider {
     const S = struct {
         var dummy: u8 = 0;
     };
@@ -120,7 +120,7 @@ fn normTags(src: []const u8, out: []u8) usize {
 
 fn expectTags(expected: []const u8, actual: []const u8, id: []const u8) !void {
     if (!std.mem.eql(u8, expected, actual)) {
-        std.debug.print("\ntag mismatch [{s}]\n  katex: {s}\n  matex: {s}\n", .{ id, expected, actual });
+        std.debug.print("\ntag mismatch [{s}]\n  katex: {s}\n  zatex: {s}\n", .{ id, expected, actual });
         return error.TestUnexpectedResult;
     }
 }
@@ -142,8 +142,8 @@ test "sweep agreement with pinned KaTeX" {
     const parsed = try std.json.parseFromSlice(std.json.Value, alloc, goldens, .{});
     const root = parsed.value.object.get("cases").?.array;
 
-    var runs: [1024]matex.ir.Run = undefined;
-    var rules: [128]matex.ir.Rule = undefined;
+    var runs: [1024]zatex.ir.Run = undefined;
+    var rules: [128]zatex.ir.Rule = undefined;
     var glyphs: [8192]u16 = undefined;
     var mbuf: [65536]u8 = undefined;
     var kbuf: [65536]u8 = undefined;
@@ -159,11 +159,11 @@ test "sweep agreement with pinned KaTeX" {
         const display = o.get("display").?.bool;
         const katex_ok = o.get("katex_ok").?.bool;
         const katex_only = o.get("katex_only").?.bool;
-        const opts: matex.LayoutOptions = .{ .display_mode = display };
+        const opts: zatex.LayoutOptions = .{ .display_mode = display };
 
-        var diag = matex.Diag.empty();
+        var diag = zatex.Diag.empty();
         const prov = stubProvider();
-        const lay = matex.layoutDiag(tex, opts, prov, &runs, &rules, &glyphs, &diag);
+        const lay = zatex.layoutDiag(tex, opts, prov, &runs, &rules, &glyphs, &diag);
         if (katex_only) {
             // Documented divergence: only our declared behavior holds.
             const want = o.get("ours").?.string;
@@ -181,10 +181,10 @@ test "sweep agreement with pinned KaTeX" {
         }
         if (lay) |_| {
             if (!katex_ok) {
-                std.debug.print("\n[{s}] matex accepts, katex rejects\n", .{id});
+                std.debug.print("\n[{s}] zatex accepts, katex rejects\n", .{id});
                 return error.TestUnexpectedResult;
             }
-            const mine = try matex.mathml(tex, opts, &mbuf);
+            const mine = try zatex.mathml(tex, opts, &mbuf);
             const kmath = o.get("katex_mathml").?.string;
             const kn = normTags(kmath, &kbuf);
             const an = normTags(mine, &abuf);
@@ -192,7 +192,7 @@ test "sweep agreement with pinned KaTeX" {
             n_ok += 1;
         } else |e| {
             if (katex_ok) {
-                std.debug.print("\n[{s}] matex rejects ({s}), katex accepts\n", .{ id, @errorName(e) });
+                std.debug.print("\n[{s}] zatex rejects ({s}), katex accepts\n", .{ id, @errorName(e) });
                 return error.TestUnexpectedResult;
             }
             if (e != error.Invalid) {

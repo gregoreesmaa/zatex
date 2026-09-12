@@ -15,15 +15,15 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     options.addOption([]const u8, "profile", profile);
 
-    const mod = b.addModule("matex", .{
-        .root_source_file = b.path("src/matex.zig"),
+    const mod = b.addModule("zatex", .{
+        .root_source_file = b.path("src/zatex.zig"),
         .target = target,
         .optimize = optimize,
     });
     mod.addOptions("build_options", options);
 
     const lib = b.addLibrary(.{
-        .name = "matex",
+        .name = "zatex",
         .root_module = mod,
         .linkage = .static,
     });
@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    refhost_mod.addImport("matex", mod);
+    refhost_mod.addImport("zatex", mod);
     const otm = b.addModule("otmath_link", .{
         .root_source_file = b.path("src/otmath.zig"),
         .target = target,
@@ -67,7 +67,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    parity_mod.addImport("matex", mod);
+    parity_mod.addImport("zatex", mod);
     const parity_tests = b.addTest(.{ .root_module = parity_mod });
     const run_parity_tests = b.addRunArtifact(parity_tests);
     run_parity_tests.setCwd(b.path("."));

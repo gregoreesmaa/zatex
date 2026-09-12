@@ -1,13 +1,13 @@
-//! MaTeX C ABI: the embedding surface (issue 9).
+//! ZaTeX C ABI: the embedding surface (issue 9).
 //!
 //! Reentrant, zero-allocation, no pointers in results: runs reference
 //! the caller's glyph buffer by (start, count) indices, so outputs
 //! stay valid as long as the caller's buffers do. Status codes mirror
 //! `LayoutError`; `err_offset`/`err_message` carry ParseError parity.
 const std = @import("std");
-const matex = @import("matex.zig");
+const zatex = @import("zatex.zig");
 
-/// Must match `matex.h`. Nullable hooks map to the optional provider
+/// Must match `zatex.h`. Nullable hooks map to the optional provider
 /// hooks (null = deterministic fallback).
 pub const CMetrics = extern struct {
     ctx: ?*const anyopaque,
@@ -52,7 +52,7 @@ pub const STATUS_TOO_LONG: i32 = 4;
 pub const STATUS_EXPANSION_LIMIT: i32 = 5;
 pub const STATUS_NO_SPACE: i32 = 6;
 
-fn toStatus(e: matex.LayoutError) i32 {
+fn toStatus(e: zatex.LayoutError) i32 {
     return switch (e) {
         error.Unsupported => STATUS_UNSUPPORTED,
         error.Invalid => STATUS_INVALID,
@@ -77,7 +77,7 @@ const Host = struct {
         const f = h.m.advance orelse return 500;
         return f(h.m.ctx, font, glyph);
     }
-    fn rule(ctx: *const anyopaque, font: u16, kind: matex.RuleKind) i32 {
+    fn rule(ctx: *const anyopaque, font: u16, kind: zatex.RuleKind) i32 {
         const h: *const Host = @ptrCast(@alignCast(ctx));
         const f = h.m.rule_thickness orelse return 40;
         return f(h.m.ctx, font, @intFromEnum(kind));
@@ -97,7 +97,7 @@ const Host = struct {
 /// Lay out one UTF-8 formula. All buffers are caller-owned. `src_len`
 /// is capped at `max_input_len`; output counts are capped by the
 /// buffer lengths (`STATUS_NO_SPACE` on overflow).
-export fn matex_layout_utf8(
+export fn zatex_layout_utf8(
     src_ptr: ?[*]const u8,
     src_len: usize,
     display_mode: bool,
@@ -121,13 +121,13 @@ export fn matex_layout_utf8(
         .err_offset = 0,
     };
     const m = metrics orelse return STATUS_NO_SPACE;
-    if (src_len > matex.max_input_len) {
+    if (src_len > zatex.max_input_len) {
         out.status = STATUS_TOO_LONG;
         return out.status;
     }
     const src = (src_ptr orelse return STATUS_NO_SPACE)[0..src_len];
     const host = Host{ .m = m };
-    const prov: matex.MetricsProvider = .{
+    const prov: zatex.MetricsProvider = .{
         .ctx = @ptrCast(&host),
         .glyphId = Host.gid,
         .advance = Host.adv,
@@ -141,10 +141,10 @@ export fn matex_layout_utf8(
     const glyphs = (glyphs_ptr orelse return STATUS_NO_SPACE)[0..glyphs_cap];
     // Bridge C runs/rules to the IR shapes with a fixed scratch
     // overlay: layout into stack temporaries, then translate.
-    var runs_tmp: [256]matex.ir.Run = undefined;
-    var rules_tmp: [64]matex.ir.Rule = undefined;
-    var diag = matex.Diag.empty();
-    const l = matex.layoutInner(src, .{ .display_mode = display_mode }, prov, &runs_tmp, &rules_tmp, glyphs, &diag) catch |e| {
+    var runs_tmp: [256]zatex.ir.Run = undefined;
+    var rules_tmp: [64]zatex.ir.Rule = undefined;
+    var diag = zatex.Diag.empty();
+    const l = zatex.layoutInner(src, .{ .display_mode = display_mode }, prov, &runs_tmp, &rules_tmp, glyphs, &diag) catch |e| {
         out.status = toStatus(e);
         out.err_offset = diag.offset;
         return out.status;
@@ -182,7 +182,7 @@ export fn matex_layout_utf8(
 
 /// MathML Core serialization into caller-owned `out`. Returns the
 /// byte count, or a negative status on error.
-export fn matex_mathml_utf8(
+export fn zatex_mathml_utf8(
     src_ptr: ?[*]const u8,
     src_len: usize,
     display_mode: bool,
@@ -190,16 +190,16 @@ export fn matex_mathml_utf8(
     out_cap: usize,
 ) isize {
     const out = (out_ptr orelse return -STATUS_NO_SPACE)[0..out_cap];
-    if (src_len > matex.max_input_len) return -STATUS_TOO_LONG;
+    if (src_len > zatex.max_input_len) return -STATUS_TOO_LONG;
     const src = (src_ptr orelse return -STATUS_NO_SPACE)[0..src_len];
-    const s = matex.mathml(src, .{ .display_mode = display_mode }, out) catch |e| return -toStatus(e);
+    const s = zatex.mathml(src, .{ .display_mode = display_mode }, out) catch |e| return -toStatus(e);
     return @intCast(s.len);
 }
 
 /// Packed semantic version: major << 16 | minor << 8 | patch.
-export fn matex_version() u32 {
-    return (@as(u32, matex.version.major) << 16) |
-        (@as(u32, matex.version.minor) << 8) | matex.version.patch;
+export fn zatex_version() u32 {
+    return (@as(u32, zatex.version.major) << 16) |
+        (@as(u32, zatex.version.minor) << 8) | zatex.version.patch;
 }
 
 test "cabi lays out through C function pointers" {
@@ -220,7 +220,7 @@ test "cabi lays out through C function pointers" {
     var glyphs: [64]u16 = undefined;
     var out: CLayout = undefined;
     const src = "x^2+\\frac12";
-    const st = matex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+    const st = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
     try std.testing.expectEqual(STATUS_OK, st);
     try std.testing.expect(out.nruns > 0 and out.nrules == 1);
     // Glyph index ranges land inside the caller buffer.
@@ -236,7 +236,7 @@ test "cabi reports Invalid with offset" {
     var glyphs: [16]u16 = undefined;
     var out: CLayout = undefined;
     const src = "\\nope";
-    const st = matex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+    const st = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
     try std.testing.expectEqual(STATUS_INVALID, st);
     try std.testing.expectEqual(@as(u32, 0), out.err_offset);
 }
@@ -244,7 +244,7 @@ test "cabi reports Invalid with offset" {
 test "cabi mathml serializes" {
     var out: [256]u8 = undefined;
     const src = "\\frac12";
-    const n = matex_mathml_utf8(src.ptr, src.len, false, &out, out.len);
+    const n = zatex_mathml_utf8(src.ptr, src.len, false, &out, out.len);
     try std.testing.expect(n > 0);
     try std.testing.expect(std.mem.indexOf(u8, out[0..@intCast(n)], "<mfrac>") != null);
 }

@@ -1,4 +1,4 @@
-//! MaTeX OpenType reader: metrics hosts need for the provider.
+//! ZaTeX OpenType reader: metrics hosts need for the provider.
 //!
 //! This is HOST-side code (tests, harnesses, embedders read their own
 //! font files with it) — the layout core never touches font files and

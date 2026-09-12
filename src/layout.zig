@@ -1,4 +1,4 @@
-//! MaTeX layout core: AST → box tree → IR runs/rules.
+//! ZaTeX layout core: AST → box tree → IR runs/rules.
 //!
 //! The only place layout math lives (AGENTS.md §2): inter-atom glue,
 //! script shifts, fraction/radical/delimiter geometry, table grids.

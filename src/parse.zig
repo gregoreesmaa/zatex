@@ -1,4 +1,4 @@
-//! MaTeX front end: lexer, macro expander, parser → AST.
+//! ZaTeX front end: lexer, macro expander, parser → AST.
 //!
 //! Bounded and allocation-free: tokens, nodes, macro bodies, and the
 //! expansion pushback all live in fixed pools inside `ParseCtx` (one

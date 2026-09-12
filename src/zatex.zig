@@ -1,4 +1,4 @@
-//! MaTeX — KaTeX-compatible LaTeX math engine (native Zig).
+//! ZaTeX — KaTeX-compatible LaTeX math engine (native Zig).
 //!
 //! Library root: public API plus the engine wiring (parse → layout →
 //! IR/MathML). The frozen v1 shapes live in `contract.zig` and are

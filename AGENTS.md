@@ -1,6 +1,6 @@
-# AGENTS.md — Guidelines for AI Coding Agents on `MaTeX`
+# AGENTS.md — Guidelines for AI Coding Agents on `ZaTeX`
 
-MaTeX is a native Zig implementation of KaTeX-compatible LaTeX math
+ZaTeX is a native Zig implementation of KaTeX-compatible LaTeX math
 typesetting. Every agent working on this repository MUST follow these
 principles (adapted from `read`: same discipline, new domain).
 
@@ -8,7 +8,7 @@ principles (adapted from `read`: same discipline, new domain).
 
 * **Compatibility target is KaTeX, not LaTeX.** The
   [KaTeX support table](https://katex.org/docs/support_table.html) is the
-  scope. Anything KaTeX rejects, MaTeX rejects (same error contract).
+  scope. Anything KaTeX rejects, ZaTeX rejects (same error contract).
 * **Native performance.** Zero heap allocations on the layout path
   (parse, expand, lay out over caller-provided buffers). Bounded input,
   bounded stack depth, bounded macro expansion (`maxExpand` = 1000,

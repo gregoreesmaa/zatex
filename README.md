@@ -1,8 +1,8 @@
-# MaTeX — a KaTeX-compatible LaTeX engine
+# ZaTeX — a KaTeX-compatible LaTeX engine
 
 > **The fastest math typesetting library for anywhere but the web.**
 
-MaTeX reads LaTeX math (the KaTeX-supported subset, working toward the full
+ZaTeX reads LaTeX math (the KaTeX-supported subset, working toward the full
 [KaTeX support table](https://katex.org/docs/support_table.html)) and lays it
 out natively in Zig: zero dependencies, zero heap allocations on the layout
 path, deterministic output. One layout core feeds every output the library
@@ -12,7 +12,7 @@ without the library itself shipping any of those writers as tools.
 ## Why not KaTeX itself
 
 KaTeX is excellent and remains the compatibility reference (its test corpus
-and fonts pin our behavior). MaTeX exists for where KaTeX cannot go: native
+and fonts pin our behavior). ZaTeX exists for where KaTeX cannot go: native
 binaries with no JS runtime, no Node, no npm — microsecond layout inside
 apps like [read](../read) that budget kilobytes, not megabytes.
 
@@ -33,7 +33,7 @@ See [AGENTS.md](AGENTS.md) for the contributor contract and
 
 ## Layout
 
-* `src/` — library core (`matex.zig` root, `ir.zig` output types).
+* `src/` — library core (`zatex.zig` root, `ir.zig` output types).
 * `docs/ir.md` — the layout IR: what every future emitter consumes.
 * No wrapper CLIs by explicit decision: MathML/SVG/PNG writers are
   out-of-repo until the core is compliant. The IR keeps them possible.
@@ -42,7 +42,7 @@ See [AGENTS.md](AGENTS.md) for the contributor contract and
 
 Coverage is tracked as GitHub issues, one per KaTeX functionality group,
 all verified against pinned KaTeX output. Direction of travel: `read`
-replaces its external math-plugin slot with the MaTeX `subset` profile.
+replaces its external math-plugin slot with the ZaTeX `subset` profile.
 
 ## License
 

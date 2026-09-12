@@ -1,4 +1,4 @@
-//! MaTeX layout IR: the output contract every emitter consumes.
+//! ZaTeX layout IR: the output contract every emitter consumes.
 //!
 //! The layout core produces positioned glyph runs plus rects (fraction
 //! bars, radicals, over/underlines) in integer font units. Hosts draw

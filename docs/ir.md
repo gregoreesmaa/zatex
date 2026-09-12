@@ -1,4 +1,4 @@
-# docs/ir.md — MaTeX layout IR (output contract)
+# docs/ir.md — ZaTeX layout IR (output contract)
 
 One layout core, many emitters. The core parses KaTeX-compatible input,
 expands macros (bounded: `maxExpand` = 1000, KaTeX parity), lays out TeX

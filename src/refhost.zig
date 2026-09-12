@@ -1,4 +1,4 @@
-//! MaTeX reference host: test-only MetricsProvider over the vendored
+//! ZaTeX reference host: test-only MetricsProvider over the vendored
 //! Latin Modern Math, plus the coverage/determinism probes.
 //!
 //! This is HOST code (like `read`'s future math plugin), not the core:
@@ -6,10 +6,10 @@
 //! It exists to prove the core against a real font — byte-identical
 //! input+font=output, every emittable glyph resolving.
 const std = @import("std");
-const matex = @import("matex");
+const zatex = @import("zatex");
 const otmath = @import("otmath");
-const contract = matex.contract;
-const symbols = matex.symbols;
+const contract = zatex.contract;
+const symbols = zatex.symbols;
 
 const Ref = struct {
     bytes: []u8,
@@ -157,14 +157,14 @@ test "determinism: repeated layout is byte-identical" {
     var ref = try Ref.load();
     defer ref.free();
     const src = "\\sum_{i=1}^{n}\\frac{i}{\\sqrt{i+1}}\\quad\\hat{\\xi}\\in\\mathbb{R}";
-    var runs_a: [64]matex.ir.Run = undefined;
-    var rules_a: [16]matex.ir.Rule = undefined;
+    var runs_a: [64]zatex.ir.Run = undefined;
+    var rules_a: [16]zatex.ir.Rule = undefined;
     var glyphs_a: [512]u16 = undefined;
-    var runs_b: [64]matex.ir.Run = undefined;
-    var rules_b: [16]matex.ir.Rule = undefined;
+    var runs_b: [64]zatex.ir.Run = undefined;
+    var rules_b: [16]zatex.ir.Rule = undefined;
     var glyphs_b: [512]u16 = undefined;
-    const a = try matex.layoutFull(src, .{ .display_mode = true }, ref.provider(), &runs_a, &rules_a, &glyphs_a);
-    const b = try matex.layoutFull(src, .{ .display_mode = true }, ref.provider(), &runs_b, &rules_b, &glyphs_b);
+    const a = try zatex.layoutFull(src, .{ .display_mode = true }, ref.provider(), &runs_a, &rules_a, &glyphs_a);
+    const b = try zatex.layoutFull(src, .{ .display_mode = true }, ref.provider(), &runs_b, &rules_b, &glyphs_b);
     try std.testing.expectEqual(a.width, b.width);
     try std.testing.expectEqual(a.height_above, b.height_above);
     try std.testing.expectEqual(a.depth_below, b.depth_below);
@@ -185,13 +185,13 @@ test "determinism: repeated layout is byte-identical" {
 test "reference: scaled fences use taller variants" {
     var ref = try Ref.load();
     defer ref.free();
-    var runs_t: [64]matex.ir.Run = undefined;
-    var rules_t: [16]matex.ir.Rule = undefined;
+    var runs_t: [64]zatex.ir.Run = undefined;
+    var rules_t: [16]zatex.ir.Rule = undefined;
     var glyphs_t: [512]u16 = undefined;
-    var runs_f: [64]matex.ir.Run = undefined;
-    var rules_f: [16]matex.ir.Rule = undefined;
+    var runs_f: [64]zatex.ir.Run = undefined;
+    var rules_f: [16]zatex.ir.Rule = undefined;
     var glyphs_f: [512]u16 = undefined;
-    const tall = try matex.layoutFull(
+    const tall = try zatex.layoutFull(
         "\\left(\\frac{\\frac{a}{b}}{\\frac{c}{d}}\\right)",
         .{},
         ref.provider(),
@@ -199,7 +199,7 @@ test "reference: scaled fences use taller variants" {
         &rules_t,
         &glyphs_t,
     );
-    const flat = try matex.layoutFull("(x)", .{}, ref.provider(), &runs_f, &rules_f, &glyphs_f);
+    const flat = try zatex.layoutFull("(x)", .{}, ref.provider(), &runs_f, &rules_f, &glyphs_f);
     try std.testing.expect(tall.height_above + tall.depth_below > flat.height_above + flat.depth_below);
     // The grown left paren is a .v-series variant, not base gid 9:
     // the first emitted run is the left fence.

@@ -1,6 +1,6 @@
-//! MaTeX shared contract: frozen v1 call-site shapes, additive growth.
+//! ZaTeX shared contract: frozen v1 call-site shapes, additive growth.
 //!
-//! `matex.zig` re-exports these names so the public API is unchanged;
+//! `zatex.zig` re-exports these names so the public API is unchanged;
 //! internal modules import this file directly (no import cycles).
 const std = @import("std");
 

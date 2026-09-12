@@ -1,4 +1,4 @@
-//! MaTeX symbol tables: KaTeX support-table coverage for the core.
+//! ZaTeX symbol tables: KaTeX support-table coverage for the core.
 //!
 //! Maps control-sequence names to Unicode codepoints plus TeX atom
 //! classes (Ord/Op/Bin/Rel/Open/Close/Punct/Inner). The core positions
