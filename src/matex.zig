@@ -14,12 +14,14 @@ pub const Profile = enum { subset, full };
 pub const profile: Profile =
     std.meta.stringToEnum(Profile, build_options.profile) orelse .full;
 
-/// v0 contract: nothing renders yet, so every input reports unsupported
-/// and callers must fall back (in `read`: plain code cards). Inspects
-/// the slice only — zero allocations.
-pub fn supports(source: []const u8) bool {
+/// v0 contract: nothing renders yet. Single pass — callers attempt
+/// layout directly and `error.Unsupported` means "not renderable, fall
+/// back" (in `read`: plain code cards). Inspects the slice only.
+pub const LayoutError = error{Unsupported};
+
+pub fn layout(source: []const u8) LayoutError!ir.Layout {
     _ = source;
-    return false;
+    return error.Unsupported;
 }
 
 test "profile option resolves to a known profile" {
@@ -33,6 +35,6 @@ test "empty input lays out empty" {
     try std.testing.expectEqual(@as(usize, 0), l.rules.len);
 }
 
-test "unsupported input reports false so callers fall back" {
-    try std.testing.expect(!supports("\\sum_{i=1}^{n} i"));
+test "unrenderable input errors so callers fall back in one pass" {
+    try std.testing.expectError(error.Unsupported, layout("\\sum_{i=1}^{n} i"));
 }
