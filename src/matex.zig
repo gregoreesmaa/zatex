@@ -57,6 +57,62 @@ pub const LayoutError = error{
     OutOfMemory, // reserved; the core allocates nothing
 };
 
+/// KaTeX `ParseError` parity: byte offset plus a static message.
+/// Positions are byte offsets into `source`, matching KaTeX's
+/// character offsets for ASCII input.
+pub const Diag = struct {
+    offset: u32,
+    message: []const u8,
+
+    pub fn empty() Diag {
+        return .{ .offset = 0, .message = "" };
+    }
+};
+
+/// Reentrant layout path: `glyphs` backs every `Run.glyphs` slice in
+/// the returned `Layout`. Zero heap allocations; `NoSpace` when any
+/// caller buffer fills.
+pub fn layoutFull(
+    source: []const u8,
+    options: LayoutOptions,
+    provider: MetricsProvider,
+    runs: []ir.Run,
+    rules: []ir.Rule,
+    glyphs: []u16,
+) LayoutError!ir.Layout {
+    _ = source;
+    _ = options;
+    _ = provider;
+    _ = runs;
+    _ = rules;
+    _ = glyphs;
+    return error.Unsupported;
+}
+
+/// Layout with KaTeX-parity diagnostics: on `Invalid`, `diag` carries
+/// the failure offset and message.
+pub fn layoutDiag(
+    source: []const u8,
+    options: LayoutOptions,
+    provider: MetricsProvider,
+    runs: []ir.Run,
+    rules: []ir.Rule,
+    glyphs: []u16,
+    diag: *Diag,
+) LayoutError!ir.Layout {
+    _ = diag;
+    return layoutFull(source, options, provider, runs, rules, glyphs);
+}
+
+/// MathML Core serialization of one formula into caller-owned `out`.
+/// Pure structural mapping over the parse tree — no layout math.
+pub fn mathml(source: []const u8, options: LayoutOptions, out: []u8) LayoutError![]const u8 {
+    _ = source;
+    _ = options;
+    _ = out;
+    return error.Unsupported;
+}
+
 /// Lay out one formula into caller-owned buffers (zero allocations).
 /// v0: nothing renders yet — oversize input errors TooLong, everything
 /// else errors Unsupported so callers fall back in a single pass.
@@ -86,14 +142,124 @@ test "empty input lays out empty" {
     try std.testing.expectEqual(@as(usize, 0), l.rules.len);
 }
 
-test "unrenderable input errors so callers fall back in one pass" {
+fn layoutOk(
+    source: []const u8,
+    options: LayoutOptions,
+    runs_buf: []ir.Run,
+    rules_buf: []ir.Rule,
+    glyphs_buf: []u16,
+) !ir.Layout {
+    return layoutFull(source, options, testProvider(), runs_buf, rules_buf, glyphs_buf);
+}
+
+test "accept: single symbol lays out one run" {
     var runs_buf: [8]ir.Run = undefined;
     var rules_buf: [4]ir.Rule = undefined;
-    const p = testProvider();
+    var glyphs_buf: [32]u16 = undefined;
+    const l = try layoutOk("x", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), l.runs.len);
+    try std.testing.expect(l.width > 0);
+}
+
+test "accept: sup-sub scripts lay out" {
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [32]u16 = undefined;
+    const l = try layoutOk("x^2_1", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expect(l.width > 0);
+    try std.testing.expect(l.runs.len >= 2);
+}
+
+test "accept: greek and operators lay out" {
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const l = try layoutOk("\\alpha+\\beta", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 3), l.runs.len);
+}
+
+test "accept: frac emits bar rule" {
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const l = try layoutOk("\\frac{1}{2}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+}
+
+test "accept: sqrt and sum lay out" {
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    _ = try layoutOk("\\sqrt{2}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    const l = try layoutOk("\\sum_{i=1}^{n} i", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expect(l.width > 0);
+}
+
+test "accept: unknown command is Invalid with offset" {
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [32]u16 = undefined;
+    var diag = Diag.empty();
     try std.testing.expectError(
-        error.Unsupported,
-        layout("\\sum_{i=1}^{n} i", .{}, p, &runs_buf, &rules_buf),
+        error.Invalid,
+        layoutDiag("\\nope", .{}, testProvider(), &runs_buf, &rules_buf, &glyphs_buf, &diag),
     );
+    try std.testing.expectEqual(@as(u32, 0), diag.offset);
+}
+
+test "accept: unbalanced brace is Invalid" {
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [32]u16 = undefined;
+    var diag = Diag.empty();
+    try std.testing.expectError(
+        error.Invalid,
+        layoutDiag("{x", .{}, testProvider(), &runs_buf, &rules_buf, &glyphs_buf, &diag),
+    );
+}
+
+test "accept: macro loop errors ExpansionLimit" {
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [32]u16 = undefined;
+    try std.testing.expectError(
+        error.ExpansionLimit,
+        layoutOk("\\def\\a{\\a}\\a", .{}, &runs_buf, &rules_buf, &glyphs_buf),
+    );
+}
+
+test "accept: excessive nesting errors TooDeep" {
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [32]u16 = undefined;
+    var deep: [80]u8 = undefined;
+    @memset(&deep, '{');
+    try std.testing.expectError(
+        error.TooDeep,
+        layoutOk(&deep, .{}, &runs_buf, &rules_buf, &glyphs_buf),
+    );
+}
+
+test "accept: user macro expands" {
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [32]u16 = undefined;
+    const l = try layoutOk("\\newcommand{\\f}{x}\\f", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), l.runs.len);
+}
+
+test "accept: mathml maps frac structurally" {
+    var out: [256]u8 = undefined;
+    const s = try mathml("\\frac12", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<mfrac>") != null);
+}
+
+test "accept: empty input lays out empty" {
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [32]u16 = undefined;
+    const l = try layoutOk("", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 0), l.width);
 }
 
 test "oversize input errors TooLong before anything else" {
