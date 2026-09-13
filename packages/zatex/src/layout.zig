@@ -607,14 +607,18 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         nparts += 1;
         const top = sup_up + sup_ha;
         if (top > ha) ha = top;
-        const sbot = sup_up - sup_db;
-        _ = sbot;
+        // A deep sup can hang below the baseline (tall content in the
+        // superscript): the depth must cover it.
+        if (sup_db > sup_up and sup_db - sup_up > db) db = sup_db - sup_up;
     }
     if (has_sub) {
         parts[nparts] = .{ .box = sub, .dx = sx, .dy = -sub_down };
         nparts += 1;
         const bot = sub_down + sub_db;
         if (bot > db) db = bot;
+        // A tall sub can reach above the baseline (tall content in the
+        // subscript): the height must cover it.
+        if (sub_ha > sub_down and sub_ha - sub_down > ha) ha = sub_ha - sub_down;
     }
     const sw = if (sup_w > sub_w) sup_w else sub_w;
     const s2 = try lc.allocKids(nparts);

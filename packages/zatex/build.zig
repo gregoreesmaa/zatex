@@ -84,6 +84,18 @@ pub fn build(b: *std.Build) void {
     const run_refhost_tests = b.addRunArtifact(refhost_tests);
     test_step.dependOn(&run_refhost_tests.step);
 
+    // Fixed-seed grammar fuzzer (test-only, zero-dependency).
+    const fuzz_mod = b.addModule("fuzz", .{
+        .root_source_file = b.path("src/fuzz.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    fuzz_mod.addImport("zatex", mod);
+    fuzz_mod.addImport("invariants", invariants_mod);
+    const fuzz_tests = b.addTest(.{ .root_module = fuzz_mod });
+    const run_fuzz_tests = b.addRunArtifact(fuzz_tests);
+    test_step.dependOn(&run_fuzz_tests.step);
+
     // Differential parity against the pinned-KaTeX sweep goldens.
     const parity_mod = b.addModule("parity", .{
         .root_source_file = b.path("src/parity.zig"),
