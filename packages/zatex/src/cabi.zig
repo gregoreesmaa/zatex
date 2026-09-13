@@ -284,6 +284,63 @@ test "cabi reports NoSpace when caller buffers overflow" {
     const st_rules = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &tiny_rules, tiny_rules.len, &glyphs, glyphs.len, &out);
     try std.testing.expectEqual(STATUS_NO_SPACE, st_rules);
 }
+test "cabi mathml truncates with negative NoSpace" {
+    var tiny: [8]u8 = undefined;
+    const src = "\\frac{a}{b}";
+    const n = zatex_mathml_utf8(src.ptr, src.len, false, &tiny, tiny.len);
+    try std.testing.expectEqual(-STATUS_NO_SPACE, n);
+}
+
+test "cabi adversarial provider stays total and deterministic" {
+    const S = struct {
+        fn adv0(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return 0;
+        }
+        fn advNeg(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return -500;
+        }
+        fn ruleHuge(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) i32 {
+            return 1_000_000;
+        }
+        fn ruleNeg(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) i32 {
+            return -40;
+        }
+        fn gid0(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) u16 {
+            return 0;
+        }
+    };
+    const base: CMetrics = .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = null };
+    const cfgs = [_]CMetrics{
+        .{ .ctx = null, .glyph_id = null, .advance = S.adv0, .rule_thickness = null },
+        .{ .ctx = null, .glyph_id = null, .advance = S.advNeg, .rule_thickness = null },
+        .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = S.ruleHuge },
+        .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = S.ruleNeg },
+        .{ .ctx = null, .glyph_id = S.gid0, .advance = null, .rule_thickness = null },
+        base,
+    };
+    const src = "x+\\frac{a}{b}";
+    for (cfgs) |m| {
+        var r1: [64]CRun = undefined;
+        var l1: [16]CRule = undefined;
+        var g1: [512]u16 = undefined;
+        var r2: [64]CRun = undefined;
+        var l2: [16]CRule = undefined;
+        var g2: [512]u16 = undefined;
+        var o1: CLayout = undefined;
+        var o2: CLayout = undefined;
+        const s1 = zatex_layout_utf8(src.ptr, src.len, false, &m, &r1, r1.len, &l1, l1.len, &g1, g1.len, &o1);
+        const s2 = zatex_layout_utf8(src.ptr, src.len, false, &m, &r2, r2.len, &l2, l2.len, &g2, g2.len, &o2);
+        try std.testing.expectEqual(s1, s2);
+        if (s1 == STATUS_OK) {
+            try std.testing.expectEqual(o1.width, o2.width);
+            try std.testing.expectEqual(o1.height_above, o2.height_above);
+            try std.testing.expectEqual(o1.depth_below, o2.depth_below);
+            try std.testing.expectEqual(o1.nruns, o2.nruns);
+            try std.testing.expectEqual(o1.nrules, o2.nrules);
+        }
+    }
+}
+
 test "cabi mathml serializes" {
     var out: [256]u8 = undefined;
     const src = "\\frac12";

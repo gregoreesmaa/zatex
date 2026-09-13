@@ -1535,8 +1535,10 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         const body = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .phantom = .{
             .body = body,
-            .keep_h = tokNameEq(name, "vphantom"),
-            .keep_v = tokNameEq(name, "hphantom"),
+            // `\phantom` keeps both axes; `\hphantom` width only;
+            // `\vphantom` height/depth only.
+            .keep_h = !tokNameEq(name, "vphantom"),
+            .keep_v = !tokNameEq(name, "hphantom"),
         } });
     }
     if (tokNameEq(name, "llap") or tokNameEq(name, "rlap") or tokNameEq(name, "clap") or

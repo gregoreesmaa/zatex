@@ -55,6 +55,17 @@ pub fn build(b: *std.Build) void {
     const run_otmath_tests = b.addRunArtifact(otmath_tests);
     test_step.dependOn(&run_otmath_tests.step);
 
+    // Shared layout-invariant helpers (test-only, never in the core).
+    const invariants_mod = b.addModule("invariants", .{
+        .root_source_file = b.path("src/invariants.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    invariants_mod.addImport("zatex", mod);
+    const invariants_tests = b.addTest(.{ .root_module = invariants_mod });
+    const run_invariants_tests = b.addRunArtifact(invariants_tests);
+    test_step.dependOn(&run_invariants_tests.step);
+
     // Reference-host probes: core driven by the real font (test-only).
     const refhost_mod = b.addModule("refhost", .{
         .root_source_file = b.path("src/refhost.zig"),
@@ -62,6 +73,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     refhost_mod.addImport("zatex", mod);
+    refhost_mod.addImport("invariants", invariants_mod);
     const otm = b.addModule("otmath_link", .{
         .root_source_file = b.path("src/otmath.zig"),
         .target = target,

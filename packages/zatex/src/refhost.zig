@@ -8,6 +8,7 @@
 const std = @import("std");
 const zatex = @import("zatex");
 const otmath = @import("otmath");
+const inv = @import("invariants");
 const contract = zatex.contract;
 const symbols = zatex.symbols;
 
@@ -20,6 +21,17 @@ const system_candidates = [_][]const u8{
     "/System/Library/Fonts/Supplemental/STIXTwoMath.otf",
     "/Library/Fonts/STIXTwoMath.otf",
 };
+
+fn layoutCase(
+    ref: *Ref,
+    src: []const u8,
+    display: bool,
+    runs: []zatex.ir.Run,
+    rules: []zatex.ir.Rule,
+    glyphs: []u16,
+) !zatex.ir.Layout {
+    return zatex.layoutFull(src, .{ .display_mode = display }, ref.provider(), runs, rules, glyphs);
+}
 
 const Ref = struct {
     bytes: []u8,
@@ -324,6 +336,172 @@ test "reference: array rows stay inside the ink box" {
         }
         for (l.rules) |r| {
             try std.testing.expect(r.y >= 0 and @as(i64, r.y) + @as(i64, r.h) <= total);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Metamorphic + determinism probes on IR text (issue #24). Reference-free:
+// no goldens, no pixels — relations between layouts of related inputs,
+// plus byte-level re-layout identity through `invariants.layoutText`.
+// ---------------------------------------------------------------------------
+
+// `\color{...}{X}` changes no geometry: identical IR to `X` (also the
+// basis for the #27 style-scoping tests and the #23 fuzzer oracles).
+test "metamorphic: color is geometry-transparent" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_][]const u8{
+        "x+y",
+        "a=b",
+        "\\frac{a}{b}",
+        "x^2_1",
+        "\\sum_{i=1}^n i",
+    };
+    for (cases) |src| {
+        var cbuf: [256]u8 = undefined;
+        const colored = try std.fmt.bufPrint(&cbuf, "\\color{{red}}{{{s}}}", .{src});
+        for ([_]bool{ false, true }) |display| {
+            var ra: [64]zatex.ir.Run = undefined;
+            var la: [16]zatex.ir.Rule = undefined;
+            var ga: [512]u16 = undefined;
+            var rb: [64]zatex.ir.Run = undefined;
+            var lb: [16]zatex.ir.Rule = undefined;
+            var gb: [512]u16 = undefined;
+            const a = try layoutCase(&ref, src, display, &ra, &la, &ga);
+            const b = try layoutCase(&ref, colored, display, &rb, &lb, &gb);
+            try inv.expectSameLayout(a, b);
+        }
+    }
+}
+
+// `\phantom{A}` keeps A's box while emitting nothing: same footprint.
+test "metamorphic: phantom preserves the footprint" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const pairs = [_][2][]const u8{
+        .{ "\\phantom{x}+y", "x+y" },
+        .{ "\\phantom{\\frac{a}{b}}+y", "\\frac{a}{b}+y" },
+    };
+    for (pairs) |p| {
+        for ([_]bool{ false, true }) |display| {
+            var ra: [64]zatex.ir.Run = undefined;
+            var la: [16]zatex.ir.Rule = undefined;
+            var ga: [512]u16 = undefined;
+            var rb: [64]zatex.ir.Run = undefined;
+            var lb: [16]zatex.ir.Rule = undefined;
+            var gb: [512]u16 = undefined;
+            const a = try layoutCase(&ref, p[0], display, &ra, &la, &ga);
+            const b = try layoutCase(&ref, p[1], display, &rb, &lb, &gb);
+            try std.testing.expectEqual(b.width, a.width);
+            try std.testing.expectEqual(b.height_above, a.height_above);
+            try std.testing.expectEqual(b.depth_below, a.depth_below);
+        }
+    }
+}
+
+// Bare, grouped, and empty-group-terminated atoms are one box.
+test "metamorphic: x vs {x} vs x{} are byte-identical" {
+    var ref = try Ref.load();
+    defer ref.free();
+    for ([_]bool{ false, true }) |display| {
+        var r0: [16]zatex.ir.Run = undefined;
+        var l0: [4]zatex.ir.Rule = undefined;
+        var g0: [64]u16 = undefined;
+        var r1: [16]zatex.ir.Run = undefined;
+        var l1: [4]zatex.ir.Rule = undefined;
+        var g1: [64]u16 = undefined;
+        var r2: [16]zatex.ir.Run = undefined;
+        var l2: [4]zatex.ir.Rule = undefined;
+        var g2: [64]u16 = undefined;
+        const a = try layoutCase(&ref, "x", display, &r0, &l0, &g0);
+        const b = try layoutCase(&ref, "{x}", display, &r1, &l1, &g1);
+        const c = try layoutCase(&ref, "x{}", display, &r2, &l2, &g2);
+        try inv.expectSameLayout(a, b);
+        try inv.expectSameLayout(a, c);
+    }
+}
+
+// Surd clearance: the radical box clears the radicand by the rule
+// gap plus the bar (integer units from the live provider).
+test "metamorphic: sqrt clears its radicand" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const prov = ref.provider();
+    const th = prov.ruleThickness(prov.ctx, 0, .fraction_bar);
+    try std.testing.expect(th > 0);
+    for ([_][]const u8{ "x", "\\frac{a}{b}", "x^2" }) |inner| {
+        var cbuf: [128]u8 = undefined;
+        const src = try std.fmt.bufPrint(&cbuf, "\\sqrt{{{s}}}", .{inner});
+        var ra: [64]zatex.ir.Run = undefined;
+        var la: [16]zatex.ir.Rule = undefined;
+        var ga: [512]u16 = undefined;
+        var rb: [64]zatex.ir.Run = undefined;
+        var lb: [16]zatex.ir.Rule = undefined;
+        var gb: [512]u16 = undefined;
+        const a = try layoutCase(&ref, inner, false, &ra, &la, &ga);
+        const b = try layoutCase(&ref, src, false, &rb, &lb, &gb);
+        // Exactly one added rule: the radical bar (the inner frac
+        // keeps its own bar).
+        try std.testing.expectEqual(a.rules.len + 1, b.rules.len);
+        // Clearance is the rule gap plus the bar; inners with sups sit
+        // up to 30mu lower because the radicand is cramped (TeX).
+        const want: i64 = @as(i64, a.height_above) + 2 * @as(i64, th) + 40 + @as(i64, th) - 30;
+        try std.testing.expect(@as(i64, b.height_above) >= want);
+        try std.testing.expect(b.depth_below >= a.depth_below);
+        try std.testing.expect(b.width > a.width);
+    }
+}
+
+// Fraction clearance: numerator and denominator clear the bar.
+test "metamorphic: frac clears numerator and denominator" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var rn: [16]zatex.ir.Run = undefined;
+    var ln: [4]zatex.ir.Rule = undefined;
+    var gn: [64]u16 = undefined;
+    var rd: [16]zatex.ir.Run = undefined;
+    var ld: [4]zatex.ir.Rule = undefined;
+    var gd: [64]u16 = undefined;
+    var rf: [64]zatex.ir.Run = undefined;
+    var lf: [16]zatex.ir.Rule = undefined;
+    var gf: [512]u16 = undefined;
+    const n = try layoutCase(&ref, "a+1", false, &rn, &ln, &gn);
+    const d = try layoutCase(&ref, "b-2", false, &rd, &ld, &gd);
+    const f = try layoutCase(&ref, "\\frac{a+1}{b-2}", false, &rf, &lf, &gf);
+    try std.testing.expectEqual(@as(usize, 1), f.rules.len);
+    try std.testing.expect(f.rules[0].h > 0);
+    const nt: i64 = @as(i64, n.height_above) + @as(i64, n.depth_below);
+    const dt: i64 = @as(i64, d.height_above) + @as(i64, d.depth_below);
+    const ft: i64 = @as(i64, f.height_above) + @as(i64, f.depth_below);
+    try std.testing.expect(ft >= nt + dt + @as(i64, f.rules[0].h));
+    try inv.expectNonNegative(f);
+    try inv.expectContained(f);
+}
+
+// Re-layout of the same input + metrics is identical IR text.
+test "determinism: IR text is stable across re-layouts" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_][]const u8{
+        "x",
+        "\\sum_{i=1}^{n}\\frac{i}{\\sqrt{i+1}}",
+        "\\begin{matrix} a & b \\\\ c & d \\end{matrix}",
+    };
+    for (cases) |src| {
+        for ([_]bool{ false, true }) |display| {
+            var ra: [64]zatex.ir.Run = undefined;
+            var la: [16]zatex.ir.Rule = undefined;
+            var ga: [512]u16 = undefined;
+            var rb: [64]zatex.ir.Run = undefined;
+            var lb: [16]zatex.ir.Rule = undefined;
+            var gb: [512]u16 = undefined;
+            const a = try layoutCase(&ref, src, display, &ra, &la, &ga);
+            const b = try layoutCase(&ref, src, display, &rb, &lb, &gb);
+            var ta: [4096]u8 = undefined;
+            var tb: [4096]u8 = undefined;
+            try std.testing.expectEqualStrings(inv.layoutText(a, &ta), inv.layoutText(b, &tb));
+            try inv.expectSameLayout(a, b);
         }
     }
 }
