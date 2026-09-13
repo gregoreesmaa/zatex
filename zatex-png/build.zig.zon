@@ -1,0 +1,20 @@
+.{
+    .name = .zatex_png,
+    .version = "0.0.0",
+    // Changing this has security and trust implications.
+    .fingerprint = 0xf94ef9699cfd16b3,
+    .minimum_zig_version = "0.16.0",
+    // Strict hierarchy: renderers depend on the core, never the reverse.
+    // The core package lives at the repo root (package name `zatex`).
+    .dependencies = .{
+        .zatex = .{
+            .path = "..",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}
