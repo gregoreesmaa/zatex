@@ -5,6 +5,15 @@
 //! atoms with `glueBetween`; hosts resolve glyphs via the provider, so
 //! these tables carry no font data.
 
+const build_options = @import("build_options");
+const contract = @import("contract.zig");
+
+/// Active build profile: `full` compiles the complete engine, `subset`
+/// the embeddable core. Full-only coverage below keys off this so the
+/// subset closure (and its size ratchet) stays untouched.
+const active_profile: contract.Profile =
+    @import("std").meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
+
 /// TeX atom classes. Spacing between adjacent atoms derives from the
 /// pair of classes (see `glueBetween`), matching TeX Book p.170 with
 /// KaTeX's observable behavior.
@@ -109,7 +118,7 @@ const greek_upper = [_]Entry{
     .{ .name = "digamma", .sym = S(0x03DD, .Ord) },
 };
 
-const operators = [_]Entry{
+const operators_base = [_]Entry{
     // Large operators with limits by default.
     .{ .name = "sum", .sym = L(0x2211) },
     .{ .name = "prod", .sym = L(0x220F) },
@@ -342,10 +351,6 @@ const operators = [_]Entry{
     .{ .name = "maltese", .sym = S(0x2720, .Ord) },
     .{ .name = "S", .sym = S(0x00A7, .Ord) },
     .{ .name = "P", .sym = S(0x00B6, .Ord) },
-    .{ .name = "sect", .sym = S(0x00A7, .Ord) },
-    // Nationals KaTeX also accepts in math mode (pinned-proven).
-    .{ .name = "aa", .sym = S(0x00E5, .Ord) },
-    .{ .name = "AA", .sym = S(0x00C5, .Ord) },
     .{ .name = "pounds", .sym = S(0x00A3, .Ord) },
     .{ .name = "yen", .sym = S(0x00A5, .Ord) },
     // Daggers and bars as ordinary symbols (KaTeX `textord`).
@@ -365,6 +370,16 @@ const operators = [_]Entry{
     .{ .name = "ldotp", .sym = S(0x002E, .Punct) },
     .{ .name = "cdotp", .sym = S(0x22C5, .Punct) },
 };
+
+/// Full-profile symbol coverage: nationals KaTeX accepts in math mode
+/// (pinned-proven). Empty in `subset` so its closure stays untouched.
+const operators_full = if (active_profile == .full) [_]Entry{
+    .{ .name = "sect", .sym = S(0x00A7, .Ord) },
+    .{ .name = "aa", .sym = S(0x00E5, .Ord) },
+    .{ .name = "AA", .sym = S(0x00C5, .Ord) },
+} else [_]Entry{};
+
+const operators = operators_base ++ operators_full;
 
 /// ASCII characters with fixed atom classes.
 pub fn asciiClass(cp: u21) ?AtomClass {
@@ -411,7 +426,7 @@ const TextCmd = struct {
     name: []const u8,
     cp: u21,
 };
-const text_cmds = [_]TextCmd{
+const text_cmds = if (active_profile == .full) [_]TextCmd{
     .{ .name = "i", .cp = 0x0131 },
     .{ .name = "j", .cp = 0x0237 },
     .{ .name = "o", .cp = 0x00F8 },
@@ -448,7 +463,7 @@ const text_cmds = [_]TextCmd{
     .{ .name = "textgreater", .cp = 0x003E },
     .{ .name = "textless", .cp = 0x003C },
     .{ .name = "textunderscore", .cp = 0x005F },
-};
+} else [_]TextCmd{};
 
 /// Look up a text-mode command. Returns null for math-only names
 /// (callers report KaTeX-parity `Invalid`).
