@@ -1160,6 +1160,9 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
         if (p.kind == .sup) {
             _ = try ctx.next();
             if (nsup > 0 and !prime_made) return ctx.fail(p.pos, "double superscript");
+            // KaTeX parity: a missing group at EOF points at the
+            // operator (`x^` → 1), not at end of input.
+            if ((try ctx.peek()).kind == .end) return ctx.fail(p.pos, "expected group after '^'");
             const s = try parseGroupOrAtom(ctx, depth);
             if (prime_made) {
                 if (nsup >= 9) return ctx.fail(p.pos, "superscript too complex");
@@ -1173,6 +1176,9 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
         } else if (p.kind == .sub) {
             _ = try ctx.next();
             if (sub != NONE) return ctx.fail(p.pos, "double subscript");
+            // KaTeX parity: a missing group at EOF points at the
+            // operator (`x_` → 1), not at end of input.
+            if ((try ctx.peek()).kind == .end) return ctx.fail(p.pos, "expected group after '_'");
             sub = try parseGroupOrAtom(ctx, depth);
         } else if (p.kind == .char and p.cp == '\'') {
             _ = try ctx.next();

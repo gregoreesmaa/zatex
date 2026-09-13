@@ -711,7 +711,9 @@ fn wrapParens(lc: *LayCtx, style: parse.Style, inner: u16) Error!u16 {
 
 fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     const size = style.sizeUnits();
-    const rad = try layoutNode(lc, style, s.radicand);
+    // TeX sets the radicand in cramped style (D' in display): sups
+    // inside rise 30mu less. Also makes Dc reachable for the atom grid.
+    const rad = try layoutNode(lc, style.cramped(), s.radicand);
     const rb = lc.boxes[rad];
     const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
     const gap = 2 * th + @divTrunc((@as(i32, 40) * size), 1000);

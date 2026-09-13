@@ -339,6 +339,37 @@ test "accept: empty input lays out empty" {
     try std.testing.expectEqual(@as(u32, 0), l.width);
 }
 
+test "sqrt radicand is cramped: sup sits 30mu lower than top level" {
+    // TeX sets the radicand in cramped style (issue #20 Dc grid rows):
+    // a sup directly inside `\sqrt{...}` rises 30mu less than at top
+    // level. Resolved by glyph id through the stub provider
+    // ('x' = 120, '2' = 50, radical U+221A = 8730).
+    const S = struct {
+        fn raise(l: ir.Layout) !i32 {
+            var yx: ?i32 = null;
+            var y2: ?i32 = null;
+            for (l.runs) |r| {
+                for (r.glyphs) |g| {
+                    if (g == 120 and yx == null) yx = r.baseline_y;
+                    if (g == 50 and y2 == null) y2 = r.baseline_y;
+                }
+            }
+            return (yx orelse return error.TestUnexpectedResult) -
+                (y2 orelse return error.TestUnexpectedResult);
+        }
+    };
+    var runs_a: [32]ir.Run = undefined;
+    var rules_a: [8]ir.Rule = undefined;
+    var glyphs_a: [128]u16 = undefined;
+    var runs_b: [32]ir.Run = undefined;
+    var rules_b: [8]ir.Rule = undefined;
+    var glyphs_b: [128]u16 = undefined;
+    const top = try layoutOk("x^2", .{}, &runs_a, &rules_a, &glyphs_a);
+    const rad = try layoutOk("\\sqrt{x^2}", .{}, &runs_b, &rules_b, &glyphs_b);
+    try std.testing.expectEqual(@as(i32, 400), try S.raise(top));
+    try std.testing.expectEqual(try S.raise(top) - 30, try S.raise(rad));
+}
+
 test "oversize input errors TooLong before anything else" {
     var big: [max_input_len + 1]u8 = .{'x'} ** (max_input_len + 1);
     var runs_buf: [8]ir.Run = undefined;

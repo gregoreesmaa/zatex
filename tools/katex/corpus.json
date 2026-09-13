@@ -1082,5 +1082,4067 @@
   "tex": "\\widetilde{x}",
   "display": false,
   "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-d",
+  "tex": "{{\\displaystyle xx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-dc",
+  "tex": "\\sqrt{{xx}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-t",
+  "tex": "{{\\textstyle xx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-tc",
+  "tex": "\\frac{{y}}{{xx}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-s",
+  "tex": "{{\\scriptstyle xx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-sc",
+  "tex": "\\frac{{y}}{{xx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-ss",
+  "tex": "{{\\scriptscriptstyle xx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{xx}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-d",
+  "tex": "{{\\displaystyle x\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-dc",
+  "tex": "\\sqrt{{x\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-t",
+  "tex": "{{\\textstyle x\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-tc",
+  "tex": "\\frac{{y}}{{x\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-s",
+  "tex": "{{\\scriptstyle x\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-sc",
+  "tex": "\\frac{{y}}{{x\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-ss",
+  "tex": "{{\\scriptscriptstyle x\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{x\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-d",
+  "tex": "{{\\displaystyle x+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-dc",
+  "tex": "\\sqrt{{x+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-t",
+  "tex": "{{\\textstyle x+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-tc",
+  "tex": "\\frac{{y}}{{x+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-s",
+  "tex": "{{\\scriptstyle x+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-sc",
+  "tex": "\\frac{{y}}{{x+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-ss",
+  "tex": "{{\\scriptscriptstyle x+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{x+}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-d",
+  "tex": "{{\\displaystyle x=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-dc",
+  "tex": "\\sqrt{{x=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-t",
+  "tex": "{{\\textstyle x=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-tc",
+  "tex": "\\frac{{y}}{{x=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-s",
+  "tex": "{{\\scriptstyle x=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-sc",
+  "tex": "\\frac{{y}}{{x=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-ss",
+  "tex": "{{\\scriptscriptstyle x=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{x=}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-d",
+  "tex": "{{\\displaystyle x(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-dc",
+  "tex": "\\sqrt{{x(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-t",
+  "tex": "{{\\textstyle x(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-tc",
+  "tex": "\\frac{{y}}{{x(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-s",
+  "tex": "{{\\scriptstyle x(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-sc",
+  "tex": "\\frac{{y}}{{x(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-ss",
+  "tex": "{{\\scriptscriptstyle x(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{x(}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-d",
+  "tex": "{{\\displaystyle x)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-dc",
+  "tex": "\\sqrt{{x)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-t",
+  "tex": "{{\\textstyle x)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-tc",
+  "tex": "\\frac{{y}}{{x)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-s",
+  "tex": "{{\\scriptstyle x)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-sc",
+  "tex": "\\frac{{y}}{{x)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-ss",
+  "tex": "{{\\scriptscriptstyle x)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{x)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-d",
+  "tex": "{{\\displaystyle x,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-dc",
+  "tex": "\\sqrt{{x,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-t",
+  "tex": "{{\\textstyle x,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-tc",
+  "tex": "\\frac{{y}}{{x,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-s",
+  "tex": "{{\\scriptstyle x,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-sc",
+  "tex": "\\frac{{y}}{{x,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-ss",
+  "tex": "{{\\scriptscriptstyle x,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{x,}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-d",
+  "tex": "{{\\displaystyle x\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-dc",
+  "tex": "\\sqrt{{x\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-t",
+  "tex": "{{\\textstyle x\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-tc",
+  "tex": "\\frac{{y}}{{x\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-s",
+  "tex": "{{\\scriptstyle x\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-sc",
+  "tex": "\\frac{{y}}{{x\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-ss",
+  "tex": "{{\\scriptscriptstyle x\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-ord-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{x\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-d",
+  "tex": "{{\\displaystyle \\sumx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-dc",
+  "tex": "\\sqrt{{\\sumx}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-t",
+  "tex": "{{\\textstyle \\sumx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-tc",
+  "tex": "\\frac{{y}}{{\\sumx}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-s",
+  "tex": "{{\\scriptstyle \\sumx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-sc",
+  "tex": "\\frac{{y}}{{\\sumx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-ss",
+  "tex": "{{\\scriptscriptstyle \\sumx}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sumx}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-d",
+  "tex": "{{\\displaystyle \\sum\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-dc",
+  "tex": "\\sqrt{{\\sum\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-t",
+  "tex": "{{\\textstyle \\sum\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-tc",
+  "tex": "\\frac{{y}}{{\\sum\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-s",
+  "tex": "{{\\scriptstyle \\sum\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-sc",
+  "tex": "\\frac{{y}}{{\\sum\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-ss",
+  "tex": "{{\\scriptscriptstyle \\sum\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sum\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-d",
+  "tex": "{{\\displaystyle \\sum+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-dc",
+  "tex": "\\sqrt{{\\sum+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-t",
+  "tex": "{{\\textstyle \\sum+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-tc",
+  "tex": "\\frac{{y}}{{\\sum+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-s",
+  "tex": "{{\\scriptstyle \\sum+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-sc",
+  "tex": "\\frac{{y}}{{\\sum+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-ss",
+  "tex": "{{\\scriptscriptstyle \\sum+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sum+}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-d",
+  "tex": "{{\\displaystyle \\sum=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-dc",
+  "tex": "\\sqrt{{\\sum=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-t",
+  "tex": "{{\\textstyle \\sum=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-tc",
+  "tex": "\\frac{{y}}{{\\sum=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-s",
+  "tex": "{{\\scriptstyle \\sum=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-sc",
+  "tex": "\\frac{{y}}{{\\sum=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-ss",
+  "tex": "{{\\scriptscriptstyle \\sum=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sum=}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-d",
+  "tex": "{{\\displaystyle \\sum(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-dc",
+  "tex": "\\sqrt{{\\sum(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-t",
+  "tex": "{{\\textstyle \\sum(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-tc",
+  "tex": "\\frac{{y}}{{\\sum(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-s",
+  "tex": "{{\\scriptstyle \\sum(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-sc",
+  "tex": "\\frac{{y}}{{\\sum(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-ss",
+  "tex": "{{\\scriptscriptstyle \\sum(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sum(}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-d",
+  "tex": "{{\\displaystyle \\sum)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-dc",
+  "tex": "\\sqrt{{\\sum)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-t",
+  "tex": "{{\\textstyle \\sum)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-tc",
+  "tex": "\\frac{{y}}{{\\sum)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-s",
+  "tex": "{{\\scriptstyle \\sum)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-sc",
+  "tex": "\\frac{{y}}{{\\sum)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-ss",
+  "tex": "{{\\scriptscriptstyle \\sum)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sum)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-d",
+  "tex": "{{\\displaystyle \\sum,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-dc",
+  "tex": "\\sqrt{{\\sum,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-t",
+  "tex": "{{\\textstyle \\sum,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-tc",
+  "tex": "\\frac{{y}}{{\\sum,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-s",
+  "tex": "{{\\scriptstyle \\sum,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-sc",
+  "tex": "\\frac{{y}}{{\\sum,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-ss",
+  "tex": "{{\\scriptscriptstyle \\sum,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sum,}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-d",
+  "tex": "{{\\displaystyle \\sum\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-dc",
+  "tex": "\\sqrt{{\\sum\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-t",
+  "tex": "{{\\textstyle \\sum\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-tc",
+  "tex": "\\frac{{y}}{{\\sum\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-s",
+  "tex": "{{\\scriptstyle \\sum\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-sc",
+  "tex": "\\frac{{y}}{{\\sum\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-ss",
+  "tex": "{{\\scriptscriptstyle \\sum\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-op-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\sum\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-d",
+  "tex": "{{\\displaystyle +x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-dc",
+  "tex": "\\sqrt{{+x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-t",
+  "tex": "{{\\textstyle +x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-tc",
+  "tex": "\\frac{{y}}{{+x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-s",
+  "tex": "{{\\scriptstyle +x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-sc",
+  "tex": "\\frac{{y}}{{+x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-ss",
+  "tex": "{{\\scriptscriptstyle +x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{+x}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-d",
+  "tex": "{{\\displaystyle +\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-dc",
+  "tex": "\\sqrt{{+\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-t",
+  "tex": "{{\\textstyle +\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-tc",
+  "tex": "\\frac{{y}}{{+\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-s",
+  "tex": "{{\\scriptstyle +\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-sc",
+  "tex": "\\frac{{y}}{{+\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-ss",
+  "tex": "{{\\scriptscriptstyle +\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{+\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-d",
+  "tex": "{{\\displaystyle ++}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-dc",
+  "tex": "\\sqrt{{++}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-t",
+  "tex": "{{\\textstyle ++}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-tc",
+  "tex": "\\frac{{y}}{{++}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-s",
+  "tex": "{{\\scriptstyle ++}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-sc",
+  "tex": "\\frac{{y}}{{++}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-ss",
+  "tex": "{{\\scriptscriptstyle ++}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{++}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-d",
+  "tex": "{{\\displaystyle +=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-dc",
+  "tex": "\\sqrt{{+=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-t",
+  "tex": "{{\\textstyle +=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-tc",
+  "tex": "\\frac{{y}}{{+=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-s",
+  "tex": "{{\\scriptstyle +=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-sc",
+  "tex": "\\frac{{y}}{{+=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-ss",
+  "tex": "{{\\scriptscriptstyle +=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{+=}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-d",
+  "tex": "{{\\displaystyle +(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-dc",
+  "tex": "\\sqrt{{+(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-t",
+  "tex": "{{\\textstyle +(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-tc",
+  "tex": "\\frac{{y}}{{+(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-s",
+  "tex": "{{\\scriptstyle +(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-sc",
+  "tex": "\\frac{{y}}{{+(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-ss",
+  "tex": "{{\\scriptscriptstyle +(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{+(}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-d",
+  "tex": "{{\\displaystyle +)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-dc",
+  "tex": "\\sqrt{{+)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-t",
+  "tex": "{{\\textstyle +)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-tc",
+  "tex": "\\frac{{y}}{{+)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-s",
+  "tex": "{{\\scriptstyle +)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-sc",
+  "tex": "\\frac{{y}}{{+)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-ss",
+  "tex": "{{\\scriptscriptstyle +)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{+)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-d",
+  "tex": "{{\\displaystyle +,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-dc",
+  "tex": "\\sqrt{{+,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-t",
+  "tex": "{{\\textstyle +,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-tc",
+  "tex": "\\frac{{y}}{{+,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-s",
+  "tex": "{{\\scriptstyle +,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-sc",
+  "tex": "\\frac{{y}}{{+,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-ss",
+  "tex": "{{\\scriptscriptstyle +,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{+,}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-d",
+  "tex": "{{\\displaystyle +\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-dc",
+  "tex": "\\sqrt{{+\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-t",
+  "tex": "{{\\textstyle +\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-tc",
+  "tex": "\\frac{{y}}{{+\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-s",
+  "tex": "{{\\scriptstyle +\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-sc",
+  "tex": "\\frac{{y}}{{+\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-ss",
+  "tex": "{{\\scriptscriptstyle +\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-bin-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{+\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-d",
+  "tex": "{{\\displaystyle =x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-dc",
+  "tex": "\\sqrt{{=x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-t",
+  "tex": "{{\\textstyle =x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-tc",
+  "tex": "\\frac{{y}}{{=x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-s",
+  "tex": "{{\\scriptstyle =x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-sc",
+  "tex": "\\frac{{y}}{{=x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-ss",
+  "tex": "{{\\scriptscriptstyle =x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{=x}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-d",
+  "tex": "{{\\displaystyle =\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-dc",
+  "tex": "\\sqrt{{=\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-t",
+  "tex": "{{\\textstyle =\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-tc",
+  "tex": "\\frac{{y}}{{=\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-s",
+  "tex": "{{\\scriptstyle =\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-sc",
+  "tex": "\\frac{{y}}{{=\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-ss",
+  "tex": "{{\\scriptscriptstyle =\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{=\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-d",
+  "tex": "{{\\displaystyle =+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-dc",
+  "tex": "\\sqrt{{=+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-t",
+  "tex": "{{\\textstyle =+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-tc",
+  "tex": "\\frac{{y}}{{=+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-s",
+  "tex": "{{\\scriptstyle =+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-sc",
+  "tex": "\\frac{{y}}{{=+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-ss",
+  "tex": "{{\\scriptscriptstyle =+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{=+}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-d",
+  "tex": "{{\\displaystyle ==}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-dc",
+  "tex": "\\sqrt{{==}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-t",
+  "tex": "{{\\textstyle ==}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-tc",
+  "tex": "\\frac{{y}}{{==}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-s",
+  "tex": "{{\\scriptstyle ==}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-sc",
+  "tex": "\\frac{{y}}{{==}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-ss",
+  "tex": "{{\\scriptscriptstyle ==}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{==}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-d",
+  "tex": "{{\\displaystyle =(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-dc",
+  "tex": "\\sqrt{{=(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-t",
+  "tex": "{{\\textstyle =(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-tc",
+  "tex": "\\frac{{y}}{{=(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-s",
+  "tex": "{{\\scriptstyle =(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-sc",
+  "tex": "\\frac{{y}}{{=(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-ss",
+  "tex": "{{\\scriptscriptstyle =(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{=(}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-d",
+  "tex": "{{\\displaystyle =)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-dc",
+  "tex": "\\sqrt{{=)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-t",
+  "tex": "{{\\textstyle =)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-tc",
+  "tex": "\\frac{{y}}{{=)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-s",
+  "tex": "{{\\scriptstyle =)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-sc",
+  "tex": "\\frac{{y}}{{=)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-ss",
+  "tex": "{{\\scriptscriptstyle =)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{=)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-d",
+  "tex": "{{\\displaystyle =,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-dc",
+  "tex": "\\sqrt{{=,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-t",
+  "tex": "{{\\textstyle =,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-tc",
+  "tex": "\\frac{{y}}{{=,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-s",
+  "tex": "{{\\scriptstyle =,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-sc",
+  "tex": "\\frac{{y}}{{=,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-ss",
+  "tex": "{{\\scriptscriptstyle =,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{=,}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-d",
+  "tex": "{{\\displaystyle =\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-dc",
+  "tex": "\\sqrt{{=\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-t",
+  "tex": "{{\\textstyle =\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-tc",
+  "tex": "\\frac{{y}}{{=\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-s",
+  "tex": "{{\\scriptstyle =\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-sc",
+  "tex": "\\frac{{y}}{{=\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-ss",
+  "tex": "{{\\scriptscriptstyle =\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-rel-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{=\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-d",
+  "tex": "{{\\displaystyle (x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-dc",
+  "tex": "\\sqrt{{(x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-t",
+  "tex": "{{\\textstyle (x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-tc",
+  "tex": "\\frac{{y}}{{(x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-s",
+  "tex": "{{\\scriptstyle (x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-sc",
+  "tex": "\\frac{{y}}{{(x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-ss",
+  "tex": "{{\\scriptscriptstyle (x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{(x}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-d",
+  "tex": "{{\\displaystyle (\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-dc",
+  "tex": "\\sqrt{{(\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-t",
+  "tex": "{{\\textstyle (\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-tc",
+  "tex": "\\frac{{y}}{{(\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-s",
+  "tex": "{{\\scriptstyle (\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-sc",
+  "tex": "\\frac{{y}}{{(\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-ss",
+  "tex": "{{\\scriptscriptstyle (\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{(\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-d",
+  "tex": "{{\\displaystyle (+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-dc",
+  "tex": "\\sqrt{{(+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-t",
+  "tex": "{{\\textstyle (+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-tc",
+  "tex": "\\frac{{y}}{{(+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-s",
+  "tex": "{{\\scriptstyle (+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-sc",
+  "tex": "\\frac{{y}}{{(+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-ss",
+  "tex": "{{\\scriptscriptstyle (+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{(+}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-d",
+  "tex": "{{\\displaystyle (=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-dc",
+  "tex": "\\sqrt{{(=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-t",
+  "tex": "{{\\textstyle (=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-tc",
+  "tex": "\\frac{{y}}{{(=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-s",
+  "tex": "{{\\scriptstyle (=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-sc",
+  "tex": "\\frac{{y}}{{(=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-ss",
+  "tex": "{{\\scriptscriptstyle (=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{(=}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-d",
+  "tex": "{{\\displaystyle ((}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-dc",
+  "tex": "\\sqrt{{((}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-t",
+  "tex": "{{\\textstyle ((}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-tc",
+  "tex": "\\frac{{y}}{{((}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-s",
+  "tex": "{{\\scriptstyle ((}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-sc",
+  "tex": "\\frac{{y}}{{((}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-ss",
+  "tex": "{{\\scriptscriptstyle ((}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{((}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-d",
+  "tex": "{{\\displaystyle ()}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-dc",
+  "tex": "\\sqrt{{()}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-t",
+  "tex": "{{\\textstyle ()}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-tc",
+  "tex": "\\frac{{y}}{{()}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-s",
+  "tex": "{{\\scriptstyle ()}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-sc",
+  "tex": "\\frac{{y}}{{()}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-ss",
+  "tex": "{{\\scriptscriptstyle ()}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{()}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-d",
+  "tex": "{{\\displaystyle (,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-dc",
+  "tex": "\\sqrt{{(,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-t",
+  "tex": "{{\\textstyle (,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-tc",
+  "tex": "\\frac{{y}}{{(,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-s",
+  "tex": "{{\\scriptstyle (,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-sc",
+  "tex": "\\frac{{y}}{{(,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-ss",
+  "tex": "{{\\scriptscriptstyle (,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{(,}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-d",
+  "tex": "{{\\displaystyle (\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-dc",
+  "tex": "\\sqrt{{(\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-t",
+  "tex": "{{\\textstyle (\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-tc",
+  "tex": "\\frac{{y}}{{(\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-s",
+  "tex": "{{\\scriptstyle (\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-sc",
+  "tex": "\\frac{{y}}{{(\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-ss",
+  "tex": "{{\\scriptscriptstyle (\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-open-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{(\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-d",
+  "tex": "{{\\displaystyle )x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-dc",
+  "tex": "\\sqrt{{)x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-t",
+  "tex": "{{\\textstyle )x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-tc",
+  "tex": "\\frac{{y}}{{)x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-s",
+  "tex": "{{\\scriptstyle )x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-sc",
+  "tex": "\\frac{{y}}{{)x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-ss",
+  "tex": "{{\\scriptscriptstyle )x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{)x}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-d",
+  "tex": "{{\\displaystyle )\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-dc",
+  "tex": "\\sqrt{{)\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-t",
+  "tex": "{{\\textstyle )\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-tc",
+  "tex": "\\frac{{y}}{{)\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-s",
+  "tex": "{{\\scriptstyle )\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-sc",
+  "tex": "\\frac{{y}}{{)\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-ss",
+  "tex": "{{\\scriptscriptstyle )\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{)\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-d",
+  "tex": "{{\\displaystyle )+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-dc",
+  "tex": "\\sqrt{{)+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-t",
+  "tex": "{{\\textstyle )+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-tc",
+  "tex": "\\frac{{y}}{{)+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-s",
+  "tex": "{{\\scriptstyle )+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-sc",
+  "tex": "\\frac{{y}}{{)+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-ss",
+  "tex": "{{\\scriptscriptstyle )+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{)+}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-d",
+  "tex": "{{\\displaystyle )=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-dc",
+  "tex": "\\sqrt{{)=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-t",
+  "tex": "{{\\textstyle )=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-tc",
+  "tex": "\\frac{{y}}{{)=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-s",
+  "tex": "{{\\scriptstyle )=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-sc",
+  "tex": "\\frac{{y}}{{)=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-ss",
+  "tex": "{{\\scriptscriptstyle )=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{)=}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-d",
+  "tex": "{{\\displaystyle )(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-dc",
+  "tex": "\\sqrt{{)(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-t",
+  "tex": "{{\\textstyle )(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-tc",
+  "tex": "\\frac{{y}}{{)(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-s",
+  "tex": "{{\\scriptstyle )(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-sc",
+  "tex": "\\frac{{y}}{{)(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-ss",
+  "tex": "{{\\scriptscriptstyle )(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{)(}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-d",
+  "tex": "{{\\displaystyle ))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-dc",
+  "tex": "\\sqrt{{))}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-t",
+  "tex": "{{\\textstyle ))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-tc",
+  "tex": "\\frac{{y}}{{))}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-s",
+  "tex": "{{\\scriptstyle ))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-sc",
+  "tex": "\\frac{{y}}{{))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-ss",
+  "tex": "{{\\scriptscriptstyle ))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{))}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-d",
+  "tex": "{{\\displaystyle ),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-dc",
+  "tex": "\\sqrt{{),}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-t",
+  "tex": "{{\\textstyle ),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-tc",
+  "tex": "\\frac{{y}}{{),}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-s",
+  "tex": "{{\\scriptstyle ),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-sc",
+  "tex": "\\frac{{y}}{{),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-ss",
+  "tex": "{{\\scriptscriptstyle ),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{),}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-d",
+  "tex": "{{\\displaystyle )\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-dc",
+  "tex": "\\sqrt{{)\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-t",
+  "tex": "{{\\textstyle )\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-tc",
+  "tex": "\\frac{{y}}{{)\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-s",
+  "tex": "{{\\scriptstyle )\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-sc",
+  "tex": "\\frac{{y}}{{)\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-ss",
+  "tex": "{{\\scriptscriptstyle )\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-close-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{)\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-d",
+  "tex": "{{\\displaystyle ,x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-dc",
+  "tex": "\\sqrt{{,x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-t",
+  "tex": "{{\\textstyle ,x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-tc",
+  "tex": "\\frac{{y}}{{,x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-s",
+  "tex": "{{\\scriptstyle ,x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-sc",
+  "tex": "\\frac{{y}}{{,x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-ss",
+  "tex": "{{\\scriptscriptstyle ,x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{,x}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-d",
+  "tex": "{{\\displaystyle ,\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-dc",
+  "tex": "\\sqrt{{,\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-t",
+  "tex": "{{\\textstyle ,\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-tc",
+  "tex": "\\frac{{y}}{{,\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-s",
+  "tex": "{{\\scriptstyle ,\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-sc",
+  "tex": "\\frac{{y}}{{,\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-ss",
+  "tex": "{{\\scriptscriptstyle ,\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{,\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-d",
+  "tex": "{{\\displaystyle ,+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-dc",
+  "tex": "\\sqrt{{,+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-t",
+  "tex": "{{\\textstyle ,+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-tc",
+  "tex": "\\frac{{y}}{{,+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-s",
+  "tex": "{{\\scriptstyle ,+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-sc",
+  "tex": "\\frac{{y}}{{,+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-ss",
+  "tex": "{{\\scriptscriptstyle ,+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{,+}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-d",
+  "tex": "{{\\displaystyle ,=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-dc",
+  "tex": "\\sqrt{{,=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-t",
+  "tex": "{{\\textstyle ,=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-tc",
+  "tex": "\\frac{{y}}{{,=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-s",
+  "tex": "{{\\scriptstyle ,=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-sc",
+  "tex": "\\frac{{y}}{{,=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-ss",
+  "tex": "{{\\scriptscriptstyle ,=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{,=}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-d",
+  "tex": "{{\\displaystyle ,(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-dc",
+  "tex": "\\sqrt{{,(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-t",
+  "tex": "{{\\textstyle ,(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-tc",
+  "tex": "\\frac{{y}}{{,(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-s",
+  "tex": "{{\\scriptstyle ,(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-sc",
+  "tex": "\\frac{{y}}{{,(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-ss",
+  "tex": "{{\\scriptscriptstyle ,(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{,(}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-d",
+  "tex": "{{\\displaystyle ,)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-dc",
+  "tex": "\\sqrt{{,)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-t",
+  "tex": "{{\\textstyle ,)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-tc",
+  "tex": "\\frac{{y}}{{,)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-s",
+  "tex": "{{\\scriptstyle ,)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-sc",
+  "tex": "\\frac{{y}}{{,)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-ss",
+  "tex": "{{\\scriptscriptstyle ,)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{,)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-d",
+  "tex": "{{\\displaystyle ,,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-dc",
+  "tex": "\\sqrt{{,,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-t",
+  "tex": "{{\\textstyle ,,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-tc",
+  "tex": "\\frac{{y}}{{,,}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-s",
+  "tex": "{{\\scriptstyle ,,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-sc",
+  "tex": "\\frac{{y}}{{,,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-ss",
+  "tex": "{{\\scriptscriptstyle ,,}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{,,}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-d",
+  "tex": "{{\\displaystyle ,\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-dc",
+  "tex": "\\sqrt{{,\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-t",
+  "tex": "{{\\textstyle ,\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-tc",
+  "tex": "\\frac{{y}}{{,\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-s",
+  "tex": "{{\\scriptstyle ,\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-sc",
+  "tex": "\\frac{{y}}{{,\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-ss",
+  "tex": "{{\\scriptscriptstyle ,\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-punct-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{,\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-d",
+  "tex": "{{\\displaystyle \\left(x\\right)x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-dc",
+  "tex": "\\sqrt{{\\left(x\\right)x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-t",
+  "tex": "{{\\textstyle \\left(x\\right)x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)x}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-s",
+  "tex": "{{\\scriptstyle \\left(x\\right)x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right)x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-ord-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right)x}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-d",
+  "tex": "{{\\displaystyle \\left(x\\right)\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-dc",
+  "tex": "\\sqrt{{\\left(x\\right)\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-t",
+  "tex": "{{\\textstyle \\left(x\\right)\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)\\sum}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-s",
+  "tex": "{{\\scriptstyle \\left(x\\right)\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right)\\sum}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-op-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right)\\sum}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-d",
+  "tex": "{{\\displaystyle \\left(x\\right)+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-dc",
+  "tex": "\\sqrt{{\\left(x\\right)+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-t",
+  "tex": "{{\\textstyle \\left(x\\right)+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)+}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-s",
+  "tex": "{{\\scriptstyle \\left(x\\right)+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right)+}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-bin-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right)+}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-d",
+  "tex": "{{\\displaystyle \\left(x\\right)=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-dc",
+  "tex": "\\sqrt{{\\left(x\\right)=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-t",
+  "tex": "{{\\textstyle \\left(x\\right)=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)=}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-s",
+  "tex": "{{\\scriptstyle \\left(x\\right)=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right)=}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-rel-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right)=}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-d",
+  "tex": "{{\\displaystyle \\left(x\\right)(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-dc",
+  "tex": "\\sqrt{{\\left(x\\right)(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-t",
+  "tex": "{{\\textstyle \\left(x\\right)(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)(}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-s",
+  "tex": "{{\\scriptstyle \\left(x\\right)(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right)(}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-open-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right)(}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-d",
+  "tex": "{{\\displaystyle \\left(x\\right))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-dc",
+  "tex": "\\sqrt{{\\left(x\\right))}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-t",
+  "tex": "{{\\textstyle \\left(x\\right))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right))}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-s",
+  "tex": "{{\\scriptstyle \\left(x\\right))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right))}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-close-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right))}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-d",
+  "tex": "{{\\displaystyle \\left(x\\right),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-dc",
+  "tex": "\\sqrt{{\\left(x\\right),}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-t",
+  "tex": "{{\\textstyle \\left(x\\right),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right),}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-s",
+  "tex": "{{\\scriptstyle \\left(x\\right),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right),}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-punct-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right),}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-d",
+  "tex": "{{\\displaystyle \\left(x\\right)\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-dc",
+  "tex": "\\sqrt{{\\left(x\\right)\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-t",
+  "tex": "{{\\textstyle \\left(x\\right)\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-tc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)\\left(x\\right)}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-s",
+  "tex": "{{\\scriptstyle \\left(x\\right)\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-sc",
+  "tex": "\\frac{{y}}{{\\left(x\\right)\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-ss",
+  "tex": "{{\\scriptscriptstyle \\left(x\\right)\\left(x\\right)}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "atomgrid-inner-inner-ssc",
+  "tex": "x^{{\\frac{{y}}{{\\left(x\\right)\\left(x\\right)}}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-unsup-abovewithdelims",
+  "tex": "\\abovewithdelims",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-and",
+  "tex": "\\and",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-ang",
+  "tex": "\\ang",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-array",
+  "tex": "\\array",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-arrowvert",
+  "tex": "\\Arrowvert",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-arrowvert-2",
+  "tex": "\\arrowvert",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-atopwithdelims",
+  "tex": "\\atopwithdelims",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-bbox",
+  "tex": "\\bbox",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-bfseries",
+  "tex": "\\bfseries",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-bigominus",
+  "tex": "\\bigominus",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-bigoslash",
+  "tex": "\\bigoslash",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-bigsqcap",
+  "tex": "\\bigsqcap",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-bracevert",
+  "tex": "\\bracevert",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-buildrel",
+  "tex": "\\buildrel",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-c",
+  "tex": "\\C",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-cancelto",
+  "tex": "\\cancelto",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-cases",
+  "tex": "\\cases",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-cee",
+  "tex": "\\cee",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-cf",
+  "tex": "\\cf",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-class",
+  "tex": "\\class",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-cline",
+  "tex": "\\cline",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-coppa",
+  "tex": "\\Coppa",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-coppa-2",
+  "tex": "\\coppa",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-cssid",
+  "tex": "\\cssId",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-digamma",
+  "tex": "\\Digamma",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-displaylines",
+  "tex": "\\displaylines",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-else",
+  "tex": "\\else",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-em",
+  "tex": "\\em",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-enclose",
+  "tex": "\\enclose",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-eqalign",
+  "tex": "\\eqalign",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-eqalignno",
+  "tex": "\\eqalignno",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-eqnarray",
+  "tex": "\\begin{eqnarray}a\\end{eqnarray}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-eqref",
+  "tex": "\\eqref",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-euro",
+  "tex": "\\euro",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-fi",
+  "tex": "\\fi",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-geneuro",
+  "tex": "\\geneuro",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-geneuronarrow",
+  "tex": "\\geneuronarrow",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-geneurowide",
+  "tex": "\\geneurowide",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-hfil",
+  "tex": "\\hfil",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-hfill",
+  "tex": "\\hfill",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-idotsint",
+  "tex": "\\idotsint",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-iddots",
+  "tex": "\\iddots",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-if",
+  "tex": "\\if",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-ifmode",
+  "tex": "\\ifmode",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-ifx",
+  "tex": "\\ifx",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-iiiint",
+  "tex": "\\iiiint",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-itshape",
+  "tex": "\\itshape",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-koppa",
+  "tex": "\\Koppa",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-koppa-2",
+  "tex": "\\koppa",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-l",
+  "tex": "\\L",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-l-2",
+  "tex": "\\l",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-label",
+  "tex": "\\label",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-leftarrow",
+  "tex": "\\LeftArrow",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-leftroot",
+  "tex": "\\leftroot",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-leqalignno",
+  "tex": "\\leqalignno",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-lower",
+  "tex": "\\lower",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-mathtip",
+  "tex": "\\mathtip",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-mbox",
+  "tex": "\\mbox",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-md",
+  "tex": "\\md",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-mdseries",
+  "tex": "\\mdseries",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-mit",
+  "tex": "\\mit",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-mmltoken",
+  "tex": "\\mmlToken",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-moveleft",
+  "tex": "\\moveleft",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-moveright",
+  "tex": "\\moveright",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-mspace",
+  "tex": "\\mspace",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-multicolumn",
+  "tex": "\\multicolumn",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-multiline",
+  "tex": "\\begin{multiline}a\\end{multiline}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-newenvironment",
+  "tex": "\\newenvironment",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-newextarrow",
+  "tex": "\\Newextarrow",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-normalfont",
+  "tex": "\\normalfont",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-officialeuro",
+  "tex": "\\officialeuro",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-oldstyle",
+  "tex": "\\oldstyle",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-or",
+  "tex": "\\or",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-overparen",
+  "tex": "\\overparen",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-overwithdelims",
+  "tex": "\\overwithdelims",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-pagecolor",
+  "tex": "\\pagecolor",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-part",
+  "tex": "\\part",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-picture",
+  "tex": "\\begin{picture}a\\end{picture}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-pmatrix",
+  "tex": "\\pmatrix",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-q",
+  "tex": "\\Q",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-raise",
+  "tex": "\\raise",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-ref",
+  "tex": "\\ref",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-renewenvironment",
+  "tex": "\\renewenvironment",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-require",
+  "tex": "\\require",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-root",
+  "tex": "\\root",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-rotatebox",
+  "tex": "\\rotatebox",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-rule",
+  "tex": "\\Rule",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-sampi",
+  "tex": "\\Sampi",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-sampi-2",
+  "tex": "\\sampi",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-sc",
+  "tex": "\\sc",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-scalebox",
+  "tex": "\\scalebox",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-scr",
+  "tex": "\\scr",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-setlength",
+  "tex": "\\setlength",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-shoveleft",
+  "tex": "\\shoveleft",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-shoveright",
+  "tex": "\\shoveright",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-sideset",
+  "tex": "\\sideset",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-skew",
+  "tex": "\\skew",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-skip",
+  "tex": "\\skip",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-sl",
+  "tex": "\\sl",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-smiley",
+  "tex": "\\smiley",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-space",
+  "tex": "\\Space",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-stigma",
+  "tex": "\\Stigma",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-stigma-2",
+  "tex": "\\stigma",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-strut",
+  "tex": "\\strut",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-style",
+  "tex": "\\style",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-textsc",
+  "tex": "\\textsc",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-texttip",
+  "tex": "\\texttip",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-textvisiblespace",
+  "tex": "\\textvisiblespace",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-tiny",
+  "tex": "\\Tiny",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-toggle",
+  "tex": "\\toggle",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-underparen",
+  "tex": "\\underparen",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-unicode",
+  "tex": "\\unicode",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-up",
+  "tex": "\\up",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-uproot",
+  "tex": "\\uproot",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-upshape",
+  "tex": "\\upshape",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-varcoppa",
+  "tex": "\\varcoppa",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-varstigma",
+  "tex": "\\varstigma",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-vfil",
+  "tex": "\\vfil",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-vfill",
+  "tex": "\\vfill",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-vline",
+  "tex": "\\vline",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-wideparen",
+  "tex": "\\wideparen",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "maxexpand-near-limit",
+  "tex": "\\def\\a{\\b}\\def\\b{\\c}\\def\\c{\\d}\\def\\d{x}\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a\\a",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "frac-groups-display",
+  "tex": "\\frac{1}{2}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "binom-display",
+  "tex": "\\binom{n}{k}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "sqrt-display",
+  "tex": "\\sqrt{2}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "leftright-display",
+  "tex": "\\left(\\frac12\\right)",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "overline-display",
+  "tex": "\\overline{AB}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "matrix-display",
+  "tex": "\\begin{matrix} a & b \\\\ c & d \\end{matrix}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "pmatrix-display",
+  "tex": "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "cases-display",
+  "tex": "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "gathered-display",
+  "tex": "\\begin{gathered} a \\\\ b \\end{gathered}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "sin-display",
+  "tex": "\\sin x + \\cos^2 y",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "accents-display",
+  "tex": "\\check{a}\\grave{a}\\acute{a}\\tilde{a}\\bar{a}\\breve{a}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-quad",
+  "tex": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-euler",
+  "tex": "e^{i\\pi} + 1 = 0",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-bayes",
+  "tex": "P(A \\mid B) = \\frac{P(B \\mid A)P(A)}{P(B)}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-maxwell",
+  "tex": "\\nabla \\times \\mathbf{E} = -\\frac{\\partial \\mathbf{B}}{\\partial t}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-series",
+  "tex": "\\sum_{n=0}^{\\infty} \\frac{x^n}{n!} = e^x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-gauss-half",
+  "tex": "\\int_0^{\\infty} e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-det",
+  "tex": "\\det\\begin{pmatrix}a & b \\\\ c & d\\end{pmatrix} = ad - bc",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-abs",
+  "tex": "|x| = \\begin{cases} x & x \\ge 0 \\\\ -x & x < 0 \\end{cases}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-binom",
+  "tex": "(x+y)^n = \\sum_{k=0}^n \\binom{n}{k} x^{n-k} y^k",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-elimit",
+  "tex": "\\lim_{n \\to \\infty} \\left(1 + \\frac{1}{n}\\right)^n = e",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-normal",
+  "tex": "\\frac{1}{\\sqrt{2\\pi\\sigma^2}} e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-dot",
+  "tex": "\\mathbf{a} \\cdot \\mathbf{b} = \\sum_i a_i b_i",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-aligned",
+  "tex": "\\begin{aligned} f(x) &= x^2 + 2x + 1 \\\\ &= (x+1)^2 \\end{aligned}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-nestrad",
+  "tex": "\\sqrt{1 + \\sqrt{1 + \\sqrt{1 + x}}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-negspace",
+  "tex": "a\\!\\left(\\frac{b}{c}\\right)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "flite-norm2",
+  "tex": "\\left\\|\\mathbf{x}\\right\\|^2 = \\sum_{i=1}^n x_i^2",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-malf-left",
+  "tex": "\\left(",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-left-display",
+  "tex": "\\left(",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-right",
+  "tex": "\\left(x\\right",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-sup",
+  "tex": "x^",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-sup-display",
+  "tex": "x^",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-sqrtb",
+  "tex": "\\sqrt[2",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-frac1",
+  "tex": "\\frac{1}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-rbrace",
+  "tex": "}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-unclosed-env",
+  "tex": "\\begin{matrix}a",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-brak",
+  "tex": "\\brak",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-brak-display",
+  "tex": "\\brak",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "lenient-trailing-bin",
+  "tex": "x +",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lenient-trailing-bin-display",
+  "tex": "x +",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "lenient-frac-empty",
+  "tex": "\\frac{a}{}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-malf-sub",
+  "tex": "x_",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-malf-sub-display",
+  "tex": "x_",
+  "display": true,
+  "expect": "reject"
  }
 ]

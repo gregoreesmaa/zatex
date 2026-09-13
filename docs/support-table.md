@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `!` | accept | goldens: overset, spacing |
 
-| `\!` | accept | goldens: spacing |
+| `\!` | accept | goldens: spacing, flite-negspace |
 
 | `#` | accept | goldens: def, def-args |
 
@@ -22,9 +22,9 @@
 
 | `\'` | accept | goldens: text, textaccent |
 
-| `(` | accept | goldens: atom-open, big-series, bigl |
+| `(` | accept | goldens: atom-open, big-series, bigl, atomgrid |
 
-| `)` | accept | goldens: atom-open, bigl, cases |
+| `)` | accept | goldens: atom-open, bigl, cases, atomgrid |
 
 | `\(…\)` | accept | goldens: frac, text, bigl |
 
@@ -46,7 +46,7 @@
 
 | `\`` | accept | goldens: text, textaccent |
 
-| `<` | accept | goldens: atom-rel |
+| `<` | accept | goldens: atom-rel, atomgrid |
 
 | `\=` | accept | goldens: text |
 
@@ -58,7 +58,7 @@
 
 | `{` | accept | goldens: accents, aligned, alignedat |
 
-| `}` | accept | goldens: accents, aligned, alignedat |
+| `}` | accept | goldens: accents, aligned, alignedat, rej-malf-rbrace |
 
 | `\{` | accept | goldens: big-series, sym-escapes |
 
@@ -66,11 +66,11 @@
 
 | `\|` | accept | goldens: array, leftright-dot, middle |
 
-| `\\|` | accept | goldens: vert |
+| `\\|` | accept | goldens: vert, flite-norm2 |
 
 | `\~` | accept | goldens: text, textaccent |
 
-| `^` | accept | goldens: boxed, braces, demo-cauchy |
+| `^` | accept | goldens: boxed, braces, demo-cauchy, atomgrid, flite-euler, rej-malf-sup |
 
 | `\^` | accept | goldens: text |
 
@@ -84,7 +84,7 @@
 
 | `\above` | TODO | owner #1 |
 
-| `\abovewithdelims` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\abovewithdelims` | unsup | goldens: rej-unsup-abovewithdelims |
 
 | `\acute` | accept | goldens: accents |
 
@@ -120,9 +120,9 @@
 
 | `\And` | TODO | owner #1 |
 
-| `\and` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\and` | unsup | goldens: rej-unsup-and |
 
-| `\ang` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\ang` | unsup | goldens: rej-unsup-ang |
 
 | `\angl` | TODO | owner #1 |
 
@@ -156,13 +156,13 @@
 
 | `{array}` | accept | goldens: array, aligned, alignedat |
 
-| `\array` | unsup | KaTeX rejects too; no reject row yet (owner #6) |
+| `\array` | unsup | goldens: rej-unsup-array |
 
 | `\arraystretch` | accept | goldens: array, def, aligned |
 
-| `\Arrowvert` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Arrowvert` | unsup | goldens: rej-unsup-arrowvert |
 
-| `\arrowvert` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\arrowvert` | unsup | goldens: rej-unsup-arrowvert-2 |
 
 | `\ast` | accept | goldens: sym-gal-1 |
 
@@ -170,7 +170,7 @@
 
 | `\atop` | accept | goldens: atop |
 
-| `\atopwithdelims` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\atopwithdelims` | unsup | goldens: rej-unsup-atopwithdelims |
 
 ## B
 
@@ -194,13 +194,13 @@
 
 | `\Bbbk` | TODO | owner #1 |
 
-| `\bbox` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bbox` | unsup | goldens: rej-unsup-bbox |
 
 | `\bcancel` | TODO | owner #7 |
 
 | `\because` | TODO | owner #1 |
 
-| `\begin` | accept | goldens: matrix, aligned, alignedat |
+| `\begin` | accept | goldens: matrix, aligned, alignedat, flite-aligned, flite-abs, flite-det, rej-malf-unclosed-env |
 
 | `\begingroup` | TODO | owner #1 |
 
@@ -214,7 +214,7 @@
 
 | `\bf` | TODO | owner #1 |
 
-| `\bfseries` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bfseries` | unsup | goldens: rej-unsup-bfseries |
 
 | `\big` | accept | goldens: big-series |
 
@@ -252,11 +252,11 @@
 
 | `\bigodot` | accept | goldens: sym-gal-1 |
 
-| `\bigominus` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bigominus` | unsup | goldens: rej-unsup-bigominus |
 
 | `\bigoplus` | accept | goldens: sym-gal-1 |
 
-| `\bigoslash` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bigoslash` | unsup | goldens: rej-unsup-bigoslash |
 
 | `\bigotimes` | accept | goldens: sym-gal-1 |
 
@@ -264,7 +264,7 @@
 
 | `\Bigr` | accept | goldens: bigl, demo-cfrac |
 
-| `\bigsqcap` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bigsqcap` | unsup | goldens: rej-unsup-bigsqcap |
 
 | `\bigsqcup` | TODO | owner #1 |
 
@@ -280,7 +280,7 @@
 
 | `\bigwedge` | accept | goldens: sym-gal-2 |
 
-| `\binom` | accept | goldens: binom |
+| `\binom` | accept | goldens: binom, flite-binom |
 
 | `\blacklozenge` | TODO | owner #1 |
 
@@ -336,13 +336,13 @@
 
 | `\brace` | TODO | owner #2 |
 
-| `\bracevert` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bracevert` | unsup | goldens: rej-unsup-bracevert |
 
 | `\brack` | TODO | owner #2 |
 
 | `\breve` | accept | goldens: accents |
 
-| `\buildrel` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\buildrel` | unsup | goldens: rej-unsup-buildrel |
 
 | `\bull` | TODO | owner #1 |
 
@@ -356,13 +356,13 @@
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\C` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\C` | unsup | goldens: rej-unsup-c |
 
 | `\cal` | TODO | owner #1 |
 
 | `\cancel` | accept | goldens: cancel |
 
-| `\cancelto` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cancelto` | unsup | goldens: rej-unsup-cancelto |
 
 | `\Cap` | TODO | owner #1 |
 
@@ -370,7 +370,7 @@
 
 | `{cases}` | accept | goldens: cases, text, aligned |
 
-| `\cases` | unsup | KaTeX rejects too; no reject row yet (owner #6) |
+| `\cases` | unsup | goldens: rej-unsup-cases |
 
 | `{CD}` | accept | goldens: aligned, alignedat, array |
 
@@ -382,11 +382,11 @@
 
 | `\ce` | TODO | owner #1 |
 
-| `\cee` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cee` | unsup | goldens: rej-unsup-cee |
 
 | `\centerdot` | accept | goldens: sym-gal-2 |
 
-| `\cf` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cf` | unsup | goldens: rej-unsup-cf |
 
 | `use `\ce` instead` | TODO | owner #14 |
 
@@ -424,9 +424,9 @@
 
 | `\circledS` | accept | goldens: sym-gal-2 |
 
-| `\class` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\class` | unsup | goldens: rej-unsup-class |
 
-| `\cline` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cline` | unsup | goldens: rej-unsup-cline |
 
 | `\clubs` | TODO | owner #1 |
 
@@ -476,9 +476,9 @@
 
 | `\cong` | accept | goldens: sym-gal-2 |
 
-| `\Coppa` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Coppa` | unsup | goldens: rej-unsup-coppa |
 
-| `\coppa` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\coppa` | unsup | goldens: rej-unsup-coppa-2 |
 
 | `\coprod` | accept | goldens: sym-gal-2 |
 
@@ -500,7 +500,7 @@
 
 | `\csc` | accept | goldens: sym-gal-3 |
 
-| `\cssId` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cssId` | unsup | goldens: rej-unsup-cssid |
 
 | `\ctg` | TODO | owner #1 |
 
@@ -568,7 +568,7 @@
 
 | `\DeclareMathOperator` | err-parity | reject rows: rej-declare-op |
 
-| `\def` | accept | goldens: def, def-args |
+| `\def` | accept | goldens: def, def-args, maxexpand-near-limit |
 
 | `\definecolor` | err-parity | reject rows: definecolor |
 
@@ -582,7 +582,7 @@
 
 | `\det` | accept | goldens: sym-gal-3 |
 
-| `\Digamma` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Digamma` | unsup | goldens: rej-unsup-digamma |
 
 | `\digamma` | accept | goldens: sym-gal-3 |
 
@@ -602,7 +602,7 @@
 
 | `\dim` | accept | goldens: sym-gal-3 |
 
-| `\displaylines` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\displaylines` | unsup | goldens: rej-unsup-displaylines |
 
 | `\displaystyle` | accept | goldens: displaystyle, sum, demo-cauchy |
 
@@ -658,9 +658,9 @@
 
 | `\ell` | accept | goldens: sym-gal-3 |
 
-| `\else` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\else` | unsup | goldens: rej-unsup-else |
 
-| `\em` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\em` | unsup | goldens: rej-unsup-em |
 
 | `\emph` | TODO | owner #7 |
 
@@ -668,7 +668,7 @@
 
 | `\emptyset` | accept | goldens: sym-gal-3 |
 
-| `\enclose` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\enclose` | unsup | goldens: rej-unsup-enclose |
 
 | `\end` | accept | goldens: matrix, aligned, alignedat |
 
@@ -680,9 +680,9 @@
 
 | `\epsilon` | accept | goldens: sym-greek |
 
-| `\eqalign` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\eqalign` | unsup | goldens: rej-unsup-eqalign |
 
-| `\eqalignno` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\eqalignno` | unsup | goldens: rej-unsup-eqalignno |
 
 | `\eqcirc` | accept | goldens: sym-gal-3 |
 
@@ -694,13 +694,13 @@
 
 | `{equation\*}` | accept | goldens: aligned, alignedat, array |
 
-| `{eqnarray}` | unsup | KaTeX rejects too; no reject row yet (owner #14) |
+| `{eqnarray}` | unsup | goldens: rej-unsup-eqnarray |
 
 | `\Eqqcolon` | TODO | owner #1 |
 
 | `\eqqcolon` | TODO | owner #1 |
 
-| `\eqref` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\eqref` | unsup | goldens: rej-unsup-eqref |
 
 | `\eqsim` | TODO | owner #1 |
 
@@ -720,7 +720,7 @@
 
 | `\eth` | accept | goldens: sym-gal-3 |
 
-| `\euro` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\euro` | unsup | goldens: rej-unsup-euro |
 
 | `\exist` | TODO | owner #1 |
 
@@ -740,7 +740,7 @@
 
 | `\fcolorbox` | accept | goldens: fcolorbox, fcolorbox-empty |
 
-| `\fi` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\fi` | unsup | goldens: rej-unsup-fi |
 
 | `\Finv` | accept | goldens: sym-gal-0 |
 
@@ -750,7 +750,7 @@
 
 | `\forall` | accept | goldens: sym-gal-4 |
 
-| `\frac` | accept | goldens: frac, bigl, demo-cfrac |
+| `\frac` | accept | goldens: frac, bigl, demo-cfrac, flite-quad, rej-malf-frac1, lenient-frac-empty |
 
 | `\frak` | TODO | owner #1 |
 
@@ -778,15 +778,15 @@
 
 | `\ge` | accept | goldens: sym-gal-4 |
 
-| `\geneuro` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\geneuro` | unsup | goldens: rej-unsup-geneuro |
 
-| `\geneuronarrow` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\geneuronarrow` | unsup | goldens: rej-unsup-geneuronarrow |
 
-| `\geneurowide` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\geneurowide` | unsup | goldens: rej-unsup-geneurowide |
 
 | `\genfrac` | accept | goldens: genfrac |
 
-| `\geq` | accept | goldens: atom-rel |
+| `\geq` | accept | goldens: atom-rel, atomgrid |
 
 | `\geqq` | TODO | owner #1 |
 
@@ -848,7 +848,7 @@
 
 | `\hbox` | TODO | owner #7 |
 
-| `\hbox to` | unsup | KaTeX rejects too; no reject row yet (owner #7) |
+| `\hbox to` | TODO | KaTeX accepts (sweep-proven); owner #7 |
 
 | `\hdashline` | accept | goldens: matrix, aligned, alignedat |
 
@@ -856,9 +856,9 @@
 
 | `\heartsuit` | accept | goldens: sym-gal-4 |
 
-| `\hfil` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\hfil` | unsup | goldens: rej-unsup-hfil |
 
-| `\hfill` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\hfill` | unsup | goldens: rej-unsup-hfill |
 
 | `\hline` | accept | goldens: matrix, aligned, alignedat |
 
@@ -896,19 +896,19 @@
 | --- | --- | --- |
 | `\i` | accept | goldens: text |
 
-| `\idotsint` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\idotsint` | unsup | goldens: rej-unsup-idotsint |
 
-| `\iddots` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\iddots` | unsup | goldens: rej-unsup-iddots |
 
-| `\if` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\if` | unsup | goldens: rej-unsup-if |
 
 | `\iff` | TODO | owner #1 |
 
-| `\ifmode` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\ifmode` | unsup | goldens: rej-unsup-ifmode |
 
-| `\ifx` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\ifx` | unsup | goldens: rej-unsup-ifx |
 
-| `\iiiint` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\iiiint` | unsup | goldens: rej-unsup-iiiint |
 
 | `\iiint` | accept | goldens: sym-gal-4 |
 
@@ -938,7 +938,7 @@
 
 | `\injlim` | TODO | owner #1 |
 
-| `\int` | accept | goldens: int, demo-fourier, demo-gauss |
+| `\int` | accept | goldens: int, demo-fourier, demo-gauss, flite-gauss-half |
 
 | `\intercal` | TODO | owner #1 |
 
@@ -952,7 +952,7 @@
 
 | `\it` | TODO | owner #1 |
 
-| `\itshape` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\itshape` | unsup | goldens: rej-unsup-itshape |
 
 ## JK
 
@@ -978,23 +978,23 @@
 
 | `\ket` | accept | goldens: sym-greek3 |
 
-| `\Koppa` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Koppa` | unsup | goldens: rej-unsup-koppa |
 
-| `\koppa` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\koppa` | unsup | goldens: rej-unsup-koppa-2 |
 
 ## L
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\L` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\L` | unsup | goldens: rej-unsup-l |
 
-| `\l` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\l` | unsup | goldens: rej-unsup-l-2 |
 
 | `\Lambda` | accept | goldens: sym-Greek |
 
 | `\lambda` | accept | goldens: sym-greek2 |
 
-| `\label` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\label` | unsup | goldens: rej-unsup-label |
 
 | `\land` | accept | goldens: sym-gal-5 |
 
@@ -1032,13 +1032,13 @@
 
 | `\leadsto` | TODO | owner #1 |
 
-| `\left` | accept | goldens: dfrac, demo-cauchy, leftright |
+| `\left` | accept | goldens: dfrac, demo-cauchy, leftright, atomgrid, rej-malf-left |
 
 | `\leftarrow` | accept | goldens: sym-gal-5 |
 
 | `\Leftarrow` | accept | goldens: sym-gal-0 |
 
-| `\LeftArrow` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\LeftArrow` | unsup | goldens: rej-unsup-leftarrow |
 
 | `\leftarrowtail` | TODO | owner #1 |
 
@@ -1058,13 +1058,13 @@
 
 | `\leftrightsquigarrow` | TODO | owner #1 |
 
-| `\leftroot` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\leftroot` | unsup | goldens: rej-unsup-leftroot |
 
 | `\leftthreetimes` | TODO | owner #1 |
 
-| `\leq` | accept | goldens: atom-rel, demo-cauchy |
+| `\leq` | accept | goldens: atom-rel, demo-cauchy, atomgrid |
 
-| `\leqalignno` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\leqalignno` | unsup | goldens: rej-unsup-leqalignno |
 
 | `\leqq` | TODO | owner #1 |
 
@@ -1092,7 +1092,7 @@
 
 | `\lhd` | accept | goldens: sym-gal-5 |
 
-| `\lim` | accept | goldens: lim, lim-display |
+| `\lim` | accept | goldens: lim, lim-display, flite-elimit |
 
 | `\liminf` | accept | goldens: sym-gal-5 |
 
@@ -1152,7 +1152,7 @@
 
 | `\lor` | accept | goldens: sym-gal-5 |
 
-| `\lower` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\lower` | unsup | goldens: rej-unsup-lower |
 
 | `\lozenge` | TODO | owner #1 |
 
@@ -1192,7 +1192,7 @@
 
 | `\mathbb` | accept | goldens: fonts, text |
 
-| `\mathbf` | accept | goldens: fonts |
+| `\mathbf` | accept | goldens: fonts, flite-dot, flite-maxwell |
 
 | `\mathbin` | TODO | owner #1 |
 
@@ -1242,7 +1242,7 @@
 
 | `\mathstrut` | accept | goldens: sqrt, demo-cfrac, demo-gauss |
 
-| `\mathtip` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mathtip` | unsup | goldens: rej-unsup-mathtip |
 
 | `\mathtt` | accept | goldens: fonts2 |
 
@@ -1254,11 +1254,11 @@
 
 | `\max` | accept | goldens: sym-gal-6 |
 
-| `\mbox` | unsup | KaTeX rejects too; no reject row yet (owner #7) |
+| `\mbox` | unsup | goldens: rej-unsup-mbox |
 
-| `\md` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\md` | unsup | goldens: rej-unsup-md |
 
-| `\mdseries` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mdseries` | unsup | goldens: rej-unsup-mdseries |
 
 | `\measuredangle` | accept | goldens: sym-gal-6 |
 
@@ -1266,7 +1266,7 @@
 
 | `\mho` | accept | goldens: sym-gal-6 |
 
-| `\mid` | accept | goldens: big-series, sym-escapes, sym-gal-6 |
+| `\mid` | accept | goldens: big-series, sym-escapes, sym-gal-6, flite-bayes |
 
 | `\middle` | accept | goldens: middle, vert, demo-cauchy |
 
@@ -1278,33 +1278,33 @@
 
 | `\minuso` | TODO | owner #1 |
 
-| `\mit` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mit` | unsup | goldens: rej-unsup-mit |
 
 | `\mkern` | TODO | owner #1 |
 
-| `\mmlToken` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mmlToken` | unsup | goldens: rej-unsup-mmltoken |
 
 | `\mod` | accept | goldens: sym-gal-3 |
 
 | `\models` | accept | goldens: sym-gal-6 |
 
-| `\moveleft` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\moveleft` | unsup | goldens: rej-unsup-moveleft |
 
-| `\moveright` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\moveright` | unsup | goldens: rej-unsup-moveright |
 
 | `\mp` | accept | goldens: sym-gal-6 |
 
 | `\mskip` | TODO | owner #1 |
 
-| `\mspace` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mspace` | unsup | goldens: rej-unsup-mspace |
 
 | `\Mu` | accept | goldens: sym-gal-0 |
 
 | `\mu` | accept | goldens: sym-greek2 |
 
-| `\multicolumn` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\multicolumn` | unsup | goldens: rej-unsup-multicolumn |
 
-| `{multiline}` | unsup | KaTeX rejects too; no reject row yet (owner #14) |
+| `{multiline}` | unsup | goldens: rej-unsup-multiline |
 
 | `\multimap` | TODO | owner #1 |
 
@@ -1314,7 +1314,7 @@
 | --- | --- | --- |
 | `\N` | TODO | owner #1 |
 
-| `\nabla` | accept | goldens: sym-gal-6 |
+| `\nabla` | accept | goldens: sym-gal-6, flite-maxwell |
 
 | `\natnums` | TODO | owner #1 |
 
@@ -1334,13 +1334,13 @@
 
 | `\negthinspace` | TODO | owner #1 |
 
-| `\neq` | accept | goldens: atom-rel |
+| `\neq` | accept | goldens: atom-rel, atomgrid |
 
 | `\newcommand` | accept | goldens: newcommand, color-macro, newcommand-arg |
 
-| `\newenvironment` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\newenvironment` | unsup | goldens: rej-unsup-newenvironment |
 
-| `\Newextarrow` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Newextarrow` | unsup | goldens: rej-unsup-newextarrow |
 
 | `\newline` | TODO | owner #1 |
 
@@ -1384,7 +1384,7 @@
 
 | `\nonumber` | accept | goldens: aligned, alignedat, array |
 
-| `\normalfont` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\normalfont` | unsup | goldens: rej-unsup-normalfont |
 
 | `\normalsize` | TODO | owner #1 |
 
@@ -1460,7 +1460,7 @@
 
 | `\oe` | accept | goldens: text |
 
-| `\officialeuro` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\officialeuro` | unsup | goldens: rej-unsup-officialeuro |
 
 | `\oiiint` | TODO | owner #3 |
 
@@ -1468,7 +1468,7 @@
 
 | `\oint` | accept | goldens: oint |
 
-| `\oldstyle` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\oldstyle` | unsup | goldens: rej-unsup-oldstyle |
 
 | `\omega` | accept | goldens: sym-greek3 |
 
@@ -1488,7 +1488,7 @@
 
 | `\oplus` | accept | goldens: sym-gal-6 |
 
-| `\or` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\or` | unsup | goldens: rej-unsup-or |
 
 | `\origof` | TODO | owner #1 |
 
@@ -1514,7 +1514,7 @@
 
 | `\overlinesegment` | TODO | owner #5 |
 
-| `\overparen` | unsup | KaTeX rejects too; no reject row yet (owner #5) |
+| `\overparen` | unsup | goldens: rej-unsup-overparen |
 
 | `\Overrightarrow` | TODO | owner #1 |
 
@@ -1524,7 +1524,7 @@
 
 | `\overset` | accept | goldens: overset |
 
-| `\overwithdelims` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\overwithdelims` | unsup | goldens: rej-unsup-overwithdelims |
 
 | `\owns` | accept | goldens: sym-gal-7 |
 
@@ -1534,13 +1534,13 @@
 | --- | --- | --- |
 | `\P` | accept | goldens: text |
 
-| `\pagecolor` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\pagecolor` | unsup | goldens: rej-unsup-pagecolor |
 
 | `\parallel` | accept | goldens: sym-gal-7 |
 
-| `\part` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\part` | unsup | goldens: rej-unsup-part |
 
-| `\partial` | accept | goldens: sym-gal-7 |
+| `\partial` | accept | goldens: sym-gal-7, flite-maxwell |
 
 | `\perp` | accept | goldens: sym-gal-7 |
 
@@ -1556,7 +1556,7 @@
 
 | `\pi` | accept | goldens: demo-cfrac, demo-fourier, demo-gauss |
 
-| `{picture}` | unsup | KaTeX rejects too; no reject row yet (owner #14) |
+| `{picture}` | unsup | goldens: rej-unsup-picture |
 
 | `\pitchfork` | TODO | owner #1 |
 
@@ -1564,9 +1564,9 @@
 
 | `\plusmn` | TODO | owner #1 |
 
-| `\pm` | accept | goldens: sym-gal-7 |
+| `\pm` | accept | goldens: sym-gal-7, flite-quad |
 
-| `\pmatrix` | unsup | KaTeX rejects too; no reject row yet (owner #6) |
+| `\pmatrix` | unsup | goldens: rej-unsup-pmatrix |
 
 | `{pmatrix}` | accept | goldens: pmatrix, aligned, alignedat |
 
@@ -1618,7 +1618,7 @@
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\Q` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Q` | unsup | goldens: rej-unsup-q |
 
 | `\qquad` | accept | goldens: spacing |
 
@@ -1628,7 +1628,7 @@
 
 | `\r` | accept | goldens: text |
 
-| `\raise` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\raise` | unsup | goldens: rej-unsup-raise |
 
 | `\raisebox` | accept | goldens: raisebox |
 
@@ -1662,7 +1662,7 @@
 
 | `\reals` | TODO | owner #1 |
 
-| `\ref` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\ref` | unsup | goldens: rej-unsup-ref |
 
 | `\reflectbox` | TODO | owner #1 |
 
@@ -1670,9 +1670,9 @@
 
 | `\renewcommand` | accept | goldens: def, renewcommand, def-args |
 
-| `\renewenvironment` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\renewenvironment` | unsup | goldens: rej-unsup-renewenvironment |
 
-| `\require` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\require` | unsup | goldens: rej-unsup-require |
 
 | `\restriction` | TODO | owner #1 |
 
@@ -1686,7 +1686,7 @@
 
 | `\rho` | accept | goldens: sym-greek2 |
 
-| `\right` | accept | goldens: dfrac, demo-cauchy, leftright |
+| `\right` | accept | goldens: dfrac, demo-cauchy, leftright, atomgrid, rej-malf-right |
 
 | `\Rightarrow` | accept | goldens: sym-gal-0 |
 
@@ -1716,9 +1716,9 @@
 
 | `\rmoustache` | TODO | owner #4 |
 
-| `\root` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\root` | unsup | goldens: rej-unsup-root |
 
-| `\rotatebox` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\rotatebox` | unsup | goldens: rej-unsup-rotatebox |
 
 | `\rparen` | TODO | owner #1 |
 
@@ -1732,7 +1732,7 @@
 
 | `\rtimes` | TODO | owner #1 |
 
-| `\Rule` | unsup | KaTeX rejects too; no reject row yet (owner #7) |
+| `\Rule` | unsup | goldens: rej-unsup-rule |
 
 | `\rule` | accept | goldens: rule |
 
@@ -1746,15 +1746,15 @@
 | --- | --- | --- |
 | `\S` | accept | goldens: text |
 
-| `\Sampi` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Sampi` | unsup | goldens: rej-unsup-sampi |
 
-| `\sampi` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\sampi` | unsup | goldens: rej-unsup-sampi-2 |
 
-| `\sc` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\sc` | unsup | goldens: rej-unsup-sc |
 
-| `\scalebox` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\scalebox` | unsup | goldens: rej-unsup-scalebox |
 
-| `\scr` | unsup | KaTeX rejects too; no reject row yet (owner #7) |
+| `\scr` | unsup | goldens: rej-unsup-scr |
 
 | `\scriptscriptstyle` | accept | goldens: frac, bigl, demo-cfrac |
 
@@ -1774,7 +1774,7 @@
 
 | `\Set` | accept | goldens: frac, bigl, demo-cfrac |
 
-| `\setlength` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\setlength` | unsup | goldens: rej-unsup-setlength |
 
 | `\setminus` | accept | goldens: sym-gal-7 |
 
@@ -1786,11 +1786,11 @@
 
 | `\shortparallel` | TODO | owner #1 |
 
-| `\shoveleft` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\shoveleft` | unsup | goldens: rej-unsup-shoveleft |
 
-| `\shoveright` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\shoveright` | unsup | goldens: rej-unsup-shoveright |
 
-| `\sideset` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\sideset` | unsup | goldens: rej-unsup-sideset |
 
 | `\Sigma` | accept | goldens: sym-Greek |
 
@@ -1812,11 +1812,11 @@
 
 | `\sh` | TODO | owner #1 |
 
-| `\skew` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\skew` | unsup | goldens: rej-unsup-skew |
 
-| `\skip` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\skip` | unsup | goldens: rej-unsup-skip |
 
-| `\sl` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\sl` | unsup | goldens: rej-unsup-sl |
 
 | `\small` | TODO | owner #1 |
 
@@ -1834,11 +1834,11 @@
 
 | `\smile` | accept | goldens: sym-gal-8 |
 
-| `\smiley` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\smiley` | unsup | goldens: rej-unsup-smiley |
 
 | `\sout` | accept | goldens: text |
 
-| `\Space` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Space` | unsup | goldens: rej-unsup-space |
 
 | `\space` | TODO | owner #1 |
 
@@ -1856,7 +1856,7 @@
 
 | `\square` | TODO | owner #1 |
 
-| `\sqrt` | accept | goldens: sqrt, demo-cfrac, demo-gauss |
+| `\sqrt` | accept | goldens: sqrt, demo-cfrac, demo-gauss, flite-nestrad, flite-normal, rej-malf-sqrtb |
 
 | `\sqsubset` | accept | goldens: sym-gal-8 |
 
@@ -1872,17 +1872,17 @@
 
 | `\star` | accept | goldens: sym-gal-8 |
 
-| `\Stigma` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Stigma` | unsup | goldens: rej-unsup-stigma |
 
-| `\stigma` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\stigma` | unsup | goldens: rej-unsup-stigma-2 |
 
-| `\strut` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\strut` | unsup | goldens: rej-unsup-strut |
 
-| `\style` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\style` | unsup | goldens: rej-unsup-style |
 
 | `\sub` | TODO | owner #1 |
 
-| `{subarray}` | unsup | KaTeX rejects too; no reject row yet (owner #14) |
+| `{subarray}` | TODO | KaTeX accepts with alignment arg (sweep-proven); owner #14 |
 
 | `\sube` | TODO | owner #1 |
 
@@ -1916,7 +1916,7 @@
 
 | `\succsim` | TODO | owner #1 |
 
-| `\sum` | accept | goldens: sum, demo-cauchy, demo-sumsq |
+| `\sum` | accept | goldens: sum, demo-cauchy, demo-sumsq, atomgrid, flite-series |
 
 | `\sup` | accept | goldens: sym-gal-8 |
 
@@ -2016,7 +2016,7 @@
 
 | `\textrm` | accept | goldens: textrm |
 
-| `\textsc` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\textsc` | unsup | goldens: rej-unsup-textsc |
 
 | `\textsf` | accept | goldens: textsf |
 
@@ -2026,7 +2026,7 @@
 
 | `\textstyle` | accept | goldens: sum, demo-cauchy, demo-sumsq |
 
-| `\texttip` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\texttip` | unsup | goldens: rej-unsup-texttip |
 
 | `\texttt` | accept | goldens: texttt |
 
@@ -2034,7 +2034,7 @@
 
 | `\textup` | TODO | owner #1 |
 
-| `\textvisiblespace` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\textvisiblespace` | unsup | goldens: rej-unsup-textvisiblespace |
 
 | `\tfrac` | accept | goldens: tfrac |
 
@@ -2060,15 +2060,15 @@
 
 | `\tilde` | accept | goldens: accents |
 
-| `\times` | accept | goldens: sym-gal-8 |
+| `\times` | accept | goldens: sym-gal-8, flite-maxwell |
 
-| `\Tiny` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Tiny` | unsup | goldens: rej-unsup-tiny |
 
 | `\tiny` | TODO | owner #1 |
 
 | `\to` | accept | goldens: lim, lim-display |
 
-| `\toggle` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\toggle` | unsup | goldens: rej-unsup-toggle |
 
 | `\top` | accept | goldens: sym-gal-9 |
 
@@ -2124,17 +2124,17 @@
 
 | `\underlinesegment` | TODO | owner #5 |
 
-| `\underparen` | unsup | KaTeX rejects too; no reject row yet (owner #5) |
+| `\underparen` | unsup | goldens: rej-unsup-underparen |
 
 | `\underset` | accept | goldens: overset |
 
-| `\unicode` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\unicode` | unsup | goldens: rej-unsup-unicode |
 
 | `\unlhd` | accept | goldens: sym-gal-9 |
 
 | `\unrhd` | accept | goldens: sym-gal-9 |
 
-| `\up` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\up` | unsup | goldens: rej-unsup-up |
 
 | `\Uparrow` | accept | goldens: sym-gal-0 |
 
@@ -2150,9 +2150,9 @@
 
 | `\uplus` | accept | goldens: sym-gal-9 |
 
-| `\uproot` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\uproot` | unsup | goldens: rej-unsup-uproot |
 
-| `\upshape` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\upshape` | unsup | goldens: rej-unsup-upshape |
 
 | `\Upsilon` | accept | goldens: sym-gal-1 |
 
@@ -2172,7 +2172,7 @@
 | --- | --- | --- |
 | `\v` | accept | goldens: text |
 
-| `\varcoppa` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\varcoppa` | unsup | goldens: rej-unsup-varcoppa |
 
 | `\varDelta` | TODO | owner #1 |
 
@@ -2214,7 +2214,7 @@
 
 | `\varsigma` | accept | goldens: sym-greek3 |
 
-| `\varstigma` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\varstigma` | unsup | goldens: rej-unsup-varstigma |
 
 | `\varsubsetneq` | TODO | owner #1 |
 
@@ -2262,11 +2262,11 @@
 
 | `\vert` | accept | goldens: vert |
 
-| `\vfil` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\vfil` | unsup | goldens: rej-unsup-vfil |
 
-| `\vfill` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\vfill` | unsup | goldens: rej-unsup-vfill |
 
-| `\vline` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\vline` | unsup | goldens: rej-unsup-vline |
 
 | `{Vmatrix}` | accept | goldens: aligned, alignedat, array |
 
@@ -2292,7 +2292,7 @@
 
 | `\widehat` | accept | goldens: widehat |
 
-| `\wideparen` | unsup | KaTeX rejects too; no reject row yet (owner #1) |
+| `\wideparen` | unsup | goldens: rej-unsup-wideparen |
 
 | `\widetilde` | accept | goldens: sym-accent-widetilde |
 
