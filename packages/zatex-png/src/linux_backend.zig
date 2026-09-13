@@ -79,6 +79,9 @@ const FT_GlyphSlotRec = extern struct {
     face: FT_Face,
     next: ?*anyopaque,
     reserved: FT_UInt,
+    // FT_Generic (was `reserved` pre-2.10): omitting it shifts every
+    // later field by 16 bytes and the outline reads as empty.
+    generic: extern struct { data: ?*anyopaque, finalizer: ?*anyopaque },
     metrics: FT_Glyph_MetricsRec,
     linearHoriAdvance: c_long,
     linearVertAdvance: c_long,
@@ -283,7 +286,11 @@ pub fn discover(family: []const u8, buf: []u8) ?[]const u8 {
     if (AddString(pat, "family", famz[0..family.len :0]) == 0) return null;
     if (ConfigSub(null, pat, 0) == 0) return null;
     DefaultSub(pat);
-    const match = Match(null, pat, null) orelse return null;
+    // FcFontMatch asserts result != NULL (fcmatch.c), so a real slot is
+    // mandatory even though we ignore the match quality: NULL aborts
+    // fontconfig builds with assertions enabled (seen on ubuntu CI).
+    var fc_result: c_int = 0;
+    const match = Match(null, pat, &fc_result) orelse return null;
     defer PatternDestroy(match);
     var file: [*:0]u8 = undefined;
     if (GetString(match, "file", 0, &file) != 0) return null;
@@ -424,3 +431,4 @@ test "freetype extents track the software backend" {
     std.debug.print("ft-vs-sw extents: worst={d}, rows>2: {d}/255\n", .{ worst, over2 });
     try std.testing.expect(over2 == 0);
 }
+
