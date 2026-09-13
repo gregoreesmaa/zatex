@@ -6,7 +6,9 @@ independent oracle engines and emits `zig-out/oracle-diff/report.md`
 stands alone. It pre-sorts a review queue; it decides nothing.
 
 Staging: per-case renders live in `tools/oracle-diff/work/` (gitignored
-staging, never committed). Before rendering a case the driver deletes
+staging, never committed). The latest full-sweep triage report is
+checked in at `zig-out/oracle-diff/report.md` (+ `png/`) so reviewers
+can browse it without running Docker. Before rendering a case the driver deletes
 its four outputs so a failed engine reports missing instead of
 comparing last run's PNG, and after the render loop `crop.py` tight-crops
 every engine's render to its ink bbox in place (the LuaTeX oracle
