@@ -1392,7 +1392,9 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     }
     r = 0;
     while (r < nrows) : (r += 1) {
-        const base = total_h - row_base[r];
+        // dy is the baseline shift up from the table baseline, which
+        // is the first-row baseline: rows below shift down (negative).
+        const base = row_base[0] - row_base[r];
         var cc: usize = 0;
         while (cc < ncols_per_row[r]) : (cc += 1) {
             const cell = cells[r][cc];
@@ -1523,7 +1525,8 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
     k = 0;
     while (k < n) : (k += 1) {
         if (nparts >= 128) return error.NoSpace;
-        parts[nparts] = .{ .box = ids[k], .dx = @divTrunc(w - widths[k], 2), .dy = total - bases[k] };
+        // Same dy convention: shift up from the first-row baseline.
+        parts[nparts] = .{ .box = ids[k], .dx = @divTrunc(w - widths[k], 2), .dy = bases[0] - bases[k] };
         nparts += 1;
     }
     const s = try lc.allocKids(nparts);

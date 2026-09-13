@@ -207,3 +207,31 @@ test "reference: scaled fences use taller variants" {
     try std.testing.expect(tall.runs[0].glyphs[0] != 9);
     try std.testing.expect(tall.width > flat.width);
 }
+
+// Row stacks must land inside the ink box: every run baseline and
+// rule rect stays within [0, height_above + depth_below]. Guards the
+// table-baseline dy convention in the array/substack emitters.
+test "reference: array rows stay inside the ink box" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const formulas = [_][]const u8{
+        "\\begin{matrix} a & b \\\\ c & d \\end{matrix}",
+        "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}",
+        "\\begin{array}{c} a \\\\ \\hline \\\\ b \\end{array}",
+        "\\sum_{\\substack{a \\\\ b}} x",
+    };
+    for (formulas) |src| {
+        var runs: [64]zatex.ir.Run = undefined;
+        var rules: [16]zatex.ir.Rule = undefined;
+        var glyphs: [512]u16 = undefined;
+        const l = try zatex.layoutFull(src, .{ .display_mode = true }, ref.provider(), &runs, &rules, &glyphs);
+        const total: i64 = @as(i64, l.height_above) + @as(i64, l.depth_below);
+        try std.testing.expect(total > 0 and l.runs.len > 0);
+        for (l.runs) |r| {
+            try std.testing.expect(r.baseline_y >= 0 and r.baseline_y <= total);
+        }
+        for (l.rules) |r| {
+            try std.testing.expect(r.y >= 0 and @as(i64, r.y) + @as(i64, r.h) <= total);
+        }
+    }
+}
