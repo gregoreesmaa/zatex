@@ -221,8 +221,9 @@ test "qa40 phantom preserves footprint and kerning" {
             const a = try lay(p[0], display, &ba);
             const c = try lay(p[1], display, &bb);
             try inv.expectSameFootprint(a, c);
-            // `y` (121) and `+` (43) sit at identical x in both.
-            try std.testing.expectEqual(try glyphX(c, 121), try glyphX(a, 121));
+            // `y` (mathit U+1D466 -> 0xD466) and `+` (43) sit at
+            // identical x in both.
+            try std.testing.expectEqual(try glyphX(c, 0xD466), try glyphX(a, 0xD466));
             try std.testing.expectEqual(try glyphX(c, 43), try glyphX(a, 43));
             // The phantom emits nothing: strictly fewer glyphs, same box.
             var na: usize = 0;
@@ -465,11 +466,11 @@ test "qa42 cramped_radicand_superscript" {
     var b2: B = .{};
     const top = try lay("x^2", false, &b0);
     const rad = try lay("\\sqrt{x^2}", false, &b1);
-    try std.testing.expectEqual(@as(i32, 400), try supRaise(top, 120, 50));
-    try std.testing.expectEqual(@as(i32, 370), try supRaise(rad, 120, 50));
+    try std.testing.expectEqual(@as(i32, 400), try supRaise(top, 0xD465, 50));
+    try std.testing.expectEqual(@as(i32, 370), try supRaise(rad, 0xD465, 50));
     // Display mode radicand is Dc: same 30mu drop (400 vs 370).
     const rad_d = try lay("\\sqrt{x^2}", true, &b2);
-    try std.testing.expectEqual(@as(i32, 370), try supRaise(rad_d, 120, 50));
+    try std.testing.expectEqual(@as(i32, 370), try supRaise(rad_d, 0xD465, 50));
 }
 
 test "qa42 cramped_denominator_superscript" {
@@ -483,8 +484,8 @@ test "qa42 cramped_denominator_superscript" {
     var b1: B = .{};
     const num = try lay("\\frac{x^2}{1}", false, &b0);
     const den = try lay("\\frac{1}{x^2}", false, &b1);
-    try std.testing.expectEqual(@as(i32, 245), try supRaise(num, 120, 50));
-    try std.testing.expectEqual(@as(i32, 224), try supRaise(den, 120, 50));
+    try std.testing.expectEqual(@as(i32, 245), try supRaise(num, 0xD465, 50));
+    try std.testing.expectEqual(@as(i32, 224), try supRaise(den, 0xD465, 50));
 }
 
 test "qa42 cramped_nested_subscript" {
@@ -496,11 +497,11 @@ test "qa42 cramped_nested_subscript" {
     const l = try lay("A_{B_C}", false, &b);
     // A baseline = root height_above = 700 (stub extents, size 1000).
     try std.testing.expectEqual(@as(u32, 700), l.height_above);
-    // B (66) sits exactly one 260mu drop below A; C (67) a further
-    // 182mu (= 260 at size 700) below B.
-    try std.testing.expectEqual(@as(i32, 700), try baseY(l, 65));
-    try std.testing.expectEqual(@as(i32, 700 + 260), try baseY(l, 66));
-    try std.testing.expectEqual(@as(i32, 700 + 260 + 182), try baseY(l, 67));
+    // B (mathit U+1D435 -> 0xD435) sits exactly one 260mu drop below
+    // A; C (0xD436) a further 182mu (= 260 at size 700) below B.
+    try std.testing.expectEqual(@as(i32, 700), try baseY(l, 0xD434));
+    try std.testing.expectEqual(@as(i32, 700 + 260), try baseY(l, 0xD435));
+    try std.testing.expectEqual(@as(i32, 700 + 260 + 182), try baseY(l, 0xD436));
     try std.testing.expectEqual(@as(u32, 260 + 182 + 125), l.depth_below);
     // DEVIATION NOTE (engine behavior pinned, not KaTeX-proven):
     // subscripts lay out in uncramped script styles (`style.script()`,
@@ -512,7 +513,7 @@ test "qa42 cramped_nested_subscript" {
     // for this test module).
     var b2: B = .{};
     const l2 = try lay("A_{B^2}", false, &b2);
-    try std.testing.expectEqual(@as(i32, 245), try supRaise(l2, 66, 50));
+    try std.testing.expectEqual(@as(i32, 245), try supRaise(l2, 0xD435, 50));
 }
 
 // ---------------------------------------------------------------------------
@@ -532,14 +533,14 @@ test "qa43 sum limits stack in display, sit aside in text" {
     try std.testing.expect(!std.mem.eql(u8, dumpAny(d, &dd), dumpAny(t, &dt)));
     try std.testing.expect(d.height_above > t.height_above);
     const y_base_d = try baseY(d, 8721);
-    const y_sup_d = try baseY(d, 110);
-    const y_sub_d = try baseY(d, 105);
+    const y_sup_d = try baseY(d, 0xD45B); // mathit n
+    const y_sub_d = try baseY(d, 0xD456); // mathit i
     try std.testing.expect(y_sup_d < y_base_d);
     try std.testing.expect(y_sub_d > y_base_d);
     // Text mode: side scripts at one 60mu script gap past the 500-unit base.
     const x_base_t = try glyphX(t, 8721);
-    const x_sup_t = try glyphX(t, 110);
-    const x_sub_t = try glyphX(t, 105);
+    const x_sup_t = try glyphX(t, 0xD45B);
+    const x_sub_t = try glyphX(t, 0xD456);
     try std.testing.expectEqual(x_base_t + 500 + 60, x_sup_t);
     try std.testing.expectEqual(x_base_t + 500 + 60, x_sub_t);
 }
@@ -557,15 +558,15 @@ test "qa43 lim stacks in display, sits aside in text" {
     var bt: B = .{};
     const d = try lay("\\lim_{x} f", true, &bd);
     const t = try lay("\\lim_{x} f", false, &bt);
-    const y_base_d = try baseY(d, 108); // 'l' of "lim"
-    const y_sub_d = try baseY(d, 120); // 'x'
+    const y_base_d = try baseY(d, 108); // 'l' of "lim" (opname, roman)
+    const y_sub_d = try baseY(d, 0xD465); // mathit 'x'
     try std.testing.expect(y_sub_d > y_base_d);
     // Text mode: the subscript starts one 60mu gap past "lim" (1500 units).
-    const x_sub_t = try glyphX(t, 120);
+    const x_sub_t = try glyphX(t, 0xD465);
     const x_lim_t = try glyphX(t, 108);
     try std.testing.expectEqual(x_lim_t + 1500 + 60, x_sub_t);
     // Display mode centers the subscript under the word, not aside it.
-    const x_sub_d = try glyphX(d, 120);
+    const x_sub_d = try glyphX(d, 0xD465);
     try std.testing.expect(x_sub_d < x_lim_t + 1500);
 }
 
@@ -1369,13 +1370,29 @@ const InkStub = struct {
     }
     fn advance(_: *const anyopaque, _: u16, glyph: u16) i32 {
         // Combining vec has no advance, like the real font.
-        return if (glyph == 0x20D7) 0 else 500;
+        if (glyph == 0x20D7) return 0;
+        // Surd advance is LM-like (833) so the sqrt junction test
+        // exercises the ink-overhang path (issue #56).
+        if (glyph == 0x221A) return 833;
+        return 500;
     }
     fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
         return 40;
     }
     fn inkBounds(_: *const anyopaque, _: u16, glyph: u16) [4]i32 {
         return switch (glyph) {
+            // Caron ink is narrower than its advance (wide side
+            // bearings), like the LM Math fixture: issue #58.
+            0x02C7 => .{ 90, 500, 410, 700 },
+            // Brace ink edges measured from the LM fixture outlines
+            // via fontTools BoundsPen (upm 1000): U+23DE ink sits
+            // 539mu above its baseline; U+23DF ink hangs 109mu above
+            // its baseline (issue #55).
+            0x23DE => .{ 0, 539, 492, 783 },
+            0x23DF => .{ 0, -353, 492, -109 },
+            // Base radical ink (LM-measured): right edge overhangs
+            // the 833 advance by 20mu (issue #56).
+            0x221A => .{ 73, -960, 853, 40 },
             '~' => .{ 0, 193, 555, 307 },
             0x20D7 => .{ -472, 521, -56, 711 },
             '.' => .{ 86, 0, 192, 106 },
@@ -1475,4 +1492,115 @@ test "qa48 span stretches wide accents and braces" {
     var b3: ProvBuf = .{};
     const n = try layProv("\\hat{x}", stubProvider(), &b3);
     for (n.runs) |r| try std.testing.expectEqual(@as(u16, 1000), r.x_scale);
+}
+
+test "qa49 wide accent ink spans the nucleus" {
+    // Issue #58: the caron advance (500) already covers the AB span
+    // (1000), so advance-stretch never fired and the 320-wide ink sat
+    // centered inside. KaTeX stretches wide accents to 100% of the
+    // nucleus span, so the core scales INK to the span: 1000/320 =
+    // 3125 per-mille, origin at -281 so scaled ink [0, 1000] covers
+    // AB exactly (-281 + 90*3125/1000 = 0, -281 + 410*3125/1000 =
+    // 1000). Without ink metrics (stub provider) the advance-box
+    // behavior above is unchanged.
+    var b: ProvBuf = .{};
+    const l = try layInk("\\widecheck{AB}", &b);
+    var found = false;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g != 0x02C7) continue;
+            found = true;
+            try std.testing.expectEqual(@as(u16, 3125), r.x_scale);
+            try std.testing.expectEqual(@as(i32, -281), r.x);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "qa50 math alphanumeric remap" {
+    // Issues #57/#62: math-variant families resolve ASCII to the SMP
+    // block (the stub truncates cp to gid 1:1, so the remap is
+    // directly visible): mathit x -> U+1D465, mathbf A -> U+1D400,
+    // mathbf 1 -> U+1D7CE; rm and mathit digits pass through (KaTeX
+    // renders Math-Italic digits upright — the block has none).
+    var b1: ProvBuf = .{};
+    const l1 = try layProv("x", stubProvider(), &b1);
+    try std.testing.expectEqual(@as(u16, @truncate(@as(u21, 0x1D465))), l1.runs[0].glyphs[0]);
+    var b2: ProvBuf = .{};
+    const l2 = try layProv("\\mathbf{A1}", stubProvider(), &b2);
+    try std.testing.expectEqual(@as(u16, @truncate(@as(u21, 0x1D400))), l2.runs[0].glyphs[0]);
+    try std.testing.expectEqual(@as(u16, @truncate(@as(u21, 0x1D7CF))), l2.runs[0].glyphs[1]);
+    var b3: ProvBuf = .{};
+    const l3 = try layProv("\\mathit{1}", stubProvider(), &b3);
+    try std.testing.expectEqual(@as(u16, '1'), l3.runs[0].glyphs[0]);
+}
+
+test "qa51 brace kern is ink to ink" {
+    // Issue #55: the brace↔nucleus kern is 0.1em ink-to-ink (KaTeX
+    // `horizBrace.ts`), not 150mu off the extents box. Stub extents
+    // are 700/250 for every glyph; the ink stub carries the LM brace
+    // edges (0x23DE ink bottom +539, 0x23DF ink top -109), so with
+    // nucleus ha/db 700/250: over gy = 700+100-539 = 261 in a
+    // 961-high construction (brace baseline 700, nucleus 961);
+    // under gy = -(250+100-109) = -241 in a 491-deep one (brace
+    // baseline 941, nucleus 700). Null-hook providers keep the
+    // legacy 150mu rule (all other tests).
+    var b1: ProvBuf = .{};
+    const o = try layInk("\\overbrace{x}", &b1);
+    var oy_brace: ?i32 = null;
+    var oy_nuc: ?i32 = null;
+    for (o.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 0x23DE) oy_brace = r.baseline_y;
+            if (g == 0xD465) oy_nuc = r.baseline_y;
+        }
+    }
+    try std.testing.expectEqual(@as(?i32, 700), oy_brace);
+    try std.testing.expectEqual(@as(?i32, 961), oy_nuc);
+    var b2: ProvBuf = .{};
+    const u = try layInk("\\underbrace{x}", &b2);
+    var uy_brace: ?i32 = null;
+    var uy_nuc: ?i32 = null;
+    for (u.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 0x23DF) uy_brace = r.baseline_y;
+            if (g == 0xD465) uy_nuc = r.baseline_y;
+        }
+    }
+    try std.testing.expectEqual(@as(?i32, 941), uy_brace);
+    try std.testing.expectEqual(@as(?i32, 700), uy_nuc);
+}
+
+test "qa52 sqrt vinculum overlaps the surd" {
+    // Issue #56 (KaTeX `sqrtMain` single-path parity): with ink
+    // metrics the bar starts one rule thickness (40mu) inside the
+    // hook's right ink edge (853), clamped to the 833 advance, so
+    // rect and glyph rasterize as one joined stroke: dx =
+    // 883-50-20 = 813, width = 500+40+50+20 = 610. Null-hook
+    // providers keep the legacy advance-edge start (dx 833).
+    var b: ProvBuf = .{};
+    const l = try layInk("\\sqrt{x}", &b);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    try std.testing.expectEqual(@as(i32, 813), l.rules[0].x);
+    try std.testing.expectEqual(@as(u32, 610), l.rules[0].w);
+}
+
+test "qa53 negative kern overlaps runs" {
+    // Issue #63: `I\\kern-2.5pt R` (-250mu at quad=10pt) must hand
+    // the negative glue to the backend as overlapping run origins —
+    // the R run starts at 500-250 = 250, inside the I run. (The
+    // sweep outlier itself was the upright-glyph shape gap closed by
+    // the #57 remap: zatex-vs-katex rose 0.306 -> 0.870 on resweep.)
+    var b: ProvBuf = .{};
+    const l = try layProv("I\\kern-2.5pt R", stubProvider(), &b);
+    var xi: ?i32 = null;
+    var xr: ?i32 = null;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == @as(u16, @truncate(@as(u21, 0x1D43C)))) xi = r.x;
+            if (g == @as(u16, @truncate(@as(u21, 0x1D445)))) xr = r.x;
+        }
+    }
+    try std.testing.expectEqual(@as(?i32, 0), xi);
+    try std.testing.expectEqual(@as(?i32, 250), xr);
 }

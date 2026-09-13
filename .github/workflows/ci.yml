@@ -118,6 +118,10 @@ jobs:
           zig build -Dtarget=x86_64-linux
           zig build -Dtarget=aarch64-linux
           zig build -Dtarget=x86_64-windows
+          zig build -Dtarget=x86_64-linux -Dbackend=native
+          zig build -Dtarget=x86_64-windows -Dbackend=native
+      - name: Per-OS backend isolation (no foreign text-stack symbols)
+        run: tools/check_backends.sh
       - name: iOS/Android backend files compile-check (SDK/NDK link on device runners)
         working-directory: packages/zatex-png
         run: |
@@ -150,6 +154,13 @@ jobs:
           zig build
           ./zig-out/bin/zatex-png "x^2" /tmp/smoke.png
           ./zig-out/bin/zatex-png --corpus screenshots/corpus.json --outdir /tmp/shots-linux --px 48
+      - name: Native backend suite on Linux (fontconfig/FreeType, issue #65)
+        working-directory: packages/zatex-png
+        run: |
+          zig build -Dbackend=native test --summary all
+          zig build -Dbackend=native
+          ./zig-out/bin/zatex-png "x^2" /tmp/smoke-native.png
+          ./zig-out/bin/zatex-png --corpus screenshots/corpus.json --outdir /tmp/shots-linux-native --px 48
 
   # Visual regression: re-render every checked-in PNG and fail on real
   # pixel drift, so each PR carries eyeballable screenshots. Layout is

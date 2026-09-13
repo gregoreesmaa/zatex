@@ -1,0 +1,67 @@
+# Cross-OS renderer showcase (issue #66): macOS / Linux / Windows PNGs
+# from the native and software backends, side by side.
+#
+# Decisions (issue #66 asked for corpus, hosting, and workflow shape):
+# - Corpus: packages/zatex-png/screenshots/corpus.json — the same
+#   maintained set the screenshots job re-renders, so the showcase
+#   never drifts from what CI pins.
+# - Hosting: workflow artifacts (90-day retention), NEVER committed.
+#   Committed PNGs are layout pins with calibrated gates; showcase
+#   renders are eyeball material (and carry rasterizer character per
+#   machine, against the deterministic-output tenet).
+# - Shape: on-demand (workflow_dispatch) plus a weekly Monday run, one
+#   job per OS with a backend matrix. continue-on-error is structural:
+#   this pipeline must NEVER appear in required checks (same rule as
+#   oracle-diff — pixel comparison across rasterizers is triage, and
+#   the native backends are explicitly allowed to vary). The Windows
+#   native combo doubles as the only runtime exercise of the GDI
+#   backend (issue #64 has no Windows CI runner otherwise).
+name: showcase
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * 1"
+
+jobs:
+  shots:
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            backend: auto
+            tag: macos-cg
+          - os: macos-14
+            backend: software
+            tag: macos-sw
+          - os: ubuntu-latest
+            backend: auto
+            tag: linux-sw
+          - os: ubuntu-latest
+            backend: native
+            tag: linux-native
+          - os: windows-latest
+            backend: auto
+            tag: windows-sw
+          - os: windows-latest
+            backend: native
+            tag: windows-native
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Build and render showcase (${{ matrix.tag }})
+        working-directory: packages/zatex-png
+        run: |
+          zig build -Dbackend=${{ matrix.backend }}
+          ./zig-out/bin/zatex-png --corpus screenshots/corpus.json --outdir ${{ github.workspace }}/shots-${{ matrix.tag }} --px 48
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: showcase-${{ matrix.tag }}
+          path: ${{ github.workspace }}/shots-${{ matrix.tag }}
+          retention-days: 90

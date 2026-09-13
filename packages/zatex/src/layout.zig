@@ -333,11 +333,120 @@ fn effFont(lc: *LayCtx, f: parse.FontFam) parse.FontFam {
     return lc.fam_subst orelse f;
 }
 
+/// Mathematical Alphanumeric remap (issues #57/#62): KaTeX selects a
+/// different physical font per family (Math-Italic, Main-Bold, ...);
+/// a single OpenType math host carries those styles in the SMP
+/// Mathematical Alphanumeric block instead, so the core remaps ASCII
+/// letters/digits there when the effective family is a math variant.
+/// Codepoints the blocks lack pass through, matching KaTeX's own
+/// rendering: digits under mathit (no italic digits exist — KaTeX's
+/// Math-Italic digits are upright) and fraktur digits (no block).
+/// Letter exceptions follow Unicode's LGC preassignments, which
+/// KaTeX's fonts honor: mathit h is the Planck slot U+210E; script,
+/// fraktur and double-struck capitals with singleton assignments keep
+/// them; script small e/g/o keep theirs. Greek is out of scope (the
+/// issues ask for ASCII only). Returns null when no remap applies;
+/// the caller falls back to the raw codepoint when the host lacks
+/// the glyph (gid 0 — verified partial in the LM fixture, which has
+/// no script small a/e), so partial host coverage degrades to
+/// today's rendering instead of tofu.
+fn mathAlpha(fam: parse.FontFam, cp: u21) ?u21 {
+    if (alphaExc(fam, cp)) |e| return e;
+    if (cp >= 'A' and cp <= 'Z') {
+        const b = alphaBase(fam, 0) orelse return null;
+        return b + (cp - 'A');
+    }
+    if (cp >= 'a' and cp <= 'z') {
+        const b = alphaBase(fam, 1) orelse return null;
+        return b + (cp - 'a');
+    }
+    if (cp >= '0' and cp <= '9') {
+        const b = alphaBase(fam, 2) orelse return null;
+        return b + (cp - '0');
+    }
+    return null;
+}
+
+/// Block base per family for columns A-Z/a-z/0-9 (0 = no block —
+/// digits under mathit, fraktur digits and script digits: KaTeX
+/// renders those upright, and the blocks have none). Kept as data,
+/// not switch arms, so the subset profile pays __const bytes (free)
+/// instead of __TEXT jump tables (gated).
+fn alphaBase(fam: parse.FontFam, col: u2) ?u21 {
+    const row: [3]u21 = switch (fam) {
+        .rm => .{ 0, 0, 0 },
+        .mathit => .{ 0x1D434, 0x1D44E, 0 },
+        .bold => .{ 0x1D400, 0x1D41A, 0x1D7CE },
+        .sans => .{ 0x1D5A0, 0x1D5BA, 0x1D7E2 },
+        .tt => .{ 0x1D670, 0x1D68A, 0x1D7F6 },
+        .frak => .{ 0x1D504, 0x1D51E, 0 },
+        .bb => .{ 0x1D538, 0x1D552, 0x1D7D8 },
+        // .cal shares the script alphabet: MathML already unifies it
+        // to the "script" variant (`variantFor`), and one host font
+        // holds one script alphabet (KaTeX keeps two physical fonts —
+        // accepted divergence, same class as the single-file host).
+        .script, .cal => .{ 0x1D49C, 0x1D4B6, 0 },
+    };
+    const b = row[col];
+    return if (b == 0) null else b;
+}
+
+/// Singleton LGC preassignments (names verified against Python
+/// unicodedata, not memory): mathit h is the Planck slot U+210E;
+/// script, fraktur and double-struck capitals with preassigned
+/// singletons keep them, as do script small e/g/o.
+fn alphaExc(fam: parse.FontFam, cp: u21) ?u21 {
+    switch (fam) {
+        .mathit => if (cp == 'h') return 0x210E,
+        .frak => switch (cp) {
+            'C' => return 0x212D,
+            'H' => return 0x210C,
+            'I' => return 0x2111,
+            'R' => return 0x211C,
+            'Z' => return 0x2128,
+            else => {},
+        },
+        .bb => switch (cp) {
+            'C' => return 0x2102,
+            'H' => return 0x210D,
+            'N' => return 0x2115,
+            'P' => return 0x2119,
+            'Q' => return 0x211A,
+            'R' => return 0x211D,
+            'Z' => return 0x2124,
+            else => {},
+        },
+        .script, .cal => {
+            switch (cp) {
+                'B' => return 0x212C,
+                'E' => return 0x2130,
+                'F' => return 0x2131,
+                'H' => return 0x210B,
+                'I' => return 0x2110,
+                'L' => return 0x2112,
+                'M' => return 0x2133,
+                'R' => return 0x211B,
+                'e' => return 0x212F,
+                'g' => return 0x210A,
+                'o' => return 0x2134,
+                else => {},
+            }
+        },
+        else => {},
+    }
+    return null;
+}
+
 fn layoutAtom(lc: *LayCtx, style: parse.Style, class: symbols.AtomClass, fam: parse.FontFam, cp: u21) Error!u16 {
     _ = class;
     const size = style.sizeUnits();
     const font = fam.id();
-    const g = lc.glyphId(font, cp);
+    const rcp = mathAlpha(fam, cp) orelse cp;
+    var g = lc.glyphId(font, rcp);
+    // Host lacks the styled glyph (gid 0): fall back to the raw
+    // codepoint rather than tofu (partial LM coverage, e.g. no
+    // script small a/e — verified against the fixture cmap).
+    if (g == 0 and rcp != cp) g = lc.glyphId(font, cp);
     const adv = lc.advance(font, g);
     const w = @divTrunc(adv * size, 1000);
     const e = lc.extents(font, g);
@@ -784,8 +893,30 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         .over => |o| {
             const stack_sup = o.kind == .overbrace and s.sup != NONE;
             const stack_sub = o.kind == .underbrace and s.sub != NONE;
-            if (stack_sup or stack_sub)
-                return layoutBraceLabel(lc, style, base, bb, sup, sup_w, sup_ha, sup_db, s.sup != NONE, sub, sub_w, sub_ha, sub_db, s.sub != NONE);
+            if (stack_sup or stack_sub) {
+                // KaTeX outer kern (pinned 0.18.7 `horizBrace.ts`,
+                // issue #55): the label clears the brace INK by 0.2em.
+                // Derive the ink edge from the base box when the hook
+                // reports it; null keeps the legacy box + 150mu rule
+                // bit-identically.
+                const rfont: u16 = @intFromEnum(contract.FontId.rm);
+                const bgly = lc.glyphId(rfont, overGlyph(o.kind));
+                var sup_top: ?i32 = null;
+                var sub_bot: ?i32 = null;
+                if (lc.ink(rfont, bgly)) |bib| {
+                    if (bib[3] > bib[1]) {
+                        const bsize = style.sizeUnits();
+                        const be = lc.extents(rfont, bgly);
+                        const bha = @divTrunc(be[0] * bsize, 1000);
+                        const bdb = @divTrunc(be[1] * bsize, 1000);
+                        const iy0 = @divTrunc(bib[1] * bsize, 1000);
+                        const iy1 = @divTrunc(bib[3] * bsize, 1000);
+                        if (stack_sup) sup_top = bb.ha - bha + iy1;
+                        if (stack_sub) sub_bot = bb.db - bdb - iy0;
+                    }
+                }
+                return layoutBraceLabel(lc, style, base, bb, sup, sup_w, sup_ha, sup_db, s.sup != NONE, sup_top, sub, sub_w, sub_ha, sub_db, s.sub != NONE, sub_bot);
+            }
         },
         else => {},
     }
@@ -871,14 +1002,20 @@ fn layoutBraceLabel(
     sup_ha: i32,
     sup_db: i32,
     has_sup: bool,
+    sup_top: ?i32,
     sub: u16,
     sub_w: i32,
     sub_ha: i32,
     sub_db: i32,
     has_sub: bool,
+    sub_bot: ?i32,
 ) Error!u16 {
     const size = style.sizeUnits();
-    const gap: i32 = @divTrunc(@as(i32, 150) * size, 1000);
+    // KaTeX outer kern is 0.2em off the brace ink (issue #55); the
+    // legacy 150mu off the extents box applies only when the caller
+    // has no ink edge (null hook), bit-identically.
+    const sup_gap: i32 = @divTrunc(@as(i32, if (sup_top != null) 200 else 150) * size, 1000);
+    const sub_gap: i32 = @divTrunc(@as(i32, if (sub_bot != null) 200 else 150) * size, 1000);
     var w = bb.w;
     if (has_sup and sup_w > w) w = sup_w;
     if (has_sub and sub_w > w) w = sub_w;
@@ -889,13 +1026,13 @@ fn layoutBraceLabel(
     var db = bb.db;
     var i: usize = 1;
     if (has_sup) {
-        const sy = bb.ha + gap + sup_db;
+        const sy = (sup_top orelse bb.ha) + sup_gap + sup_db;
         lc.bkids[k + i] = .{ .box = sup, .dx = @divTrunc(w - sup_w, 2), .dy = sy };
         ha = sy + sup_ha;
         i += 1;
     }
     if (has_sub) {
-        const sy = -(bb.db + gap + sub_ha);
+        const sy = -((sub_bot orelse bb.db) + sub_gap + sub_ha);
         lc.bkids[k + i] = .{ .box = sub, .dx = @divTrunc(w - sub_w, 2), .dy = sy };
         db = -sy + sub_db;
     }
@@ -1091,16 +1228,39 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = g } },
         .invisible = false,
     });
+    // Junction (issue #56, KaTeX `sqrtMain` single-path parity): the
+    // vinculum must OVERLAP the surd hook ink, not abut the advance
+    // edge — an abutting rect + glyph rasterizes a light seam. KaTeX
+    // draws bar and surd as one path with the bar starting inside the
+    // hook overhang, so with ink metrics the bar starts one rule
+    // thickness inside the hook's right ink edge, clamped to [ink
+    // left, advance]. Null-hook providers keep the legacy
+    // advance-edge start bit-identically. Weight is deliberately
+    // untouched (option (a): KaTeX-numeric 0.04em parity per AGENTS.md;
+    // the LM fixture's thicker surd strokes are host-font character).
+    const join: i32 = blk: {
+        if (lc.ink(font, g)) |sib| {
+            if (sib[3] > sib[1] and sib[2] > sib[0]) {
+                const six1 = @divTrunc(sib[2] * size, 1000);
+                const six0 = @divTrunc(sib[0] * size, 1000);
+                const start = @min(gw, @max(six0, six1 - rw));
+                break :blk gw - start;
+            }
+        }
+        break :blk 0;
+    };
+    const rule_dx = rad_x - kern - join;
+    const rule_w = rb.w + over + kern + join;
     lc.bkids[s1] = .{ .box = gb, .dx = 0, .dy = rad_dy };
     lc.bkids[s1 + 1] = .{ .box = rad, .dx = rad_x, .dy = 0 };
     const ruleb = try lc.allocBox(.{
-        .w = rb.w + over + kern,
+        .w = rule_w,
         .ha = @divTrunc(rw + 1, 2),
         .db = rw - @divTrunc(rw + 1, 2),
         .kind = .{ .rule = {} },
         .invisible = false,
     });
-    lc.bkids[s1 + 2] = .{ .box = ruleb, .dx = rad_x - kern, .dy = rule_y };
+    lc.bkids[s1 + 2] = .{ .box = ruleb, .dx = rule_dx, .dy = rule_y };
     var ha = rule_top;
     var db = rb.db;
     const gtop = rad_dy + gha;
@@ -1128,7 +1288,7 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         lc.bkids[s2] = .{ .box = idx, .dx = pad + lead, .dy = idx_dy };
         lc.bkids[s2 + 1] = .{ .box = gb, .dx = pad + body_dx, .dy = rad_dy };
         lc.bkids[s2 + 2] = .{ .box = rad, .dx = pad + body_dx + rad_x, .dy = 0 };
-        lc.bkids[s2 + 3] = .{ .box = ruleb, .dx = pad + body_dx + rad_x - kern, .dy = rule_y };
+        lc.bkids[s2 + 3] = .{ .box = ruleb, .dx = pad + body_dx + rule_dx, .dy = rule_y };
         total_w = pad + body_dx + content_w;
         const itop = idx_dy + ib.ha;
         if (itop > ha) ha = itop;
@@ -1354,11 +1514,37 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const w = nb.w;
     var ax = ink_ax orelse @divTrunc(nb.w - aw, 2) + @divTrunc(skew, 2);
     if (a.wide and n_dots == 0) {
-        const sc = spanScale(nb.w, aw);
-        if (sc > 1000) {
-            lc.boxes[ab].x_scale = sc;
+        // KaTeX parity (pinned 0.18.7): wide accents are SVGs stretched
+        // to 100% of the nucleus span (`preserveAspectRatio="none"`),
+        // so the accent INK spans the nucleus — not the advance box
+        // (issue #58: the caron advance already covers AB, so
+        // advance-stretch never fired and the check covered only part
+        // of the nucleus). With ink metrics, scale ink to the span and
+        // center it; without them keep the advance-box rule below
+        // bit-identically.
+        var ink_sc: u16 = 1000;
+        if (ink) |ib| {
+            const jx0 = @divTrunc(ib[0] * size, 1000);
+            const jx1 = @divTrunc(ib[2] * size, 1000);
+            if (jx1 > jx0) {
+                const jsc = spanScale(nb.w, jx1 - jx0);
+                if (jsc > 1000) {
+                    ink_sc = jsc;
+                    ax = @divTrunc(nb.w, 2) + @divTrunc(skew, 2) -
+                        @divTrunc((jx0 + jx1) * @as(i32, jsc), 2000);
+                }
+            }
+        }
+        if (ink_sc > 1000) {
+            lc.boxes[ab].x_scale = ink_sc;
             lc.boxes[ab].w = nb.w;
-            ax = @divTrunc(skew, 2);
+        } else {
+            const sc = spanScale(nb.w, aw);
+            if (sc > 1000) {
+                lc.boxes[ab].x_scale = sc;
+                lc.boxes[ab].w = nb.w;
+                ax = @divTrunc(skew, 2);
+            }
         }
     }
     var ay = nb.ha - clearance + adb;
@@ -1609,8 +1795,23 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 }
             }
             const s = try lc.allocKids(2);
+            // KaTeX clearance (pinned 0.18.7 `horizBrace.ts`, issue
+            // #55): brace↔nucleus kern is 0.1em ink-to-ink. The host
+            // brace glyph carries empty space below/above its ink
+            // (LM U+23DE ink bottom sits 539mu above its baseline, so
+            // the extents rule compounded to 0.69em of daylight), so
+            // with ink metrics the brace baseline drops until the ink
+            // edge lands exactly 100mu from the nucleus. Arrows and
+            // null-hook providers keep the legacy rule bit-identically.
+            const bgap: i32 = @divTrunc(@as(i32, 100) * size, 1000);
+            const bink = if (is_brace) lc.ink(font, gg) else null;
+            const bink_ok = if (bink) |bib| bib[3] > bib[1] else false;
             if (!is_under) {
-                const gy = nb.ha + gap + gdb;
+                var gy = nb.ha + gap + gdb;
+                if (bink_ok) {
+                    const iy0 = @divTrunc(bink.?[1] * size, 1000);
+                    gy = nb.ha + bgap - iy0;
+                }
                 lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = gb, .dx = gx, .dy = gy };
                 return lc.allocBox(.{
@@ -1621,7 +1822,11 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                     .invisible = false,
                 });
             } else {
-                const gy = -(nb.db + gap + gha);
+                var gy = -(nb.db + gap + gha);
+                if (bink_ok) {
+                    const iy1 = @divTrunc(bink.?[3] * size, 1000);
+                    gy = -(nb.db + bgap + iy1);
+                }
                 lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = gb, .dx = gx, .dy = gy };
                 return lc.allocBox(.{

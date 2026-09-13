@@ -163,7 +163,7 @@ pub fn build(b: *std.Build) void {
     // engine (full profile), whose suite runs in its own targets.
     const qa_tests = b.addTest(.{
         .root_module = qa_mod,
-        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa dump" },
+        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa dump" },
     });
     const run_qa_tests = b.addRunArtifact(qa_tests);
     run_qa_tests.setCwd(b.path("."));
