@@ -1167,20 +1167,25 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
             .rbrace => cp = '}',
             .newline => is_space = true,
             .ctrl => {
-                const c = tk.name[0];
-                switch (c) {
-                    '{', '}', '%', '&', '#', '_', '$', ',', ':', ';', '!', '|', '/' => cp = c,
-                    ' ' => is_space = true,
-                    '~' => is_space = true,
-                    else => {
-                        // Text accent: precompose with the next char.
-                        const acc = parse.textAccentCp(c) orelse return error.Invalid;
-                        if (i + 1 >= toks.len) return error.Invalid;
-                        const nx = toks[i + 1];
-                        if (nx.kind != .char) return error.Invalid;
-                        i += 1;
-                        cp = parse.precompose(acc, nx.cp) orelse return error.Invalid;
-                    },
+                // Text-mode command (`\i`, `\textdollar`, ...).
+                if (symbols.lookupText(tk.name)) |tcp| {
+                    cp = tcp;
+                } else {
+                    const c = tk.name[0];
+                    switch (c) {
+                        '{', '}', '%', '&', '#', '_', '$', ',', ':', ';', '!', '|', '/' => cp = c,
+                        ' ' => is_space = true,
+                        '~' => is_space = true,
+                        else => {
+                            // Text accent: precompose with the next char.
+                            const acc = parse.textAccentCp(c) orelse return error.Invalid;
+                            if (i + 1 >= toks.len) return error.Invalid;
+                            const nx = toks[i + 1];
+                            if (nx.kind != .char) return error.Invalid;
+                            i += 1;
+                            cp = parse.precompose(acc, nx.cp) orelse return error.Invalid;
+                        },
+                    }
                 }
             },
             else => return error.Invalid,

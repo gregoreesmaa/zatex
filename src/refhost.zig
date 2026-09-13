@@ -208,6 +208,28 @@ test "reference: scaled fences use taller variants" {
     try std.testing.expect(tall.width > flat.width);
 }
 
+// Math-mode textords (`\S`, `\aa`, ...) lay out via the symbol table,
+// and text-mode-only commands (`\i`, `\textdollar`, ...) lay out inside
+// `\text` (KaTeX parity, pinned-proven per mode).
+test "reference: textord nationals lay out" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const formulas = [_][]const u8{
+        "\\S \\P \\sect \\aa \\AA",
+        "\\text{\\i \\j \\o \\O \\ae \\AE \\ss \\oe \\OE}",
+        "\\text{\\S \\P \\sect \\aa}",
+        "\\text{\\textdollar \\textsterling \\textdegree \\textellipsis}",
+        "\\text{\\textendash \\textemdash \\textbackslash \\textbar}",
+    };
+    for (formulas) |src| {
+        var runs: [16]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [64]u16 = undefined;
+        const l = try zatex.layoutFull(src, .{}, ref.provider(), &runs, &rules, &glyphs);
+        try std.testing.expect(l.width > 0 and l.runs.len > 0);
+    }
+}
+
 // Row stacks must land inside the ink box: every run baseline and
 // rule rect stays within [0, height_above + depth_below]. Guards the
 // table-baseline dy convention in the array/substack emitters.

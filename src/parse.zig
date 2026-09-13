@@ -1627,6 +1627,11 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         }
         return applyTextAccent(ctx, t.pos, acc, a);
     }
+    // Single-letter named symbols (`\S`, `\i`, ...) live in the same
+    // table as multi-letter names (KaTeX parity).
+    if (symbols.lookup(t.name)) |sym| {
+        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp } });
+    }
     return ctx.fail(t.pos, "undefined control sequence");
 }
 
@@ -2276,13 +2281,19 @@ fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
                     return ctx.fail(tk.pos, "can't use '$' in text mode");
             },
             .ctrl => {
-                // Only single-character escapes (`\%`, `\_`, ...) and
-                // spacing are allowed in text; math commands are not.
-                if (tk.name.len != 1) return ctx.fail(tk.pos, "can't use math command in text mode");
+                // Single-character escapes (`\%`, `\_`, ...), spacing,
+                // accents, and text-mode commands (`\i`, `\textdollar`,
+                // ...) are allowed in text; math commands are not.
+                if (tk.name.len != 1) {
+                    if (symbols.lookupText(tk.name) == null)
+                        return ctx.fail(tk.pos, "can't use math command in text mode");
+                    continue;
+                }
                 const c = tk.name[0];
                 switch (c) {
                     '{', '}', '%', '&', '#', '_', '$', ' ', ',', ':', ';', '!', '~', '|', '\'', '`', '^', '"', '=', '.', 'u', 'v', 'H', 't', 'c', 'd', 'b', 'r' => {},
-                    else => return ctx.fail(tk.pos, "can't use math command in text mode"),
+                    else => if (symbols.lookupText(tk.name) == null)
+                        return ctx.fail(tk.pos, "can't use math command in text mode"),
                 }
             },
             .sup, .sub => return ctx.fail(tk.pos, "can't use '^'/'_' in text mode"),
