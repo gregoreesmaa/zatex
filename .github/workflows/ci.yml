@@ -33,11 +33,13 @@ jobs:
           npm run sweep
           git diff --exit-code ../../goldens/katex_sweep.json
 
-  # Visual regression: re-render every checked-in PNG and fail on any
-  # pixel drift, so each PR carries eyeballable screenshots. Renders are
-  # byte-deterministic for fixed input + fixture font on one runner
-  # image (pinned macos-14 below); the fresh PNGs also upload as
-  # artifacts for comparison under the PR.
+  # Visual regression: re-render every checked-in PNG and fail on real
+  # pixel drift, so each PR carries eyeballable screenshots. Layout is
+  # deterministic (dimensions must match exactly), but CoreText
+  # antialiasing coverage varies by a few levels across macOS builds,
+  # so tools/compare_shots.py compares decoded pixels with calibrated
+  # tolerances instead of bytes. Fresh PNGs also upload as artifacts
+  # for comparison under the PR.
   screenshots:
     runs-on: macos-14
     steps:
@@ -48,11 +50,13 @@ jobs:
       - name: Re-render screenshot baselines and fail on drift
         run: |
           ./zatex-png/screenshots/render.sh /tmp/shots
-          diff -rq zatex-png/screenshots/png /tmp/shots
+          python3 tools/compare_shots.py zatex-png/screenshots/png /tmp/shots
       - name: Regenerate docs mirror and fail on drift
         run: |
+          cp -r docs/renders /tmp/docbase
           python3 tools/gen_doc_renders.py
-          git diff --exit-code docs/ zatex-png/screenshots/png
+          python3 tools/compare_shots.py /tmp/docbase docs/renders
+          git diff --exit-code docs/katex-syntax.md
       - name: Attach renders to the run
         if: always()
         uses: actions/upload-artifact@v4
