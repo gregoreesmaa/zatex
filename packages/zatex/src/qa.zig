@@ -1604,3 +1604,359 @@ test "qa53 negative kern overlaps runs" {
     try std.testing.expectEqual(@as(?i32, 0), xi);
     try std.testing.expectEqual(@as(?i32, 250), xr);
 }
+
+test "qa54 mathop takes display limits" {
+    // Issue #51 (KaTeX \mathop parity): subscripts on an Op wrapper
+    // stack below in display mode but sit aside in text mode, so the
+    // display construction is strictly deeper.
+    var b1: B = .{};
+    const d = try lay("\\mathop{x}_{y}", true, &b1);
+    var b2: B = .{};
+    const t = try lay("\\mathop{x}_{y}", false, &b2);
+    try std.testing.expect(d.depth_below > t.depth_below);
+}
+
+test "qa55 operatorname star takes display limits" {
+    // Issue #51 (KaTeX \operatorname* parity, pinned 0.18.7): the
+    // star stacks scripts below in display mode only; text mode
+    // keeps side scripts.
+    var b1: B = .{};
+    const d = try lay("\\operatorname*{asin}_{y}", true, &b1);
+    var b2: B = .{};
+    const t = try lay("\\operatorname*{asin}_{y}", false, &b2);
+    try std.testing.expect(d.depth_below > t.depth_below);
+}
+
+test "qa56 operatornamewithlimits parses as star" {
+    // Issue #51 (KaTeX \operatornamewithlimits parity): the legacy
+    // alias behaves exactly like the star form.
+    var b1: B = .{};
+    const d = try lay("\\operatornamewithlimits{asin}_{y}", true, &b1);
+    var b2: B = .{};
+    const t = try lay("\\operatornamewithlimits{asin}_{y}", false, &b2);
+    try std.testing.expect(d.depth_below > t.depth_below);
+}
+
+test "qa57 limits after operatorname is inert" {
+    // Issue #51 (KaTeX parity, pinned 0.18.7 placement matrix):
+    // explicit \limits/\nolimits after \operatorname parses but never
+    // moves scripts: display stays side, identical to the bare form.
+    var b1: B = .{};
+    const d = try lay("\\operatorname{asin}\\limits_{y}", true, &b1);
+    var b2: B = .{};
+    const p = try lay("\\operatorname{asin}_{y}", true, &b2);
+    try std.testing.expectEqual(p.depth_below, d.depth_below);
+}
+
+test "qa58 katex logo geometry" {
+    // Issue #51 (KaTeX \KaTeX parity): K, raised scriptsize A, T,
+    // lowered E, X with negative kerns (raise amounts from KaTeX
+    // 0.18.7: A top-aligned via T_h - 0.7*A_h, E down 0.5ex).
+    var b: B = .{};
+    const l = try lay("\\KaTeX", false, &b);
+    var yk: ?i32 = null;
+    var ya: ?i32 = null;
+    var ye: ?i32 = null;
+    var sa: ?u16 = null;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 'K') yk = r.baseline_y;
+            if (g == 'A') {
+                ya = r.baseline_y;
+                sa = r.size_units;
+            }
+            if (g == 'E') ye = r.baseline_y;
+        }
+    }
+    try std.testing.expect(yk != null and ya != null and ye != null);
+    try std.testing.expect(ya.? < yk.?);
+    try std.testing.expect(ye.? > yk.?);
+    try std.testing.expectEqual(@as(?u16, 700), sa);
+}
+
+test "qa59 latex and tex logos parse" {
+    // Issue #51 (KaTeX \LaTeX / \TeX parity): the sibling logos lay
+    // out (same raised-A / lowered-E construction as \KaTeX).
+    var b1: B = .{};
+    _ = try lay("\\LaTeX", false, &b1);
+    var b2: B = .{};
+    _ = try lay("\\TeX", false, &b2);
+}
+
+test "qa60 mathstrut is a zero-width paren strut" {
+    // Issue #51 (KaTeX \mathstrut parity): vertical extent of `(`
+    // with no width of its own.
+    var b1: B = .{};
+    const s = try lay("\\mathstrut", false, &b1);
+    try std.testing.expectEqual(@as(u32, 0), s.width);
+    try std.testing.expect(s.height_above > 0 and s.depth_below > 0);
+    var b2: B = .{};
+    _ = try lay("\\sqrt{\\mathstrut a}", false, &b2);
+}
+
+test "qa62 bra ket are fixed inner fences" {
+    // Issue #51 (KaTeX bra-ket parity): `\bra`/`\ket` use fixed-size
+    // fences in an Inner atom (no sizing, bar is an Ord).
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\bra{\\psi}", .{}, &buf);
+    try expectGolden("\\bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><mrow><mo>⟨</mo><mi>ψ</mi><mi>∣</mi></mrow></mrow></mrow></math>", got);
+    var buf2: [4096]u8 = undefined;
+    const got2 = try zatex.mathml("\\ket{\\psi}", .{}, &buf2);
+    try expectGolden("\\ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><mrow><mi>∣</mi><mi>ψ</mi><mo>⟩</mo></mrow></mrow></mrow></math>", got2);
+}
+
+test "qa64 display cases use displaystyle cells" {
+    // Issue #51 (KaTeX dcases/drcases parity): display-cases cells
+    // set limits-taking operators with stacked scripts, unlike the
+    // textstyle cells of cases/rcases.
+    var b1: B = .{};
+    const d = try lay("\\begin{dcases}\\sum_x a\\end{dcases}", false, &b1);
+    var b2: B = .{};
+    const c = try lay("\\begin{cases}\\sum_x a\\end{cases}", false, &b2);
+    try std.testing.expect(d.depth_below > c.depth_below);
+    var b3: B = .{};
+    const dr = try lay("\\begin{drcases}\\sum_x a\\end{drcases}", false, &b3);
+    var b4: B = .{};
+    const r = try lay("\\begin{rcases}\\sum_x a\\end{rcases}", false, &b4);
+    try std.testing.expect(dr.depth_below > r.depth_below);
+}
+
+test "qa66 edef snapshots expansion" {
+    // Issue #51 (KaTeX \edef parity): the body expands at definition
+    // time, so later redefinition does not affect the snapshot.
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\def\\foo{a}\\edef\\fcopy{\\foo}\\def\\foo{}\\fcopy", .{}, &buf);
+    try expectGolden("edef", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>a</mi></mrow></math>", got);
+    // Parameters stay symbolic through the snapshot and bind at use.
+    var buf2: [4096]u8 = undefined;
+    const got2 = try zatex.mathml("\\edef\\add#1#2{#1+#2}\\add 2 3", .{}, &buf2);
+    try expectGolden("edef-params", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mn>2</mn><mo>+</mo><mn>3</mn></mrow></math>", got2);
+    // Nested parameterized uses resolve inside the snapshot.
+    var buf3: [4096]u8 = undefined;
+    const got3 = try zatex.mathml("\\def\\id#1{#1}\\edef\\a{\\id{xy}}\\a", .{}, &buf3);
+    try expectGolden("edef-nested", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>x</mi><mi>y</mi></mrow></math>", got3);
+    // Undefined names fail at define time (KaTeX parity).
+    var b: B = .{};
+    const r = lay("\\edef\\a{\\foo}\\a", false, &b);
+    try std.testing.expectError(error.Invalid, r);
+}
+
+test "qa67 xdef defines globally expanded" {
+    // Issue #51 (KaTeX \xdef parity): global edef snapshots like
+    // \edef (all engine definitions are already global).
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\def\\foo{a}\\xdef\\fcopy{\\foo}\\def\\foo{}\\fcopy", .{}, &buf);
+    try expectGolden("xdef", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>a</mi></mrow></math>", got);
+}
+
+test "qa69 textregistered is text registered" {
+    // Issue #51 (KaTeX parity): `\textregistered` works inside
+    // `\text` (single ® glyph, exactly KaTeX's MathML spelling).
+    var b: B = .{};
+    _ = try lay("\\text{\\textregistered}", false, &b);
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\text{\\textregistered}", .{}, &buf);
+    try expectGolden("textregistered", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>®</mtext></mrow></math>", got);
+}
+
+test "qa70 textcircled overlays a circle" {
+    // Issue #51 (KaTeX parity): the circle overlays the base letter,
+    // growing the construction above the bare letter.
+    var b1: B = .{};
+    const circ = try lay("\\text{\\textcircled a}", false, &b1);
+    var b2: B = .{};
+    const bare = try lay("\\text{a}", false, &b2);
+    try std.testing.expect(circ.height_above > bare.height_above);
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\text{\\textcircled a}", .{}, &buf);
+    try expectGolden("textcircled", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>a⃝</mtext></mrow></math>", got);
+}
+
+test "qa71 sout strikes text" {
+    // Issue #51 (KaTeX parity): `\sout` in text draws one rule
+    // across the whole argument.
+    var b: B = .{};
+    const l = try lay("\\text{\\sout{abc}}", false, &b);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    try std.testing.expectEqual(@as(u32, 1500), l.rules[0].w);
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\text{\\sout{abc}}", .{}, &buf);
+    try expectGolden("sout-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>a̶b̶c̶</mtext></mrow></math>", got);
+}
+
+test "qa73 overbracket draws a square bracket" {
+    // Issue #51 (KaTeX parity): rule-drawn top bracket with legs,
+    // 1.6em minimum span, sup label above like overbrace.
+    var b1: B = .{};
+    _ = try lay("\\overbracket{x+1}^{n}", false, &b1);
+    var b2: B = .{};
+    const bare = try lay("x+1", false, &b2);
+    var b3: B = .{};
+    const br = try lay("\\overbracket{x+1}", false, &b3);
+    try std.testing.expect(br.height_above > bare.height_above);
+    var b4: B = .{};
+    const narrow = try lay("\\overbracket{i}", false, &b4);
+    try std.testing.expectEqual(@as(u32, 1600), narrow.width);
+    var buf: [8192]u8 = undefined;
+    const got = try zatex.mathml("\\overbracket{x+1}", .{}, &buf);
+    try expectGolden("overbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow><mo>&#x23B4;</mo></mover></mrow></math>", got);
+}
+
+test "qa78 cr is a full row-separator alias" {
+    // Issue #51 (KaTeX parity): \cr separates env rows exactly like
+    // \\ — trailing, leading, and consecutive separators all match.
+    var b1: B = .{};
+    const c = try lay("\\begin{matrix}a\\cr b\\end{matrix}", false, &b1);
+    var b2: B = .{};
+    const s = try lay("\\begin{matrix}a\\\\b\\end{matrix}", false, &b2);
+    try std.testing.expectEqual(s.width, c.width);
+    try std.testing.expectEqual(s.height_above, c.height_above);
+    try std.testing.expectEqual(s.depth_below, c.depth_below);
+    var b3: B = .{};
+    const ct = try lay("\\begin{matrix}a\\cr\\end{matrix}", false, &b3);
+    var b4: B = .{};
+    const st = try lay("\\begin{matrix}a\\\\\\end{matrix}", false, &b4);
+    try std.testing.expectEqual(st.height_above, ct.height_above);
+    try std.testing.expectEqual(st.depth_below, ct.depth_below);
+    var b5: B = .{};
+    const cc = try lay("\\begin{matrix}a\\cr\\cr b\\end{matrix}", false, &b5);
+    var b6: B = .{};
+    const sc = try lay("\\begin{matrix}a\\\\\\\\b\\end{matrix}", false, &b6);
+    try std.testing.expectEqual(sc.height_above, cc.height_above);
+    try std.testing.expectEqual(sc.depth_below, cc.depth_below);
+    // Stray \cr outside an env is rejected (KaTeX: undefined
+    // sequence) with the use-site offset.
+    var b7: B = .{};
+    var diag = zatex.Diag.empty();
+    const r = zatex.layoutDiag("a\\cr b", .{}, stubProvider(), &b7.runs, &b7.rules, &b7.glyphs, &diag);
+    try std.testing.expectError(error.Invalid, r);
+    try std.testing.expectEqualStrings("unexpected '\\cr'", diag.message);
+    try std.testing.expectEqual(@as(u32, 1), diag.offset);
+    // Same alias inside \substack rows.
+    var b8: B = .{};
+    const cb = try lay("\\sum_{\\substack{a\\cr b}}", false, &b8);
+    var b9: B = .{};
+    const sb = try lay("\\sum_{\\substack{a\\\\b}}", false, &b9);
+    try std.testing.expectEqual(sb.height_above, cb.height_above);
+    try std.testing.expectEqual(sb.depth_below, cb.depth_below);
+}
+
+test "qa77 phase pads for the phasor angle" {
+    // Issue #51 (KaTeX parity): angleHeight pad on the left, depth
+    // grows by lineWeight + clearance, menclose phasorangle.
+    var b1: B = .{};
+    const v = try lay("\\phase{30}", false, &b1);
+    var b2: B = .{};
+    const bare = try lay("30", false, &b2);
+    // lineWeight 60 + clearance 0.35ex (x-height 431): depth grows.
+    try std.testing.expectEqual(bare.depth_below + 60 + 150, v.depth_below);
+    // Padding is angleHeight/2 + lineWeight off the content width.
+    const H = bare.height_above + bare.depth_below + 60 + 150;
+    try std.testing.expectEqual(bare.width + H / 2 + 60, v.width);
+    // The mark also underlines the span: one full-width bottom bar
+    // (KaTeX phasePath fills the bottom edge, 80mu tall).
+    try std.testing.expectEqual(@as(usize, 1), v.rules.len);
+    try std.testing.expectEqual(v.width, v.rules[0].w);
+    try std.testing.expectEqual(@as(u32, 80), v.rules[0].h);
+    var buf: [8192]u8 = undefined;
+    const got = try zatex.mathml("\\phase{30}", .{}, &buf);
+    try expectGolden("phase", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><menclose notation=\"phasorangle\"><mrow><mn>30</mn></mrow></menclose></mrow></math>", got);
+}
+
+test "qa76 vcenter centers on the math axis" {
+    // Issue #51 (KaTeX parity): the content is shifted so the math
+    // axis halves it — height minus depth is exactly twice the axis
+    // (250mu), total preserved, mpadded in MathML.
+    var b1: B = .{};
+    const v = try lay("\\vcenter{x}", false, &b1);
+    try std.testing.expectEqual(v.height_above - v.depth_below, @as(u32, 500));
+    var b2: B = .{};
+    const bare = try lay("x", false, &b2);
+    try std.testing.expectEqual(bare.height_above + bare.depth_below, v.height_above + v.depth_below);
+    var buf: [8192]u8 = undefined;
+    const got = try zatex.mathml("\\vcenter{x}", .{}, &buf);
+    try expectGolden("vcenter", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mpadded class=\"vcenter\"><mi>x</mi></mpadded></mrow></math>", got);
+}
+
+test "qa75 pmb keeps metrics, marks bold" {
+    // Issue #51 (KaTeX parity): \pmb is a text-shadow style, not a
+    // font switch — same box as the bare content, mstyle wrapper.
+    var b1: B = .{};
+    const p = try lay("\\pmb{x+1}", false, &b1);
+    var b2: B = .{};
+    const bare = try lay("x+1", false, &b2);
+    try std.testing.expectEqual(bare.width, p.width);
+    try std.testing.expectEqual(bare.height_above, p.height_above);
+    try std.testing.expectEqual(bare.depth_below, p.depth_below);
+    var buf: [8192]u8 = undefined;
+    const got = try zatex.mathml("\\pmb{x}", .{}, &buf);
+    try expectGolden("pmb", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle style=\"text-shadow: 0.02em 0.01em 0.04px\"><mi>x</mi></mstyle></mrow></math>", got);
+}
+
+test "qa74 underbracket mirrors below" {
+    // Issue #51 (KaTeX parity): bottom bracket with sub label below.
+    var b1: B = .{};
+    _ = try lay("\\underbracket{x}_{y}", false, &b1);
+    var b2: B = .{};
+    const bare = try lay("x", false, &b2);
+    var b3: B = .{};
+    const br = try lay("\\underbracket{x}", false, &b3);
+    try std.testing.expect(br.depth_below > bare.depth_below);
+    var buf: [8192]u8 = undefined;
+    const got = try zatex.mathml("\\underbracket{x}", .{}, &buf);
+    try expectGolden("underbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mi>x</mi><mo>&#x23B5;</mo></munder></mrow></math>", got);
+}
+
+test "qa72 sout strikes math" {
+    // Issue #51 (KaTeX parity): math-mode `\sout` is a horizontal
+    // strike (menclose horizontalstrike, like `\cancel` diagonal).
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\sout{abc}", .{}, &buf);
+    try expectGolden("sout-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><menclose notation=\"horizontalstrike\"><mrow><mi>a</mi><mi>b</mi><mi>c</mi></mrow></menclose></mrow></math>", got);
+}
+
+test "qa68 global prefix takes definitions" {
+    // Issue #51 (KaTeX \global parity): the prefix applies to the
+    // next definition (`\def` here) and rejects anything else.
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\global\\def\\add#1#2{#1+#2} \\add 2 3", .{}, &buf);
+    try expectGolden("global", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mn>2</mn><mo>+</mo><mn>3</mn></mrow></math>", got);
+    var b: B = .{};
+    const r = lay("\\global x", false, &b);
+    try std.testing.expectError(error.Invalid, r);
+}
+
+test "qa65 right cases fence on the right" {
+    // Issue #51 (KaTeX rcases/drcases parity): the brace closes on
+    // the right with no opening fence.
+    var buf: [8192]u8 = undefined;
+    const got = try zatex.mathml("\\begin{rcases}a\\end{rcases}", .{}, &buf);
+    try std.testing.expect(std.mem.indexOf(u8, got, "<mo fence=\"true\">}</mo>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "{") == null);
+    var buf2: [8192]u8 = undefined;
+    _ = try zatex.mathml("\\begin{drcases}a\\end{drcases}", .{}, &buf2);
+}
+
+test "qa63 sized bra ket are fences" {
+    // Issue #51 (KaTeX `\Bra`/`\Ket` parity): capital forms size
+    // like `\left\langle … \right\vert` (verified identical KaTeX
+    // output), so they serialize as fence delimiters.
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\Bra{\\psi}", .{}, &buf);
+    try expectGolden("\\Bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">⟨</mo><mi>ψ</mi><mo fence=\"true\">∣</mo></mrow></math>", got);
+    var buf2: [4096]u8 = undefined;
+    const got2 = try zatex.mathml("\\Ket{\\psi}", .{}, &buf2);
+    try expectGolden("\\Ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">∣</mo><mi>ψ</mi><mo fence=\"true\">⟩</mo></mrow></math>", got2);
+}
+
+test "qa61 lbrace works after left" {
+    // Issue #51 (KaTeX delimiter parity): `\{`-class braces are
+    // valid `\left`/`\right` delimiters.
+    var b1: B = .{};
+    _ = try lay("\\left\\lbrace x \\right.", false, &b1);
+    var b2: B = .{};
+    const bare = try lay("x", false, &b2);
+    var b3: B = .{};
+    const fenced = try lay("\\left\\lbrace x \\right.", false, &b3);
+    try std.testing.expect(fenced.width >= bare.width);
+}

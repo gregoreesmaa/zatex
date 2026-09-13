@@ -12,12 +12,15 @@ tex=$(cat "$texfile")
 # KaTeX `#RRGGBB` hex colors have no pdflatex/xcolor spelling: translate
 # the oracle side to the equivalent `[HTML]` form (the compared property
 # — the rendered color — is unchanged; ZaTeX still gets the raw string).
-tex=$(printf '%s' "$tex" | sed -e 's/\\color{#\([0-9A-Fa-f]\{6\}\)}/\\color[HTML]{\1}/g' -e 's/\\color{#\([0-9A-Fa-f]\{3\}\)}/\\color[HTML]{\1}/g' -e 's/\\colorbox{#\([0-9A-Fa-f]\{6\}\)}/\\colorbox[HTML]{\1}/g' -e 's/\\textcolor{#\([0-9A-Fa-f]\{6\}\)}/\\textcolor[HTML]{\1}/g')
+# Short `#rgb` is expanded to `#rrggbb` first: xcolor's HTML model needs
+# six digits, and the expansion is safe corpus-wide (`#` elsewhere only
+# starts macro parameters like `#1`, never `{#hhh}`).
+tex=$(printf '%s' "$tex" | sed -e 's/\({\)#\([0-9A-Fa-f]\)\([0-9A-Fa-f]\)\([0-9A-Fa-f]\)}/\1#\2\2\3\3\4\4}/g' -e 's/\\color{#\([0-9A-Fa-f]\{6\}\)}/\\color[HTML]{\1}/g' -e 's/\\colorbox{#\([0-9A-Fa-f]\{6\}\)}/\\colorbox[HTML]{\1}/g' -e 's/\\fcolorbox{\([^}]*\)}{#\([0-9A-Fa-f]\{6\}\)}/\\fcolorbox{\1}[HTML]{\2}/g' -e 's/\\textcolor{#\([0-9A-Fa-f]\{6\}\)}/\\textcolor[HTML]{\1}/g')
 if [ "$display" = "1" ]; then body="\\[ $tex \\]"; else body="\$$tex\$"; fi
 {
 cat <<'EOF'
 \documentclass{minimal}
-\usepackage{amsmath,amssymb,xcolor}
+\usepackage{amsmath,amssymb,xcolor,mathrsfs,hyperref}
 \begin{document}
 EOF
 printf '%s\n' "$body"

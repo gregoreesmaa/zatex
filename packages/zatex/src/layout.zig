@@ -205,12 +205,35 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .accent => |a| return layoutAccent(lc, style, a),
         .over => |o| return layoutOver(lc, style, o),
         .style => |s| return layoutNode(lc, s.style, s.body),
+        .classwrap => |c| return layoutNode(lc, style, c.body),
         .font => |f| {
             const prev = lc.fam_subst;
             lc.fam_subst = f.fam;
             const b = try layoutNode(lc, style, f.body);
             lc.fam_subst = prev;
             return b;
+        },
+        // Poor-man's bold is a paint style (KaTeX text-shadow), so
+        // layout is the bare body box, bit-identically.
+        .pmb => |p| return layoutNode(lc, style, p.body),
+        .vcenter => |v| {
+            // KaTeX parity (pinned 0.18.7 HTML, issue #51): shift
+            // the body so the math axis halves its total — the same
+            // rule as grown-fence centering, without the depth clamp
+            // (a shallow body really does end above the baseline).
+            const body = try layoutNode(lc, style, v.body);
+            const bb = lc.boxes[body];
+            const axis = @divTrunc(@as(i32, 250) * style.sizeUnits(), 1000);
+            const half = @divTrunc(bb.ha + bb.db + 1, 2);
+            const s = try lc.allocKids(1);
+            lc.bkids[s] = .{ .box = body, .dx = 0, .dy = axis + half - bb.ha };
+            return lc.allocBox(.{
+                .w = bb.w,
+                .ha = axis + half,
+                .db = half - axis,
+                .kind = .{ .list = .{ .start = s, .len = 1 } },
+                .invisible = false,
+            });
         },
         .text => |t| return layoutText(lc, style, t),
         .env => |e| return layoutEnv(lc, style, e),
@@ -281,6 +304,8 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         },
         .boxed => |b| return layoutBoxed(lc, style, b),
         .cancel => |b| return layoutCancel(lc, style, b),
+        .phase => |b| return layoutPhase(lc, style, b),
+        .sout => |b| return layoutSout(lc, style, b),
         .lap => |l| return layoutLap(lc, style, l),
         .not => |nt| return layoutNot(lc, style, nt),
         .smash => |s| {
@@ -542,7 +567,10 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .accent => |a| return classOf(pc, a.nucleus) orelse .Ord,
         .over => return .Ord,
         .style => |s| return classOf(pc, s.body),
+        .classwrap => |c| return c.class,
         .font => |f| return classOf(pc, f.body),
+        .pmb => |p| return classOf(pc, p.body),
+        .vcenter => |v| return classOf(pc, v.body),
         .text => return .Ord,
         .env => return .Ord,
         .substack => return .Ord,
@@ -556,6 +584,8 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .phantom => |p| return classOf(pc, p.body),
         .boxed => return .Ord,
         .cancel => |b| return classOf(pc, b),
+        .phase => |b| return classOf(pc, b),
+        .sout => |b| return classOf(pc, b),
         .lap => |l| return classOf(pc, l.body),
         // KaTeX wraps `\not` in `\mathrel` unconditionally.
         .not => return .Rel,
@@ -891,8 +921,8 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     // the ordinary side path below, as `msub`/`msup` do.
     switch (parse.nodeAt(lc.pctx, s.base)) {
         .over => |o| {
-            const stack_sup = o.kind == .overbrace and s.sup != NONE;
-            const stack_sub = o.kind == .underbrace and s.sub != NONE;
+            const stack_sup = (o.kind == .overbrace or o.kind == .overbracket) and s.sup != NONE;
+            const stack_sub = (o.kind == .underbrace or o.kind == .underbracket) and s.sub != NONE;
             if (stack_sup or stack_sub) {
                 // KaTeX outer kern (pinned 0.18.7 `horizBrace.ts`,
                 // issue #55): the label clears the brace INK by 0.2em.
@@ -900,10 +930,19 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
                 // reports it; null keeps the legacy box + 150mu rule
                 // bit-identically.
                 const rfont: u16 = @intFromEnum(contract.FontId.rm);
+                const is_bracket = o.kind == .overbracket or o.kind == .underbracket;
                 const bgly = lc.glyphId(rfont, overGlyph(o.kind));
                 var sup_top: ?i32 = null;
                 var sub_bot: ?i32 = null;
-                if (lc.ink(rfont, bgly)) |bib| {
+                // Rule-drawn brackets fill their box edge to edge, so
+                // the ink top/bottom IS the box top/bottom (KaTeX 0.2em
+                // outer kern applies off it, no glyph lookup involved).
+                if (is_bracket) {
+                    if (stack_sup) sup_top = bb.ha;
+                    if (stack_sub) sub_bot = bb.db;
+                }
+                if (!is_bracket and lc.ink(rfont, bgly) != null) {
+                    const bib = lc.ink(rfont, bgly).?;
                     if (bib[3] > bib[1]) {
                         const bsize = style.sizeUnits();
                         const be = lc.extents(rfont, bgly);
@@ -1614,6 +1653,7 @@ fn nucleusFirstCp(pc: *const parse.ParseCtx, id: Idx) u21 {
         .supsub => |s| return nucleusFirstCp(pc, s.base),
         .font => |f| return nucleusFirstCp(pc, f.body),
         .style => |s| return nucleusFirstCp(pc, s.body),
+        .classwrap => |c| return nucleusFirstCp(pc, c.body),
         else => return 'x',
     }
 }
@@ -1622,6 +1662,8 @@ fn overGlyph(kind: parse.OverKind) u21 {
     return switch (kind) {
         .overbrace => 0x23DE,
         .underbrace => 0x23DF,
+        .overbracket => 0x23B4,
+        .underbracket => 0x23B5,
         .overleft, .xleft => 0x2190,
         .overright, .xright => 0x2192,
         .overboth, .xboth => 0x2194,
@@ -1714,6 +1756,63 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
         else => {
             // Brace / arrow overs: glyph above or below the nucleus,
             // extensible-arrow labels in script style.
+            if (o.kind == .overbracket or o.kind == .underbracket) {
+                // KaTeX parity (pinned 0.18.7 `horizBrace.ts`, issue
+                // #51): square brackets are drawn from strokes, not a
+                // font glyph — minimum span 1.6em, 0.1em clearance off
+                // the nucleus, the bar arm's-length below
+                // armheight+0.3em (legs span it), thickness 120mu.
+                const is_under = o.kind == .underbracket;
+                const nuc = try layoutNode(lc, style, o.nucleus);
+                const nb = lc.boxes[nuc];
+                const minw = @divTrunc(@as(i32, 1600) * size, 1000);
+                const w = if (nb.w > minw) nb.w else minw;
+                const sth = @divTrunc(@as(i32, 120) * size, 1000);
+                const cgap = @divTrunc(@as(i32, 100) * size, 1000);
+                const drop = @divTrunc(@as(i32, if (is_under) 1030 else 730) * size, 1000);
+                const bar = try lc.allocBox(.{
+                    .w = w,
+                    .ha = sth,
+                    .db = 0,
+                    .kind = .{ .rule = {} },
+                    .invisible = false,
+                });
+                const leg = try lc.allocBox(.{
+                    .w = sth,
+                    .ha = drop,
+                    .db = 0,
+                    .kind = .{ .rule = {} },
+                    .invisible = false,
+                });
+                const s = try lc.allocKids(4);
+                const nx = @divTrunc(w - nb.w, 2);
+                lc.bkids[s] = .{ .box = nuc, .dx = nx, .dy = 0 };
+                if (!is_under) {
+                    const ly = nb.ha + cgap;
+                    lc.bkids[s + 1] = .{ .box = bar, .dx = 0, .dy = ly + drop };
+                    lc.bkids[s + 2] = .{ .box = leg, .dx = 0, .dy = ly };
+                    lc.bkids[s + 3] = .{ .box = leg, .dx = w - sth, .dy = ly };
+                    return lc.allocBox(.{
+                        .w = w,
+                        .ha = ly + drop + sth,
+                        .db = nb.db,
+                        .kind = .{ .list = .{ .start = s, .len = 4 } },
+                        .invisible = false,
+                    });
+                } else {
+                    const ly = -(nb.db + cgap);
+                    lc.bkids[s + 1] = .{ .box = bar, .dx = 0, .dy = ly - drop - sth };
+                    lc.bkids[s + 2] = .{ .box = leg, .dx = 0, .dy = ly - drop };
+                    lc.bkids[s + 3] = .{ .box = leg, .dx = w - sth, .dy = ly - drop };
+                    return lc.allocBox(.{
+                        .w = w,
+                        .ha = nb.ha,
+                        .db = -ly + drop + sth,
+                        .kind = .{ .list = .{ .start = s, .len = 4 } },
+                        .invisible = false,
+                    });
+                }
+            }
             const is_under = o.kind == .underbrace or o.kind == .underleft or
                 o.kind == .underright or o.kind == .underboth;
             const is_x = o.kind == .xleft or o.kind == .xright or o.kind == .xboth or
@@ -1845,6 +1944,63 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
 // Text, environments, boxes
 // ---------------------------------------------------------------------------
 
+// Emit one pending text span decoration: circled overlay or
+// strike rule (shared by the in-loop check and the end flush).
+fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circle: bool,
+    x: i32, ha: *i32, db: *i32, parts: *[256]BKid, nparts: *usize) Error!void {
+    if (is_circle) {
+        // Circle overlay centered over the span (pinned-output
+        // measured: centered, not left-aligned). Top tucks
+        // 194mu above the span top.
+        var stop: i32 = 0;
+        for (parts.*[pp0..nparts.*]) |pt| {
+            const pbx = lc.boxes[pt.box];
+            const pt_top = pt.dy + pbx.ha;
+            if (pt_top > stop) stop = pt_top;
+        }
+        const cg = lc.glyphId(font, 0x25EF);
+        const cadv = lc.advance(font, cg);
+        const caw = @divTrunc(cadv * size, 1000);
+        const ce = lc.extents(font, cg);
+        const caha = @divTrunc(ce[0] * size, 1000);
+        const cadb = @divTrunc(ce[1] * size, 1000);
+        const cb = try lc.allocBox(.{
+            .w = caw,
+            .ha = caha,
+            .db = cadb,
+            .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = cg } },
+            .invisible = false,
+        });
+        const cadx = px0 + @divTrunc((x - px0) - caw, 2);
+        const lift = @divTrunc(@as(i32, 194) * size, 1000);
+        const cady = stop + lift - caha;
+        if (nparts.* >= 256) return error.NoSpace;
+        parts.*[nparts.*] = .{ .box = cb, .dx = cadx, .dy = cady };
+        nparts.* += 1;
+        const catop = cady + caha;
+        if (catop > ha.*) ha.* = catop;
+        const cabot = cadb - cady;
+        if (cabot > db.*) db.* = cabot;
+    } else {
+        // Strike rule across the span at half x-height (same
+        // geometry as the math sout node).
+        const th = @divTrunc(@as(i32, 80) * size, 1000);
+        const strike = @divTrunc(x_height_1000 * size, 2000);
+        const rb = try lc.allocBox(.{
+            .w = x - px0,
+            .ha = @divTrunc(th + 1, 2),
+            .db = th - @divTrunc(th + 1, 2),
+            .kind = .{ .rule = {} },
+            .invisible = false,
+        });
+        if (nparts.* >= 256) return error.NoSpace;
+        parts.*[nparts.*] = .{ .box = rb, .dx = px0, .dy = strike };
+        nparts.* += 1;
+        const rtop = strike + @divTrunc(th + 1, 2);
+        if (rtop > ha.*) ha.* = rtop;
+    }
+}
+
 fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     const size = style.sizeUnits();
     const fam = lc.fam_subst orelse t.fam;
@@ -1854,9 +2010,22 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     var x: i32 = 0;
     var ha: i32 = 0;
     var db: i32 = 0;
+    // Pending strike/circle spans (textcircled, sout): each entry
+    // decorates the slice [x0, current x) once the argument end index
+    // is reached. Bounded depth; deeper nesting is NoSpace.
+    var pend_x0: [4]i32 = undefined;
+    var pend_p0: [4]usize = undefined;
+    var pend_end: [4]usize = undefined;
+    var pend_circle: [4]bool = undefined;
+    var npend: u8 = 0;
     const toks = parse.toksOf(lc.pctx, t.toks);
     var i: usize = 0;
     while (i < toks.len) : (i += 1) {
+        while (npend > 0 and pend_end[npend - 1] <= i) {
+            npend -= 1;
+            try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
+                x, &ha, &db, &parts, &nparts);
+        }
         const tk = toks[i];
         var cp: u21 = 0;
         var is_space = false;
@@ -1877,6 +2046,39 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
             .ctrl => {
                 // Text-mode command (`\i`, `\textdollar`, ...; full
                 // profile only).
+                if (comptime active_profile == .full) {
+                    // Argument-taking text commands: circled overlay
+                    // and strikeout queue a pending span over a char
+                    // or braced group argument (KaTeX parity: a missing
+                    // argument rejects, an empty group is fine).
+                    if (symbols.lookupTextArg(tk.name)) |ta| {
+                        var j = i + 1;
+                        if (j < toks.len and toks[j].kind == .lbrace) {
+                            var depth: usize = 1;
+                            j += 1;
+                            while (j < toks.len and depth > 0) : (j += 1) {
+                                if (toks[j].kind == .lbrace) depth += 1;
+                                if (toks[j].kind == .rbrace) depth -= 1;
+                            }
+                            if (depth > 0) return error.Invalid;
+                        } else {
+                            // Skip interword space (TeX control-word
+                            // space skipping): the argument is the next
+                            // real token.
+                            while (j < toks.len and (toks[j].kind == .newline or
+                                (toks[j].kind == .char and toks[j].cp == ' '))) j += 1;
+                            if (j >= toks.len) return error.Invalid;
+                            j += 1;
+                        }
+                        if (npend >= pend_x0.len) return error.NoSpace;
+                        pend_x0[npend] = x;
+                        pend_p0[npend] = nparts;
+                        pend_end[npend] = j;
+                        pend_circle[npend] = ta == .circled;
+                        npend += 1;
+                        continue;
+                    }
+                }
                 const tcp = if (comptime active_profile == .full)
                     symbols.lookupText(tk.name)
                 else
@@ -2027,6 +2229,14 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
         if (bb.ha > ha) ha = bb.ha;
         if (bb.db > db) db = bb.db;
     }
+    // Flush spans ending exactly at the text end (the in-loop
+    // check only runs for live indices).
+    while (npend > 0) {
+        npend -= 1;
+        try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
+            x, &ha, &db, &parts, &nparts);
+    }
+
     const s = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
     return lc.allocBox(.{
@@ -2064,7 +2274,15 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             if (hlineDashed(lc.pctx, id)) |dash| {
                 cells[nrows][c] = .{ .id = 0, .w = 0, .ha = 0, .db = 0, .is_rule = true, .dash = dash };
             } else {
-                const b = try layoutNode(lc, if (e.kind == .smallmatrix) parse.Style.S else parse.Style.T, id);
+                // Display-cases cells are displaystyle (KaTeX parity);
+                // smallmatrix is scriptstyle; everything else textstyle.
+                const cell_style = if (e.kind == .smallmatrix)
+                    parse.Style.S
+                else if (e.kind == .dcases or e.kind == .drcases)
+                    parse.Style.D
+                else
+                    parse.Style.T;
+                const b = try layoutNode(lc, cell_style, id);
                 const bb = lc.boxes[b];
                 cells[nrows][c] = .{ .id = b, .w = bb.w, .ha = bb.ha, .db = bb.db, .is_rule = false, .dash = false };
             }
@@ -2113,14 +2331,19 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             var col: usize = 0;
             while (col < 8) : (col += 1) col_align[col] = if (col % 2 == 0) 2 else 0;
         },
-        .cases => {
+        .cases, .dcases, .drcases, .rcases => {
             col_align[0] = 0;
             var col: usize = 1;
             while (col < 8) : (col += 1) col_align[col] = 0;
         },
         else => {
+            // Starred matrix envs store one [l|c|r] code for every
+            // column (parse default: centered); unstarred forms carry
+            // no spec and stay centered.
+            const spec1 = parse.kidsOf(lc.pctx, parse.Range{ .start = e.spec_start, .len = e.spec_len });
+            const fill: u8 = if (spec1.len == 1) @intCast(spec1[0]) else 1;
             var col: usize = 0;
-            while (col < 8) : (col += 1) col_align[col] = 1;
+            while (col < 8) : (col += 1) col_align[col] = fill;
         },
     }
     // Column widths.
@@ -2166,7 +2389,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             var i: usize = 2;
             while (i < 8) : (i += 2) pre[i] = qsep;
         },
-        .cases => post[0] = qsep,
+        .cases, .dcases, .drcases, .rcases => post[0] = qsep,
         .alignedat, .gathered => {},
         else => {
             var i: usize = 0;
@@ -2495,12 +2718,107 @@ fn layoutCancel(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     });
 }
 
+/// Phasor angle (`\phase{X}`, issue #51): KaTeX draws a full-height
+/// diagonal in SVG with `angleHeight = h+d+lineWeight+clearance`,
+/// `paddingLeft = angleHeight/2+lineWeight`, the mark bottom sitting
+/// lineWeight+clearance below the content (pinned 0.18.7 enclose).
+/// The path also fills the bottom edge, so an 80mu underline bar
+/// spans the box with its bottom on the mark bottom.
+/// The IR has no diagonal strokes, so the mark is a U+2220 glyph
+/// squashed to KaTeX's 2:1 slope (`x_scale` 500) and bottom-anchored
+/// on the vertex; all box metrics follow the KaTeX formula exactly.
+/// On tiny bodies the pad widens to the mark width (KaTeX's SVG is
+/// clipped, never overlapping — the metrics stay overlap-free too).
+fn layoutPhase(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
+    const size: u16 = style.sizeUnits();
+    const b = try layoutNode(lc, style, id);
+    const bb = lc.boxes[b];
+    // 0.6pt at base sizing (KaTeX `havingBaseSizing`: never scaled
+    // by \Huge-style size changes).
+    const lw: i32 = 60;
+    const clr = @divTrunc(@as(i32, 35) * @divTrunc(x_height_1000 * size, 1000), 100);
+    const hgt = bb.ha + bb.db + lw + clr;
+    const font: u16 = @intFromEnum(contract.FontId.rm);
+    const g = lc.glyphId(font, 0x2220);
+    const gw = @divTrunc(lc.advance(font, g) * size, 1000);
+    const ge = lc.extents(font, g);
+    const gha = @divTrunc(ge[0] * size, 1000);
+    const gdb = @divTrunc(ge[1] * size, 1000);
+    const mw = @divTrunc(gw + 1, 2);
+    var pad = @divTrunc(hgt, 2) + lw;
+    if (mw > pad) pad = mw;
+    const ndb = bb.db + lw + clr;
+    const ab = try lc.allocBox(.{
+        .w = mw,
+        .ha = gha,
+        .db = gdb,
+        .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = g } },
+        .invisible = false,
+    });
+    lc.boxes[ab].x_scale = 500;
+    // KaTeX `phasePath` fills the SVG bottom edge across the full
+    // span: an 80mu underline bar whose bottom meets the mark bottom.
+    const btw: i32 = 80;
+    const bar = try lc.allocBox(.{
+        .w = pad + bb.w,
+        .ha = btw,
+        .db = 0,
+        .kind = .{ .rule = {} },
+        .invisible = false,
+    });
+    const s = try lc.allocKids(3);
+    lc.bkids[s] = .{ .box = b, .dx = pad, .dy = 0 };
+    lc.bkids[s + 1] = .{ .box = ab, .dx = 0, .dy = gdb - ndb };
+    lc.bkids[s + 2] = .{ .box = bar, .dx = 0, .dy = -ndb };
+    var ha = bb.ha;
+    const mtop = gdb - ndb + gha;
+    if (mtop > ha) ha = mtop;
+    return lc.allocBox(.{
+        .w = pad + bb.w,
+        .ha = ha,
+        .db = ndb,
+        .kind = .{ .list = .{ .start = s, .len = 3 } },
+        .invisible = false,
+    });
+}
+
 /// Negation overlay (`\not X`, issue #36): the U+0338 slash struck
 /// over the bound base at the same baseline. The reference slash ink
 /// hangs left of its origin (text combining design), so the v4 ink
 /// hook centers it on the base; without the hook the advance middle
 /// is the fallback (never worse than the old left-edge draw). Clamped
 /// at the left edge like brace clamping when the ink is wider.
+// Strikeout (issue #51): horizontal rule at half x-height (KaTeX
+// enclose sout shifts the line by -0.5*xHeight, with the visible
+// .08em CSS border setting the weight). Unlike cancel the rule can
+// poke above shallow bodies, so the height grows to cover it
+// (canvas sizing reads ha/db).
+fn layoutSout(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
+    const b = try layoutNode(lc, style, id);
+    const bb = lc.boxes[b];
+    const size = style.sizeUnits();
+    const th = @divTrunc(@as(i32, 80) * size, 1000);
+    const strike = @divTrunc(x_height_1000 * size, 2000);
+    const rb = try lc.allocBox(.{
+        .w = bb.w,
+        .ha = @divTrunc(th + 1, 2),
+        .db = th - @divTrunc(th + 1, 2),
+        .kind = .{ .rule = {} },
+        .invisible = false,
+    });
+    const s = try lc.allocKids(2);
+    lc.bkids[s] = .{ .box = b, .dx = 0, .dy = 0 };
+    lc.bkids[s + 1] = .{ .box = rb, .dx = 0, .dy = strike };
+    const top = strike + @divTrunc(th + 1, 2);
+    return lc.allocBox(.{
+        .w = bb.w,
+        .ha = if (bb.ha > top) bb.ha else top,
+        .db = bb.db,
+        .kind = .{ .list = .{ .start = s, .len = 2 } },
+        .invisible = false,
+    });
+}
+
 fn layoutNot(lc: *LayCtx, style: parse.Style, n: anytype) Error!u16 {
     const size = style.sizeUnits();
     const font: u16 = @intFromEnum(contract.FontId.rm);

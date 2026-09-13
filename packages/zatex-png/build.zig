@@ -150,7 +150,9 @@ pub fn build(b: *std.Build) void {
         nmod.addOptions("build_options", opts);
         nmod.addImport("zatex", zatex_dep.module("zatex"));
         nmod.addImport("otmath", zatex_dep.module("otmath"));
-        if (backend_is_cg) {
+        // Sibling-backend imports reference CoreGraphics on Apple
+        // hosts whatever `-Dbackend` selects (same rule as sw_mod).
+        if (apple) {
             nmod.linkFramework("CoreGraphics", .{});
             nmod.linkFramework("CoreText", .{});
             nmod.linkFramework("ImageIO", .{});

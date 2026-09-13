@@ -440,6 +440,131 @@ const Writer = struct {
     }
 
     /// Text-token range to mtext content (shared by `\text` and boxes).
+    // One text accent + base (shared by textBody and sout spans).
+    fn textAccentTok(self: *Writer, toks: []const parse.Tok, i: *usize, c: u8) Error!void {
+        // Braced single letters too.
+        const acc = parse.textAccentCp(c) orelse return error.Invalid;
+        if (i.* + 1 >= toks.len) return error.Invalid;
+        var nx = toks[i.* + 1];
+        if (nx.kind == .lbrace) {
+            if (i.* + 3 >= toks.len) return error.Invalid;
+            if (toks[i.* + 2].kind != .char or toks[i.* + 3].kind != .rbrace)
+                return error.Invalid;
+            nx = toks[i.* + 2];
+            i.* += 2;
+        }
+        if (nx.kind != .char) return error.Invalid;
+        i.* += 1;
+        if (parse.precompose(acc, nx.cp)) |pcp| {
+            self.escCp(pcp);
+        } else {
+            // No precomposed form: base + combining mark
+            // (KaTeX emits mover here; inside mtext
+            // the combining form renders the same).
+            if (parse.mathTextAccentCp(c) == null) return error.Invalid;
+            self.escCp(nx.cp);
+            self.escCp(acc);
+        }
+    }
+
+    // Span of an argument-taking text command at toks[i] (the
+    // command): inner [s, e) plus the first index after the arg.
+    fn textArgSpan(toks: []const parse.Tok, i: usize) Error!struct { s: usize, e: usize, after: usize } {
+        var j = i + 1;
+        if (j < toks.len and toks[j].kind == .lbrace) {
+            var depth: usize = 1;
+            j += 1;
+            const s = j;
+            while (j < toks.len and depth > 0) : (j += 1) {
+                if (toks[j].kind == .lbrace) depth += 1;
+                if (toks[j].kind == .rbrace) depth -= 1;
+            }
+            if (depth > 0) return error.Invalid;
+            return .{ .s = s, .e = j - 1, .after = j };
+        }
+        // Skip interword space (TeX control-word space skipping).
+        while (j < toks.len and (toks[j].kind == .newline or
+            (toks[j].kind == .char and toks[j].cp == ' '))) j += 1;
+        if (j >= toks.len) return error.Invalid;
+        return .{ .s = j, .e = j + 1, .after = j + 1 };
+    }
+
+    // Circled span: base chars each with a combining enclosing
+    // circle (layout draws one overlay circle; inside mtext the
+    // combining form renders the same).
+    fn textCircledSpan(self: *Writer, toks: []const parse.Tok, s: usize, e: usize) Error!void {
+        var k = s;
+        while (k < e) : (k += 1) {
+            const t = toks[k];
+            if (t.kind == .char) {
+                if (t.cp == ' ') self.byte(' ') else self.escCp(t.cp);
+                self.escCp(0x20DD);
+            } else if (t.kind == .lbrace or t.kind == .rbrace) {
+            } else if (t.kind == .newline) {
+                self.byte(' ');
+            } else if (t.kind == .ctrl and symbols.lookupText(t.name) != null) {
+                self.escCp(symbols.lookupText(t.name).?);
+                self.escCp(0x20DD);
+            } else return error.Invalid;
+        }
+    }
+
+    // Strikeout span: every content unit struck with a combining
+    // long stroke (KaTeX wraps mtext in menclose horizontalstrike;
+    // inside mtext the combining form renders the same).
+    fn textSoutSpan(self: *Writer, toks: []const parse.Tok, s: usize, e: usize) Error!void {
+        var k = s;
+        while (k < e) {
+            const t = toks[k];
+            switch (t.kind) {
+                .char => {
+                    if (t.cp == ' ') self.byte(' ') else if (t.cp == '~') self.escCp(0xA0) else self.escCp(t.cp);
+                    self.escCp(0x0336);
+                    k += 1;
+                },
+                .lbrace, .rbrace => k += 1,
+                .newline => {
+                    self.byte(' ');
+                    self.escCp(0x0336);
+                    k += 1;
+                },
+                .ctrl => {
+                    if (symbols.lookupText(t.name)) |tcp| {
+                        self.escCp(tcp);
+                        self.escCp(0x0336);
+                        k += 1;
+                    } else if (symbols.lookupTextArg(t.name)) |ta| {
+                        const sp = try textArgSpan(toks, k);
+                        if (ta == .circled) {
+                            try self.textCircledSpan(toks, sp.s, sp.e);
+                            self.escCp(0x0336);
+                        } else {
+                            try self.textSoutSpan(toks, sp.s, sp.e);
+                        }
+                        k = sp.after;
+                    } else if (parse.textAccentCp(t.name[0]) != null) {
+                        var idx = k;
+                        try self.textAccentTok(toks, &idx, t.name[0]);
+                        self.escCp(0x0336);
+                        k = idx + 1;
+                    } else return error.Invalid;
+                },
+                else => return error.Invalid,
+            }
+        }
+    }
+
+    // Argument-taking text commands (textcircled, sout).
+    fn textArg(self: *Writer, toks: []const parse.Tok, i: *usize, ta: symbols.TextArg) Error!void {
+        const sp = try textArgSpan(toks, i.*);
+        if (ta == .circled) {
+            try self.textCircledSpan(toks, sp.s, sp.e);
+        } else {
+            try self.textSoutSpan(toks, sp.s, sp.e);
+        }
+        i.* = sp.after - 1;
+    }
+
     fn textBody(self: *Writer, toks: []const parse.Tok) Error!void {
         var i: usize = 0;
         while (i < toks.len) : (i += 1) {
@@ -458,6 +583,15 @@ const Writer = struct {
                 .lbrace, .rbrace => {},
                 .newline => self.byte(' '),
                 .ctrl => {
+                    // Full-profile text commands (layout parity).
+                    if (symbols.lookupText(tk.name)) |tcp| {
+                        self.escCp(tcp);
+                        continue;
+                    }
+                    if (symbols.lookupTextArg(tk.name)) |ta| {
+                        try self.textArg(toks, &i, ta);
+                        continue;
+                    }
                     const c = tk.name[0];
                     switch (c) {
                         '{', '}', '%', '&', '#', '_', '$', '|', '/' => self.escCp(c),
@@ -475,31 +609,7 @@ const Writer = struct {
                             self.escCp(0x2063);
                         },
                         ' ' => self.byte(' '),
-                        else => {
-                            // Braced single letters too (`\'{a}`).
-                            const acc = parse.textAccentCp(c) orelse return error.Invalid;
-                            if (i + 1 >= toks.len) return error.Invalid;
-                            var nx = toks[i + 1];
-                            if (nx.kind == .lbrace) {
-                                if (i + 3 >= toks.len) return error.Invalid;
-                                if (toks[i + 2].kind != .char or toks[i + 3].kind != .rbrace)
-                                    return error.Invalid;
-                                nx = toks[i + 2];
-                                i += 2;
-                            }
-                            if (nx.kind != .char) return error.Invalid;
-                            i += 1;
-                            if (parse.precompose(acc, nx.cp)) |pcp| {
-                                self.escCp(pcp);
-                            } else {
-                                // No precomposed form: base + combining mark
-                                // (KaTeX emits `mover` here; inside `mtext`
-                                // the combining form renders the same).
-                                if (parse.mathTextAccentCp(c) == null) return error.Invalid;
-                                self.escCp(nx.cp);
-                                self.escCp(acc);
-                            }
-                        },
+                        else => try self.textAccentTok(toks, &i, c),
                     }
                 },
                 else => return error.Invalid,
@@ -642,8 +752,8 @@ const Writer = struct {
                 // order. The cross cases stay plain msup/msub.
                 const brace_over: ?bool = switch (parse.nodeAt(self.pc, s.base)) {
                     .over => |o| switch (o.kind) {
-                        .overbrace => true,
-                        .underbrace => false,
+                        .overbrace, .overbracket => true,
+                        .underbrace, .underbracket => false,
                         else => null,
                     },
                     else => null,
@@ -770,6 +880,18 @@ const Writer = struct {
                 try self.node(f.body, .{ .fam = f.fam, .script = face.script });
                 self.str("</mstyle>");
             },
+            // KaTeX parity (pinned 0.18.7, issue #51): poor-man's
+            // bold is a text-shadow paint style on the same glyphs.
+            .pmb => |p| {
+                self.str("<mstyle style=\"text-shadow: 0.02em 0.01em 0.04px\">");
+                try self.node(p.body, face);
+                self.str("</mstyle>");
+            },
+            .vcenter => |v| {
+                self.str("<mpadded class=\"vcenter\">");
+                try self.node(v.body, face);
+                self.str("</mpadded>");
+            },
             .text => |t| {
                 if (t.fam == .rm) {
                     self.str("<mtext>");
@@ -895,6 +1017,15 @@ const Writer = struct {
                 self.str("</mrow>");
             },
             .htmlwrap => |b| try self.node(b, face),
+            // KaTeX parity (pinned 0.18.7): \mathop{x} -> <mo>x</mo>,
+            // \mathrel{x} -> <mo>x</mo>; \mathinner{x} is a bare
+            // <mpadded> there, structurally identical to <mrow>,
+            // which is what this emitter knows.
+            .classwrap => |c| {
+                if (c.class == .Inner) self.str("<mrow>") else self.str("<mo>");
+                try self.node(c.body, face);
+                if (c.class == .Inner) self.str("</mrow>") else self.str("</mo>");
+            },
             .phantom => |p| {
                 self.str("<mphantom>");
                 try self.node(p.body, face);
@@ -912,6 +1043,16 @@ const Writer = struct {
             },
             .cancel => |b| {
                 self.str("<menclose notation=\"updiagonalstrike\">");
+                try self.node(b, face);
+                self.str("</menclose>");
+            },
+            .sout => |b| {
+                self.str("<menclose notation=\"horizontalstrike\">");
+                try self.node(b, face);
+                self.str("</menclose>");
+            },
+            .phase => |b| {
+                self.str("<menclose notation=\"phasorangle\">");
                 try self.node(b, face);
                 self.str("</menclose>");
             },
@@ -1060,6 +1201,16 @@ const Writer = struct {
                 try self.node(o.nucleus, face);
                 self.str("<mo>&#x23DF;</mo></munder>");
             },
+            .overbracket => {
+                self.str("<mover>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>&#x23B4;</mo></mover>");
+            },
+            .underbracket => {
+                self.str("<munder>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>&#x23B5;</mo></munder>");
+            },
             .overleft => try self.arrowOver(o.nucleus, 0x2190, face),
             .overright => try self.arrowOver(o.nucleus, 0x2192, face),
             .overboth => try self.arrowOver(o.nucleus, 0x2194, face),
@@ -1161,7 +1312,8 @@ const Writer = struct {
         // (display cells for aligned-family/gathered, script for
         // smallmatrix, text otherwise), whose MathML is an mstyle
         // wrapping the cell group under the normal row rule.
-        const disp_cell = e.kind == .aligned or e.kind == .alignedat or e.kind == .gathered;
+        const disp_cell = e.kind == .aligned or e.kind == .alignedat or e.kind == .gathered or
+            e.kind == .dcases or e.kind == .drcases;
         const script_cell = e.kind == .smallmatrix;
         // Small tables keep a small row gap (KaTeX `arraystretch<1`).
         if (script_cell) self.str("<mstyle scriptlevel=\"1\">");

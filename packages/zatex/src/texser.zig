@@ -155,6 +155,9 @@ const Walker = struct {
                         .vmatrix => .{ .l = '|', .r = '|' },
                         .Vmatrix => .{ .l = 0x2016, .r = 0x2016 },
                         .cases => .{ .l = '{', .r = 0 },
+                        .dcases => .{ .l = '{', .r = 0 },
+                        .drcases => .{ .l = 0, .r = '}' },
+                        .rcases => .{ .l = 0, .r = '}' },
                         else => null,
                     };
                     if (auto) |f| {
@@ -212,6 +215,14 @@ const Walker = struct {
                 });
                 try self.put(" ");
                 try self.scope(s.body);
+            },
+            .pmb => |p| {
+                try self.cmd("pmb");
+                try self.arg(p.body);
+            },
+            .vcenter => |v| {
+                try self.cmd("vcenter");
+                try self.arg(v.body);
             },
             .font => |f| {
                 try self.cmd(switch (f.fam) {
@@ -335,6 +346,7 @@ const Walker = struct {
                 try self.arg(h.body);
             },
             .htmlwrap => |b| try self.node(b),
+            .classwrap => |c| try self.node(c.body),
             .phantom => |p| {
                 if (p.keep_h and p.keep_v) try self.cmd("phantom");
                 if (p.keep_h and !p.keep_v) try self.cmd("hphantom");
@@ -356,6 +368,14 @@ const Walker = struct {
             },
             .cancel => |b| {
                 try self.cmd("cancel");
+                try self.arg(b);
+            },
+            .sout => |b| {
+                try self.cmd("sout");
+                try self.arg(b);
+            },
+            .phase => |b| {
+                try self.cmd("phase");
                 try self.arg(b);
             },
             .not => |nt| {
@@ -517,6 +537,22 @@ const Walker = struct {
                     try self.arg(o.extra);
                 }
             },
+            .overbracket => {
+                try self.cmd("overbracket");
+                try self.arg(o.nucleus);
+                if (o.extra != parse.NONE) {
+                    try self.put("^");
+                    try self.arg(o.extra);
+                }
+            },
+            .underbracket => {
+                try self.cmd("underbracket");
+                try self.arg(o.nucleus);
+                if (o.extra != parse.NONE) {
+                    try self.put("_");
+                    try self.arg(o.extra);
+                }
+            },
             .overset => {
                 try self.cmd("overset");
                 try self.arg(o.extra);
@@ -611,6 +647,11 @@ const Walker = struct {
                     try self.put("\\");
                     try self.put(tok.name);
                 },
+                // Grouping braces are transparent in text (KaTeX
+                // parity): re-emit them so arg-taking text commands
+                // round-trip.
+                .lbrace => try self.put("{"),
+                .rbrace => try self.put("}"),
                 else => return error.Unsupported,
             }
         }
