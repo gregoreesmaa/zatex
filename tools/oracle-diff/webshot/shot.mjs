@@ -85,17 +85,19 @@ const body = engine === "katex"
      <script>try {
        katex.render(${texJS}, document.getElementById("m"),
          {displayMode: ${display}, throwOnError: true, strict: false, trust: true});
-       document.title = "ready";
+       document.fonts.ready.then(() => { document.title = "ready"; });
      } catch (e) { document.title = "katex-error: " + e.message; }</script>`
   : `<div id="m"></div>
      <script>window.MathJax = {startup: {typeset: false}};</script>
      <script src="/mathjax/tex-chtml.js"></script>
      <script>MathJax.startup.promise.then(() => {
-       document.getElementById("m").textContent =
-         ${display} ? "$$" + ${texJS} + "$$" : "$" + ${texJS} + "$";
-       return MathJax.typesetPromise(["#m"]);
+       // Direct conversion (no delimiter scanning): deterministic,
+       // and independent of document-typeset quirks.
+       const node = MathJax.tex2chtml(${texJS}, {display: ${display}});
+       document.getElementById("m").appendChild(node);
+       return document.fonts.ready;
      }).then(() => { document.title = "ready"; })
-       .catch((e) => { document.title = "mathjax-error: " + e.message; });</script>`;
+       .catch((e) => { document.title = "mathjax-error: " + (e && e.message || e); });</script>`;
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><title>…</title></head>
 <body style="margin:0;background:#fff">
@@ -122,16 +124,23 @@ try {
     console.error("oracle render failed: " + title + " :: " + tex);
     failed = true;
   } else {
+    // One settle frame: lets CHTML finalize metrics after fonts arrive.
+    await new Promise((r) => setTimeout(r, 400));
     const el = await page.$("#m");
     const box = await el.boundingBox();
-    await page.screenshot({
-      path: out,
-      clip: {
-        x: Math.max(0, box.x - 8), y: Math.max(0, box.y - 8),
-        width: box.width + 16, height: box.height + 16,
-      },
-    });
-    console.log("shot: " + out);
+    if (!box || box.width < 2 || box.height < 2) {
+      console.error("oracle render empty: " + tex);
+      failed = true;
+    } else {
+      await page.screenshot({
+        path: out,
+        clip: {
+          x: Math.max(0, box.x - 8), y: Math.max(0, box.y - 8),
+          width: box.width + 16, height: box.height + 16,
+        },
+      });
+      console.log("shot: " + out);
+    }
   }
 } finally {
   await browser.close();

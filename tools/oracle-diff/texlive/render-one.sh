@@ -13,7 +13,7 @@ if [ "$display" = "1" ]; then body="\\[ $tex \\]"; else body="\$$tex\$"; fi
 {
 cat <<'EOF'
 \documentclass{minimal}
-\usepackage{amsmath,amssymb}
+\usepackage{amsmath,amssymb,xcolor}
 \begin{document}
 EOF
 printf '%s\n' "$body"
