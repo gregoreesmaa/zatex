@@ -474,6 +474,485 @@ test "oversize input errors TooLong before anything else" {
     );
 }
 
+test "issue36: text-mode spacing commands emit space, not glyphs" {
+    // KaTeX parity (pinned 0.18.7): `\,`/`\:`/`\;`/`\>`/`\!` inside
+    // `\text` (and `\llap` bodies, which are text mode) produce spacing
+    // (`mspace`), never literal `,`/`:`/`;` glyphs.
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const cases = [_]struct { src: []const u8, w: u32 }{
+        .{ .src = "\\text{/\\,}", .w = 500 + 167 },
+        .{ .src = "\\text{a\\;b}", .w = 500 + 278 + 500 },
+        .{ .src = "\\text{a\\:b}", .w = 500 + 222 + 500 },
+        .{ .src = "\\text{a\\>b}", .w = 500 + 222 + 500 },
+        .{ .src = "\\text{a\\!b}", .w = 500 - 167 + 500 },
+    };
+    for (cases) |c| {
+        const l = try layoutOk(c.src, .{}, &runs_buf, &rules_buf, &glyphs_buf);
+        try std.testing.expectEqual(c.w, l.width);
+        for (l.runs) |r| {
+            for (r.glyphs) |g| {
+                try std.testing.expect(g != @as(u16, ','));
+                try std.testing.expect(g != @as(u16, ':'));
+                try std.testing.expect(g != @as(u16, ';'));
+            }
+        }
+    }
+    // Math-mode thin/med pins (KaTeX 0.1667em / 0.2222em).
+    const m1 = try layoutOk("a\\,\\,{b}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 + 2 * 167 + 500), m1.width);
+    const m2 = try layoutOk("a\\:\\:{b}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 + 2 * 222 + 500), m2.width);
+    // `{=}\llap{/\,}`: slash overlapped left, no comma ink (KaTeX shows
+    // no comma here — the `\,` is text-mode space).
+    const l = try layoutOk("{=}\\llap{/\\,}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500), l.width);
+    var saw_slash = false;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == @as(u16, '/')) saw_slash = true;
+            try std.testing.expect(g != @as(u16, ','));
+        }
+    }
+    try std.testing.expect(saw_slash);
+}
+
+test "issue38: text-mode dot/caron/double-acute accents render" {
+    // KaTeX accepts `\.`, `\v`, `\H` inside `\text` (pinned 0.18.7 renders
+    // an overlaid accent); the engine precomposes when a single codepoint
+    // exists and overlays the spacing accent otherwise.
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    // `\v{s}` / `\H{o}` precompose (U+0161 / U+0151) and take the fast
+    // path; these have no precomposed form, so they overlay.
+    const cases = [_][]const u8{
+        "\\text{\\.{a}}",
+        "\\text{\\v{e}}",
+        "\\text{\\H{a}}",
+    };
+    for (cases) |src| {
+        const l = try layoutOk(src, .{}, &runs_buf, &rules_buf, &glyphs_buf);
+        // Accent ink overhangs without advancing: width is the base width.
+        try std.testing.expectEqual(@as(u32, 500), l.width);
+        try std.testing.expect(l.height_above > 700);
+    }
+    // Precompose fast path still a single glyph (`\~n` -> U+00F1).
+    const l = try layoutOk("\\text{\\~n}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), l.runs.len);
+    try std.testing.expectEqual(@as(u16, 0x00F1), l.runs[0].glyphs[0]);
+}
+
+test "issue36: liminf and limsup carry a thin space" {
+    // KaTeX parity (pinned 0.18.7 expands `\liminf` to
+    // `\operatorname*{lim\,inf}`): the two words are separated by a
+    // thin space, not run together.
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const l = try layoutOk("\\liminf", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 3 * 500 + 167 + 3 * 500), l.width);
+    const s = try layoutOk("\\limsup", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 3 * 500 + 167 + 3 * 500), s.width);
+}
+
+test "issue37: overbrace spans its nucleus and carries its label" {
+    // KaTeX parity: the brace stretches to the nucleus span (never
+    // narrower, never contributing extra width); `\overbrace{...}^`
+    // centers its label above like limits (pinned 0.18.7 nested
+    // `mover`), and symmetrically below for `\underbrace{...}_`.
+    const P = struct {
+        fn gid(_: *const anyopaque, _: u16, cp: u21) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: *const anyopaque, _: u16, glyph: u16) i32 {
+            if (glyph == 0x23DE or glyph == 0x23DF) return 900;
+            return 500;
+        }
+        fn rule(_: *const anyopaque, _: u16, _: RuleKind) i32 {
+            return 40;
+        }
+    };
+    const prov: MetricsProvider = .{
+        .ctx = &.{},
+        .glyphId = P.gid,
+        .advance = P.adv,
+        .ruleThickness = P.rule,
+    };
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const o = try layoutFull("\\overbrace{AB}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1000), o.width);
+    const u = try layoutFull("\\underbrace{AB}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1000), u.width);
+    // `1+2`: 500 + med + 500 + med + 500 = 1944; label `100` in
+    // script style is 3 * 350 = 1050. Stacked, the brace span wins.
+    const l = try layoutOk("\\overbrace{1+2}^{100}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1944), l.width);
+    try std.testing.expect(l.height_above > 700 + 150);
+    const d = try layoutOk("\\underbrace{1+2}_{100}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1944), d.width);
+    try std.testing.expect(d.depth_below > 250 + 150);
+}
+
+test "issue37: sqrt root index is scriptscript, raised and tucked" {
+    // KaTeX parity (pinned 0.18.7 `sqrt.js`, TeX `\r@@t`): the index
+    // is always scriptscript (size 500, not 700), raised 0.6 x (body
+    // height - depth) above the baseline, tucked with +5mu / -10mu
+    // bearings. Stub arithmetic for `\sqrt[3]{x}`: rule_top = 860,
+    // body depth 250, so the `3` baseline sits 6*(860-250)/10 = 366
+    // above the main baseline (absolute y 860-366 = 494); bearings
+    // 277/-555 against a 250-wide index normalize the body to x 0
+    // with the index at 305, and the width equals the plain root.
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const l = try layoutOk("\\sqrt[3]{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    var pruns_buf: [32]ir.Run = undefined;
+    var prules_buf: [8]ir.Rule = undefined;
+    var pglyphs_buf: [128]u16 = undefined;
+    const p = try layoutOk("\\sqrt{x}", .{}, &pruns_buf, &prules_buf, &pglyphs_buf);
+    try std.testing.expectEqual(p.width, l.width);
+    try std.testing.expectEqual(@as(u32, 1090), l.width);
+    // NOTE: the two layouts use separate glyph buffers — sharing one
+    // would clobber `l`'s glyph slices when `p` is laid out.
+    var saw_index = false;
+    var saw_x = false;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == @as(u16, '3')) {
+                try std.testing.expectEqual(@as(u16, 500), r.size_units);
+                try std.testing.expectEqual(@as(i32, 305), r.x);
+                try std.testing.expectEqual(@as(i32, 494), r.baseline_y);
+                saw_index = true;
+            }
+            if (g == @as(u16, 'x')) {
+                try std.testing.expectEqual(@as(i32, 550), r.x);
+                try std.testing.expectEqual(@as(i32, 860), r.baseline_y);
+                saw_x = true;
+            }
+        }
+    }
+    try std.testing.expect(saw_index and saw_x);
+}
+
+test "issue37: rule dimensions and raise pin the IR rect" {
+    // KaTeX parity: `\rule[raise]{w}{h}` is a filled rect spanning
+    // [raise, raise + h] above the baseline — never below it (the
+    // bracket is a vertical raise, not depth). `x\rule[6pt]{2ex}{1ex}x`
+    // in text style: 6pt = 600, 2ex = 1000 wide, 1ex = 500 tall, so
+    // the rect is 1000x500 at the ink-box top between the two x runs.
+    // (Whether the rasterizer fills or outlines that rect belongs to
+    // the PNG backend, not the layout core.)
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const l = try layoutOk("x\\rule[6pt]{2ex}{1ex}x", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 + 1000 + 500), l.width);
+    try std.testing.expectEqual(@as(u32, 600 + 500), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    try std.testing.expectEqual(@as(i32, 500), l.rules[0].x);
+    try std.testing.expectEqual(@as(i32, 0), l.rules[0].y);
+    try std.testing.expectEqual(@as(u32, 1000), l.rules[0].w);
+    try std.testing.expectEqual(@as(u32, 500), l.rules[0].h);
+}
+
+test "issue35: color threads from parse to native runs and rules" {
+    // KaTeX parity: `\color` paints its body (nested scopes win);
+    // `\colorbox`/`\fcolorbox` paint background (and frame) rules.
+    // Colors ride IR runs/rules as 0xRRGGBBAA (null = ambient).
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [16]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const r = try layoutOk("\\color{#f00}{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(?u32, 0xFF0000FF), r.runs[0].color);
+    const n = try layoutOk("\\color{red}{\\color{#0f0}{x}}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(?u32, 0x00FF00FF), n.runs[0].color);
+    const u = try layoutOk("x", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(?u32, null), u.runs[0].color);
+    // `\color` scopes over the rest of the enclosing group (KaTeX:
+    // `\color{blue}{a}b` paints `b` too), so one run covers both.
+    const s = try layoutOk("\\color{blue}{a}b", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), s.runs.len);
+    try std.testing.expectEqual(@as(?u32, 0x0000FFFF), s.runs[0].color);
+    // Color boundaries split runs (same font, different paint).
+    const m = try layoutOk("\\color{blue}{a}\\color{red}{b}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 2), m.runs.len);
+    try std.testing.expectEqual(@as(?u32, 0x0000FFFF), m.runs[0].color);
+    try std.testing.expectEqual(@as(?u32, 0xFF0000FF), m.runs[1].color);
+    // Boxes: background (+frame) rules carry their colors; the text
+    // inside keeps the ambient (null) paint.
+    const b = try layoutOk("\\colorbox{yellow}{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expect(b.rules.len >= 1);
+    try std.testing.expectEqual(@as(?u32, 0xFFFF00FF), b.rules[0].color);
+    const f = try layoutOk("\\fcolorbox{red}{yellow}{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    var saw_frame = false;
+    var saw_bg = false;
+    for (f.rules) |rl| {
+        if (rl.color != null and rl.color.? == 0xFF0000FF) saw_frame = true;
+        if (rl.color != null and rl.color.? == 0xFFFF00FF) saw_bg = true;
+    }
+    try std.testing.expect(saw_frame and saw_bg);
+}
+
+test "issue34: alphabet commands request distinct provider fonts" {
+    // The core requests one font id per alphabet command through the
+    // provider callback (KaTeX keeps ASCII codepoints and switches
+    // typefaces; `FontId` is that switch). The same-roman renders in
+    // the issue are the host backend ignoring `font_id`
+    // (`zatex-png/src/font.zig` maps every request to one font).
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const cases = [_]struct { src: []const u8, font: u16, cp: u16 }{
+        .{ .src = "\\mathbf{A}", .font = 2, .cp = 'A' },
+        .{ .src = "\\mathcal{A}", .font = 8, .cp = 'A' },
+        .{ .src = "\\mathscr{A}", .font = 6, .cp = 'A' },
+        .{ .src = "\\mathfrak{A}", .font = 5, .cp = 'A' },
+        .{ .src = "\\mathsf{A}", .font = 3, .cp = 'A' },
+        .{ .src = "\\mathtt{A}", .font = 4, .cp = 'A' },
+        .{ .src = "\\mathbb{A}", .font = 7, .cp = 'A' },
+        .{ .src = "\\Bbb{A}", .font = 7, .cp = 'A' },
+        .{ .src = "\\boldsymbol{A}", .font = 2, .cp = 'A' },
+        // Nested alphabets: the innermost command wins (KaTeX).
+        .{ .src = "\\mathbf{\\mathcal{R}}", .font = 8, .cp = 'R' },
+        .{ .src = "\\mathcal{\\mathbf{R}}", .font = 2, .cp = 'R' },
+    };
+    for (cases) |c| {
+        const l = try layoutOk(c.src, .{}, &runs_buf, &rules_buf, &glyphs_buf);
+        try std.testing.expectEqual(@as(usize, 1), l.runs.len);
+        try std.testing.expectEqual(c.font, l.runs[0].font_id);
+        try std.testing.expectEqual(c.cp, l.runs[0].glyphs[0]);
+    }
+    // Digits ride the same request (`\mathbf{1}` keeps font 2).
+    const d = try layoutOk("\\mathbf{1}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u16, 2), d.runs[0].font_id);
+    // Dotless `\imath` requests U+0131, never ASCII `i` (the
+    // identical render in the issue is backend font coverage).
+    const i = try layoutOk("\\imath", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u16, 0x0131), i.runs[0].glyphs[0]);
+}
+
+test "issue33: matrix column gaps match KaTeX separation" {
+    // KaTeX parity (pinned 0.18.7 `array.ts`): default columns carry
+    // 0.5em each side (1em between, none outside); `array` adds outer
+    // halves; `aligned` rl pairs touch; `cases` separates with 1em.
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const m = try layoutOk("\\begin{matrix}a&b\\end{matrix}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1500 + 1500), m.width);
+    const a = try layoutOk("\\begin{array}{cc}a&b\\end{array}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 + 1500 + 1500 + 500), a.width);
+    // `aligned` rl pairs touch (the `=` cell keeps its own Rel glue;
+    // KaTeX shows the same empty-mord + thick space before `=`).
+    const al = try layoutOk("\\begin{aligned}a&=b\\end{aligned}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 + 278 + 500 + 278 + 500), al.width);
+    // `cases` wraps the env in a `\{` fence (500): env columns are
+    // 500 + 1em gap + 500.
+    const c = try layoutOk("\\begin{cases}a&b\\end{cases}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 + 500 + 1000 + 500), c.width);
+}
+
+test "issue33: tables center on the math axis" {
+    // KaTeX centers tables on the axis (pinned 0.18.7 `delimcenter`
+    // + axis strut); delimiters previously rode high because the
+    // table sat on its first-row baseline.
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const p = try layoutOk("\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expect(p.height_above > 250);
+    try std.testing.expectEqual(p.height_above - 250, p.depth_below + 250);
+}
+
+test "issue33: hline and hdashline render row rules" {
+    // Row-leading rule commands belong to the row gap (KaTeX
+    // `getHLines` parity); `\\hdashline` draws dashes. Mid-row rules
+    // are misplaced (KaTeX parity error).
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [16]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const h = try layoutOk("\\begin{array}{c}a\\\\\\hline b\\end{array}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), h.rules.len);
+    try std.testing.expectEqual(h.width, h.rules[0].w);
+    const d = try layoutOk("\\begin{array}{c}a\\\\\\hdashline b\\end{array}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expect(d.rules.len > 1);
+    // Dashes tile the full table width in order.
+    try std.testing.expectEqual(@as(i32, 0), d.rules[0].x);
+    var end: i32 = 0;
+    for (d.rules) |r| {
+        try std.testing.expect(r.x >= end);
+        end = r.x + @as(i32, @intCast(r.w));
+    }
+    try std.testing.expectEqual(@as(i32, @intCast(d.width)), end);
+    var diag = Diag.empty();
+    try std.testing.expectError(error.Invalid, layoutDiag("\\begin{matrix}a&\\hline b\\\\c&d\\end{matrix}", .{}, testProvider(), &runs_buf, &rules_buf, &glyphs_buf, &diag));
+}
+
+test "issue32: fraction shifts follow TeX rules 15b-e per style" {
+    // KaTeX parity (pinned 0.18.7 `genfrac.ts`, Main metrics in
+    // thousandths): text bar fractions use num2/denom2 (394/345) with
+    // clearance θ; display uses num1/denom1 (677/686) with 3θ; atop
+    // uses num3 (444) with 7θ/3θ. Stub extents are uniform (700/250),
+    // rule thickness 40, axis 250.
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    // Text `\frac{a}{b}`: content is script-sized (S: 490/175 under
+    // stub extents); the numerator clearance bump applies.
+    // ns = 394 + (40 - ((394-175) - (250+20))) = 485; ds = 345.
+    const t = try layoutOk("\\frac{a}{b}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), t.rules.len);
+    try std.testing.expectEqual(@as(u32, 485 + 490), t.height_above);
+    try std.testing.expectEqual(@as(u32, 345 + 175), t.depth_below);
+    // Display `\dfrac{a}{b}` in text mode: content is text-sized,
+    // shifts are num1/denom1 (677/686), clearance 3θ, no bumps.
+    const d = try layoutOk("\\dfrac{a}{b}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 677 + 700), d.height_above);
+    try std.testing.expectEqual(@as(u32, 686 + 250), d.depth_below);
+    // Atop `\binom{n}{k}`: num3/denom2 (444/345), 3θ clearance met
+    // exactly (no bump). Fence ink overflows the content box by
+    // design when the provider offers no bigger variant
+    // (`wrapParens`: instruments are promises, not extents).
+    const b = try layoutOk("\\binom{n}{k}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 444 + 490), b.height_above);
+    try std.testing.expectEqual(@as(u32, 345 + 175), b.depth_below);
+    try std.testing.expectEqual(@as(usize, 0), b.rules.len);
+}
+
+test "issue31: accents never contribute width; wide accents span the base" {
+    // KaTeX parity: narrow accents sit in a zero-width `accent-body`
+    // (an accent wider than its base overhangs symmetrically); wide
+    // (`\widehat` etc.) accents stretch to the nucleus span. Either
+    // way the construction is exactly as wide as the nucleus.
+    const P = struct {
+        fn gid(_: *const anyopaque, _: u16, cp: u21) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: *const anyopaque, _: u16, glyph: u16) i32 {
+            if (glyph == 0x5E or glyph == 0x7E or glyph == 0x2C7) return 900;
+            return 500;
+        }
+        fn rule(_: *const anyopaque, _: u16, _: RuleKind) i32 {
+            return 40;
+        }
+    };
+    const prov: MetricsProvider = .{
+        .ctx = &.{},
+        .glyphId = P.gid,
+        .advance = P.adv,
+        .ruleThickness = P.rule,
+    };
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const n = try layoutFull("\\hat{x}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500), n.width);
+    const w = try layoutFull("\\widehat{AB}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1000), w.width);
+    const t = try layoutFull("\\widetilde{AB}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1000), t.width);
+    const c = try layoutFull("\\widecheck{AB}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 1000), c.width);
+}
+
+test "issue30: narrow accents tuck to within an x-height of the base" {
+    // KaTeX parity (pinned 0.18.7 `accent.ts`): clearance =
+    // min(body height, x-height); the accent ink bottom sits that far
+    // below the body top — accents no longer float 120 units above.
+    // Stub extents are uniform (700/250), x-height is 431.
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const h = try layoutOk("\\hat{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 700 - 431 + 250 + 700), h.height_above);
+    // Same rule for every narrow accent: dot, bar, breve, check, grave,
+    // ring, tilde, vec all tuck identically under stub metrics (real
+    // providers differentiate through each accent's own extents).
+    const d = try layoutOk("\\dot{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(h.height_above, d.height_above);
+    const v = try layoutOk("\\vec{F}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(h.height_above, v.height_above);
+}
+
+test "issue37: rule raise shifts the bar up, not down" {
+    // KaTeX parity: `\rule[6pt]{2ex}{1ex}` raises a 1ex bar by 6pt
+    // (`bottom:0.6em`); the bracket is a raise, never depth below the
+    // baseline. ex = 500 units (documented approximation).
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const l = try layoutOk("x\\rule[6pt]{2ex}{1ex}x", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    const r = l.rules[0];
+    try std.testing.expectEqual(@as(u32, 1000), r.w);
+    try std.testing.expectEqual(@as(u32, 500), r.h);
+    // Bar bottom sits 600 above the baseline: y + h == base - 600.
+    const base = @as(i32, @intCast(l.height_above));
+    try std.testing.expectEqual(base - 600, r.y + @as(i32, @intCast(r.h)));
+    const u = try layoutOk("x\\rule{2ex}{1ex}x", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500), u.rules[0].h);
+    const ubase = @as(i32, @intCast(u.height_above));
+    try std.testing.expectEqual(ubase, u.rules[0].y + @as(i32, @intCast(u.rules[0].h)));
+}
+
+test "issue36: forced limits stack even in text style" {
+    // KaTeX parity: `\lim\limits_x` stacks in text style (pinned 0.18.7
+    // renders `mop op-limits`); only default limits need display style.
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const l = try layoutOk("\\lim\\limits_x", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 3 * 500), l.width);
+    try std.testing.expect(l.depth_below > 0);
+    // `\nolimits` keeps display-style subs to the side.
+    const n = try layoutOk("\\sum\\nolimits_{i} x", .{ .display_mode = true }, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expect(n.width > 500);
+}
+
+test "issue36: kern and overlap primitives measure like KaTeX" {
+    // `\kern-2.5pt` (-250 units); laps take no width; `\mathclap`
+    // centers zero-width content under its base.
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const k = try layoutOk("I\\kern-2.5pt R", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 - 250 + 500), k.width);
+    const ll = try layoutOk("\\llap{x}y", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500), ll.width);
+    const rl = try layoutOk("\\rlap{\\,/}{=}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    // rlap ink (slash + thin space) takes no width; `=` keeps its own.
+    try std.testing.expectEqual(@as(u32, 500), rl.width);
+    const mc = try layoutOk("\\sum_{\\mathclap{1\\le i\\le n}} x_{i}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expect(mc.width > 0);
+    try std.testing.expect(mc.depth_below > 0);
+}
+
+test "issue36: not overlays the following symbol with no extra width" {
+    // KaTeX parity (pinned 0.18.7): `\not` is a zero-width Rel overlay
+    // (`\mathrel{\mathrlap\@not}\nobreak`); `\not =` is exactly as wide
+    // as `=`, and `a\not\in b` keeps only the Rel side bearings.
+    var runs_buf: [16]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    const eq = try layoutOk("=", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    const ne = try layoutOk("\\not =", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(eq.width, ne.width);
+    var saw_slash = false;
+    for (ne.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 0x338) saw_slash = true;
+        }
+    }
+    try std.testing.expect(saw_slash);
+    const l = try layoutOk("a\\not\\in b", .{}, &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500 + 278 + 500 + 278 + 500), l.width);
+}
+
 fn testProvider() MetricsProvider {
     const S = struct {
         fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {

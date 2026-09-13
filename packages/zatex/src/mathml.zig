@@ -6,6 +6,7 @@
 const std = @import("std");
 const contract = @import("contract.zig");
 const parse = @import("parse.zig");
+const symbols = @import("symbols.zig");
 
 const Error = contract.LayoutError;
 const Idx = parse.Idx;
@@ -260,17 +261,26 @@ fn rendersRow(pc: *const parse.ParseCtx, id: Idx) bool {
     }
 }
 
-/// Fold `\not` overlays: `<mi>\u{338}</mi>` followed by an
+/// Fold `\not` overlays: a bare U+0338 element followed by an
 /// `mo`/`mi`/`mn` element merges the slash after the next element's
 /// first character (KaTeX `buildExpression` parity). In-place; the
 /// result is always shorter.
 fn mergeNot(buf: []u8) usize {
-    const mark = "<mi>\xcc\xb8</mi>";
+    // `\not` renders `<mo>` (Rel overlay); a literal U+0338 character
+    // in input stays `<mi>` (Ord atom). Both fold the same way.
+    const marks = [_][]const u8{ "<mo>\xcc\xb8</mo>", "<mi>\xcc\xb8</mi>" };
     var r: usize = 0;
     var n: usize = 0;
     while (r < buf.len) {
-        if (r + mark.len <= buf.len and std.mem.eql(u8, buf[r .. r + mark.len], mark)) {
-            const after = r + mark.len;
+        var mark_len: usize = 0;
+        for (marks) |m| {
+            if (r + m.len <= buf.len and std.mem.eql(u8, buf[r .. r + m.len], m)) {
+                mark_len = m.len;
+                break;
+            }
+        }
+        if (mark_len > 0) {
+            const after = r + mark_len;
             // Next element must open as mo/mi/mn (never self-closed;
             // our mo/mi/mn opens carry no attributes, so `>` follows).
             if (after + 4 < buf.len and buf[after] == '<' and buf[after + 1] != '/') {
@@ -311,6 +321,13 @@ fn mergeNot(buf: []u8) usize {
         r += 1;
     }
     return n;
+}
+
+/// Whether a node is the `\not` slash (Rel U+0338 atom), which the
+/// parser always wraps in an rlap overlay (issue #36).
+fn isNotSlash(pc: *const parse.ParseCtx, id: parse.Idx) bool {
+    const nn = parse.nodeAt(pc, id);
+    return nn == .atom and nn.atom.cp == 0x0338;
 }
 
 fn utf8Width(lead: u8) usize {
@@ -450,7 +467,20 @@ const Writer = struct {
                 .ctrl => {
                     const c = tk.name[0];
                     switch (c) {
-                        '{', '}', '%', '&', '#', '_', '$', ',', ':', ';', '!', '|', '/' => self.escCp(c),
+                        '{', '}', '%', '&', '#', '_', '$', '|', '/' => self.escCp(c),
+                        // Spacing commands are Unicode spaces (KaTeX 0.18.7
+                        // `mtext` runs: thin U+2009, med U+2005, thick
+                        // U+2005+U+200A, neg-thin U+2009+U+2063).
+                        ',' => self.escCp(0x2009),
+                        ':', '>' => self.escCp(0x2005),
+                        ';' => {
+                            self.escCp(0x2005);
+                            self.escCp(0x200A);
+                        },
+                        '!' => {
+                            self.escCp(0x2009);
+                            self.escCp(0x2063);
+                        },
                         ' ' => self.byte(' '),
                         else => {
                             // Braced single letters too (`\'{a}`).
@@ -466,7 +496,16 @@ const Writer = struct {
                             }
                             if (nx.kind != .char) return error.Invalid;
                             i += 1;
-                            self.escCp(parse.precompose(acc, nx.cp) orelse return error.Invalid);
+                            if (parse.precompose(acc, nx.cp)) |pcp| {
+                                self.escCp(pcp);
+                            } else {
+                                // No precomposed form: base + combining mark
+                                // (KaTeX emits `mover` here; inside `mtext`
+                                // the combining form renders the same).
+                                if (parse.mathTextAccentCp(c) == null) return error.Invalid;
+                                self.escCp(nx.cp);
+                                self.escCp(acc);
+                            }
                         },
                     }
                 },
@@ -515,7 +554,16 @@ const Writer = struct {
             .op => |o| {
                 if (o.func) {
                     self.str("<mi>");
-                    self.str(o.text);
+                    // Two-word limit operators join with a thin space
+                    // (KaTeX `<mi mathvariant="normal">lim\u{2009}inf</mi>`,
+                    // pinned 0.18.7; issue #36).
+                    if (symbols.splitLimitOp(o.text)) |halves| {
+                        self.str(halves[0]);
+                        self.escCp(0x2009);
+                        self.str(halves[1]);
+                    } else {
+                        self.str(o.text);
+                    }
                     self.str("</mi>");
                     // Function application marker (KaTeX parity).
                     self.str("<mo>");
@@ -579,10 +627,18 @@ const Writer = struct {
             .supsub => |s| {
                 const has_sup = s.sup != NONE;
                 const has_sub = s.sub != NONE;
-                const stacked = if (parse.opBase(self.pc, s.base)) |o|
-                    parse.useLimits(self.style, o)
-                else
-                    false;
+                // KaTeX parity (pinned 0.18.7 `supsub.ts` mathmlBuilder):
+                // with both scripts present, `munderover` needs display
+                // style even for forced `\limits` (`\int\limits_0^1` in
+                // text is `msubsup` in MathML while the HTML stacks);
+                // single scripts follow the shared limit decision.
+                const stacked = if (parse.opBase(self.pc, s.base)) |o| blk: {
+                    if (has_sup and has_sub) {
+                        break :blk self.style.isDisplay() and o.limits != .off and
+                            (o.limits == .on or o.lim_def);
+                    }
+                    break :blk parse.useLimits(self.style, o);
+                } else false;
                 const sc = self.style.script();
                 // A function base rows its name with the application
                 // marker (KaTeX `parentIsSupSub` parity).
@@ -867,6 +923,15 @@ const Writer = struct {
                 self.str("</menclose>");
             },
             .lap => |l| {
+                // `\not` is an rlap slash overlay: emit the atom bare so
+                // `mergeNot` folds it onto the next element (KaTeX
+                // `buildExpression` parity). A user `\rlap` can never
+                // contain the bare slash atom (text mode rejects `\not`),
+                // so this shape is unambiguous.
+                if (l.kind == .rlap and isNotSlash(self.pc, l.body)) {
+                    try self.node(l.body, face);
+                    return;
+                }
                 // KaTeX offsets laps via lspace (rlap needs none).
                 self.str("<mpadded");
                 switch (l.kind) {
@@ -903,9 +968,9 @@ const Writer = struct {
                 // writer tracks no ambient color; values are out of
                 // tag scope).
                 self.str("<mpadded height=\"");
-                self.em(r.dep);
+                self.em(r.raise);
                 self.str("\" voffset=\"");
-                self.em(r.dep);
+                self.em(r.raise);
                 self.str("\">");
                 self.str("<mspace mathbackground=\"black\" width=\"");
                 self.em(r.w);
@@ -1107,14 +1172,51 @@ const Writer = struct {
         const script_cell = e.kind == .smallmatrix;
         // Small tables keep a small row gap (KaTeX `arraystretch<1`).
         if (script_cell) self.str("<mstyle scriptlevel=\"1\">");
-        self.str("<mtable>");
-        const cs: parse.Style = if (disp_cell) .D else if (script_cell) .S else .T;
+        // KaTeX `rowlines` parity (issue #33): rule rows between
+        // content rows become gap entries (`solid`/`dashed`/`none`).
+        // Leading/trailing rules have no gap to attach to (KaTeX wraps
+        // those in `menclose`; not modeled).
         const rows = parse.rowsOf(self.pc, e.rows_start, e.rows_len);
+        var gap_marks: [64]?bool = .{null} ** 64;
+        var ncontent: usize = 0;
+        var pending_rule: ?bool = null;
+        var any_rule = false;
         for (rows) |row| {
-            self.str("<mtr>");
             const kids = parse.kidsOf(self.pc, .{ .start = row.start, .len = row.len });
+            if (kids.len == 1) {
+                if (hlineDashed(self.pc, kids[0])) |dash| {
+                    any_rule = true;
+                    if (pending_rule == null) pending_rule = dash;
+                    continue;
+                }
+            }
+            if (ncontent > 0 and ncontent <= 64) gap_marks[ncontent - 1] = pending_rule;
+            pending_rule = null;
+            ncontent += 1;
+        }
+        if (any_rule) {
+            self.str("<mtable rowlines=\"");
+            var g: usize = 0;
+            while (g + 1 < ncontent and g < 64) : (g += 1) {
+                if (g > 0) self.str(" ");
+                if (gap_marks[g]) |dash| {
+                    self.str(if (dash) "dashed" else "solid");
+                } else {
+                    self.str("none");
+                }
+            }
+            self.str("\">");
+        } else {
+            self.str("<mtable>");
+        }
+        const cs: parse.Style = if (disp_cell) .D else if (script_cell) .S else .T;
+        for (rows) |row| {
+            const kids = parse.kidsOf(self.pc, .{ .start = row.start, .len = row.len });
+            // Rule rows fold into `rowlines` above; they emit no `mtr`
+            // (KaTeX parity).
+            if (kids.len == 1 and isHlineNode(self.pc, kids[0])) continue;
+            self.str("<mtr>");
             for (kids) |k| {
-                if (isHlineNode(self.pc, k)) continue;
                 self.str("<mtd><mstyle scriptlevel=\"");
                 self.str(if (script_cell) "1" else "0");
                 self.str("\" displaystyle=\"");
@@ -1130,15 +1232,22 @@ const Writer = struct {
     }
 };
 
-fn isHlineNode(pc: *const parse.ParseCtx, id: Idx) bool {
+/// Row-rule detection (mirrors the layout core): bare rule node or a
+/// group wrapping exactly one. Returns dashedness (issue #33).
+fn hlineDashed(pc: *const parse.ParseCtx, id: Idx) ?bool {
     switch (parse.nodeAt(pc, id)) {
-        .hline => return true,
+        .hline => |h| return h.dashed,
         .group => |g| {
             const kids = parse.kidsOf(pc, g);
-            return kids.len == 1 and isHlineNode(pc, kids[0]);
+            if (kids.len != 1) return null;
+            return hlineDashed(pc, kids[0]);
         },
-        else => return false,
+        else => return null,
     }
+}
+
+fn isHlineNode(pc: *const parse.ParseCtx, id: Idx) bool {
+    return hlineDashed(pc, id) != null;
 }
 
 fn variantFor(fam: parse.FontFam) []const u8 {
@@ -1246,6 +1355,27 @@ test "text braced accent arg precomposes like the bare form" {
     try std.testing.expectEqualStrings("<mtext>\xc3\xa1</mtext>", out[0..w.pos]);
 }
 
+test "text dot accent without precomposed form emits base plus combining mark" {
+    // KaTeX accepts `\text{\.{a}}` (pinned 0.18.7 renders an overlaid
+    // accent via `mover`); inside `mtext` the combining form renders the
+    // same glyph (`a` + U+0307).
+    var pc = parse.ParseCtx.init("\\text{\\.{a}}");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mtext>a\xcc\x87</mtext>", out[0..w.pos]);
+}
+
+test "text thin space is U+2009, matching KaTeX" {
+    var pc = parse.ParseCtx.init("\\text{a\\,b}");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mtext>a\xe2\x80\x89b</mtext>", out[0..w.pos]);
+}
+
 test "text tilde char is nbsp, matching KaTeX" {
     var pc = parse.ParseCtx.init("\\text{a~b}");
     const root = try parse.parse(&pc, false);
@@ -1318,7 +1448,10 @@ test "builtin func-ops and textord corners match KaTeX tags" {
     try w.node(root, .{ .fam = null, .script = false });
     const s = out[0..w.pos];
     try std.testing.expectEqualStrings(
-        "<mrow><mi>liminf</mi><mo>\u{2061}</mo>" ++
+        // `liminf` carries KaTeX's thin space (pinned 0.18.7 MathML
+        // `lim\u{2009}inf`, issue #36); the old `liminf` spelling was
+        // wrong per the KaTeX-side proof.
+        "<mrow><mi>lim\u{2009}inf</mi><mo>\u{2061}</mo>" ++
             "<mi>ln</mi><mo>\u{2061}</mo>" ++
             "<mi>\u{ac}</mi><mo>\u{22d8}</mo>" ++
             "<mo><mi mathvariant=\"normal\">\u{231e}</mi></mo></mrow>",

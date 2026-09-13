@@ -9,11 +9,34 @@
 //! flip (and its test); backends only consume bottom-left rects and
 //! baselines, which every 2D API (Quartz, Cairo, Skia, Direct2D) draws
 //! natively.
+//!
+//! `-Dbackend=` overrides the default: `auto` (CoreGraphics on Apple
+//! OSes, portable software rasterizer elsewhere), `cg` (Apple only),
+//! or `software` (any OS — how Linux/Windows/Android renders are
+//! verified on a macOS host, and how the Linux oracle image builds).
+const std = @import("std");
 const builtin = @import("builtin");
+const forced: []const u8 = @import("build_options").backend;
 
-pub const impl = switch (builtin.os.tag) {
-    .macos, .ios => @import("cg_backend.zig"),
-    else => @compileError("zatex-png: no backend for this OS yet (the layout core in packages/zatex stays portable)"),
+pub const impl = blk: {
+    if (std.mem.eql(u8, forced, "cg")) {
+        if (builtin.os.tag != .macos and builtin.os.tag != .ios)
+            @compileError("zatex-png: -Dbackend=cg needs an Apple OS (CoreGraphics)");
+        break :blk @import("cg_backend.zig");
+    }
+    if (std.mem.eql(u8, forced, "software")) break :blk @import("sw_backend.zig");
+    if (!std.mem.eql(u8, forced, "auto"))
+        @compileError("zatex-png: -Dbackend must be auto|cg|software");
+    // Zig models Android as Linux + an android ABI (there is no
+    // `.android` OS tag), so it is detected before the OS switch.
+    if (builtin.abi.isAndroid()) break :blk @import("android_backend.zig");
+    break :blk switch (builtin.os.tag) {
+        .macos => @import("cg_backend.zig"),
+        .ios => @import("ios_backend.zig"),
+        .linux => @import("linux_backend.zig"),
+        .windows => @import("windows_backend.zig"),
+        else => @compileError("zatex-png: no backend for this OS yet (the layout core in packages/zatex stays portable)"),
+    };
 };
 
 // Interface contract every backend file honors, checked at comptime so

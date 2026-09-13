@@ -59,14 +59,15 @@ pub fn opBase(ctx: *const ParseCtx, id: Idx) ?OpDesc {
     }
 }
 
-/// Limit-vs-side decision (KaTeX parity, probed): display style stacks
-/// only for default-limit operators (`\sum`, `\lim`) or forced
-/// `\limits`; integrals and text style always go to the side.
+/// Limit-vs-side decision (KaTeX parity, pinned 0.18.7 `supsub.ts`):
+/// forced `\limits` stacks in every style; default-limit operators
+/// (`\sum`, `\lim`) stack only in display style; `\nolimits` and
+/// integrals always go to the side.
 pub fn useLimits(style: Style, o: OpDesc) bool {
-    return style.isDisplay() and switch (o.limits) {
+    return switch (o.limits) {
         .on => true,
         .off => false,
-        .auto => o.lim_def,
+        .auto => style.isDisplay() and o.lim_def,
     };
 }
 
@@ -359,7 +360,11 @@ pub const Node = union(enum) {
     space: i16,
     vspace: i16,
     newline: void,
-    hline: void,
+    /// Row rule (`\hline` solid, `\hdashline` dashed). Rules live in
+    /// their own rows (KaTeX `getHLines` parity, issue #33).
+    hline: struct {
+        dashed: bool,
+    },
     /// Foreground color: `spec` is the literal color-spec token
     /// range (`red`, `#f00`, `rgb(...)`). Layout renders `body`;
     /// the MathML emitter wraps it in `mstyle`.
@@ -403,7 +408,9 @@ pub const Node = union(enum) {
     rule: struct {
         w: i16,
         h: i16,
-        dep: i16,
+        /// Vertical raise in thousandths of an em (KaTeX `\rule`
+        /// bracket; may be negative). Not depth (issue #37).
+        raise: i16,
     },
 };
 
@@ -1244,9 +1251,12 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                 // Gap-position rule (KaTeX `getHLines` parity): a rule
                 // command opening a cell belongs to the row gap, not
                 // the cell, so it contributes no cell content.
+                // Rule commands never belong to a cell (the row loop
+                // consumes row-leading rules into gap rows); mid-cell
+                // they are misplaced (KaTeX parity, issue #33).
                 if (n == 0 and (tokNameEq(t.name, "hline") or tokNameEq(t.name, "hdashline"))) {
-                    _ = try ctx.next();
-                    continue;
+                    if (tokNameEq(t.name, "hline")) return ctx.fail(t.pos, "\\hline valid only within array environment");
+                    return ctx.fail(t.pos, "\\hdashline valid only within array environment");
                 }
                 if (isInfix(t)) {
                     _ = try ctx.next();
@@ -1317,9 +1327,10 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
                     _ = try ctx.next();
                     return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline };
                 }
+                // Same misplacement rule on the infix-rest path.
                 if (n == 0 and (tokNameEq(t.name, "hline") or tokNameEq(t.name, "hdashline"))) {
-                    _ = try ctx.next();
-                    continue;
+                    if (tokNameEq(t.name, "hline")) return ctx.fail(t.pos, "\\hline valid only within array environment");
+                    return ctx.fail(t.pos, "\\hdashline valid only within array environment");
                 }
                 const maybe = try parseAtom(ctx, depth);
                 if (maybe) |id| {
@@ -1400,21 +1411,24 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         return ctx.allocNode(.{ .over = .{ .kind = kind, .nucleus = base, .extra = sup, .under = NONE } });
     }
     if (tokNameEq(name, "not")) {
-        // Combining slash as a plain atom: KaTeX overlays it onto the
-        // following symbol at emit time (`\not\in` → one `mo`), which
-        // the MathML renderer replicates textually.
+        // Zero-width Rel overlay (KaTeX `\mathrel{\mathrlap\@not}`):
+        // the slash takes no space and the Rel class keeps the outer
+        // side bearings (`\not =` is as wide as `=`). The MathML
+        // renderer folds it textually onto the next element.
         try subsetGate(false);
-        return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x0338 } });
+        const slash = try ctx.allocNode(.{ .atom = .{ .class = .Rel, .font = .rm, .cp = 0x0338 } });
+        return ctx.allocNode(.{ .lap = .{ .body = slash, .kind = .rlap } });
     }
     if (tokNameEq(name, "begin")) {
         try subsetGate(false);
         return parseEnv(ctx, depth, t);
     }
     if (tokNameEq(name, "end")) return ctx.fail(t.pos, "unexpected '\\end'");
-    if (tokNameEq(name, "hline")) {
-        if (ctx.in_env == 0) return ctx.fail(t.pos, "'\\hline' outside environment");
-        return ctx.allocNode(.{ .hline = {} });
-    }
+    // Rule commands only open rows (consumed by the environment row
+    // loop, KaTeX `getHLines` parity); anywhere else they are
+    // misplaced (KaTeX parity messages, issue #33).
+    if (tokNameEq(name, "hline")) return ctx.fail(t.pos, "\\hline valid only within array environment");
+    if (tokNameEq(name, "hdashline")) return ctx.fail(t.pos, "\\hdashline valid only within array environment");
     if (tokNameEq(name, "cr")) return ctx.fail(t.pos, "unexpected '\\cr'");
     if (tokNameEq(name, "text") or tokNameEq(name, "mbox")) {
         const toks = try parseBracedToks(ctx, t, true);
@@ -1626,6 +1640,8 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         ' ' => return ctx.allocNode(.{ .space = space_interword }),
         ',' => return ctx.allocNode(.{ .space = space_thin }),
         ':' => return ctx.allocNode(.{ .space = space_med }),
+        // KaTeX `\>` is a medium space (issue #38: med-space row).
+        '>' => return ctx.allocNode(.{ .space = space_med }),
         ';' => return ctx.allocNode(.{ .space = space_thick }),
         '!' => return ctx.allocNode(.{ .space = -space_thin }),
         // No `\/` arm: KaTeX has no italic-correction escape, in math
@@ -1655,8 +1671,9 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
 }
 
 /// Spacing accent label for math-mode text accents (KaTeX
-/// `accent`-group symbols in text mode).
-fn mathTextAccentCp(c: u8) ?u21 {
+/// `accent`-group symbols in text mode). Also the overlay glyph for
+/// text-mode accents with no precomposed form (issues #36, #38).
+pub fn mathTextAccentCp(c: u8) ?u21 {
     for (symbols.all_math_text_accents) |e| if (e.c == c) return e.cp;
     return null;
 }
@@ -2174,6 +2191,79 @@ fn isColorWord(cp: u21) bool {
 /// `#` needs 3 or 6 hex digits, and everything else — empty specs,
 /// spaces, `rgb(...)`, control sequences — is "Invalid color".
 /// Failure carries the spec brace position (KaTeX parity).
+fn hexVal(cp: u21) ?u32 {
+    if (cp >= '0' and cp <= '9') return cp - '0';
+    if (cp >= 'a' and cp <= 'f') return cp - 'a' + 10;
+    if (cp >= 'A' and cp <= 'F') return cp - 'A' + 10;
+    return null;
+}
+
+/// CSS basic keywords (plus common aliases) by 0xRRGGBB.
+const named_colors = [_]struct { name: []const u8, rgb: u32 }{
+    .{ .name = "black", .rgb = 0x000000 },
+    .{ .name = "silver", .rgb = 0xC0C0C0 },
+    .{ .name = "gray", .rgb = 0x808080 },
+    .{ .name = "grey", .rgb = 0x808080 },
+    .{ .name = "white", .rgb = 0xFFFFFF },
+    .{ .name = "maroon", .rgb = 0x800000 },
+    .{ .name = "red", .rgb = 0xFF0000 },
+    .{ .name = "purple", .rgb = 0x800080 },
+    .{ .name = "fuchsia", .rgb = 0xFF00FF },
+    .{ .name = "magenta", .rgb = 0xFF00FF },
+    .{ .name = "green", .rgb = 0x008000 },
+    .{ .name = "lime", .rgb = 0x00FF00 },
+    .{ .name = "olive", .rgb = 0x808000 },
+    .{ .name = "yellow", .rgb = 0xFFFF00 },
+    .{ .name = "navy", .rgb = 0x000080 },
+    .{ .name = "blue", .rgb = 0x0000FF },
+    .{ .name = "teal", .rgb = 0x008080 },
+    .{ .name = "aqua", .rgb = 0x00FFFF },
+    .{ .name = "cyan", .rgb = 0x00FFFF },
+    .{ .name = "orange", .rgb = 0xFFA500 },
+};
+
+/// Resolve a validated color spec to 0xRRGGBBAA paint (issue #35):
+/// `#rgb` / `#rrggbb` hex plus the CSS basic keywords
+/// (case-insensitive). Other bare words are valid per KaTeX (the
+/// browser resolves them) but have no native value here — null means
+/// the host renders its ambient paint.
+pub fn resolveColorSpec(pc: *const ParseCtx, r: Range) ?u32 {
+    const toks = pc.toks[r.start .. r.start + r.len];
+    if (toks.len == 0) return null;
+    if (toks[0].kind == .char and toks[0].cp == '#') {
+        var v: u32 = 0;
+        if (toks.len == 4) {
+            for (toks[1..]) |tk| {
+                if (tk.kind != .char) return null;
+                const d = hexVal(tk.cp) orelse return null;
+                v = (v << 4) | d;
+                v = (v << 4) | d;
+            }
+            return (v << 8) | 0xFF;
+        }
+        if (toks.len == 7) {
+            for (toks[1..]) |tk| {
+                if (tk.kind != .char) return null;
+                const d = hexVal(tk.cp) orelse return null;
+                v = (v << 4) | d;
+            }
+            return (v << 8) | 0xFF;
+        }
+        return null;
+    }
+    var buf: [16]u8 = undefined;
+    if (toks.len > buf.len) return null;
+    for (toks, 0..) |tk, i| {
+        if (tk.kind != .char or tk.cp > 0x7F) return null;
+        buf[i] = std.ascii.toLower(@as(u8, @intCast(tk.cp)));
+    }
+    const w = buf[0..toks.len];
+    for (named_colors) |nc| {
+        if (std.mem.eql(u8, nc.name, w)) return (nc.rgb << 8) | 0xFF;
+    }
+    return null;
+}
+
 fn validateColorSpec(ctx: *ParseCtx, r: Range, brace_pos: u32) Error!void {
     const toks = ctx.toks[r.start .. r.start + r.len];
     if (toks.len == 0) return ctx.fail(brace_pos, "invalid color");
@@ -2315,7 +2405,7 @@ fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
                 }
                 const c = tk.name[0];
                 switch (c) {
-                    '{', '}', '%', '&', '#', '_', '$', ' ', ',', ':', ';', '!', '~', '|', '\'', '`', '^', '"', '=', '.', 'u', 'v', 'H', 't', 'c', 'd', 'b', 'r' => {},
+                    '{', '}', '%', '&', '#', '_', '$', ' ', ',', ':', ';', '!', '>', '~', '|', '\'', '`', '^', '"', '=', '.', 'u', 'v', 'H', 't', 'c', 'd', 'b', 'r' => {},
                     else => if (!is_text_cmd)
                         return ctx.fail(tk.pos, "can't use math command in text mode"),
                 }
@@ -2495,18 +2585,20 @@ test "smash option leniency matches KaTeX" {
 }
 
 fn parseRule(ctx: *ParseCtx, depth: u8) Error!Idx {
-    var dep: i16 = 0;
+    // The bracket is a vertical RAISE (KaTeX `bottom:<raise>`), never
+    // depth below the baseline (issue #37).
+    var raise: i16 = 0;
     const pk = try ctx.peek();
     if (pk.kind == .char and pk.cp == '[') {
         _ = try ctx.next();
         const r = try parseFormula(ctx, depth, .bracket);
         // The bracket frame yields a group; interpret a bare dimension
         // from its single atom when possible.
-        dep = try ruleDimenFromGroup(ctx, r, pk.pos);
+        raise = try ruleDimenFromGroup(ctx, r, pk.pos);
     }
     const w = try parseDimenArg(ctx, pk);
     const h = try parseDimenArg(ctx, pk);
-    return ctx.allocNode(.{ .rule = .{ .w = w, .h = h, .dep = dep } });
+    return ctx.allocNode(.{ .rule = .{ .w = w, .h = h, .raise = raise } });
 }
 
 fn ruleDimenFromGroup(ctx: *ParseCtx, g: Idx, pos: u32) Error!i16 {
@@ -2843,17 +2935,51 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     var nrowbuf: usize = 0;
     var done = false;
     while (!done) {
-        const c = try parseCell(ctx, depth);
-        if (nrowbuf >= 64) return error.NoSpace;
-        // amsmath parity (`\start@aligned`): every second cell of an
-        // aligned row opens with an empty group so a leading operator
-        // keeps binary spacing (and its MathML row).
-        var cell = c.cell;
-        if ((kind == .aligned or kind == .alignedat) and nrowbuf % 2 == 1) {
-            cell = try prependEmptyGroup(ctx, cell);
+        // KaTeX `getHLines` parity (issue #33): rule commands opening
+        // a row become their own gap rows, in order. Anywhere else in
+        // a row they are misplaced (rejected inside `parseCell`).
+        var pending: [8]bool = undefined;
+        var npending: usize = 0;
+        while (nrowbuf == 0) {
+            const pk = try ctx.peek();
+            if (pk.kind != .ctrl) break;
+            const dash: bool = if (tokNameEq(pk.name, "hline"))
+                false
+            else if (tokNameEq(pk.name, "hdashline"))
+                true
+            else
+                break;
+            if (npending >= pending.len) return error.NoSpace;
+            pending[npending] = dash;
+            npending += 1;
+            _ = try ctx.next();
         }
-        rowbuf[nrowbuf] = cell;
-        nrowbuf += 1;
+        const c = try parseCell(ctx, depth);
+        for (pending[0..npending]) |dash| {
+            if (nspans >= 64) return error.NoSpace;
+            const hnode = try ctx.allocNode(.{ .hline = .{ .dashed = dash } });
+            const hs = try ctx.allocKids(1);
+            ctx.kids[hs] = hnode;
+            spans[nspans] = .{ .start = hs, .len = 1 };
+            nspans += 1;
+        }
+        if (nrowbuf >= 64) return error.NoSpace;
+        // A trailing rule row takes no content row after it (`\hline`
+        // before `\end` is a bottom border, not a border plus an
+        // empty row).
+        const empty_trailer = npending > 0 and nspans > 0 and
+            (c.term == .end or c.term == .right) and isEmptyCellGroup(ctx, c.cell);
+        if (!empty_trailer) {
+            // amsmath parity (`\start@aligned`): every second cell of
+            // an aligned row opens with an empty group so a leading
+            // operator keeps binary spacing (and its MathML row).
+            var cell = c.cell;
+            if ((kind == .aligned or kind == .alignedat) and nrowbuf % 2 == 1) {
+                cell = try prependEmptyGroup(ctx, cell);
+            }
+            rowbuf[nrowbuf] = cell;
+            nrowbuf += 1;
+        }
         switch (c.term) {
             .amp => {},
             .newline => {
@@ -2919,6 +3045,15 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         return ctx.allocNode(.{ .delim = .{ .left = f.l, .right = f.r, .body = env_id } });
     }
     return env_id;
+}
+
+/// Whether a parsed cell is an empty group (a row trailer with no
+/// content, e.g. after a trailing row rule).
+fn isEmptyCellGroup(ctx: *ParseCtx, id: Idx) bool {
+    return switch (ctx.nodes[id]) {
+        .group => |g| g.len == 0,
+        else => false,
+    };
 }
 
 /// Copy one row's cell list into the kids pool; the `Row` span is

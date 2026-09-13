@@ -1,0 +1,40 @@
+# Oracle-diff triage sweep (issue #39).
+#
+# INFORMATIONAL ONLY — this workflow is NEVER a required status check and
+# NEVER blocks a merge. AGENTS.md section 4 bans pixel tests from required
+# gates; required gates compare layout IR / MathML text. Do NOT add this
+# job to required status checks, and do NOT treat a 2-vs-1 oracle vote as
+# truth (see docs/oracle-diff.md): when oracles disagree with each other,
+# that marks spec ambiguity, not a ZaTeX bug. Pinned KaTeX 0.18.7 remains
+# the sole truth for accept/reject and geometry disputes.
+name: oracle-diff
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Comma-separated case ids (empty = full curated corpus)"
+        required: false
+        default: ""
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the four-engine sweep and build the triage report
+        run: |
+          if [ -n "${{ inputs.cases }}" ]; then
+            tools/diff-oracles.sh --cases "${{ inputs.cases }}"
+          else
+            tools/diff-oracles.sh
+          fi
+
+      - name: Upload triage report (markdown + normalized renders)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-diff
+          path: zig-out/oracle-diff
+          retention-days: 14

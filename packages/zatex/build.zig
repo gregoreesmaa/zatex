@@ -144,4 +144,47 @@ pub fn build(b: *std.Build) void {
     const install_gallery = b.addInstallArtifact(gallery_exe, .{});
     const gallery_step = b.step("gallery", "Render the corpus gallery HTML (informational, never a gate)");
     gallery_step.dependOn(&install_gallery.step);
+
+    // ---- QA coverage module (issues #40-48; test-only, appended) ----
+    // `qa` (full profile) owns issues #40-48 plus the full half of the
+    // #45 profile-equality probe; `qa_subset` (subset profile, separate
+    // binary — one source file per module per compilation) owns the
+    // subset half over the shared `goldens/qa_profile_ir.json`.
+    const qa_mod = b.addModule("qa", .{
+        .root_source_file = b.path("src/qa.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    qa_mod.addImport("zatex", mod);
+    qa_mod.addImport("invariants", invariants_mod);
+    qa_mod.addImport("speech", speech_mod);
+    qa_mod.addImport("texser", texser_mod);
+    // Filtered to this module's own tests: the binary also links the
+    // engine (full profile), whose suite runs in its own targets.
+    const qa_tests = b.addTest(.{
+        .root_module = qa_mod,
+        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa dump" },
+    });
+    const run_qa_tests = b.addRunArtifact(qa_tests);
+    run_qa_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_qa_tests.step);
+    const qa_subset_options = b.addOptions();
+    qa_subset_options.addOption([]const u8, "profile", @as([]const u8, "subset"));
+    const qa_subset_mod = b.addModule("qa_subset", .{
+        .root_source_file = b.path("src/qa_subset.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    qa_subset_mod.addOptions("build_options", qa_subset_options);
+    // Filtered to the subset probes: the binary links the engine
+    // sources (subset profile), whose full-profile tests must NOT run
+    // here (full-only constructs honestly fail under subset gates).
+    const qa_subset_tests = b.addTest(.{
+        .root_module = qa_subset_mod,
+        .filters = &.{ "qa45s", "subset profile" },
+    });
+    const run_qa_subset_tests = b.addRunArtifact(qa_subset_tests);
+    run_qa_subset_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_qa_subset_tests.step);
+    // ---- end QA coverage module ----
 }

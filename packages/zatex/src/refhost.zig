@@ -409,7 +409,13 @@ test "metamorphic: color is geometry-transparent" {
             var gb: [512]u16 = undefined;
             const a = try layoutCase(&ref, src, display, &ra, &la, &ga);
             const b = try layoutCase(&ref, colored, display, &rb, &lb, &gb);
-            try inv.expectSameLayout(a, b);
+            // Paint is not geometry (issue #35 threads `\color` onto
+            // runs/rules): compare the footprint, not the paint.
+            try std.testing.expectEqual(a.width, b.width);
+            try std.testing.expectEqual(a.height_above, b.height_above);
+            try std.testing.expectEqual(a.depth_below, b.depth_below);
+            try std.testing.expectEqual(a.runs.len, b.runs.len);
+            try std.testing.expectEqual(a.rules.len, b.rules.len);
         }
     }
 }
@@ -513,7 +519,12 @@ test "metamorphic: frac clears numerator and denominator" {
     const nt: i64 = @as(i64, n.height_above) + @as(i64, n.depth_below);
     const dt: i64 = @as(i64, d.height_above) + @as(i64, d.depth_below);
     const ft: i64 = @as(i64, f.height_above) + @as(i64, f.depth_below);
-    try std.testing.expect(ft >= nt + dt + @as(i64, f.rules[0].h));
+    // KaTeX-true bound (issue #32): fraction content is set one style
+    // smaller (x0.7), so the total covers script-scaled content plus
+    // the bar — never full-size content. Pinned KaTeX 0.18.7 totals
+    // 1.2484em for this fraction vs nt+dt+rule = 1.6511em, so the old
+    // bound encoded the pre-fix over-spacing.
+    try std.testing.expect(ft * 10 >= 7 * (nt + dt) + @as(i64, f.rules[0].h) * 10);
     try inv.expectNonNegative(f);
     try inv.expectContained(f);
 }

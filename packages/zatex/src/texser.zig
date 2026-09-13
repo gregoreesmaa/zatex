@@ -303,7 +303,7 @@ const Walker = struct {
             .space => |v| try self.space(v),
             .vspace => return error.Unsupported,
             .newline => try self.put("\\\\"),
-            .hline => try self.cmd("hline"),
+            .hline => |h| try self.cmd(if (h.dashed) "hdashline" else "hline"),
             .color => |c| {
                 try self.cmd("color");
                 try self.put("{");
@@ -359,6 +359,15 @@ const Walker = struct {
                 try self.arg(b);
             },
             .lap => |l| {
+                // `\not` parses to an rlap slash overlay (issue #36);
+                // round-trip it as `\not`, not `\rlap`.
+                if (l.kind == .rlap) {
+                    const nn = parse.nodeAt(self.ctx, l.body);
+                    if (nn == .atom and nn.atom.cp == 0x0338) {
+                        try self.cmd("not");
+                        return;
+                    }
+                }
                 try self.cmd(switch (l.kind) {
                     .llap => "llap",
                     .rlap => "rlap",
@@ -380,8 +389,12 @@ const Walker = struct {
                 try self.arg(r.body);
             },
             .rule => |r| {
-                if (r.dep != 0) return error.Unsupported;
                 try self.cmd("rule");
+                if (r.raise != 0) {
+                    try self.put("[");
+                    try self.dimen(r.raise);
+                    try self.put("]");
+                }
                 try self.put("{");
                 try self.dimen(r.w);
                 try self.put("}{");

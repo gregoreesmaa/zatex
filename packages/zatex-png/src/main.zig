@@ -21,7 +21,9 @@ const usage =
 
 pub fn main(min: std.process.Init.Minimal) !void {
     const alloc = std.heap.c_allocator;
-    var it = std.process.Args.Iterator.init(min.args);
+    // initAllocator on every OS: the plain init() is a compile error on
+    // Windows, and the allocator form is a no-op wrapper elsewhere.
+    var it = try std.process.Args.Iterator.initAllocator(min.args, alloc);
     defer it.deinit();
     _ = it.next(); // argv0
 
@@ -84,8 +86,6 @@ fn single(font: *Font, src: []const u8, dst: []const u8, display: bool, px: u32)
         std.debug.print("zatex-png: layout failed: {s}\n", .{@errorName(e)});
         return e;
     };
-    for (layout.runs) |r| std.debug.print("DBG run base={d} g0={d}\n", .{ r.baseline_y, if (r.glyphs.len > 0) r.glyphs[0] else 0 });
-    for (layout.rules) |r| std.debug.print("DBG rule y={d} h={d}\n", .{ r.y, r.h });
     try render.renderToPng(font, layout, px, 16, dst);
     std.debug.print("zatex-png: {s} ({d}x{d}+{d})\n", .{ dst, layout.width, layout.height_above, layout.depth_below });
 }
