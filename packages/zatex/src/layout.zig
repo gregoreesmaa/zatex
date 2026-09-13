@@ -1200,7 +1200,7 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
             else => return error.Invalid,
         }
         if (is_space) {
-            const sw = @divTrunc((@as(i32, 333) * size), 1000);
+            const sw = @divTrunc((@as(i32, parse.space_interword) * size), 1000);
             const kb = try lc.allocBox(.{
                 .w = sw,
                 .ha = 0,

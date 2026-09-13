@@ -735,30 +735,31 @@ const Writer = struct {
             .mathchoice => |c| try self.node(c[0], face),
             .space => |u| {
                 // Small spacings serialize as text (KaTeX parity);
-                // only measurable glue stays an `mspace`.
+                // only measurable glue stays an `mspace`. Widths are
+                // the canonical `parse.space_*` constants (issue 16).
                 switch (u) {
-                    167 => {
+                    parse.space_thin => {
                         self.str("<mtext>");
                         self.cp(0x2009);
                         self.str("</mtext>");
                     },
-                    222 => {
+                    parse.space_med => {
                         self.str("<mtext>");
                         self.cp(0x2005);
                         self.str("</mtext>");
                     },
-                    278 => {
+                    parse.space_thick => {
                         self.str("<mtext>");
                         self.cp(0x2005);
                         self.cp(0x200A);
                         self.str("</mtext>");
                     },
-                    333 => {
+                    parse.space_interword => {
                         self.str("<mtext>");
                         self.cp(0x00A0);
                         self.str("</mtext>");
                     },
-                    -167 => {
+                    -parse.space_thin => {
                         self.str("<mtext>");
                         self.cp(0x2009);
                         self.cp(0x2063);

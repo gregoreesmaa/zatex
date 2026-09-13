@@ -29,6 +29,17 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
+    // Dynamic plugin artifact (issue 12): hosts like `read` load the
+    // subset profile at RUNTIME via dlopen (`libzatex.dylib` built with
+    // `-Dprofile=subset`), never at link time — plugins live outside
+    // host size budgets, and an absent dylib is a clean fallback.
+    const dylib = b.addLibrary(.{
+        .name = "zatex",
+        .root_module = mod,
+        .linkage = .dynamic,
+    });
+    b.installArtifact(dylib);
+
     const mod_tests = b.addTest(.{ .root_module = mod });
     const run_mod_tests = b.addRunArtifact(mod_tests);
     const test_step = b.step("test", "Run tests");
@@ -72,4 +83,21 @@ pub fn build(b: *std.Build) void {
     const run_parity_tests = b.addRunArtifact(parity_tests);
     run_parity_tests.setCwd(b.path("."));
     test_step.dependOn(&run_parity_tests.step);
+
+    // Gallery renderer (issue 13): corpus -> browsable MathML HTML.
+    // Informational eyeball aid only, never a required gate.
+    // Path is repo-root-relative: this build file lives in packages/zatex.
+    const gallery_mod = b.addModule("gallery", .{
+        .root_source_file = b.path("../../tools/gallery.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    gallery_mod.addImport("zatex", mod);
+    const gallery_exe = b.addExecutable(.{
+        .name = "gallery",
+        .root_module = gallery_mod,
+    });
+    const install_gallery = b.addInstallArtifact(gallery_exe, .{});
+    const gallery_step = b.step("gallery", "Render the corpus gallery HTML (informational, never a gate)");
+    gallery_step.dependOn(&install_gallery.step);
 }

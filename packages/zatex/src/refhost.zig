@@ -11,16 +11,30 @@ const otmath = @import("otmath");
 const contract = zatex.contract;
 const symbols = zatex.symbols;
 
+/// Vendored reference font (test fixture, never linked into hosts).
+const vendored_path = "fixtures/fonts/latinmodern-math.otf";
+
+/// System-font fallback candidates (issue 8): STIX Two Math ships in
+/// the macOS Supplemental fonts; /Library/Fonts covers user installs.
+const system_candidates = [_][]const u8{
+    "/System/Library/Fonts/Supplemental/STIXTwoMath.otf",
+    "/Library/Fonts/STIXTwoMath.otf",
+};
+
 const Ref = struct {
     bytes: []u8,
     font: otmath.Font,
 
     fn load() !Ref {
+        return loadFrom(vendored_path);
+    }
+
+    fn loadFrom(path: []const u8) !Ref {
         var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
         defer threaded.deinit();
         const bytes = try std.Io.Dir.cwd().readFileAlloc(
             threaded.io(),
-            "fixtures/fonts/latinmodern-math.otf",
+            path,
             std.testing.allocator,
             .limited(4 * 1024 * 1024),
         );
@@ -89,6 +103,25 @@ const Ref = struct {
         return self.scale1000(v);
     }
 };
+
+/// First loadable font in `paths`, or null when none load. Unloadable
+/// entries are skipped, never fatal — this is what makes the fallback
+/// chain total on machines without any candidate installed.
+fn loadFirst(paths: []const []const u8) ?Ref {
+    for (paths) |p| {
+        if (Ref.loadFrom(p)) |r| return r else |_| continue;
+    }
+    return null;
+}
+
+/// Vendored reference first, system font second (issue 8 fallback
+/// path). Hosts without the fixture checkout (like `read`) use the
+/// same order: bundled-or-vendored first, OS font second.
+fn loadWithFallback() !Ref {
+    if (Ref.loadFrom(vendored_path)) |r| return r else |_| {}
+    if (loadFirst(&system_candidates)) |r| return r;
+    return error.FileNotFound;
+}
 
 // Every codepoint the core can emit must resolve in the reference
 // font (issue 8 acceptance probe). All misses print before failing.
@@ -206,6 +239,43 @@ test "reference: scaled fences use taller variants" {
     try std.testing.expect(tall.runs.len > 0 and tall.runs[0].glyphs.len > 0);
     try std.testing.expect(tall.runs[0].glyphs[0] != 9);
     try std.testing.expect(tall.width > flat.width);
+}
+
+// Fallback order is total: unloadable paths skip, the vendored fixture
+// resolves through the same entry point hosts use.
+test "fallback: unloadable paths skip, fixture resolves" {
+    const bogus = [_][]const u8{"/nonexistent/zatex-font.otf"};
+    try std.testing.expect(loadFirst(&bogus) == null);
+    var ref = try loadWithFallback();
+    defer ref.free();
+    try std.testing.expect(ref.font.upm > 0);
+}
+
+// System STIX Two Math drives the full provider when the OS ships it
+// (macOS Supplemental fonts); skips cleanly where it is absent.
+test "fallback: system font lays out deterministically when present" {
+    var sys = loadFirst(&system_candidates) orelse {
+        std.debug.print("note: no system math font installed; probe skipped\n", .{});
+        return;
+    };
+    defer sys.free();
+    try std.testing.expect(sys.font.upm > 0);
+    _ = try otmath.constant(sys.font, .frac_rule);
+    try std.testing.expect(try otmath.glyphId(sys.font, '(') != 0);
+    try std.testing.expect(try otmath.glyphId(sys.font, 0x2211) != 0); // summation
+    try std.testing.expect(try otmath.glyphId(sys.font, 0x03B1) != 0); // alpha
+    const src = "\\sum_{i=1}^{n}\\frac{i}{i+1}";
+    var runs_a: [32]zatex.ir.Run = undefined;
+    var rules_a: [8]zatex.ir.Rule = undefined;
+    var glyphs_a: [256]u16 = undefined;
+    var runs_b: [32]zatex.ir.Run = undefined;
+    var rules_b: [8]zatex.ir.Rule = undefined;
+    var glyphs_b: [256]u16 = undefined;
+    const a = try zatex.layoutFull(src, .{ .display_mode = true }, sys.provider(), &runs_a, &rules_a, &glyphs_a);
+    const b = try zatex.layoutFull(src, .{ .display_mode = true }, sys.provider(), &runs_b, &rules_b, &glyphs_b);
+    try std.testing.expectEqual(a.width, b.width);
+    try std.testing.expectEqual(a.runs.len, b.runs.len);
+    try std.testing.expect(a.width > 0 and a.rules.len > 0);
 }
 
 // Math-mode textords (`\S`, `\aa`, ...) lay out via the symbol table,

@@ -28,15 +28,25 @@ principles (adapted from `read`: same discipline, new domain).
   `displayMode`/`textstyle` behavior, `maxExpand`, `throwOnError`
   semantics. If our output differs from pinned KaTeX, our code is wrong —
   never "fix" the golden.
-* One layout core, many emitters. Layout logic lives in exactly one place;
-  output writers (native runs, MathML, later SVG/PNG) are thin walkers
-  over the box tree. No layout math in emitters, ever.
+* One layout core, many emitters. Measuring and geometry live in exactly
+  one place (`layout.zig`); shared decisions (limit placement via
+  `parse.opBase`/`useLimits`, glue widths via `parse.space_*`) are owned
+  by the core and reused, never re-derived. Geometric emitters (native
+  runs, later SVG/PNG) are thin walkers over the box tree. The MathML
+  emitter is a thin *structural* walker over the AST (KaTeX builds its
+  MathML from its parse tree too — the positioned box tree has already
+  lost the semantics MathML needs); it takes no `MetricsProvider`, so
+  measuring there is impossible by construction. No layout math in
+  emitters, ever (resolution of issue #16, owner-signed by closing it).
 
 ## 3. Design Standards
 
 * Reference font: Latin Modern Math (Computer Modern descendant — the look
   is part of compatibility). Vendored only as a test fixture and, later,
-  as embedded subsets in out-of-repo tools — never in the core.
+  as embedded subsets in out-of-repo tools — never in the core. Hosts
+  fall back to system math fonts (e.g. STIX Two Math on macOS) when the
+  fixture is absent; order is vendored-first, system-second
+  (see `src/refhost.zig`, issue #8).
 * Error style: KaTeX `ParseError` parity (message + position), surfaced as
   Zig errors with byte offsets.
 
