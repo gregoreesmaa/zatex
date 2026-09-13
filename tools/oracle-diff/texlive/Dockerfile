@@ -8,8 +8,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       texlive-latex-base \
       texlive-latex-recommended \
+      texlive-fonts-recommended \
       poppler-utils \
  && rm -rf /var/lib/apt/lists/*
+# texlive-fonts-recommended carries the rsfs metrics behind mathrsfs
+# (\mathscr in the fonts case); without it pdflatex dies in mktextfm.
 
 # Render one case: render-one <texfile> <display:0|1> <out.png>
 COPY render-one.sh /usr/local/bin/render-one

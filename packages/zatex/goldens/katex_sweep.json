@@ -7899,6 +7899,87 @@
    "katex_ok": false,
    "katex_pos": 1,
    "katex_error": "KaTeX parse error: Expected group after '_' at position 2: x_̲"
+  },
+  {
+   "id": "sw-overbracket",
+   "tex": "\\overbracket{x+1}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow><mo stretchy=\"true\">⎴</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\overbracket{x+1}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-underbracket",
+   "tex": "\\underbracket{x}_{y}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munder><munder><mi>x</mi><mo stretchy=\"true\">⎵</mo></munder><mi>y</mi></munder></mrow><annotation encoding=\"application/x-tex\">\\underbracket{x}_{y}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-pmb",
+   "tex": "\\pmb{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle style=\"text-shadow: 0.02em 0.01em 0.04px\"><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\pmb{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-vcenter",
+   "tex": "\\vcenter{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded class =\"vcenter\"><mi>x</mi></mpadded></mrow><annotation encoding=\"application/x-tex\">\\vcenter{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-phase",
+   "tex": "\\phase{30}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><menclose notation=\"phasorangle\"><mn>30</mn></menclose></mrow><annotation encoding=\"application/x-tex\">\\phase{30}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-cr",
+   "tex": "\\begin{matrix}a&b\\cr c&d\\end{matrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.16em\" columnalign=\"center center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{matrix}a&amp;b\\cr c&amp;d\\end{matrix}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-textcircled",
+   "tex": "\\textcircled{a}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mi>a</mi><mo>◯</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\textcircled{a}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-textsout",
+   "tex": "\\text{\\sout{abc}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><menclose notation=\"horizontalstrike\"><mtext>abc</mtext></menclose></mrow><annotation encoding=\"application/x-tex\">\\text{\\sout{abc}}</annotation></semantics></math>"
+  },
+  {
+   "id": "sw-mathsout",
+   "tex": "\\sout{abc}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><menclose notation=\"horizontalstrike\"><mrow><mi>a</mi><mi>b</mi><mi>c</mi></mrow></menclose></mrow><annotation encoding=\"application/x-tex\">\\sout{abc}</annotation></semantics></math>"
   }
  ]
 }

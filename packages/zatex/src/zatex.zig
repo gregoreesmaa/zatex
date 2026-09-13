@@ -343,14 +343,14 @@ test "sqrt radicand is cramped: sup sits 30mu lower than top level" {
     // TeX sets the radicand in cramped style (issue #20 Dc grid rows):
     // a sup directly inside `\sqrt{...}` rises 30mu less than at top
     // level. Resolved by glyph id through the stub provider
-    // ('x' = 120, '2' = 50, radical U+221A = 8730).
+    // (mathit x = U+1D465 -> 0xD465, '2' = 50, radical U+221A = 8730).
     const S = struct {
         fn raise(l: ir.Layout) !i32 {
             var yx: ?i32 = null;
             var y2: ?i32 = null;
             for (l.runs) |r| {
                 for (r.glyphs) |g| {
-                    if (g == 120 and yx == null) yx = r.baseline_y;
+                    if (g == 0xD465 and yx == null) yx = r.baseline_y;
                     if (g == 50 and y2 == null) y2 = r.baseline_y;
                 }
             }
@@ -631,7 +631,7 @@ test "issue37: sqrt root index is scriptscript, raised and tucked" {
                 try std.testing.expectEqual(@as(i32, 466), r.baseline_y);
                 saw_index = true;
             }
-            if (g == @as(u16, 'x')) {
+            if (g == @as(u16, 0xD465)) {
                 try std.testing.expectEqual(@as(i32, 550), r.x);
                 // Absolute from the ink-box top: the radicand sits at
                 // dy 0, so its baseline is the box height (rule_top).
@@ -705,26 +705,29 @@ test "issue35: color threads from parse to native runs and rules" {
 
 test "issue34: alphabet commands request distinct provider fonts" {
     // The core requests one font id per alphabet command through the
-    // provider callback (KaTeX keeps ASCII codepoints and switches
-    // typefaces; `FontId` is that switch). The same-roman renders in
-    // the issue are the host backend ignoring `font_id`
+    // provider callback, AND resolves the ASCII codepoint into the
+    // Mathematical Alphanumeric block for the single-file host
+    // (issues #57/#62 — KaTeX switches typefaces, we remap). The
+    // test provider truncates cp to gid 1:1, so the remap is visible
+    // below (e.g. mathbf A -> U+1D400 -> 0xD400). The same-roman
+    // renders in the issue are the host backend ignoring `font_id`
     // (`zatex-png/src/font.zig` maps every request to one font).
     var runs_buf: [16]ir.Run = undefined;
     var rules_buf: [4]ir.Rule = undefined;
     var glyphs_buf: [64]u16 = undefined;
     const cases = [_]struct { src: []const u8, font: u16, cp: u16 }{
-        .{ .src = "\\mathbf{A}", .font = 2, .cp = 'A' },
-        .{ .src = "\\mathcal{A}", .font = 8, .cp = 'A' },
-        .{ .src = "\\mathscr{A}", .font = 6, .cp = 'A' },
-        .{ .src = "\\mathfrak{A}", .font = 5, .cp = 'A' },
-        .{ .src = "\\mathsf{A}", .font = 3, .cp = 'A' },
-        .{ .src = "\\mathtt{A}", .font = 4, .cp = 'A' },
-        .{ .src = "\\mathbb{A}", .font = 7, .cp = 'A' },
-        .{ .src = "\\Bbb{A}", .font = 7, .cp = 'A' },
-        .{ .src = "\\boldsymbol{A}", .font = 2, .cp = 'A' },
+        .{ .src = "\\mathbf{A}", .font = 2, .cp = 0xD400 },
+        .{ .src = "\\mathcal{A}", .font = 8, .cp = 0xD49C },
+        .{ .src = "\\mathscr{A}", .font = 6, .cp = 0xD49C },
+        .{ .src = "\\mathfrak{A}", .font = 5, .cp = 0xD504 },
+        .{ .src = "\\mathsf{A}", .font = 3, .cp = 0xD5A0 },
+        .{ .src = "\\mathtt{A}", .font = 4, .cp = 0xD670 },
+        .{ .src = "\\mathbb{A}", .font = 7, .cp = 0xD538 },
+        .{ .src = "\\Bbb{A}", .font = 7, .cp = 0xD538 },
+        .{ .src = "\\boldsymbol{A}", .font = 2, .cp = 0xD400 },
         // Nested alphabets: the innermost command wins (KaTeX).
-        .{ .src = "\\mathbf{\\mathcal{R}}", .font = 8, .cp = 'R' },
-        .{ .src = "\\mathcal{\\mathbf{R}}", .font = 2, .cp = 'R' },
+        .{ .src = "\\mathbf{\\mathcal{R}}", .font = 8, .cp = 0x211B },
+        .{ .src = "\\mathcal{\\mathbf{R}}", .font = 2, .cp = 0xD411 },
     };
     for (cases) |c| {
         const l = try layoutOk(c.src, .{}, &runs_buf, &rules_buf, &glyphs_buf);

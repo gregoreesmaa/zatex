@@ -26,12 +26,26 @@ import struct
 import sys
 import zlib
 
-ENGINES = ("zatex", "katex", "mathjax", "luatex")
-ORACLES = ("katex", "mathjax", "luatex")
+ENGINES = ("zatex", "katex", "luatex", "mathjax")
+# Oracle order (issue #59): MathJax renders last — it is the most
+# different engine, so its column closes the row.
+ORACLES = ("katex", "luatex", "mathjax")
 PAD_PX = 10
 NORM_H = 128
 INK_THRESH = 240  # channel value below this counts as ink on white
 AMBIGUOUS_SPREAD = 0.90  # oracle-oracle min-sim below this tags spec-ambiguous
+# Triage tripwire for issue #60: flag rows where ZaTeX-vs-pinned-KaTeX sits
+# this far below the oracle-oracle floor (spread). There is deliberately NO
+# absolute floor: cross-font spread dominates (even trivial agreement rows
+# score ~0.55-0.68, and a fully blank render outscores a real one at 0.66
+# vs 0.65 on agree-sum), so an absolute bar either fires on everything or
+# blesses blank output. Margin calibration on real 128px-high renders:
+# rogue single pixel shifts sim by ~0.0005, a 1px global shift by ~0.01,
+# a 6px structural shift by ~0.06; the one visually confirmed structural
+# bug in the 2026-09-13 sweep (space-kern, `I\kern-2.5pt R`) sits 0.109
+# below spread. 0.10 clears noise by an order of magnitude while catching
+# it. Triage attention only, never a gate (AGENTS.md section 4).
+KATEX_OUTLIER_MARGIN = 0.10
 
 
 def read_png(path):
@@ -283,9 +297,20 @@ def build_report(rawdir, outdir, corpus):
             write_png(os.path.join(pngdir, "%s.%s.png" % (cid, eng)),
                       W, H, gray_to_rgba(W, H, g))
         score, per, spread, missing = score_case(norm)
-        tag = "spec-ambiguous" if spread < AMBIGUOUS_SPREAD else ""
+        tags = []
+        if spread < AMBIGUOUS_SPREAD:
+            tags.append("spec-ambiguous")
+        # Issue #60 tripwire: ZaTeX-vs-pinned-KaTeX worse than the
+        # oracle-oracle floor by more than the margin. Needs "katex" plus
+        # a spread to compare against (spread defaults to 1.0 when fewer
+        # than two oracle pairs render, which keeps the rule meaningful).
+        katex_outlier = ("katex" in per and
+                         per["katex"] < spread - KATEX_OUTLIER_MARGIN)
+        if katex_outlier:
+            tags.append("katex-outlier")
         rows.append({"case": case, "score": score, "per": per,
-                     "spread": spread, "missing": missing, "tag": tag})
+                     "spread": spread, "missing": missing,
+                     "tag": " ".join(tags), "katex_outlier": katex_outlier})
     rows.sort(key=lambda r: (r["score"] is None, r["score"]
                              if r["score"] is not None else 0.0))
     lines = []
@@ -297,9 +322,15 @@ def build_report(rawdir, outdir, corpus):
                  "ZaTeX is the solo outlier. `spread` is the minimum "
                  "oracle-oracle similarity; rows with spread < %.2f are "
                  "tagged `spec-ambiguous` (oracles disagree with each "
-                 "other — spec ambiguity, never a ZaTeX bug). When oracles "
+                 "other — spec ambiguity, never a ZaTeX bug). Rows where "
+                 "ZaTeX-vs-pinned-KaTeX falls more than %.2f below `spread` "
+                 "are tagged `katex-outlier`: ZaTeX stands alone against "
+                 "the reference even after allowing for oracle "
+                 "disagreement — investigate first (triage attention, "
+                 "never a gate). When oracles "
                  "disagree, pinned KaTeX 0.18.7 remains the sole truth "
-                 "for accept/reject and geometry disputes." % AMBIGUOUS_SPREAD)
+                 "for accept/reject and geometry disputes."
+                 % (AMBIGUOUS_SPREAD, KATEX_OUTLIER_MARGIN))
     lines.append("")
     lines.append("Normalization per case: tight-crop ink bbox + %dpx white "
                  "pad, uniform rescale to height %d (aspect preserved), "
@@ -307,7 +338,7 @@ def build_report(rawdir, outdir, corpus):
                  "Absolute-size divergences are out of scope here (covered "
                  "by layout-IR tests)." % (PAD_PX, NORM_H))
     lines.append("")
-    header = ("| case | source | score | KaTeX | MathJax | LuaTeX | spread | "
+    header = ("| case | source | score | KaTeX | LuaTeX | MathJax | spread | "
               "tag | renders |")
     lines.append(header)
     lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
@@ -320,11 +351,13 @@ def build_report(rawdir, outdir, corpus):
         f = lambda k: ("%.3f" % per[k]) if k in per else "missing"
         sc = "n/a (no zatex render)" if r["score"] is None else "%.3f" % r["score"]
         iss = "" if c.get("issue") is None else "#%d" % c["issue"]
-        imgs = " ".join(
-            "[%s](png/%s.%s.png)" % (e[0].upper(), c["id"], e) for e in ENGINES)
+        # Issue #59: inline images (shown directly, not links — the
+        # report's point is the visible differences) in engine order.
+        imgs = "<br>".join(
+            "![%s](png/%s.%s.png)" % (e[0].upper(), c["id"], e) for e in ENGINES)
         miss = (" missing:" + ",".join(r["missing"])) if r["missing"] else ""
         lines.append("| %s %s | %s | %s | %s | %s | %s | %.3f | %s%s | %s |" % (
-            c["id"], iss, src, sc, f("katex"), f("mathjax"), f("luatex"),
+            c["id"], iss, src, sc, f("katex"), f("luatex"), f("mathjax"),
             r["spread"], r["tag"], miss, imgs))
     lines.append("")
     with open(os.path.join(outdir, "report.md"), "w") as f:
@@ -417,6 +450,15 @@ def selfcheck():
           by_id["solo"]["score"] < by_id["agree"]["score"])
     check("oracle-disagreement row tagged spec-ambiguous",
           by_id["ambig"]["tag"] == "spec-ambiguous")
+    # Issue #60 tripwire: the solo row (zatex differs, oracles agree) is a
+    # katex-outlier; rows matching KaTeX are not.
+    check("solo-outlier row tagged katex-outlier",
+          by_id["solo"]["katex_outlier"] is True and
+          "katex-outlier" in by_id["solo"]["tag"])
+    check("agreement row is not a katex-outlier",
+          by_id["agree"]["katex_outlier"] is False)
+    check("oracle-matching row is not a katex-outlier",
+          by_id["ambig"]["katex_outlier"] is False)
     check("report.md written with all rows",
           os.path.exists(os.path.join(out, "report.md")) and
           all(i in open(os.path.join(out, "report.md")).read()

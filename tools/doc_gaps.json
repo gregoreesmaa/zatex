@@ -3,15 +3,7 @@
   "kind": "overclaim",
   "note": "inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math"
  },
- "\\Bra": {
-  "kind": "engine",
-  "note": "bra-ket notation missing; KaTeX accepts"
- },
  "\\Braket": {
-  "kind": "engine",
-  "note": "bra-ket notation missing; KaTeX accepts"
- },
- "\\Ket": {
   "kind": "engine",
   "note": "bra-ket notation missing; KaTeX accepts"
  },
@@ -19,61 +11,9 @@
   "kind": "engine",
   "note": "set notation missing; KaTeX accepts"
  },
- "\\bra": {
-  "kind": "engine",
-  "note": "bra-ket notation missing; KaTeX accepts"
- },
  "\\braket": {
   "kind": "engine",
   "note": "bra-ket notation missing; KaTeX accepts"
- },
- "\\cr": {
-  "kind": "engine",
-  "note": "in-matrix \\cr exhausts buffers (NoSpace); KaTeX accepts"
- },
- "\\dotsi": {
-  "kind": "engine",
-  "note": "dotsi alias missing from symbol table; KaTeX accepts"
- },
- "\\edef": {
-  "kind": "engine",
-  "note": "edef macro definition missing; KaTeX accepts"
- },
- "\\global": {
-  "kind": "engine",
-  "note": "global prefix missing; KaTeX accepts"
- },
- "\\href": {
-  "kind": "engine",
-  "note": "\\KaTeX logo command missing; KaTeX accepts"
- },
- "\\ket": {
-  "kind": "engine",
-  "note": "bra-ket notation missing; KaTeX accepts"
- },
- "\\left": {
-  "kind": "engine",
-  "note": "lbrace/rbrace delimiters after \\left/\\right unsupported; KaTeX accepts"
- },
- "\\mathinner": {
-  "kind": "engine",
-  "note": "atom-class wrappers missing; KaTeX accepts"
- },
- "\\mathop": {
-  "kind": "engine",
-  "note": "atom-class wrappers missing; KaTeX accepts"
- },
- "\\mathrel": {
-  "kind": "engine",
-  "note": "atom-class wrappers missing; KaTeX accepts"
- },
- "\\mathstrut": {
-  "kind": "engine",
-  "note": "strut missing; KaTeX accepts"
- },
- "\\mod": {
-  "kind": "engine",
-  "note": "mod spacing missing; KaTeX accepts"
  },
  "\\nonumber": {
   "kind": "engine",
@@ -83,61 +23,9 @@
   "kind": "engine",
   "note": "equation numbering context missing; KaTeX accepts"
  },
- "\\operatorname*": {
-  "kind": "engine",
-  "note": "\\limits placement unsupported; KaTeX accepts"
- },
- "\\operatornamewithlimits": {
-  "kind": "engine",
-  "note": "with-limits operator name missing; KaTeX accepts"
- },
- "\\overbracket": {
-  "kind": "engine",
-  "note": "bracket overline missing (brace works); KaTeX accepts"
- },
- "\\phase": {
-  "kind": "engine",
-  "note": "phase notation missing; KaTeX accepts"
- },
- "\\pmb": {
-  "kind": "engine",
-  "note": "poor-man's bold missing; KaTeX accepts"
- },
- "\\sout": {
-  "kind": "engine",
-  "note": "strikeout missing; KaTeX accepts"
- },
- "\\textcircled": {
-  "kind": "engine",
-  "note": "enclosing circle missing; KaTeX accepts"
- },
- "\\textregistered": {
-  "kind": "engine",
-  "note": "\\textregistered inside \\text unsupported; KaTeX accepts"
- },
- "\\underbracket": {
-  "kind": "engine",
-  "note": "bracket underline missing; KaTeX accepts"
- },
- "\\vcenter": {
-  "kind": "engine",
-  "note": "vertical centering missing; KaTeX accepts"
- },
- "\\xdef": {
-  "kind": "engine",
-  "note": "xdef macro definition missing; KaTeX accepts"
- },
- "{Bmatrix*}": {
-  "kind": "engine",
-  "note": "starred env names do not lex; KaTeX accepts"
- },
  "{CD}": {
   "kind": "overclaim",
   "note": "pinned KaTeX rejects CD; table needs a reject row"
- },
- "{Vmatrix*}": {
-  "kind": "engine",
-  "note": "starred env names do not lex; KaTeX accepts"
  },
  "{align*}": {
   "kind": "engine",
@@ -155,18 +43,6 @@
   "kind": "overclaim",
   "note": "pinned KaTeX rejects unstarred align; table needs a reject row"
  },
- "{bmatrix*}": {
-  "kind": "engine",
-  "note": "starred env names do not lex; KaTeX accepts"
- },
- "{dcases}": {
-  "kind": "engine",
-  "note": "display cases missing; KaTeX accepts"
- },
- "{drcases}": {
-  "kind": "engine",
-  "note": "display right-cases missing; KaTeX accepts"
- },
  "{equation*}": {
   "kind": "overclaim",
   "note": "pinned KaTeX rejects equation*; table needs a reject row"
@@ -179,24 +55,8 @@
   "kind": "overclaim",
   "note": "pinned KaTeX rejects gather; table needs a reject row"
  },
- "{matrix*}": {
-  "kind": "engine",
-  "note": "starred env names do not lex; KaTeX accepts"
- },
- "{pmatrix*}": {
-  "kind": "engine",
-  "note": "starred env names do not lex; KaTeX accepts"
- },
- "{rcases}": {
-  "kind": "engine",
-  "note": "right-cases missing; KaTeX accepts"
- },
  "{split}": {
   "kind": "overclaim",
   "note": "pinned KaTeX rejects standalone split; table needs a reject row"
- },
- "{vmatrix*}": {
-  "kind": "engine",
-  "note": "starred env names do not lex; KaTeX accepts"
  }
 }

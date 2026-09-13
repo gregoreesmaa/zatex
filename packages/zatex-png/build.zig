@@ -5,25 +5,38 @@ const std = @import("std");
 // rasterizer everywhere else. The layout core stays portable.
 // See README.md.
 //
-// -Dbackend=auto|cg|software selects the backend (default auto).
+// -Dbackend=auto|cg|software|native selects the backend (default
+// auto: CoreGraphics on Apple OSes, software elsewhere; `native`
+// selects the per-OS native rasterizer — CoreGraphics on Apple,
+// GDI on Windows, fontconfig/FreeType on Linux — and stays opt-in
+// so the deterministic software backend remains the default).
 // Link requirements per OS (declared next to the backend choice):
 //   macOS/iOS + cg ....... CoreGraphics, CoreText, ImageIO,
 //                          CoreFoundation (system frameworks; iOS needs
 //                          the Xcode iOS SDK at compile time).
 //   macOS/iOS + software . libc only (already linked below).
-//   linux/windows/android  libc only (already linked below) — the
-//                          software backend has zero host dependencies,
-//                          which is what makes cross-compiles from any
-//                          host link without an SDK or sysroot.
+//   windows + native ..... + gdi32 (system DLL, cross-linkable via
+//                          bundled mingw import libs — no SDK).
+//   linux + native ....... no new link requirements: fontconfig and
+//                          FreeType load at RUNTIME via dlopen, so
+//                          cross-compiles still link without a sysroot
+//                          and machines without the libraries keep
+//                          working (native load fails honestly).
+//   linux/windows/android + software: libc only (already linked
+//                          below) — zero host dependencies, which is
+//                          what makes cross-compiles from any host
+//                          link without an SDK or sysroot.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const backend_opt = b.option([]const u8, "backend", "rendering backend: auto|cg|software (default auto)") orelse "auto";
+    const backend_opt = b.option([]const u8, "backend", "rendering backend: auto|cg|software|native (default auto)") orelse "auto";
 
     const tag = target.result.os.tag;
     const apple = tag == .macos or tag == .ios;
     const backend_is_cg = std.mem.eql(u8, backend_opt, "cg") or
-        (std.mem.eql(u8, backend_opt, "auto") and apple);
+        (std.mem.eql(u8, backend_opt, "auto") and apple) or
+        (std.mem.eql(u8, backend_opt, "native") and apple);
+    const backend_is_win_native = std.mem.eql(u8, backend_opt, "native") and tag == .windows;
 
     const zatex_dep = b.dependency("zatex", .{
         .target = target,
@@ -61,6 +74,7 @@ pub fn build(b: *std.Build) void {
         mod.linkFramework("ImageIO", .{});
         mod.linkFramework("CoreFoundation", .{});
     }
+    if (backend_is_win_native) mod.linkSystemLibrary("gdi32", .{});
 
     const exe = b.addExecutable(.{
         .name = "zatex-png",
@@ -91,6 +105,7 @@ pub fn build(b: *std.Build) void {
         render_mod.linkFramework("ImageIO", .{});
         render_mod.linkFramework("CoreFoundation", .{});
     }
+    if (backend_is_win_native) render_mod.linkSystemLibrary("gdi32", .{});
     const render_tests = b.addTest(.{ .root_module = render_mod });
     test_step.dependOn(&b.addRunArtifact(render_tests).step);
 
@@ -114,4 +129,36 @@ pub fn build(b: *std.Build) void {
     }
     const sw_tests = b.addTest(.{ .root_module = sw_mod });
     test_step.dependOn(&b.addRunArtifact(sw_tests).step);
+
+    // Native-backend unit tests (issues #64/#65): the OS files are
+    // only *linked* into their OS builds, but their pure-logic tests
+    // (name-table parse, dlopen probing, graceful degradation) run on
+    // every host; OS-gated tests skip themselves elsewhere. The files
+    // import build_options + sibling backends only, so the roots below
+    // stay link-clean on all hosts (Windows-only GDI calls prune at
+    // comptime; FreeType/fontconfig bind at runtime via dlopen).
+    for ([_]struct { name: []const u8, file: []const u8 }{
+        .{ .name = "zatex_png_win", .file = "src/windows_backend.zig" },
+        .{ .name = "zatex_png_linux", .file = "src/linux_backend.zig" },
+    }) |m| {
+        const nmod = b.addModule(m.name, .{
+            .root_source_file = b.path(m.file),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        nmod.addOptions("build_options", opts);
+        nmod.addImport("zatex", zatex_dep.module("zatex"));
+        nmod.addImport("otmath", zatex_dep.module("otmath"));
+        // Sibling-backend imports reference CoreGraphics on Apple
+        // hosts whatever `-Dbackend` selects (same rule as sw_mod).
+        if (apple) {
+            nmod.linkFramework("CoreGraphics", .{});
+            nmod.linkFramework("CoreText", .{});
+            nmod.linkFramework("ImageIO", .{});
+            nmod.linkFramework("CoreFoundation", .{});
+        }
+        if (backend_is_win_native) nmod.linkSystemLibrary("gdi32", .{});
+        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = nmod })).step);
+    }
 }

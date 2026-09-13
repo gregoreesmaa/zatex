@@ -118,6 +118,60 @@ suspect the tool before the engine.
   oracle-disagreement row, correctly deprioritized by max-scoring.
   `\widecheck` stays missing on the LuaTeX side (amsmath lacks it).
 
+## Similarity expectation (issue #60)
+
+There is deliberately **no absolute similarity floor**, and the numbers
+prove one cannot work:
+
+- Cross-font spread dominates everything. Even trivial agreement rows
+  (`x^2`, `agree-sum`) reach only ~0.55–0.68 against their best oracle,
+  because the four engines use four font designs.
+- Block SSIM on the union canvas cannot see missing output: a fully
+  **blank** render outscores the real ZaTeX render on `agree-sum`
+  (0.663 vs 0.654), and a tofu block lands mid-range (0.50) —
+  indistinguishable from genuine font-driven scores. Missing-engine
+  renders are caught by the `missing` path, not by similarity.
+- Real structural shifts move the needle modestly: a 6px global shift
+  drops sim by ~0.06 on 128px-high renders, while a rogue single pixel
+  moves it by ~0.0005 and a 1px shift by ~0.01.
+
+The expectation is therefore **relative** (`report.py`,
+`KATEX_OUTLIER_MARGIN = 0.10`): a row gets the `katex-outlier`
+attention tag when `sim(ZaTeX, pinned KaTeX) < spread − 0.10`, i.e.
+ZaTeX stands alone against the reference even after allowing for
+oracle disagreement. The 0.10 margin clears pixel noise by an order of
+magnitude while catching the one visually confirmed structural bug in
+the 2026-09-13 sweep (`space-kern`, 0.109 below spread — the only row
+flagged). This is triage attention, never a gate: pixel tests are
+banned from required gates (AGENTS.md §4), and pinned KaTeX remains
+the sole truth for geometry disputes.
+
+All three systematic gaps below are fixed in the layout core, and the
+resweep (same pinned oracles, fresh renders) confirms the lifts with
+zero `katex-outlier` rows remaining:
+
+- Math alphanumeric remap (#57, #62). The core now resolves ASCII
+  letters/digits into the Mathematical Alphanumeric Symbols block per
+  math family (`layout.zig:mathAlpha`, `qa50`), falling back to the
+  raw codepoint when the host lacks the glyph. `agree-quad` (`x^2`)
+  rose 0.559 → 0.719, `acc-bar` (`\bar{y}`) 0.386 → 0.618,
+  `frac-binom` (`\binom n k`) 0.251 → 0.281 (still low — thinner
+  parens plus oracle spread 0.185, tagged spec-ambiguous as designed),
+  `font-bf` (`\mathbf{AaBb123}`) 0.305 → 0.350 (block SSIM stays dull
+  to weight changes by construction; the layout side is pinned by
+  `qa50`, not pixels).
+- Negative-kern raster residual (#63). Root cause was the upright
+  glyph shapes, not the glue: with math-italic `I`/`R` the row rose
+  0.306 → 0.364 against spread 0.415 (gap 0.051 < 0.10 — tripwire
+  clears), and `qa53` pins the negative-glue IR handoff (overlapping
+  run origins) non-pixel.
+- Geometry joins (#55, #56, #58). Brace↔nucleus kern is 0.1em
+  ink-to-ink (`qa51`; `brace-over` 0.480 → 0.520), the vinculum starts
+  one rule thickness inside the surd hook ink (`qa52`;
+  `sqrt-idx` KaTeX sim 0.624), and wide accents scale ink — not the
+  advance box — to the nucleus span (`qa49`; `wide-hat` 0.426 →
+  0.477).
+
 ## Verification boundary
 
 `report.py --selfcheck` (SSIM math unit checks + synthetic end-to-end

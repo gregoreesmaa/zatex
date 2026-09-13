@@ -117,6 +117,9 @@ const Walker = struct {
             .over => |o| try self.over(o),
             .style => |s| try self.node(s.body),
             .font => |f| try self.node(f.body),
+            .pmb => |p| try self.node(p.body),
+            .vcenter => |v| try self.node(v.body),
+            .circled => |c| try self.node(c.body),
             .text => |t| {
                 const toks = parse.toksOf(self.ctx, t.toks);
                 for (toks) |tok| {
@@ -175,9 +178,12 @@ const Walker = struct {
             },
             .href => |h| try self.node(h.body),
             .htmlwrap => |b| try self.node(b),
+            .classwrap => |c| try self.node(c.body),
             .phantom => |p| try self.node(p.body),
             .boxed => |b| try self.node(b),
             .cancel => |b| try self.node(b),
+            .sout => |b| try self.node(b),
+            .phase => |b| try self.node(b),
             .lap => |l| try self.node(l.body),
             // KaTeX a11y order ("not equals"): modifier first.
             .not => |nt| {
@@ -235,6 +241,8 @@ const Walker = struct {
             .underline => try self.word("underbar"),
             .overbrace => try self.word("overbrace"),
             .underbrace => try self.word("underbrace"),
+            .overbracket => try self.word("overbracket"),
+            .underbracket => try self.word("underbracket"),
             .overset => try self.word("overset"),
             .underset => try self.word("underset"),
             .xleft => try self.word("left arrow"),

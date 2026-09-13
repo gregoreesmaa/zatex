@@ -48,6 +48,31 @@ pub fn opBase(ctx: *const ParseCtx, id: Idx) ?OpDesc {
                 .lim_def = o.lim_def,
             },
             .style => |s| cur = s.body,
+            // An Op wrapper is itself the operator (KaTeX \mathop
+            // defaults limits:false — only explicit \limits stacks
+            // it); other classes are transparent like .font/.color.
+            .classwrap => |c| {
+                if (c.class == .Op) return .{
+                    .cp = 0,
+                    .large = false,
+                    .func = true,
+                    .limits = c.limits,
+                    .lim_def = false,
+                };
+                cur = c.body;
+            },
+            // A word operator stacks display scripts only for the
+            // star form (`\operatorname*`, `\operatornamewithlimits`):
+            // explicit `\limits` after `\operatorname` parses but is
+            // inert (KaTeX 0.18.7 placement matrix), so only the
+            // star-set flag feeds the default.
+            .opname => |o| return .{
+                .cp = 0,
+                .large = false,
+                .func = true,
+                .limits = .auto,
+                .lim_def = o.limits == .on,
+            },
             .font => |f| cur = f.body,
             .color => |c| cur = c.body,
             // A background box body is text tokens, never an operator.
@@ -235,6 +260,8 @@ pub const OverKind = enum(u8) {
     underline,
     overbrace,
     underbrace,
+    overbracket,
+    underbracket,
     overleft,
     overright,
     overboth,
@@ -265,6 +292,9 @@ pub const EnvKind = enum(u8) {
     aligned,
     alignedat,
     cases,
+    dcases,
+    drcases,
+    rcases,
     gathered,
 };
 
@@ -334,8 +364,33 @@ pub const Node = union(enum) {
         style: Style,
         body: Idx,
     },
+    /// Atom-class wrapper (`\mathinner`/`\mathop`/`\mathrel`, issue
+    /// #51): transparent geometry, forced outer spacing class; an Op
+    /// wrapper additionally takes explicit limits via `opBase`
+    /// (KaTeX `\mathop` defaults limits:false — only `\limits`
+    /// stacks it).
+    classwrap: struct {
+        class: symbols.AtomClass,
+        body: Idx,
+        limits: LimitsMode,
+    },
     font: struct {
         fam: FontFam,
+        body: Idx,
+    },
+    /// Poor-man's bold: KaTeX keeps the same glyphs and bolds via a
+    /// text-shadow style (never a font switch).
+    pmb: struct {
+        body: Idx,
+    },
+    /// Circled math (`\textcircled` in math mode, issue #51): a
+    /// circle overlay over the body (KaTeX `mover` with U+25EF).
+    circled: struct {
+        body: Idx,
+    },
+    /// Vertically centered box: the body is shifted so the math axis
+    /// halves its height plus depth (KaTeX `mpadded`).
+    vcenter: struct {
         body: Idx,
     },
     /// Token range (into the token arena) for `\text` bodies.
@@ -392,6 +447,8 @@ pub const Node = union(enum) {
     },
     boxed: Idx,
     cancel: Idx,
+    sout: Idx,
+    phase: Idx,
     lap: struct {
         body: Idx,
         kind: LapKind,
@@ -757,6 +814,119 @@ pub const ParseCtx = struct {
             }
         }
     }
+
+    /// Eagerly expand a token range (for `\\edef`/`\\xdef` bodies).
+    /// Macro uses resolve now against current definitions; `.param`
+    /// tokens pass through (they bind at use time); builtins copy
+    /// verbatim; anything else is an undefined control sequence
+    /// (KaTeX parity: eager expansion walks `\\def` names too, so a
+    /// nested definition fails on its own name at define time).
+    /// Budgets mirror lazy expansion (`expansions`, the token pool).
+    fn eagerExpand(self: *ParseCtx, body: Range) Error!Range {
+        const ExpFrame = struct { start: u16, len: u16, at: u16, args: [9]Range, nargs: u3, has_args: bool };
+        var stack: [65]ExpFrame = undefined;
+        stack[0] = .{ .start = body.start, .len = body.len, .at = 0, .args = undefined, .nargs = 0, .has_args = false };
+        var nstack: u8 = 1;
+        const out_start = try self.allocToks(0);
+        var out_len: u16 = 0;
+        while (nstack > 0) {
+            const f = &stack[nstack - 1];
+            if (f.at >= f.len) {
+                nstack -= 1;
+                continue;
+            }
+            const t = self.toks[f.start + f.at];
+            f.at += 1;
+            if (t.kind == .param and f.has_args) {
+                // Splice the captured argument: any `.param` inside
+                // belongs to an outer definition and passes through
+                // when its own frame emits it.
+                if (t.arg >= f.nargs) {
+                    self.err_pos = t.pos;
+                    self.err_msg = "macro parameter out of range";
+                    return error.Invalid;
+                }
+                if (nstack >= stack.len) {
+                    self.err_pos = t.pos;
+                    self.err_msg = "macro expansion limit exceeded";
+                    return error.ExpansionLimit;
+                }
+                const ar = f.args[t.arg];
+                stack[nstack] = .{ .start = ar.start, .len = ar.len, .at = 0, .args = undefined, .nargs = 0, .has_args = false };
+                nstack += 1;
+                continue;
+            }
+            if (t.kind == .ctrl) {
+                var cur_tok = t;
+                var cur_name = t.name;
+                var guard: u8 = 0;
+                while (self.findDef(cur_name)) |d| {
+                    if (!d.is_alias) break;
+                    self.expansions += 1;
+                    if (self.expansions > contract.max_expand or guard >= max_defs) {
+                        self.err_pos = t.pos;
+                        self.err_msg = "macro expansion limit exceeded";
+                        return error.ExpansionLimit;
+                    }
+                    guard += 1;
+                    cur_tok = d.alias_tok;
+                    if (cur_tok.kind != .ctrl) break;
+                    cur_name = cur_tok.name;
+                }
+                const rd = if (cur_tok.kind == .ctrl) self.findDef(cur_name) else null;
+                if (rd) |def| {
+                    self.expansions += 1;
+                    if (self.expansions > contract.max_expand) {
+                        self.err_pos = t.pos;
+                        self.err_msg = "macro expansion limit exceeded";
+                        return error.ExpansionLimit;
+                    }
+                    if (nstack >= stack.len) {
+                        self.err_pos = t.pos;
+                        self.err_msg = "macro expansion limit exceeded";
+                        return error.ExpansionLimit;
+                    }
+                    var args: [9]Range = undefined;
+                    var ai: u3 = 0;
+                    while (ai < def.nargs) : (ai += 1) {
+                        if (f.at >= f.len) return self.fail(t.pos, "expected argument");
+                        const a0 = f.start + f.at;
+                        if (self.toks[a0].kind == .lbrace) {
+                            var depth: u16 = 1;
+                            var j: u16 = 1;
+                            while (true) {
+                                if (f.at + j >= f.len) return self.fail(t.pos, "expected '}' before end of input");
+                                const q = self.toks[f.start + f.at + j];
+                                if (q.kind == .lbrace) depth += 1;
+                                if (q.kind == .rbrace) {
+                                    depth -= 1;
+                                    if (depth == 0) break;
+                                }
+                                j += 1;
+                            }
+                            args[ai] = .{ .start = a0 + 1, .len = j - 1 };
+                            f.at += j + 1;
+                        } else {
+                            args[ai] = .{ .start = a0, .len = 1 };
+                            f.at += 1;
+                        }
+                    }
+                    stack[nstack] = .{ .start = def.body.start, .len = def.body.len, .at = 0, .args = args, .nargs = def.nargs, .has_args = true };
+                    nstack += 1;
+                    continue;
+                }
+                if (!isBuiltin(cur_name)) return self.fail(cur_tok.pos, "undefined control sequence");
+                _ = try self.allocToks(1);
+                self.toks[out_start + out_len] = cur_tok;
+                out_len += 1;
+                continue;
+            }
+            _ = try self.allocToks(1);
+            self.toks[out_start + out_len] = t;
+            out_len += 1;
+        }
+        return .{ .start = out_start, .len = out_len };
+    }
 };
 
 fn isLetter(c: u8) bool {
@@ -921,6 +1091,17 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                     const last = buf[n - 1];
                     switch (ctx.nodes[last]) {
                         .op => |*o| o.limits = if (isName(t, "limits")) .on else .off,
+                        // Explicit `\limits`/`\nolimits` after an Op
+                        // wrapper mutates it (KaTeX Parser.ts accepts
+                        // limit controls after any `op`); other
+                        // classes keep rejecting below.
+                        .classwrap => |*c| if (c.class == .Op) {
+                            c.limits = if (isName(t, "limits")) .on else .off;
+                        } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
+                        // Explicit `\limits`/`\nolimits` after a word
+                        // operator parses but never moves scripts
+                        // (KaTeX 0.18.7: only the star stacks).
+                        .opname => {},
                         else => return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                     }
                     // Scripts after `\limits` attach to the same
@@ -1137,6 +1318,16 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     try parseDef(ctx, t);
                     return null;
                 }
+                if (tokNameEq(t.name, "edef") or tokNameEq(t.name, "xdef")) {
+                    try subsetGate(false);
+                    try parseEdef(ctx, t);
+                    return null;
+                }
+                if (tokNameEq(t.name, "global")) {
+                    try subsetGate(false);
+                    try parseGlobal(ctx, t);
+                    return null;
+                }
                 if (tokNameEq(t.name, "let")) {
                     try subsetGate(false);
                     try parseLet(ctx, t);
@@ -1246,6 +1437,10 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
             },
             .ctrl => {
                 if (isName(t, "end") or isName(t, "right") or isName(t, "cr")) {
+                    // `\cr` is a row separator like `\\`: consume it
+                    // (issue #51 robustness — the token must not reach
+                    // the next cell). `\end`/`\right` stay for the caller.
+                    if (isName(t, "cr")) _ = try ctx.next();
                     return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "amp")) .amp else if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline };
                 }
                 // `\\` is the row separator inside environments (the
@@ -1280,6 +1475,17 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                     const last = buf[n - 1];
                     switch (ctx.nodes[last]) {
                         .op => |*o| o.limits = if (isName(t, "limits")) .on else .off,
+                        // Explicit `\limits`/`\nolimits` after an Op
+                        // wrapper mutates it (KaTeX Parser.ts accepts
+                        // limit controls after any `op`); other
+                        // classes keep rejecting below.
+                        .classwrap => |*c| if (c.class == .Op) {
+                            c.limits = if (isName(t, "limits")) .on else .off;
+                        } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
+                        // Explicit `\limits`/`\nolimits` after a word
+                        // operator parses but never moves scripts
+                        // (KaTeX 0.18.7: only the star stacks).
+                        .opname => {},
                         else => return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                     }
                     // Scripts after `\limits` attach to the same
@@ -1327,6 +1533,8 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
             },
             .ctrl => {
                 if (isName(t, "end") or isName(t, "right") or isName(t, "cr")) {
+                    // Same `\cr` consume as the cell path (issue #51).
+                    if (isName(t, "cr")) _ = try ctx.next();
                     return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline };
                 }
                 if (tokNameEq(t.name, "\\")) {
@@ -1456,6 +1664,21 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         const body = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .font = .{ .fam = .bold, .body = body } });
     }
+    if (tokNameEq(name, "pmb")) {
+        const body = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .pmb = .{ .body = body } });
+    }
+    if (tokNameEq(name, "vcenter")) {
+        try subsetGate(false);
+        const body = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .vcenter = .{ .body = body } });
+    }
+    if (tokNameEq(name, "mathinner") or tokNameEq(name, "mathop") or tokNameEq(name, "mathrel")) {
+        try subsetGate(false);
+        const body = try parseGroupOrAtom(ctx, depth);
+        const class: symbols.AtomClass = if (tokNameEq(name, "mathop")) .Op else if (tokNameEq(name, "mathrel")) .Rel else .Inner;
+        return ctx.allocNode(.{ .classwrap = .{ .class = class, .body = body, .limits = .auto } });
+    }
     if (tokNameEq(name, "verb")) {
         try subsetGate(false);
         return parseVerb(ctx, t);
@@ -1496,9 +1719,11 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         const body = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .htmlwrap = body });
     }
-    if (tokNameEq(name, "operatorname")) {
+    if (tokNameEq(name, "operatorname") or tokNameEq(name, "operatornamewithlimits")) {
         try subsetGate(false);
-        var limits: LimitsMode = .off;
+        // `\operatornamewithlimits` is the legacy alias of the star
+        // form (KaTeX parity): both stack display scripts.
+        var limits: LimitsMode = if (tokNameEq(name, "operatornamewithlimits")) .on else .off;
         const pk = try ctx.peek();
         if (pk.kind == .char and pk.cp == '*') {
             _ = try ctx.next();
@@ -1507,6 +1732,75 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         const toks = try ctx.captureArg();
         try checkTextToks(ctx, toks);
         return ctx.allocNode(.{ .opname = .{ .toks = toks, .limits = limits } });
+    }
+    if (tokNameEq(name, "dotsi")) {
+        // KaTeX macro parity: `\dotsi` = `\,\cdots` (negative thin
+        // space + centered dots, for integrals).
+        try subsetGate(false);
+        const sp = try ctx.allocNode(.{ .space = -space_thin });
+        const dots = try ctx.allocNode(.{ .atom = .{ .class = .Inner, .font = .rm, .cp = 0x22EF } });
+        return finishGroup(ctx, &.{ sp, dots });
+    }
+    if (tokNameEq(name, "mod")) {
+        // KaTeX macro parity: `\mod` = style-choice leading space
+        // (18mu display, 12mu otherwise) + upright "mod" + thin space
+        // + argument. `\allowbreak` has no engine counterpart (no line
+        // breaking) and is skipped. 1mu = 1000/18 em thousandths.
+        try subsetGate(false);
+        const s18 = try ctx.allocNode(.{ .space = 1000 });
+        const s12 = try ctx.allocNode(.{ .space = 667 });
+        const choice = try ctx.allocNode(.{ .mathchoice = .{ s18, s12, s12, s12 } });
+        const m = try ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 'm' } });
+        const o = try ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 'o' } });
+        const d = try ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 'd' } });
+        const thin = try ctx.allocNode(.{ .space = space_thin });
+        const arg = try parseGroupOrAtom(ctx, depth);
+        return finishGroup(ctx, &.{ choice, m, o, d, thin, arg });
+    }
+    if (tokNameEq(name, "KaTeX") or tokNameEq(name, "LaTeX") or tokNameEq(name, "TeX")) {
+        try subsetGate(false);
+        // Logo macros (KaTeX 0.18.7 `macros.js`, all `\textrm`):
+        // kerned upright letters, a top-aligned scriptsize A raised
+        // by T_h - 0.7*A_h = 0.206667em, and E lowered by 0.5ex.
+        // Widths are thousandths of an em (matching `.space`).
+        const mkLetter = struct {
+            fn mk(c: *ParseCtx, cp: u21) Error!Idx {
+                return c.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = cp } });
+            }
+        }.mk;
+        const mkKern = struct {
+            fn mk(c: *ParseCtx, w: i16) Error!Idx {
+                return c.allocNode(.{ .space = w });
+            }
+        }.mk;
+        const a_glyph = try mkLetter(ctx, 'A');
+        const raised_a = try ctx.allocNode(.{ .raisebox = .{
+            .body = try ctx.allocNode(.{ .style = .{ .style = .S, .body = a_glyph } }),
+            .dh = 207,
+        } });
+        const lowered_e = try ctx.allocNode(.{ .raisebox = .{
+            .body = try mkLetter(ctx, 'E'),
+            .dh = -238,
+        } });
+        // The `\TeX` tail shared by all three logos.
+        const tex_tail = [_]Idx{
+            try mkLetter(ctx, 'T'),
+            try mkKern(ctx, -167),
+            lowered_e,
+            try mkKern(ctx, -125),
+            try mkLetter(ctx, 'X'),
+        };
+        if (tokNameEq(name, "TeX")) return finishGroup(ctx, &tex_tail);
+        const head = [_]Idx{
+            try mkLetter(ctx, if (tokNameEq(name, "KaTeX")) 'K' else 'L'),
+            try mkKern(ctx, if (tokNameEq(name, "KaTeX")) -170 else -360),
+            raised_a,
+            try mkKern(ctx, -150),
+        };
+        var kids: [head.len + tex_tail.len]Idx = undefined;
+        @memcpy(kids[0..head.len], &head);
+        @memcpy(kids[head.len..], &tex_tail);
+        return finishGroup(ctx, &kids);
     }
     if (tokNameEq(name, "substack")) {
         try subsetGate(false);
@@ -1563,6 +1857,49 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
             .keep_v = !tokNameEq(name, "hphantom"),
         } });
     }
+    if (tokNameEq(name, "bra") or tokNameEq(name, "ket") or
+        tokNameEq(name, "Bra") or tokNameEq(name, "Ket"))
+    {
+        try subsetGate(false);
+        // Bra-ket notation (KaTeX 0.18.7): lowercase forms use
+        // fixed-size fences in an Inner atom (`\bra{X}` = ⟨X∣);
+        // capitals auto-size exactly like `\left\langle X \right\vert`
+        // (byte-identical KaTeX output), so they desugar to fence nodes.
+        const body = try parseGroupOrAtom(ctx, depth);
+        const big = name[0] < 'a';
+        const is_bra = name[1] == 'r';
+        const fence: u21 = 0x27E8;
+        const bar: u21 = 0x2223;
+        if (!big) {
+            const kids = [_]Idx{
+                try ctx.allocNode(.{ .atom = .{
+                    .class = if (is_bra) .Open else .Ord,
+                    .font = .rm,
+                    .cp = if (is_bra) fence else bar,
+                } }),
+                body,
+                try ctx.allocNode(.{ .atom = .{
+                    .class = if (is_bra) .Ord else .Close,
+                    .font = .rm,
+                    .cp = if (is_bra) bar else 0x27E9,
+                } }),
+            };
+            const group = try finishGroup(ctx, &kids);
+            return ctx.allocNode(.{ .classwrap = .{ .class = .Inner, .body = group, .limits = .auto } });
+        }
+        return ctx.allocNode(.{ .delim = .{
+            .left = if (is_bra) fence else bar,
+            .right = if (is_bra) bar else 0x27E9,
+            .body = body,
+        } });
+    }
+    if (tokNameEq(name, "mathstrut")) {
+        try subsetGate(false);
+        // KaTeX parity: `\mathstrut` renders exactly like
+        // `\vphantom{(}` (verified against pinned 0.18.7 output).
+        const body = try ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '(' } });
+        return ctx.allocNode(.{ .phantom = .{ .body = body, .keep_h = false, .keep_v = true } });
+    }
     if (tokNameEq(name, "llap") or tokNameEq(name, "rlap") or tokNameEq(name, "clap") or
         tokNameEq(name, "mathllap") or tokNameEq(name, "mathrlap") or tokNameEq(name, "mathclap"))
     {
@@ -1588,6 +1925,26 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         try subsetGate(false);
         const body = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .cancel = body });
+    }
+    if (tokNameEq(name, "sout")) {
+        try subsetGate(false);
+        // Math-mode strikeout (KaTeX parity, allowed with a
+        // strict-mode warning there): horizontal rule like cancel.
+        const body = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .sout = body });
+    }
+    if (tokNameEq(name, "phase")) {
+        try subsetGate(false);
+        const body = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .phase = body });
+    }
+    if (tokNameEq(name, "textcircled")) {
+        // Math-mode circled (KaTeX parity: strict-mode warning
+        // there, never a reject): full-only like math `\sout`
+        // while the `\text` token path stays subset-free.
+        try subsetGate(false);
+        const body = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .circled = .{ .body = body } });
     }
     if (tokNameEq(name, "quad")) return ctx.allocNode(.{ .space = 1000 });
     if (tokNameEq(name, "qquad")) return ctx.allocNode(.{ .space = 2000 });
@@ -1823,6 +2180,8 @@ fn parseOverName(name: []const u8) ?OverKind {
     if (tokNameEq(name, "underline")) return .underline;
     if (tokNameEq(name, "overbrace")) return .overbrace;
     if (tokNameEq(name, "underbrace")) return .underbrace;
+    if (tokNameEq(name, "overbracket")) return .overbracket;
+    if (tokNameEq(name, "underbracket")) return .underbracket;
     if (tokNameEq(name, "overleftarrow")) return .overleft;
     if (tokNameEq(name, "overrightarrow")) return .overright;
     if (tokNameEq(name, "overleftrightarrow")) return .overboth;
@@ -2403,7 +2762,7 @@ fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
                 // `\textdollar`, ...) are allowed in text; math commands
                 // are not.
                 const is_text_cmd = if (comptime active_profile == .full)
-                    symbols.lookupText(tk.name) != null
+                    symbols.lookupText(tk.name) != null or symbols.lookupTextArg(tk.name) != null
                 else
                     false;
                 if (tk.name.len != 1) {
@@ -2758,6 +3117,60 @@ fn parseNewCommand(ctx: *ParseCtx, cmd: Tok, renew: bool, provide: bool) Error!v
 }
 
 /// `\def\name#1#2{body}`.
+// Install (or overwrite) a definition. Shared by def/gdef and
+// edef/xdef (every definition is already global).
+fn storeDef(ctx: *ParseCtx, cmd: Tok, name: []const u8, nargs: u3, body: Range) Error!void {
+    if (ctx.findDef(name)) |d| {
+        d.nargs = nargs;
+        d.body = body;
+        d.is_alias = false;
+        return;
+    }
+    if (ctx.ndefs >= max_defs) {
+        ctx.err_pos = cmd.pos;
+        ctx.err_msg = "too many macros";
+        return error.ExpansionLimit;
+    }
+    ctx.defs[ctx.ndefs] = .{ .name = name, .nargs = nargs, .body = body };
+    ctx.ndefs += 1;
+}
+
+// edef/xdef (identical: every definition is already global). The
+// body expands now against current definitions; parameters stay
+// symbolic for use time (KaTeX parity).
+fn parseEdef(ctx: *ParseCtx, cmd: Tok) Error!void {
+    const nt = try ctx.next();
+    if (nt.kind != .ctrl or nt.name.len == 0) return ctx.fail(nt.pos, "expected control sequence");
+    var nargs: u3 = 0;
+    while (true) {
+        const q = try ctx.peek();
+        if (q.kind == .char and q.cp == '#') {
+            _ = try ctx.next();
+            const d = try ctx.next();
+            if (d.kind != .char or d.cp != '1' + @as(u21, nargs)) return ctx.fail(d.pos, "parameters must be sequential");
+            nargs += 1;
+            if (nargs > 9) return ctx.fail(d.pos, "too many parameters");
+        } else break;
+    }
+    const raw = try ctx.captureArg();
+    const body = try ctx.eagerExpand(raw);
+    return storeDef(ctx, cmd, nt.name, nargs, body);
+}
+
+// The global prefix (KaTeX parity): the next token must open a
+// definition (def family, let); anything else is rejected.
+// Definitions are already global, so this is a parse-level gate.
+fn parseGlobal(ctx: *ParseCtx, cmd: Tok) Error!void {
+    _ = cmd;
+    const nt = try ctx.next();
+    if (nt.kind != .ctrl or nt.name.len <= 1) return ctx.fail(nt.pos, "invalid token after macro prefix");
+    if (tokNameEq(nt.name, "global")) return parseGlobal(ctx, nt);
+    if (tokNameEq(nt.name, "def") or tokNameEq(nt.name, "gdef")) return parseDef(ctx, nt);
+    if (tokNameEq(nt.name, "edef") or tokNameEq(nt.name, "xdef")) return parseEdef(ctx, nt);
+    if (tokNameEq(nt.name, "let")) return parseLet(ctx, nt);
+    return ctx.fail(nt.pos, "invalid token after macro prefix");
+}
+
 fn parseDef(ctx: *ParseCtx, cmd: Tok) Error!void {
     const nt = try ctx.next();
     if (nt.kind != .ctrl or nt.name.len == 0) return ctx.fail(nt.pos, "expected control sequence");
@@ -2773,19 +3186,7 @@ fn parseDef(ctx: *ParseCtx, cmd: Tok) Error!void {
         } else break;
     }
     const body = try ctx.captureArg();
-    if (ctx.findDef(nt.name)) |d| {
-        d.nargs = nargs;
-        d.body = body;
-        d.is_alias = false;
-        return;
-    }
-    if (ctx.ndefs >= max_defs) {
-        ctx.err_pos = cmd.pos;
-        ctx.err_msg = "too many macros";
-        return error.ExpansionLimit;
-    }
-    ctx.defs[ctx.ndefs] = .{ .name = nt.name, .nargs = nargs, .body = body };
-    ctx.ndefs += 1;
+    return storeDef(ctx, cmd, nt.name, nargs, body);
 }
 
 /// `\let\new=\old` / `\let\new\old`.
@@ -2822,19 +3223,22 @@ fn isBuiltin(name: []const u8) bool {
     const prims: []const []const u8 = &.{
         "frac", "dfrac", "tfrac", "cfrac", "binom", "dbinom", "genfrac",
         "sqrt", "left", "right", "middle", "begin", "end", "hline", "cr",
-        "text", "mbox", "boldsymbol", "color", "href", "url", "htmlClass",
+        "text", "mbox", "boldsymbol", "pmb", "vcenter", "color", "href", "url", "htmlClass",
         "htmlId", "htmlStyle", "htmlData", "operatorname", "substack",
         "mathchoice", "smash", "raisebox", "rule", "boxed", "fbox",
+        "KaTeX", "LaTeX", "TeX", "operatornamewithlimits", "mathstrut",
+        "bra", "ket", "Bra", "Ket",
         "phantom", "hphantom", "vphantom", "llap", "rlap", "clap",
-        "cancel", "bcancel", "quad", "qquad", "enskip", "hspace", "vspace",
+        "cancel", "bcancel", "sout", "phase", "textcircled", "quad", "qquad", "enskip", "hspace", "vspace",
         "kern", "mkern", "mskip", "hskip", "newcommand", "renewcommand",
-        "providecommand", "def", "gdef", "let", "over", "atop", "choose", "brace",
+        "providecommand", "def", "gdef", "edef", "xdef", "global", "let", "over", "atop", "choose", "brace",
         "brack", "limits", "nolimits", "not", "overset", "underset",
     };
     for (prims) |p| if (tokNameEq(p, name)) return true;
     const envs: []const []const u8 = &.{
         "matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix",
-        "smallmatrix", "array", "aligned", "alignedat", "cases", "gathered",
+        "smallmatrix", "array", "aligned", "alignedat", "cases", "dcases",
+        "drcases", "rcases", "gathered",
     };
     for (envs) |e| if (tokNameEq(e, name)) return true;
     return false;
@@ -2848,45 +3252,64 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     // Environment name: `{matrix}` — letter chars.
     const lb = try ctx.next();
     if (lb.kind != .lbrace) return ctx.fail(lb.pos, "expected '{' after '\\begin'");
-    var nbuf: [32]u8 = undefined;
+    var nbuf: [40]u8 = undefined;
     var nn: usize = 0;
     while (true) {
         const q = try ctx.next();
         if (q.kind == .rbrace) break;
         if (q.kind != .char or q.cp > 0x7F) return ctx.fail(q.pos, "expected environment name");
         const c: u8 = @intCast(q.cp);
-        if (!((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z'))) return ctx.fail(q.pos, "expected environment name");
+        // A trailing `*` rides along raw (the `\end` check below
+        // compares raw names, so begin/end stars must match exactly).
+        if (!((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '*')) return ctx.fail(q.pos, "expected environment name");
         if (nn >= nbuf.len) return ctx.fail(q.pos, "environment name too long");
         nbuf[nn] = c;
         nn += 1;
     }
-    const kind: EnvKind = if (tokNameEq(nbuf[0..nn], "matrix"))
+    // KaTeX amsmath parity: the six matrix envs take a trailing star
+    // (same rendering; starred forms take one optional [l|c|r] column
+    // alignment below). A star anywhere else is unknown — KaTeX
+    // rejects `aligned*`, `cases*`, bare `*` the same way.
+    const starred = nn > 0 and nbuf[nn - 1] == '*';
+    const base = if (starred) nbuf[0 .. nn - 1] else nbuf[0..nn];
+    const kind: EnvKind = if (tokNameEq(base, "matrix"))
         .matrix
-    else if (tokNameEq(nbuf[0..nn], "pmatrix"))
+    else if (tokNameEq(base, "pmatrix"))
         .pmatrix
-    else if (tokNameEq(nbuf[0..nn], "bmatrix"))
+    else if (tokNameEq(base, "bmatrix"))
         .bmatrix
-    else if (tokNameEq(nbuf[0..nn], "Bmatrix"))
+    else if (tokNameEq(base, "Bmatrix"))
         .Bmatrix
-    else if (tokNameEq(nbuf[0..nn], "vmatrix"))
+    else if (tokNameEq(base, "vmatrix"))
         .vmatrix
-    else if (tokNameEq(nbuf[0..nn], "Vmatrix"))
+    else if (tokNameEq(base, "Vmatrix"))
         .Vmatrix
-    else if (tokNameEq(nbuf[0..nn], "smallmatrix"))
+    else if (tokNameEq(base, "smallmatrix"))
         .smallmatrix
-    else if (tokNameEq(nbuf[0..nn], "array"))
+    else if (tokNameEq(base, "array"))
         .array
-    else if (tokNameEq(nbuf[0..nn], "aligned"))
+    else if (tokNameEq(base, "aligned"))
         .aligned
-    else if (tokNameEq(nbuf[0..nn], "alignedat"))
+    else if (tokNameEq(base, "alignedat"))
         .alignedat
-    else if (tokNameEq(nbuf[0..nn], "cases"))
+    else if (tokNameEq(base, "cases"))
         .cases
-    else if (tokNameEq(nbuf[0..nn], "gathered"))
+    else if (tokNameEq(base, "dcases"))
+        .dcases
+    else if (tokNameEq(base, "drcases"))
+        .drcases
+    else if (tokNameEq(base, "rcases"))
+        .rcases
+    else if (tokNameEq(base, "gathered"))
         .gathered
     else
         // KaTeX parity: reported at the `{name}` group opener.
         return ctx.fail(lb.pos, "unknown environment");
+    const matrix_star = starred and switch (kind) {
+        .matrix, .pmatrix, .bmatrix, .Bmatrix, .vmatrix, .Vmatrix => true,
+        else => false,
+    };
+    if (starred and !matrix_star) return ctx.fail(lb.pos, "unknown environment");
 
     // Column spec for `{array}` / `{alignedat}`.
     var spec: [16]u16 = undefined;
@@ -2930,6 +3353,26 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
             spec[nspec] = 2;
             spec[nspec + 1] = 0;
             nspec += 2;
+        }
+    }
+    if (matrix_star) {
+        // One optional [l|c|r] alignment for every column (default
+        // centered): stored as a single spec code, expanded by
+        // layoutEnv. KaTeX parity: unknown letters reject.
+        spec[0] = 1;
+        nspec = 1;
+        const pk = try ctx.peek();
+        if (pk.kind == .char and pk.cp == '[') {
+            _ = try ctx.next();
+            const a = try ctx.next();
+            spec[0] = if (a.kind == .char) switch (a.cp) {
+                'l' => @as(u16, 0),
+                'c' => 1,
+                'r' => 2,
+                else => return ctx.fail(a.pos, "expected column alignment"),
+            } else return ctx.fail(a.pos, "expected column alignment");
+            const cl = try ctx.next();
+            if (cl.kind != .char or cl.cp != ']') return ctx.fail(cl.pos, "expected ']'");
         }
     }
 
@@ -3047,6 +3490,9 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         .vmatrix => .{ .l = '|', .r = '|' },
         .Vmatrix => .{ .l = 0x2016, .r = 0x2016 },
         .cases => .{ .l = '{', .r = 0 },
+        .dcases => .{ .l = '{', .r = 0 },
+        .drcases => .{ .l = 0, .r = '}' },
+        .rcases => .{ .l = 0, .r = '}' },
         else => null,
     };
     if (fence) |f| {
@@ -3122,6 +3568,77 @@ test "gdef defines like def" {
         .group => |g| try std.testing.expectEqual(@as(u16, 1), g.len),
         else => return error.TestUnexpectedResult,
     }
+}
+
+test "starred matrix envs take alignment, other stars reject" {
+    // KaTeX amsmath parity (issue #51): pmatrix*/matrix* accept with
+    // one optional [l|c|r] spec (default centered); aligned*/cases*
+    // and mismatched begin/end stars reject like KaTeX.
+    const Case = struct {
+        fn envOf(src: []const u8) !struct { kind: EnvKind, spec: u16 } {
+            var ctx = ParseCtx.init(src);
+            const root = try parse(&ctx, false);
+            const env_id = switch (ctx.nodes[root]) {
+                // Delimited envs (pmatrix et al) wrap the env node.
+                .group => |g| switch (ctx.nodes[ctx.kids[g.start]]) {
+                    .delim => |d| d.body,
+                    else => ctx.kids[g.start],
+                },
+                else => return error.TestUnexpectedResult,
+            };
+            return switch (ctx.nodes[env_id]) {
+                .env => |e| .{
+                    .kind = e.kind,
+                    .spec = if (e.spec_len == 1) kidsOf(&ctx, .{ .start = e.spec_start, .len = 1 })[0] else 9,
+                },
+                else => error.TestUnexpectedResult,
+            };
+        }
+    };
+    const a = try Case.envOf("\\begin{pmatrix*}[r]x\\end{pmatrix*}");
+    try std.testing.expectEqual(EnvKind.pmatrix, a.kind);
+    try std.testing.expectEqual(@as(u16, 2), a.spec);
+    const b = try Case.envOf("\\begin{matrix*}x\\end{matrix*}");
+    try std.testing.expectEqual(EnvKind.matrix, b.kind);
+    try std.testing.expectEqual(@as(u16, 1), b.spec);
+    var c = ParseCtx.init("\\begin{aligned*}x\\end{aligned*}");
+    try std.testing.expectError(error.Invalid, parse(&c, false));
+    var d = ParseCtx.init("\\begin{matrix}x\\end{matrix*}");
+    try std.testing.expectError(error.Invalid, parse(&d, false));
+    var e = ParseCtx.init("\\begin{matrix*}[x]y\\end{matrix*}");
+    try std.testing.expectError(error.Invalid, parse(&e, false));
+}
+
+test "class wrappers, dotsi and mod expand" {
+    // Issue #51 batch A: \mathinner/\mathop/\mathrel wrap the body
+    // with a forced class; \dotsi is thin-negative-space + cdots;
+    // \mod is style-choice space + upright "mod" + thin + argument
+    // (KaTeX macro parity).
+    const W = struct {
+        fn wrapOf(src: []const u8) !struct { cls: symbols.AtomClass, is_group: bool } {
+            var ctx = ParseCtx.init(src);
+            const root = try parse(&ctx, false);
+            const id = switch (ctx.nodes[root]) {
+                .group => |g| if (g.len == 1) ctx.kids[g.start] else return error.TestUnexpectedResult,
+                else => return error.TestUnexpectedResult,
+            };
+            return switch (ctx.nodes[id]) {
+                .classwrap => |c| .{ .cls = c.class, .is_group = false },
+                .group => .{ .cls = .Ord, .is_group = true },
+                else => error.TestUnexpectedResult,
+            };
+        }
+    };
+    const r = try W.wrapOf("\\mathrel{x}");
+    try std.testing.expectEqual(symbols.AtomClass.Rel, r.cls);
+    const o = try W.wrapOf("\\mathop{x}");
+    try std.testing.expectEqual(symbols.AtomClass.Op, o.cls);
+    const i = try W.wrapOf("\\mathinner{x}");
+    try std.testing.expectEqual(symbols.AtomClass.Inner, i.cls);
+    const d = try W.wrapOf("\\dotsi");
+    try std.testing.expect(d.is_group);
+    const m = try W.wrapOf("\\mod b");
+    try std.testing.expect(m.is_group);
 }
 
 test "macro loop hits expansion limit" {

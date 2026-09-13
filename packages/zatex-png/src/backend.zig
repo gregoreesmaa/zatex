@@ -25,8 +25,12 @@ pub const impl = blk: {
         break :blk @import("cg_backend.zig");
     }
     if (std.mem.eql(u8, forced, "software")) break :blk @import("sw_backend.zig");
-    if (!std.mem.eql(u8, forced, "auto"))
-        @compileError("zatex-png: -Dbackend must be auto|cg|software");
+    // `native` needs no arm here: the OS files themselves select the
+    // native implementation (Windows GDI, Linux fontconfig/FreeType,
+    // Apple CoreGraphics which is already native) when the option is
+    // `native`, and the software rasterizer otherwise.
+    if (!std.mem.eql(u8, forced, "auto") and !std.mem.eql(u8, forced, "native"))
+        @compileError("zatex-png: -Dbackend must be auto|cg|software|native");
     // Zig models Android as Linux + an android ABI (there is no
     // `.android` OS tag), so it is detected before the OS switch.
     if (builtin.abi.isAndroid()) break :blk @import("android_backend.zig");

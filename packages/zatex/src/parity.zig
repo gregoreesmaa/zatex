@@ -12,6 +12,8 @@
 //!   pushes the variant onto leaves; the wrapper is dropped.
 //! - `\href` emits an `mrow href` wrapper while KaTeX puts `href` on
 //!   the child; the wrapper is dropped.
+//! - single-child `mrow` shells drop: KaTeX merges runs before
+//!   row-wrapping, so one-leaf groups pass through bare.
 //! Attribute *values* (spacing widths, exact variants) are out of
 //! scope: this test compares structure, not metrics.
 
@@ -40,6 +42,48 @@ fn stubProvider() zatex.MetricsProvider {
         .advance = Stub.advance,
         .ruleThickness = Stub.ruleThickness,
     };
+}
+
+/// True when the `<mrow>` opening at `lt` wraps exactly one child
+/// element. KaTeX merges runs before row-wrapping (`buildExpression`
+/// then `makeRow`), so single-leaf groups pass through bare; an
+/// `mrow` around one child is grouping-transparent per MathML
+/// semantics, so the shell drops like the other wrappers below.
+fn singleChildMrow(src: []const u8, lt: usize) bool {
+    var i = lt;
+    var level: u32 = 0;
+    var kids: u32 = 0;
+    var started = false;
+    while (i < src.len) {
+        const l = std.mem.indexOfScalarPos(u8, src, i, '<') orelse return false;
+        const g = std.mem.indexOfScalarPos(u8, src, l, '>') orelse return false;
+        const raw = src[l + 1 .. g];
+        i = g + 1;
+        if (raw.len == 0) continue;
+        const closing = raw[0] == '/';
+        const body = if (closing) raw[1..] else raw;
+        var e: usize = 0;
+        while (e < body.len and body[e] != ' ' and body[e] != '\t' and
+            body[e] != '\n' and body[e] != '\r' and body[e] != '/') : (e += 1) {}
+        const name = body[0..e];
+        if (name.len == 0 or name[0] == '!' or name[0] == '?') continue;
+        const self_close = !closing and raw[raw.len - 1] == '/';
+        if (!started) {
+            if (closing) return false;
+            started = true;
+            level = 1;
+            continue;
+        }
+        if (closing) {
+            if (level == 0) return false;
+            level -= 1;
+            if (level == 0) return kids == 1;
+            continue;
+        }
+        if (level == 1) kids += 1;
+        if (!self_close) level += 1;
+    }
+    return false;
 }
 
 /// Reduce MathML to a canonical space-joined tag sequence, applying
@@ -72,7 +116,8 @@ fn normTags(src: []const u8, out: []u8) usize {
         const self_close = !closing and raw[raw.len - 1] == '/';
         const is_wrapper = !closing and !self_close and
             ((std.mem.eql(u8, name, "mstyle") and std.mem.indexOf(u8, raw, "mathvariant") != null) or
-            (std.mem.eql(u8, name, "mrow") and std.mem.indexOf(u8, raw, "href") != null));
+            (std.mem.eql(u8, name, "mrow") and std.mem.indexOf(u8, raw, "href") != null) or
+            (std.mem.eql(u8, name, "mrow") and singleChildMrow(src, lt)));
         if (is_wrapper) {
             // Drop the shell; children pass through. Nesting deeper
             // than the table fails loudly below (tags won't match).

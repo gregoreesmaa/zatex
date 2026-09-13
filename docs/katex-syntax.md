@@ -164,9 +164,9 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\blacktriangleright` | — | — | owner #1 |
 | `\bm` | — | — | owner #1 |
 | `{Bmatrix}` | `\begin{Bmatrix}\na & b \\\nc & d\n\end{Bmatrix}` | ![](renders/bmatrix.png) |  |
-| `{Bmatrix*}` | `\begin{Bmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{Bmatrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
+| `{Bmatrix*}` | `\begin{Bmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{Bmatrix*}` | ![](renders/bmatrixstar.png) |  |
 | `{bmatrix}` | `\begin{bmatrix}\na & b \\\nc & d\n\end{bmatrix}` | ![](renders/bmatrix-2.png) |  |
-| `{bmatrix*}` | `\begin{bmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{bmatrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
+| `{bmatrix*}` | `\begin{bmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{bmatrix*}` | ![](renders/bmatrixstar-2.png) |  |
 | `\bmod` | — | — | owner #1 |
 | `\bold` | — | — | owner #1 |
 | `\boldsymbol` | `\boldsymbol{AaBb}` | ![](renders/boldsymbol.png) |  |
@@ -178,8 +178,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\boxminus` | `\boxminus` | ![](renders/boxminus.png) |  |
 | `\boxplus` | `\boxplus` | ![](renders/boxplus.png) |  |
 | `\boxtimes` | `\boxtimes` | ![](renders/boxtimes.png) |  |
-| `\Bra` | `\Bra{\psi}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
-| `\bra` | `\bra{\psi}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
+| `\Bra` | `\Bra{\psi}` | ![](renders/bra.png) |  |
+| `\bra` | `\bra{\psi}` | ![](renders/bra-2.png) |  |
 | `\braket` | `\braket{\phi\VERT\psi}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
 | `\Braket` | `\Braket{ ϕ \VERT \frac{∂^2}{∂ t^2} \VERT ψ }` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
 | `\brace` | — | — | owner #2 |
@@ -265,7 +265,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\cot` | `\cot` | ![](renders/cot.png) |  |
 | `\cotg` | — | — | owner #1 |
 | `\coth` | `\coth` | ![](renders/coth.png) |  |
-| `\cr` | `\begin{matrix}\na & b \cr\nc & d\n\end{matrix}` | *no render (engine)* | in-matrix \cr exhausts buffers (NoSpace); KaTeX accepts |
+| `\cr` | `\begin{matrix}\na & b \cr\nc & d\n\end{matrix}` | ![](renders/cr.png) |  |
 | `\csc` | `\csc` | ![](renders/csc.png) |  |
 | `\cssId` | — | — | goldens: rej-unsup-cssid |
 | `\ctg` | — | — | owner #1 |
@@ -295,7 +295,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\dashv` | `\dashv` | ![](renders/dashv.png) |  |
 | `\dbinom` | `\dbinom n k` | ![](renders/dbinom.png) |  |
 | `\dblcolon` | — | — | owner #1 |
-| `{dcases}` | `\begin{dcases}\na &\text{if } b  \\\nc &\text{if } d\n\end{dcases}` | *no render (engine)* | display cases missing; KaTeX accepts |
+| `{dcases}` | `\begin{dcases}\na &\text{if } b  \\\nc &\text{if } d\n\end{dcases}` | ![](renders/dcases.png) |  |
 | `\ddag` | `\ddag` | ![](renders/ddag.png) |  |
 | `\ddagger` | `\ddagger` | ![](renders/ddagger.png) |  |
 | `\ddddot` | `\ddddot x` | ![](renders/ddddot.png) |  |
@@ -332,7 +332,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\dots` | `x_1 + \dots + x_n` | ![](renders/dots.png) |  |
 | `\dotsb` | — | — | owner #1 |
 | `\dotsc` | — | — | owner #1 |
-| `\dotsi` | `\int_{A_1}\int_{A_2}\dotsi` | *no render (engine)* | dotsi alias missing from symbol table; KaTeX accepts |
+| `\dotsi` | `\int_{A_1}\int_{A_2}\dotsi` | ![](renders/dotsi.png) |  |
 | `\dotsm` | — | — | owner #1 |
 | `\dotso` | — | — | owner #1 |
 | `\doublebarwedge` | — | — | owner #1 |
@@ -343,13 +343,13 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\downdownarrows` | — | — | owner #1 |
 | `\downharpoonleft` | — | — | owner #1 |
 | `\downharpoonright` | — | — | owner #1 |
-| `{drcases}` | `\begin{drcases}\na &\text{if } b  \\\nc &\text{if } d\n\end{drcases}` | *no render (engine)* | display right-cases missing; KaTeX accepts |
+| `{drcases}` | `\begin{drcases}\na &\text{if } b  \\\nc &\text{if } d\n\end{drcases}` | ![](renders/drcases.png) |  |
 
 ## E
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\edef` | `\def\foo{a}\edef\fcopy{\foo}\def\foo{}\fcopy` | *no render (engine)* | edef macro definition missing; KaTeX accepts |
+| `\edef` | `\def\foo{a}\edef\fcopy{\foo}\def\foo{}\fcopy` | ![](renders/edef.png) |  |
 | `\ell` | `\ell` | ![](renders/ell.png) |  |
 | `\else` | — | — | goldens: rej-unsup-else |
 | `\em` | — | — | goldens: rej-unsup-em |
@@ -429,7 +429,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\ggg` | `\ggg` | ![](renders/ggg.png) |  |
 | `\gggtr` | — | — | owner #1 |
 | `\gimel` | `\gimel` | ![](renders/gimel.png) |  |
-| `\global` | `\global\def\add#1#2{#1+#2} \add 2 3` | *no render (engine)* | global prefix missing; KaTeX accepts |
+| `\global` | `\global\def\add#1#2{#1+#2} \add 2 3` | ![](renders/global.png) |  |
 | `\gnapprox` | — | — | owner #1 |
 | `\gneq` | — | — | owner #1 |
 | `\gneqq` | — | — | owner #1 |
@@ -466,7 +466,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\hookleftarrow` | `\hookleftarrow` | ![](renders/hookleftarrow.png) |  |
 | `\hookrightarrow` | `\hookrightarrow` | ![](renders/hookrightarrow.png) |  |
 | `\hphantom` | — | — | owner #7 |
-| `\href` | `\href{https://katex.org/}{\KaTeX}` | *no render (engine)* | \KaTeX logo command missing; KaTeX accepts |
+| `\href` | `\href{https://katex.org/}{\KaTeX}` | ![](renders/href.png) |  |
 | `\hskip` | — | — | owner #1 |
 | `\hslash` | `\hslash` | ![](renders/hslash.png) |  |
 | `\hspace` | `s\hspace7ex k` | ![](renders/hspace.png) |  |
@@ -524,8 +524,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\KaTeX` | — | — | owner #1 |
 | `\ker` | `\ker` | ![](renders/ker.png) |  |
 | `\kern` | `I\kern-2.5pt R` | ![](renders/kern.png) |  |
-| `\Ket` | `\Ket{\psi}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
-| `\ket` | `\ket{\psi}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
+| `\Ket` | `\Ket{\psi}` | ![](renders/ket.png) |  |
+| `\ket` | `\ket{\psi}` | ![](renders/ket-2.png) |  |
 | `\Koppa` | — | — | goldens: rej-unsup-koppa |
 | `\koppa` | — | — | goldens: rej-unsup-koppa-2 |
 
@@ -556,7 +556,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\ldots` | `\ldots` | ![](renders/ldots.png) |  |
 | `\le` | `\le` | ![](renders/le.png) |  |
 | `\leadsto` | — | — | owner #1 |
-| `\left` | `\left\lbrace \dfrac ab \right.` | *no render (engine)* | lbrace/rbrace delimiters after \left/\right unsupported; KaTeX accepts |
+| `\left` | `\left\lbrace \dfrac ab \right.` | ![](renders/left.png) |  |
 | `\leftarrow` | `\leftarrow` | ![](renders/leftarrow.png) |  |
 | `\Leftarrow` | `\Leftarrow` | ![](renders/leftarrow-2.png) |  |
 | `\LeftArrow` | — | — | goldens: rej-unsup-leftarrow |
@@ -647,28 +647,28 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\mathclose` | — | — | owner #1 |
 | `\mathellipsis` | — | — | owner #1 |
 | `\mathfrak` | `\mathfrak{AaBb}` | ![](renders/mathfrak.png) |  |
-| `\mathinner` | `ab\mathinner{\text{inside}}cd` | *no render (engine)* | atom-class wrappers missing; KaTeX accepts |
+| `\mathinner` | `ab\mathinner{\text{inside}}cd` | ![](renders/mathinner.png) |  |
 | `\mathit` | `\mathit{AaBb}` | ![](renders/mathit.png) |  |
 | `\mathllap` | `{=}\mathllap{/\,}` | ![](renders/mathllap.png) |  |
 | `\mathnormal` | — | — | owner #1 |
-| `\mathop` | `\mathop{\star}_a^b` | *no render (engine)* | atom-class wrappers missing; KaTeX accepts |
+| `\mathop` | `\mathop{\star}_a^b` | ![](renders/mathop.png) |  |
 | `\mathopen` | — | — | owner #1 |
 | `\mathord` | — | — | owner #1 |
 | `\mathpunct` | — | — | owner #1 |
 | `\mathreflectbox` | — | — | owner #1 |
-| `\mathrel` | `a \mathrel{\#} b` | *no render (engine)* | atom-class wrappers missing; KaTeX accepts |
+| `\mathrel` | `a \mathrel{\#} b` | ![](renders/mathrel.png) |  |
 | `\mathrlap` | `\mathrlap{\,/}{=}` | ![](renders/mathrlap.png) |  |
 | `\mathring` | `\mathring{a}` | ![](renders/mathring.png) |  |
 | `\mathrm` | `\mathrm{AaBb123}` | ![](renders/mathrm.png) |  |
 | `\mathscr` | `\mathscr{AaBb123}` | ![](renders/mathscr.png) |  |
 | `\mathsf` | `\mathsf{AaBb123}` | ![](renders/mathsf.png) |  |
 | `\mathsterling` | — | — | owner #1 |
-| `\mathstrut` | `\sqrt{\mathstrut a}` | *no render (engine)* | strut missing; KaTeX accepts |
+| `\mathstrut` | `\sqrt{\mathstrut a}` | ![](renders/mathstrut.png) |  |
 | `\mathtip` | — | — | goldens: rej-unsup-mathtip |
 | `\mathtt` | `\mathtt{AaBb123}` | ![](renders/mathtt.png) |  |
 | `\matrix` | — | — | reject rows: rej-env-mismatch |
 | `{matrix}` | `\begin{matrix}\na & b \\\nc & d\n\end{matrix}` | ![](renders/matrix.png) |  |
-| `{matrix*}` | `\begin{matrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{matrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
+| `{matrix*}` | `\begin{matrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{matrix*}` | ![](renders/matrixstar.png) |  |
 | `\max` | `\max` | ![](renders/max.png) |  |
 | `\mbox` | — | — | goldens: rej-unsup-mbox |
 | `\md` | — | — | goldens: rej-unsup-md |
@@ -685,7 +685,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\mit` | — | — | goldens: rej-unsup-mit |
 | `\mkern` | — | — | owner #1 |
 | `\mmlToken` | — | — | goldens: rej-unsup-mmltoken |
-| `\mod` | `3\equiv 5 \mod 2` | *no render (engine)* | mod spacing missing; KaTeX accepts |
+| `\mod` | `3\equiv 5 \mod 2` | ![](renders/mod.png) |  |
 | `\models` | `\models` | ![](renders/models.png) |  |
 | `\moveleft` | — | — | goldens: rej-unsup-moveleft |
 | `\moveright` | — | — | goldens: rej-unsup-moveright |
@@ -790,8 +790,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\omicron` | — | — | owner #1 |
 | `\ominus` | `\ominus` | ![](renders/ominus.png) |  |
 | `\operatorname` | `\operatorname{asin} x` | ![](renders/operatorname.png) |  |
-| `\operatorname*` | `\operatorname*{asin}\limits_y x` | *no render (engine)* | \limits placement unsupported; KaTeX accepts |
-| `\operatornamewithlimits` | `\operatornamewithlimits{asin}\limits_y x` | *no render (engine)* | with-limits operator name missing; KaTeX accepts |
+| `\operatorname*` | `\operatorname*{asin}\limits_y x` | ![](renders/operatornamestar.png) |  |
+| `\operatornamewithlimits` | `\operatornamewithlimits{asin}\limits_y x` | ![](renders/operatornamewithlimits.png) |  |
 | `\oplus` | `\oplus` | ![](renders/oplus.png) |  |
 | `\or` | — | — | goldens: rej-unsup-or |
 | `\origof` | — | — | owner #1 |
@@ -799,7 +799,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\otimes` | `\otimes` | ![](renders/otimes.png) |  |
 | `\over` | `{a+1 \over b+2}+c` | ![](renders/over.png) |  |
 | `\overbrace` | `\overbrace{x+⋯+x}^{n\text{ times}}` | ![](renders/overbrace.png) |  |
-| `\overbracket` | `\overbracket{x+⋯+x}^{n\text{ times}}` | *no render (engine)* | bracket overline missing (brace works); KaTeX accepts |
+| `\overbracket` | `\overbracket{x+⋯+x}^{n\text{ times}}` | ![](renders/overbracket.png) |  |
 | `\overgroup` | — | — | owner #5 |
 | `\overleftarrow` | `\overleftarrow{AB}` | ![](renders/overleftarrow.png) |  |
 | `\overleftharpoon` | — | — | owner #1 |
@@ -825,7 +825,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\partial` | `\partial` | ![](renders/partial.png) |  |
 | `\perp` | `\perp` | ![](renders/perp.png) |  |
 | `\phantom` | `\Gamma^{\phantom{i}j}_{i\phantom{j}k}` | ![](renders/phantom.png) |  |
-| `\phase` | `\phase{-78^\circ}` | *no render (engine)* | phase notation missing; KaTeX accepts |
+| `\phase` | `\phase{-78^\circ}` | ![](renders/phase.png) |  |
 | `\Phi` | `\Phi` | ![](renders/phi.png) |  |
 | `\phi` | `\phi` | ![](renders/phi-2.png) |  |
 | `\Pi` | `\Pi` | ![](renders/pi.png) |  |
@@ -837,8 +837,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\pm` | `\pm` | ![](renders/pm.png) |  |
 | `\pmatrix` | — | — | goldens: rej-unsup-pmatrix |
 | `{pmatrix}` | `\begin{pmatrix}\na & b \\\nc & d\n\end{pmatrix}` | ![](renders/pmatrix.png) |  |
-| `{pmatrix*}` | `\begin{pmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{pmatrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
-| `\pmb` | `\pmb{\mu}` | *no render (engine)* | poor-man's bold missing; KaTeX accepts |
+| `{pmatrix*}` | `\begin{pmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{pmatrix*}` | ![](renders/pmatrixstar.png) |  |
+| `\pmb` | `\pmb{\mu}` | ![](renders/pmb.png) |  |
 | `\pmod` | — | — | owner #1 |
 | `\pod` | — | — | owner #1 |
 | `\pounds` | `\pounds` | ![](renders/pounds.png) |  |
@@ -880,7 +880,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\rBrace` | — | — | owner #1 |
 | `\rbrace` | — | — | owner #1 |
 | `\rbrack` | — | — | owner #1 |
-| `{rcases}` | `\begin{rcases}\na &\text{if } b  \\\nc &\text{if } d\n\end{rcases}` | *no render (engine)* | right-cases missing; KaTeX accepts |
+| `{rcases}` | `\begin{rcases}\na &\text{if } b  \\\nc &\text{if } d\n\end{rcases}` | ![](renders/rcases.png) |  |
 | `\rceil` | `\rceil` | ![](renders/rceil.png) |  |
 | `\Re` | `\Re` | ![](renders/re.png) |  |
 | `\real` | — | — | owner #1 |
@@ -976,7 +976,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\smash` | `\left(x^{\smash{2}}\right)` | ![](renders/smash.png) |  |
 | `\smile` | `\smile` | ![](renders/smile.png) |  |
 | `\smiley` | — | — | goldens: rej-unsup-smiley |
-| `\sout` | `\text{\sout{abc}}` | *no render (engine)* | strikeout missing; KaTeX accepts |
+| `\sout` | `\text{\sout{abc}}` | ![](renders/sout.png) |  |
 | `\Space` | — | — | goldens: rej-unsup-space |
 | `\space` | — | — | owner #1 |
 | `\spades` | — | — | owner #1 |
@@ -1049,7 +1049,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\textbf` | `\textbf{AaBb123}` | ![](renders/textbf.png) |  |
 | `\textbraceleft` | `\text{\textbraceleft}` | ![](renders/textbraceleft.png) |  |
 | `\textbraceright` | `\text{\textbraceright}` | ![](renders/textbraceright.png) |  |
-| `\textcircled` | `\text{\textcircled a}` | *no render (engine)* | enclosing circle missing; KaTeX accepts |
+| `\textcircled` | `\text{\textcircled a}` | ![](renders/textcircled.png) |  |
 | `\textcolor` | `\textcolor{blue}{F=ma}` | ![](renders/textcolor.png) |  |
 | `\textdagger` | `\text{\textdagger}` | ![](renders/textdagger.png) |  |
 | `\textdaggerdbl` | `\text{\textdaggerdbl}` | ![](renders/textdaggerdbl.png) |  |
@@ -1067,7 +1067,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\textquotedblright` | `\text{\textquotedblright}` | ![](renders/textquotedblright.png) |  |
 | `\textquoteleft` | `\text{\textquoteleft}` | ![](renders/textquoteleft.png) |  |
 | `\textquoteright` | `\text{\textquoteright}` | ![](renders/textquoteright.png) |  |
-| `\textregistered` | `\text{\textregistered}` | *no render (engine)* | \textregistered inside \text unsupported; KaTeX accepts |
+| `\textregistered` | `\text{\textregistered}` | ![](renders/textregistered.png) |  |
 | `\textrm` | `\textrm{AaBb123}` | ![](renders/textrm.png) |  |
 | `\textsc` | — | — | goldens: rej-unsup-textsc |
 | `\textsf` | `\textsf{AaBb123}` | ![](renders/textsf.png) |  |
@@ -1119,7 +1119,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\ulcorner` | `\ulcorner` | ![](renders/ulcorner.png) |  |
 | `\underbar` | — | — | owner #1 |
 | `\underbrace` | `\underbrace{x+⋯+x}_{n\text{ times}}` | ![](renders/underbrace.png) |  |
-| `\underbracket` | `\underbracket{x+⋯+x}_{n\text{ times}}` | *no render (engine)* | bracket underline missing; KaTeX accepts |
+| `\underbracket` | `\underbracket{x+⋯+x}_{n\text{ times}}` | ![](renders/underbracket.png) |  |
 | `\undergroup` | — | — | owner #5 |
 | `\underleftarrow` | — | — | owner #5 |
 | `\underleftrightarrow` | — | — | owner #5 |
@@ -1187,7 +1187,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\varUpsilon` | — | — | owner #1 |
 | `\varXi` | — | — | owner #1 |
 | `\vcentcolon` | — | — | owner #1 |
-| `\vcenter` | `a+\left(\vcenter{\frac{\frac a b}c}\right)` | *no render (engine)* | vertical centering missing; KaTeX accepts |
+| `\vcenter` | `a+\left(\vcenter{\frac{\frac a b}c}\right)` | ![](renders/vcenter.png) |  |
 | `\Vdash` | — | — | owner #1 |
 | `\vDash` | — | — | owner #1 |
 | `\vdash` | `\vdash` | ![](renders/vdash.png) |  |
@@ -1202,9 +1202,9 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\vfill` | — | — | goldens: rej-unsup-vfill |
 | `\vline` | — | — | goldens: rej-unsup-vline |
 | `{Vmatrix}` | `\begin{Vmatrix}\na & b \\\nc & d\n\end{Vmatrix}` | ![](renders/vmatrix.png) |  |
-| `{Vmatrix*}` | `\begin{Vmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{Vmatrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
+| `{Vmatrix*}` | `\begin{Vmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{Vmatrix*}` | ![](renders/vmatrixstar.png) |  |
 | `{vmatrix}` | `\begin{vmatrix}\na & b \\\nc & d\n\end{vmatrix}` | ![](renders/vmatrix-2.png) |  |
-| `{vmatrix*}` | `\begin{vmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{vmatrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
+| `{vmatrix*}` | `\begin{vmatrix*}[r]\n0 & -1 \\\n-1 & 0\n\end{vmatrix*}` | ![](renders/vmatrixstar-2.png) |  |
 | `\vphantom` | `\overline{\vphantom{M}a}` | ![](renders/vphantom.png) |  |
 | `\Vvdash` | — | — | owner #1 |
 
@@ -1226,7 +1226,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
 | `\xcancel` | — | — | owner #7 |
-| `\xdef` | `\def\foo{a}\xdef\fcopy{\foo}\def\foo{}\fcopy` | *no render (engine)* | xdef macro definition missing; KaTeX accepts |
+| `\xdef` | `\def\foo{a}\xdef\fcopy{\foo}\def\foo{}\fcopy` | ![](renders/xdef.png) |  |
 | `\Xi` | `\Xi` | ![](renders/xi.png) |  |
 | `\xi` | `\xi` | ![](renders/xi-2.png) |  |
 | `\xhookleftarrow` | — | — | owner #1 |

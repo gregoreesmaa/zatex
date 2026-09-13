@@ -463,12 +463,23 @@ const text_cmds = if (active_profile == .full) [_]TextCmd{
     .{ .name = "textgreater", .cp = 0x003E },
     .{ .name = "textless", .cp = 0x003C },
     .{ .name = "textunderscore", .cp = 0x005F },
+    .{ .name = "textregistered", .cp = 0x00AE },
 } else [_]TextCmd{};
 
 /// Look up a text-mode command. Returns null for math-only names
 /// (callers report KaTeX-parity `Invalid`).
 pub fn lookupText(name: []const u8) ?u21 {
     for (text_cmds) |e| if (eq(e.name, name)) return e.cp;
+    return null;
+}
+
+// Text-mode commands that take an argument (they cannot live in the
+// codepoint table): circled overlay and strikeout.
+pub const TextArg = enum { circled, sout };
+pub fn lookupTextArg(name: []const u8) ?TextArg {
+    if (comptime active_profile != .full) return null;
+    if (eq(name, "textcircled")) return .circled;
+    if (eq(name, "sout")) return .sout;
     return null;
 }
 
@@ -550,6 +561,8 @@ pub const DelimEntry = struct { name: []const u8, cp: u21, cls: AtomClass };
 const delims = [_]DelimEntry{
         .{ .name = "langle", .cp = 0x27E8, .cls = .Open },
         .{ .name = "rangle", .cp = 0x27E9, .cls = .Close },
+        .{ .name = "lbrace", .cp = 0x007B, .cls = .Open },
+        .{ .name = "rbrace", .cp = 0x007D, .cls = .Close },
         .{ .name = "lvert", .cp = 0x007C, .cls = .Open },
         .{ .name = "rvert", .cp = 0x007C, .cls = .Close },
         .{ .name = "vert", .cp = 0x007C, .cls = .Ord },
