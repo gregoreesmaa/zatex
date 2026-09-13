@@ -179,7 +179,7 @@ test "sweep agreement with pinned KaTeX" {
                 continue;
             }
         }
-        if (lay) |_| {
+        if (lay) |l1| {
             if (!katex_ok) {
                 std.debug.print("\n[{s}] zatex accepts, katex rejects\n", .{id});
                 return error.TestUnexpectedResult;
@@ -189,6 +189,17 @@ test "sweep agreement with pinned KaTeX" {
             const kn = normTags(kmath, &kbuf);
             const an = normTags(mine, &abuf);
             try expectTags(kbuf[0..kn], abuf[0..an], id);
+            // Issue #20: the atom grid also pins stub-provider IR
+            // widths — every grid row lays out nonempty (no spacing
+            // collapse) and deterministically.
+            if (std.mem.startsWith(u8, id, "atomgrid-")) {
+                try std.testing.expect(l1.width > 0);
+                var diag2 = zatex.Diag.empty();
+                const l2 = try zatex.layoutDiag(tex, opts, prov, &runs, &rules, &glyphs, &diag2);
+                try std.testing.expectEqual(l1.width, l2.width);
+                try std.testing.expectEqual(l1.runs.len, l2.runs.len);
+                try std.testing.expectEqual(l1.rules.len, l2.rules.len);
+            }
             n_ok += 1;
         } else |e| {
             if (katex_ok) {

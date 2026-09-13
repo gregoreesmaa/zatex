@@ -8,6 +8,7 @@
 const std = @import("std");
 const zatex = @import("zatex");
 const otmath = @import("otmath");
+const inv = @import("invariants");
 const contract = zatex.contract;
 const symbols = zatex.symbols;
 
@@ -21,9 +22,28 @@ const system_candidates = [_][]const u8{
     "/Library/Fonts/STIXTwoMath.otf",
 };
 
+fn layoutCase(
+    ref: *Ref,
+    src: []const u8,
+    display: bool,
+    runs: []zatex.ir.Run,
+    rules: []zatex.ir.Rule,
+    glyphs: []u16,
+) !zatex.ir.Layout {
+    return zatex.layoutFull(src, .{ .display_mode = display }, ref.provider(), runs, rules, glyphs);
+}
+
 const Ref = struct {
     bytes: []u8,
     font: otmath.Font,
+    /// Test knobs (all neutral by default):
+    /// - `no_italic` zeroes italic corrections.
+    /// - `kern_caps` answers every kern query with canned cut-ins
+    ///   (`sup` for top-right, `sub` for bottom-right).
+    /// - `extents_mul` scales the (otherwise default 700/250) extents.
+    no_italic: bool = false,
+    kern_caps: ?struct { sup: i32, sub: i32 } = null,
+    extents_mul: u32 = 1,
 
     fn load() !Ref {
         return loadFrom(vendored_path);
@@ -57,6 +77,8 @@ const Ref = struct {
             .ruleThickness = rule,
             .glyphVariant = variant,
             .italicCorrection = italic,
+            .kernCorrection = kern,
+            .extents = ext,
         };
     }
 
@@ -99,8 +121,37 @@ const Ref = struct {
     fn italic(ctx: *const anyopaque, font_id: u16, glyph: u16) i32 {
         _ = font_id;
         const self: *const Ref = @ptrCast(@alignCast(ctx));
+        if (self.no_italic) return 0;
         const v = otmath.italicCorrection(self.font, glyph) catch 0;
         return self.scale1000(v);
+    }
+
+    fn kern(ctx: *const anyopaque, font_id: u16, glyph: u16, height: i32, corner: contract.KernCorner) i32 {
+        _ = font_id;
+        const self: *const Ref = @ptrCast(@alignCast(ctx));
+        if (self.kern_caps) |caps| {
+            return switch (corner) {
+                .top_right => caps.sup,
+                .bottom_right => caps.sub,
+                else => 0,
+            };
+        }
+        const oc: otmath.KernCorner = switch (corner) {
+            .top_right => .top_right,
+            .top_left => .top_left,
+            .bottom_right => .bottom_right,
+            .bottom_left => .bottom_left,
+        };
+        const v = otmath.kernCorrection(self.font, glyph, height, oc) catch 0;
+        return self.scale1000(v);
+    }
+
+    fn ext(ctx: *const anyopaque, font_id: u16, glyph: u16) [2]i32 {
+        _ = font_id;
+        _ = glyph;
+        const self: *const Ref = @ptrCast(@alignCast(ctx));
+        const m: i32 = @intCast(self.extents_mul);
+        return .{ 700 * m, 250 * m };
     }
 };
 
@@ -324,6 +375,355 @@ test "reference: array rows stay inside the ink box" {
         }
         for (l.rules) |r| {
             try std.testing.expect(r.y >= 0 and @as(i64, r.y) + @as(i64, r.h) <= total);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Metamorphic + determinism probes on IR text (issue #24). Reference-free:
+// no goldens, no pixels — relations between layouts of related inputs,
+// plus byte-level re-layout identity through `invariants.layoutText`.
+// ---------------------------------------------------------------------------
+
+// `\color{...}{X}` changes no geometry: identical IR to `X` (also the
+// basis for the #27 style-scoping tests and the #23 fuzzer oracles).
+test "metamorphic: color is geometry-transparent" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_][]const u8{
+        "x+y",
+        "a=b",
+        "\\frac{a}{b}",
+        "x^2_1",
+        "\\sum_{i=1}^n i",
+    };
+    for (cases) |src| {
+        var cbuf: [256]u8 = undefined;
+        const colored = try std.fmt.bufPrint(&cbuf, "\\color{{red}}{{{s}}}", .{src});
+        for ([_]bool{ false, true }) |display| {
+            var ra: [64]zatex.ir.Run = undefined;
+            var la: [16]zatex.ir.Rule = undefined;
+            var ga: [512]u16 = undefined;
+            var rb: [64]zatex.ir.Run = undefined;
+            var lb: [16]zatex.ir.Rule = undefined;
+            var gb: [512]u16 = undefined;
+            const a = try layoutCase(&ref, src, display, &ra, &la, &ga);
+            const b = try layoutCase(&ref, colored, display, &rb, &lb, &gb);
+            try inv.expectSameLayout(a, b);
+        }
+    }
+}
+
+// `\phantom{A}` keeps A's box while emitting nothing: same footprint.
+test "metamorphic: phantom preserves the footprint" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const pairs = [_][2][]const u8{
+        .{ "\\phantom{x}+y", "x+y" },
+        .{ "\\phantom{\\frac{a}{b}}+y", "\\frac{a}{b}+y" },
+    };
+    for (pairs) |p| {
+        for ([_]bool{ false, true }) |display| {
+            var ra: [64]zatex.ir.Run = undefined;
+            var la: [16]zatex.ir.Rule = undefined;
+            var ga: [512]u16 = undefined;
+            var rb: [64]zatex.ir.Run = undefined;
+            var lb: [16]zatex.ir.Rule = undefined;
+            var gb: [512]u16 = undefined;
+            const a = try layoutCase(&ref, p[0], display, &ra, &la, &ga);
+            const b = try layoutCase(&ref, p[1], display, &rb, &lb, &gb);
+            try std.testing.expectEqual(b.width, a.width);
+            try std.testing.expectEqual(b.height_above, a.height_above);
+            try std.testing.expectEqual(b.depth_below, a.depth_below);
+        }
+    }
+}
+
+// Bare, grouped, and empty-group-terminated atoms are one box.
+test "metamorphic: x vs {x} vs x{} are byte-identical" {
+    var ref = try Ref.load();
+    defer ref.free();
+    for ([_]bool{ false, true }) |display| {
+        var r0: [16]zatex.ir.Run = undefined;
+        var l0: [4]zatex.ir.Rule = undefined;
+        var g0: [64]u16 = undefined;
+        var r1: [16]zatex.ir.Run = undefined;
+        var l1: [4]zatex.ir.Rule = undefined;
+        var g1: [64]u16 = undefined;
+        var r2: [16]zatex.ir.Run = undefined;
+        var l2: [4]zatex.ir.Rule = undefined;
+        var g2: [64]u16 = undefined;
+        const a = try layoutCase(&ref, "x", display, &r0, &l0, &g0);
+        const b = try layoutCase(&ref, "{x}", display, &r1, &l1, &g1);
+        const c = try layoutCase(&ref, "x{}", display, &r2, &l2, &g2);
+        try inv.expectSameLayout(a, b);
+        try inv.expectSameLayout(a, c);
+    }
+}
+
+// Surd clearance: the radical box clears the radicand by the rule
+// gap plus the bar (integer units from the live provider).
+test "metamorphic: sqrt clears its radicand" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const prov = ref.provider();
+    const th = prov.ruleThickness(prov.ctx, 0, .fraction_bar);
+    try std.testing.expect(th > 0);
+    for ([_][]const u8{ "x", "\\frac{a}{b}", "x^2" }) |inner| {
+        var cbuf: [128]u8 = undefined;
+        const src = try std.fmt.bufPrint(&cbuf, "\\sqrt{{{s}}}", .{inner});
+        var ra: [64]zatex.ir.Run = undefined;
+        var la: [16]zatex.ir.Rule = undefined;
+        var ga: [512]u16 = undefined;
+        var rb: [64]zatex.ir.Run = undefined;
+        var lb: [16]zatex.ir.Rule = undefined;
+        var gb: [512]u16 = undefined;
+        const a = try layoutCase(&ref, inner, false, &ra, &la, &ga);
+        const b = try layoutCase(&ref, src, false, &rb, &lb, &gb);
+        // Exactly one added rule: the radical bar (the inner frac
+        // keeps its own bar).
+        try std.testing.expectEqual(a.rules.len + 1, b.rules.len);
+        // Clearance is the rule gap plus the bar; inners with sups sit
+        // up to 30mu lower because the radicand is cramped (TeX).
+        const want: i64 = @as(i64, a.height_above) + 2 * @as(i64, th) + 40 + @as(i64, th) - 30;
+        try std.testing.expect(@as(i64, b.height_above) >= want);
+        try std.testing.expect(b.depth_below >= a.depth_below);
+        try std.testing.expect(b.width > a.width);
+    }
+}
+
+// Fraction clearance: numerator and denominator clear the bar.
+test "metamorphic: frac clears numerator and denominator" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var rn: [16]zatex.ir.Run = undefined;
+    var ln: [4]zatex.ir.Rule = undefined;
+    var gn: [64]u16 = undefined;
+    var rd: [16]zatex.ir.Run = undefined;
+    var ld: [4]zatex.ir.Rule = undefined;
+    var gd: [64]u16 = undefined;
+    var rf: [64]zatex.ir.Run = undefined;
+    var lf: [16]zatex.ir.Rule = undefined;
+    var gf: [512]u16 = undefined;
+    const n = try layoutCase(&ref, "a+1", false, &rn, &ln, &gn);
+    const d = try layoutCase(&ref, "b-2", false, &rd, &ld, &gd);
+    const f = try layoutCase(&ref, "\\frac{a+1}{b-2}", false, &rf, &lf, &gf);
+    try std.testing.expectEqual(@as(usize, 1), f.rules.len);
+    try std.testing.expect(f.rules[0].h > 0);
+    const nt: i64 = @as(i64, n.height_above) + @as(i64, n.depth_below);
+    const dt: i64 = @as(i64, d.height_above) + @as(i64, d.depth_below);
+    const ft: i64 = @as(i64, f.height_above) + @as(i64, f.depth_below);
+    try std.testing.expect(ft >= nt + dt + @as(i64, f.rules[0].h));
+    try inv.expectNonNegative(f);
+    try inv.expectContained(f);
+}
+
+// ---------------------------------------------------------------------------
+// OpenType MATH calibration probes (issue #26). Integer units only;
+// KaTeX-structural agreement is guarded by the parity sweep, while
+// metrics-sensitive widths are pinned here against the real font.
+// ---------------------------------------------------------------------------
+
+// Real-font kern reads zero (no MathKern table in Latin Modern Math),
+// so canned-zero and live-zero providers agree byte-for-byte.
+test "calibration: absent kern table reads graceful zeros" {
+    var ref = try Ref.load();
+    defer ref.free();
+    ref.kern_caps = .{ .sup = 0, .sub = 0 };
+    var r0: [64]zatex.ir.Run = undefined;
+    var l0: [16]zatex.ir.Rule = undefined;
+    var g0: [512]u16 = undefined;
+    const canned = try layoutCase(&ref, "x^2_1", false, &r0, &l0, &g0);
+    ref.kern_caps = null;
+    var r1: [64]zatex.ir.Run = undefined;
+    var l1: [16]zatex.ir.Rule = undefined;
+    var g1: [512]u16 = undefined;
+    const live = try layoutCase(&ref, "x^2_1", false, &r1, &l1, &g1);
+    try inv.expectSameLayout(canned, live);
+}
+
+// Canned cut-ins tuck scripts by exact integers: TR answers sups,
+// BR answers subs. Deltas are collected per run so no run-order
+// assumption sneaks in.
+test "calibration: kern cut-ins tuck sup/sub exactly" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_]struct { src: []const u8, want: [2]i32 }{
+        .{ .src = "x^2_1", .want = .{ 40, 20 } },
+        .{ .src = "x^2", .want = .{ 40, 0 } },
+        .{ .src = "x_1", .want = .{ 20, 0 } },
+    };
+    for (cases) |c| {
+        ref.kern_caps = .{ .sup = 40, .sub = 20 };
+        var ra: [64]zatex.ir.Run = undefined;
+        var la: [16]zatex.ir.Rule = undefined;
+        var ga: [512]u16 = undefined;
+        const a = try layoutCase(&ref, c.src, false, &ra, &la, &ga);
+        ref.kern_caps = null;
+        var rb: [64]zatex.ir.Run = undefined;
+        var lb: [16]zatex.ir.Rule = undefined;
+        var gb: [512]u16 = undefined;
+        const b = try layoutCase(&ref, c.src, false, &rb, &lb, &gb);
+        try std.testing.expectEqual(a.runs.len, b.runs.len);
+        var got = [_]i32{ 0, 0 };
+        var n: usize = 0;
+        for (a.runs, b.runs) |x, y| {
+            try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
+            try std.testing.expectEqual(x.baseline_y, y.baseline_y);
+            const dx = y.x - x.x;
+            try std.testing.expect(dx >= 0);
+            if (dx > 0) {
+                try std.testing.expect(n < got.len);
+                got[n] = dx;
+                n += 1;
+            }
+        }
+        // Order-free compare of the (up-to-two) deltas.
+        var matched = [_]bool{ false, false };
+        var want_n: usize = 0;
+        for (c.want) |w| if (w > 0) {
+            want_n += 1;
+        };
+        try std.testing.expectEqual(want_n, n);
+        for (got[0..n]) |d| {
+            var hit = false;
+            for (c.want, 0..) |w, k| {
+                if (!matched[k] and w == d) {
+                    matched[k] = true;
+                    hit = true;
+                    break;
+                }
+            }
+            try std.testing.expect(hit);
+        }
+    }
+}
+
+// Clamp policy: cut-ins saturate at the script gap and floor at zero,
+// so hostile hooks can neither overlap scripts nor push them outward.
+test "calibration: cut-ins clamp to the script gap" {
+    var ref = try Ref.load();
+    defer ref.free();
+    ref.kern_caps = .{ .sup = 1000, .sub = 1000 };
+    var ra: [64]zatex.ir.Run = undefined;
+    var la: [16]zatex.ir.Rule = undefined;
+    var ga: [512]u16 = undefined;
+    const big = try layoutCase(&ref, "x^2_1", false, &ra, &la, &ga);
+    ref.kern_caps = .{ .sup = -50, .sub = -50 };
+    var rb: [64]zatex.ir.Run = undefined;
+    var lb: [16]zatex.ir.Rule = undefined;
+    var gb: [512]u16 = undefined;
+    const neg = try layoutCase(&ref, "x^2_1", false, &rb, &lb, &gb);
+    ref.kern_caps = null;
+    var rc: [64]zatex.ir.Run = undefined;
+    var lc: [16]zatex.ir.Rule = undefined;
+    var gc: [512]u16 = undefined;
+    const plain = try layoutCase(&ref, "x^2_1", false, &rc, &lc, &gc);
+    try std.testing.expectEqual(big.runs.len, plain.runs.len);
+    var saw_gap = false;
+    for (big.runs, plain.runs) |x, y| {
+        const dx = y.x - x.x;
+        // Inline script gap is 60mu: huge cut-ins saturate there.
+        try std.testing.expect(dx == 0 or dx == 60);
+        if (dx == 60) saw_gap = true;
+    }
+    try std.testing.expect(saw_gap);
+    try inv.expectSameLayout(neg, plain);
+}
+
+// Italic-correction application: the accent over an italic nucleus
+// shifts by half the correction (x: 16/2 = 8 at text size).
+test "calibration: italic correction centers accents" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var ra: [32]zatex.ir.Run = undefined;
+    var la: [8]zatex.ir.Rule = undefined;
+    var ga: [128]u16 = undefined;
+    const a = try layoutCase(&ref, "\\hat{x}", false, &ra, &la, &ga);
+    ref.no_italic = true;
+    var rb: [32]zatex.ir.Run = undefined;
+    var lb: [8]zatex.ir.Rule = undefined;
+    var gb: [128]u16 = undefined;
+    const b = try layoutCase(&ref, "\\hat{x}", false, &rb, &lb, &gb);
+    try std.testing.expectEqual(a.width, b.width);
+    try std.testing.expectEqual(a.runs.len, b.runs.len);
+    var shifts: usize = 0;
+    for (a.runs, b.runs) |x, y| {
+        try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
+        const dx = y.x - x.x;
+        if (dx != 0) {
+            try std.testing.expectEqual(@as(i32, -8), dx);
+            shifts += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 1), shifts);
+}
+
+// Layout-box vs ink-box split: advances drive widths, extents drive
+// heights. Doubling extents doubles the ink height; widths don't move.
+test "calibration: extents drive heights, advances drive widths" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var ra: [16]zatex.ir.Run = undefined;
+    var la: [4]zatex.ir.Rule = undefined;
+    var ga: [64]u16 = undefined;
+    const a = try layoutCase(&ref, "x", false, &ra, &la, &ga);
+    try std.testing.expectEqual(@as(u32, 700), a.height_above);
+    try std.testing.expectEqual(@as(u32, 250), a.depth_below);
+    ref.extents_mul = 2;
+    var rb: [16]zatex.ir.Run = undefined;
+    var lb: [4]zatex.ir.Rule = undefined;
+    var gb: [64]u16 = undefined;
+    const b = try layoutCase(&ref, "x", false, &rb, &lb, &gb);
+    try std.testing.expectEqual(@as(u32, 1400), b.height_above);
+    try std.testing.expectEqual(@as(u32, 500), b.depth_below);
+    try std.testing.expectEqual(a.width, b.width);
+}
+
+// Stretchy fences select taller variants through the provider.
+test "calibration: tall braces use brace variants" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const brace = try otmath.glyphId(ref.font, '{');
+    try std.testing.expectEqual(@as(u16, 92), brace);
+    var runs: [64]zatex.ir.Run = undefined;
+    var rules: [16]zatex.ir.Rule = undefined;
+    var glyphs: [512]u16 = undefined;
+    const tall = try layoutCase(
+        &ref,
+        "\\left\\{\\frac{\\frac{a}{b}}{\\frac{c}{d}}\\right\\}",
+        false,
+        &runs,
+        &rules,
+        &glyphs,
+    );
+    try std.testing.expect(tall.runs.len > 0 and tall.runs[0].glyphs.len > 0);
+    try std.testing.expect(tall.runs[0].glyphs[0] != brace);
+}
+
+// Re-layout of the same input + metrics is identical IR text.
+test "determinism: IR text is stable across re-layouts" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_][]const u8{
+        "x",
+        "\\sum_{i=1}^{n}\\frac{i}{\\sqrt{i+1}}",
+        "\\begin{matrix} a & b \\\\ c & d \\end{matrix}",
+    };
+    for (cases) |src| {
+        for ([_]bool{ false, true }) |display| {
+            var ra: [64]zatex.ir.Run = undefined;
+            var la: [16]zatex.ir.Rule = undefined;
+            var ga: [512]u16 = undefined;
+            var rb: [64]zatex.ir.Run = undefined;
+            var lb: [16]zatex.ir.Rule = undefined;
+            var gb: [512]u16 = undefined;
+            const a = try layoutCase(&ref, src, display, &ra, &la, &ga);
+            const b = try layoutCase(&ref, src, display, &rb, &lb, &gb);
+            var ta: [4096]u8 = undefined;
+            var tb: [4096]u8 = undefined;
+            try std.testing.expectEqualStrings(inv.layoutText(a, &ta), inv.layoutText(b, &tb));
+            try inv.expectSameLayout(a, b);
         }
     }
 }

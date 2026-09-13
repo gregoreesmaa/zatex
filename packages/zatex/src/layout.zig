@@ -107,6 +107,10 @@ pub const LayCtx = struct {
         if (self.provider.italicCorrection) |f| return f(self.provider.ctx, font, glyph);
         return 0;
     }
+    fn kernCorr(self: *LayCtx, font: u16, glyph: u16, height: i32, corner: contract.KernCorner) i32 {
+        if (self.provider.kernCorrection) |f| return f(self.provider.ctx, font, glyph, height, corner);
+        return 0;
+    }
     fn extents(self: *LayCtx, font: u16, glyph: u16) [2]i32 {
         if (self.provider.extents) |f| return f(self.provider.ctx, font, glyph);
         return .{ 700, 250 };
@@ -596,6 +600,21 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     const script_gap: i32 = 60;
     _ = sc_size;
     const sx = bb.w + @divTrunc(script_gap * size, 1000);
+    // MathKern cut-ins (provider v3): top-right tucks superscripts,
+    // bottom-right tucks subscripts. The nucleus representative follows
+    // the accent precedent (roman font + first codepoint). Clamped to
+    // [0, gap]: adversarial hooks can neither overlap scripts nor push
+    // them outward. Null hooks read 0: output is bit-identical.
+    const kgap: i32 = sx - bb.w;
+    const kglyph = lc.glyphId(@intFromEnum(contract.FontId.rm), nucleusFirstCp(lc.pctx, s.base));
+    const cut_sup = if (has_sup)
+        @min(@max(lc.kernCorr(@intFromEnum(contract.FontId.rm), kglyph, sup_up, .top_right), 0), kgap)
+    else
+        0;
+    const cut_sub = if (has_sub)
+        @min(@max(lc.kernCorr(@intFromEnum(contract.FontId.rm), kglyph, sub_down, .bottom_right), 0), kgap)
+    else
+        0;
     var parts: [3]BKid = undefined;
     var nparts: usize = 0;
     parts[0] = .{ .box = base, .dx = 0, .dy = 0 };
@@ -603,24 +622,32 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var ha = bb.ha;
     var db = bb.db;
     if (has_sup) {
-        parts[nparts] = .{ .box = sup, .dx = sx, .dy = sup_up };
+        parts[nparts] = .{ .box = sup, .dx = sx - cut_sup, .dy = sup_up };
         nparts += 1;
         const top = sup_up + sup_ha;
         if (top > ha) ha = top;
-        const sbot = sup_up - sup_db;
-        _ = sbot;
+        // A deep sup can hang below the baseline (tall content in the
+        // superscript): the depth must cover it.
+        if (sup_db > sup_up and sup_db - sup_up > db) db = sup_db - sup_up;
     }
     if (has_sub) {
-        parts[nparts] = .{ .box = sub, .dx = sx, .dy = -sub_down };
+        parts[nparts] = .{ .box = sub, .dx = sx - cut_sub, .dy = -sub_down };
         nparts += 1;
         const bot = sub_down + sub_db;
         if (bot > db) db = bot;
+        // A tall sub can reach above the baseline (tall content in the
+        // subscript): the height must cover it.
+        if (sub_ha > sub_down and sub_ha - sub_down > ha) ha = sub_ha - sub_down;
     }
-    const sw = if (sup_w > sub_w) sup_w else sub_w;
+    // Right edges account the tuck; identical to the old `sx + sw`
+    // when both cuts are 0 (kgap > 0 keeps the base edge inside).
+    var w = bb.w;
+    if (has_sup and sx - cut_sup + sup_w > w) w = sx - cut_sup + sup_w;
+    if (has_sub and sx - cut_sub + sub_w > w) w = sx - cut_sub + sub_w;
     const s2 = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s2 .. s2 + nparts], parts[0..nparts]);
     return lc.allocBox(.{
-        .w = sx + sw,
+        .w = w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s2, .len = @intCast(nparts) } },
@@ -711,7 +738,9 @@ fn wrapParens(lc: *LayCtx, style: parse.Style, inner: u16) Error!u16 {
 
 fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     const size = style.sizeUnits();
-    const rad = try layoutNode(lc, style, s.radicand);
+    // TeX sets the radicand in cramped style (D' in display): sups
+    // inside rise 30mu less. Also makes Dc reachable for the atom grid.
+    const rad = try layoutNode(lc, style.cramped(), s.radicand);
     const rb = lc.boxes[rad];
     const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
     const gap = 2 * th + @divTrunc((@as(i32, 40) * size), 1000);

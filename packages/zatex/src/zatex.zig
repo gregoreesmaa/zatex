@@ -339,6 +339,131 @@ test "accept: empty input lays out empty" {
     try std.testing.expectEqual(@as(u32, 0), l.width);
 }
 
+test "sqrt radicand is cramped: sup sits 30mu lower than top level" {
+    // TeX sets the radicand in cramped style (issue #20 Dc grid rows):
+    // a sup directly inside `\sqrt{...}` rises 30mu less than at top
+    // level. Resolved by glyph id through the stub provider
+    // ('x' = 120, '2' = 50, radical U+221A = 8730).
+    const S = struct {
+        fn raise(l: ir.Layout) !i32 {
+            var yx: ?i32 = null;
+            var y2: ?i32 = null;
+            for (l.runs) |r| {
+                for (r.glyphs) |g| {
+                    if (g == 120 and yx == null) yx = r.baseline_y;
+                    if (g == 50 and y2 == null) y2 = r.baseline_y;
+                }
+            }
+            return (yx orelse return error.TestUnexpectedResult) -
+                (y2 orelse return error.TestUnexpectedResult);
+        }
+    };
+    var runs_a: [32]ir.Run = undefined;
+    var rules_a: [8]ir.Rule = undefined;
+    var glyphs_a: [128]u16 = undefined;
+    var runs_b: [32]ir.Run = undefined;
+    var rules_b: [8]ir.Rule = undefined;
+    var glyphs_b: [128]u16 = undefined;
+    const top = try layoutOk("x^2", .{}, &runs_a, &rules_a, &glyphs_a);
+    const rad = try layoutOk("\\sqrt{x^2}", .{}, &runs_b, &rules_b, &glyphs_b);
+    try std.testing.expectEqual(@as(i32, 400), try S.raise(top));
+    try std.testing.expectEqual(try S.raise(top) - 30, try S.raise(rad));
+}
+
+test "caller buffers: exhaustion is NoSpace, never panic" {
+    // Every truncation point on the layout path reports honestly.
+    var runs_buf: [8]ir.Run = undefined;
+    var rules_buf: [4]ir.Rule = undefined;
+    var glyphs_buf: [64]u16 = undefined;
+    var runs1: [1]ir.Run = undefined;
+    try std.testing.expectError(
+        error.NoSpace,
+        layoutFull("\\frac{a}{b}+x", .{}, testProvider(), &runs1, &rules_buf, &glyphs_buf),
+    );
+    var rules0: [0]ir.Rule = undefined;
+    try std.testing.expectError(
+        error.NoSpace,
+        layoutFull("\\frac{a}{b}", .{}, testProvider(), &runs_buf, &rules0, &glyphs_buf),
+    );
+    var glyphs3: [3]u16 = undefined;
+    try std.testing.expectError(
+        error.NoSpace,
+        layoutFull("wxyz", .{}, testProvider(), &runs_buf, &rules_buf, &glyphs3),
+    );
+    var mbuf: [8]u8 = undefined;
+    try std.testing.expectError(error.NoSpace, mathml("\\frac{a}{b}", .{}, &mbuf));
+    // Empty input needs nothing: zero-length buffers still serve it.
+    var runs0: [0]ir.Run = undefined;
+    var rules00: [0]ir.Rule = undefined;
+    var glyphs0: [0]u16 = undefined;
+    const l = try layoutFull("", .{}, testProvider(), &runs0, &rules00, &glyphs0);
+    try std.testing.expectEqual(@as(u32, 0), l.width);
+}
+
+test "adversarial provider: graceful and deterministic" {
+    // Zero/negative advances, degenerate rule weights, and missing
+    // glyphs must never panic: the engine returns (ok or LayoutError)
+    // and agrees with itself on a second run.
+    const P = struct {
+        adv_val: i32 = 500,
+        rule_val: i32 = 40,
+        no_glyphs: bool = false,
+        fn gid(ctx: *const anyopaque, _: u16, cp: u21) u16 {
+            const self: *const @This() = @ptrCast(@alignCast(ctx));
+            if (self.no_glyphs) return 0;
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(ctx: *const anyopaque, _: u16, _: u16) i32 {
+            const self: *const @This() = @ptrCast(@alignCast(ctx));
+            return self.adv_val;
+        }
+        fn rule(ctx: *const anyopaque, _: u16, _: RuleKind) i32 {
+            const self: *const @This() = @ptrCast(@alignCast(ctx));
+            return self.rule_val;
+        }
+    };
+    const cfgs = [_]P{
+        .{ .adv_val = 0 },
+        .{ .adv_val = -500 },
+        .{ .rule_val = 1_000_000 },
+        .{ .rule_val = 0 },
+        .{ .rule_val = -40 },
+        .{ .no_glyphs = true },
+    };
+    const formulas = [_][]const u8{ "x+\\frac{a}{b}", "\\sum_{i}^{n}\\sqrt{x_i}" };
+    for (cfgs) |cfg| {
+        var holder = cfg;
+        const prov: MetricsProvider = .{
+            .ctx = &holder,
+            .glyphId = P.gid,
+            .advance = P.adv,
+            .ruleThickness = P.rule,
+        };
+        for (formulas) |src| {
+            var ra: [64]ir.Run = undefined;
+            var la: [16]ir.Rule = undefined;
+            var ga: [512]u16 = undefined;
+            var rb: [64]ir.Run = undefined;
+            var lb: [16]ir.Rule = undefined;
+            var gb: [512]u16 = undefined;
+            var da = Diag.empty();
+            var db = Diag.empty();
+            const r1 = layoutDiag(src, .{}, prov, &ra, &la, &ga, &da);
+            const r2 = layoutDiag(src, .{}, prov, &rb, &lb, &gb, &db);
+            if (r1) |l1| {
+                const l2 = try r2;
+                try std.testing.expectEqual(l1.width, l2.width);
+                try std.testing.expectEqual(l1.height_above, l2.height_above);
+                try std.testing.expectEqual(l1.depth_below, l2.depth_below);
+                try std.testing.expectEqual(l1.runs.len, l2.runs.len);
+                try std.testing.expectEqual(l1.rules.len, l2.rules.len);
+            } else |e1| {
+                try std.testing.expectError(e1, r2);
+            }
+        }
+    }
+}
+
 test "oversize input errors TooLong before anything else" {
     var big: [max_input_len + 1]u8 = .{'x'} ** (max_input_len + 1);
     var runs_buf: [8]ir.Run = undefined;

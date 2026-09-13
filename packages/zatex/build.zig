@@ -55,6 +55,17 @@ pub fn build(b: *std.Build) void {
     const run_otmath_tests = b.addRunArtifact(otmath_tests);
     test_step.dependOn(&run_otmath_tests.step);
 
+    // Shared layout-invariant helpers (test-only, never in the core).
+    const invariants_mod = b.addModule("invariants", .{
+        .root_source_file = b.path("src/invariants.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    invariants_mod.addImport("zatex", mod);
+    const invariants_tests = b.addTest(.{ .root_module = invariants_mod });
+    const run_invariants_tests = b.addRunArtifact(invariants_tests);
+    test_step.dependOn(&run_invariants_tests.step);
+
     // Reference-host probes: core driven by the real font (test-only).
     const refhost_mod = b.addModule("refhost", .{
         .root_source_file = b.path("src/refhost.zig"),
@@ -62,6 +73,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     refhost_mod.addImport("zatex", mod);
+    refhost_mod.addImport("invariants", invariants_mod);
     const otm = b.addModule("otmath_link", .{
         .root_source_file = b.path("src/otmath.zig"),
         .target = target,
@@ -71,6 +83,38 @@ pub fn build(b: *std.Build) void {
     const refhost_tests = b.addTest(.{ .root_module = refhost_mod });
     const run_refhost_tests = b.addRunArtifact(refhost_tests);
     test_step.dependOn(&run_refhost_tests.step);
+
+    // Speech strings + copy-as-LaTeX serializer (host-side walkers).
+    const speech_mod = b.addModule("speech", .{
+        .root_source_file = b.path("src/speech.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    speech_mod.addImport("zatex", mod);
+    const speech_tests = b.addTest(.{ .root_module = speech_mod });
+    const run_speech_tests = b.addRunArtifact(speech_tests);
+    test_step.dependOn(&run_speech_tests.step);
+    const texser_mod = b.addModule("texser", .{
+        .root_source_file = b.path("src/texser.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    texser_mod.addImport("zatex", mod);
+    const texser_tests = b.addTest(.{ .root_module = texser_mod });
+    const run_texser_tests = b.addRunArtifact(texser_tests);
+    test_step.dependOn(&run_texser_tests.step);
+
+    // Fixed-seed grammar fuzzer (test-only, zero-dependency).
+    const fuzz_mod = b.addModule("fuzz", .{
+        .root_source_file = b.path("src/fuzz.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    fuzz_mod.addImport("zatex", mod);
+    fuzz_mod.addImport("invariants", invariants_mod);
+    const fuzz_tests = b.addTest(.{ .root_module = fuzz_mod });
+    const run_fuzz_tests = b.addRunArtifact(fuzz_tests);
+    test_step.dependOn(&run_fuzz_tests.step);
 
     // Differential parity against the pinned-KaTeX sweep goldens.
     const parity_mod = b.addModule("parity", .{

@@ -21,6 +21,14 @@ pub const LayoutOptions = struct {
 /// Rule kinds the core may ask a thickness for.
 pub const RuleKind = enum { fraction_bar, radical, overline, underline };
 
+/// MathKern corner for script cut-ins (v3 hook below).
+pub const KernCorner = enum(u32) {
+    top_right = 0,
+    top_left = 1,
+    bottom_right = 2,
+    bottom_left = 3,
+};
+
 /// Host-supplied font metrics. The core never touches font files: glyph
 /// identity, advances, and rule weights arrive here in integer font
 /// units. `font` is the host's own namespace, opaque to the core.
@@ -30,7 +38,10 @@ pub const RuleKind = enum { fraction_bar, radical, overline, underline };
 /// - `glyphVariant` returns a taller variant of `glyph` whose extent
 ///   is at least `min_height`, or the input glyph when unknown.
 /// - `italicCorrection` returns the italic correction of `glyph`.
-pub const provider_version: u32 = 2;
+/// - `kernCorrection` (v3) returns the MathKern cut-in of `glyph` at
+///   correction `height` for `corner`; the core applies top-right
+///   cut-ins to superscripts and bottom-right cut-ins to subscripts.
+pub const provider_version: u32 = 3;
 pub const MetricsProvider = struct {
     ctx: *const anyopaque,
     glyphId: *const fn (ctx: *const anyopaque, font: u16, codepoint: u21) u16,
@@ -44,6 +55,7 @@ pub const MetricsProvider = struct {
     extents: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16) [2]i32 = null,
     glyphVariant: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16, min_height: i32) u16 = null,
     italicCorrection: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32 = null,
+    kernCorrection: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16, height: i32, corner: KernCorner) i32 = null,
 };
 
 /// Every failure the engine can ever report. Variants are added, never
