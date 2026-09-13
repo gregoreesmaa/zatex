@@ -19,7 +19,7 @@ apps like [read](../read) that budget kilobytes, not megabytes.
 | Package | What | Path |
 | --- | --- | --- |
 | `zatex` (core) | Parser, macro expander, layout, MathML, C ABI. Portable Zig. | `packages/zatex/` |
-| `zatex-png` | LaTeX → PNG CLI + visual regression set. macOS-only backend. Depends on the core, never the reverse. | `packages/zatex-png/` |
+| `zatex-png` | LaTeX → PNG CLI + visual regression set. One backend per OS (CoreGraphics on Apple, portable software rasterizer elsewhere). Depends on the core, never the reverse. | `packages/zatex-png/` |
 
 Shared at the root: `docs/` (contracts, policies, the syntax mirror),
 `tools/` (KaTeX sweep harness, size gate, render helpers), `.github/`
@@ -27,7 +27,7 @@ Shared at the root: `docs/` (contracts, policies, the syntax mirror),
 
 ## Use it
 
-Prerequisites: Zig 0.16.0; macOS 14+ for `zatex-png`.
+Prerequisites: Zig 0.16.0; `zatex-png` builds anywhere (CoreGraphics backend on macOS/iOS, zero-dependency software backend on Linux/Windows/Android).
 
 ```sh
 # Core: full test suite (incl. pinned-KaTeX differential sweep)
@@ -64,14 +64,24 @@ and the KaTeX expectations are checked in as JSON goldens
 
 * `zig build test` in `packages/zatex` — core suite, including the
   pinned-KaTeX differential sweep against the checked-in goldens.
-* `zig build test` in `packages/zatex-png` — CLI logic plus backend
-  coordinate-mapping tests (rendering itself is exercised via the CLI).
+* `zig build test` in `packages/zatex-png` — CLI logic, backend
+  coordinate-mapping tests, plus the software-backend suite (CFF
+  interpreter, rasterizer, PNG, CoreText cross-check); rendering
+  itself is exercised via the CLI.
 * `./tools/size_gate.sh` — subset-profile host-cost gate (macOS-only:
   it measures Mach-O `__TEXT` with the system `size` tool).
 * `zatex-png` renders (`./zig-out/bin/zatex-png "x^2" out.png`,
   `./screenshots/render.sh`) — one backend per OS behind a small
-  `Backend` interface; CoreGraphics (macOS) is implemented, the layout
-  core stays portable and backend-free.
+  `Backend` interface (`-Dbackend=auto|cg|software`); the layout core
+  stays portable and backend-free. Backends:
+
+| OS | Backend | Status |
+| --- | --- | --- |
+| macOS | CoreGraphics (`cg_backend.zig`) | Reference; CI renders + compares. |
+| iOS | CoreGraphics (`ios_backend.zig`, re-export) | Wired; needs Xcode iOS SDK to compile-check (SDK CI runner). |
+| Linux | Software rasterizer (`linux_backend.zig`) | Builds + renders; layout dimensions bit-equal to CoreGraphics, pixels geometrically exact but unhinted (see `packages/zatex-png/README.md`). |
+| Windows | Software rasterizer (`windows_backend.zig`) | Cross-compiles; DirectWrite stays a future optimization. |
+| Android | Software rasterizer (`android_backend.zig`) | File compiles; full link needs NDK libc (NDK CI runner). |
 
 Two maintainer-only workflows need third-party runtimes. Both run in
 CI, so contributors never have to touch them:

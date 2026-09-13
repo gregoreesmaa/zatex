@@ -303,7 +303,7 @@ const Walker = struct {
             .space => |v| try self.space(v),
             .vspace => return error.Unsupported,
             .newline => try self.put("\\\\"),
-            .hline => try self.cmd("hline"),
+            .hline => |h| try self.cmd(if (h.dashed) "hdashline" else "hline"),
             .color => |c| {
                 try self.cmd("color");
                 try self.put("{");
@@ -358,6 +358,10 @@ const Walker = struct {
                 try self.cmd("cancel");
                 try self.arg(b);
             },
+            .not => |nt| {
+                try self.cmd("not");
+                try self.arg(nt.base);
+            },
             .lap => |l| {
                 try self.cmd(switch (l.kind) {
                     .llap => "llap",
@@ -380,8 +384,12 @@ const Walker = struct {
                 try self.arg(r.body);
             },
             .rule => |r| {
-                if (r.dep != 0) return error.Unsupported;
                 try self.cmd("rule");
+                if (r.raise != 0) {
+                    try self.put("[");
+                    try self.dimen(r.raise);
+                    try self.put("]");
+                }
                 try self.put("{");
                 try self.dimen(r.w);
                 try self.put("}{");

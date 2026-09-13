@@ -1,0 +1,63 @@
+# Oracle-diff sweep (issue #39): 4 services, all from pinned digests.
+# No service has any network at run time (`network_mode: none`): images
+# are fully baked at build time, cases and fonts enter via mounts, and
+# orchestration happens from the host (tools/diff-oracles.sh), never
+# container-to-container.
+#
+# Base-image digests were resolved 2026-09-13; refresh recipe lives in
+# webshot/Dockerfile. Run from the repo root so the relative mounts below
+# resolve: docker compose -f tools/oracle-diff/compose.yml <cmd>.
+name: zatex-oracle-diff
+
+services:
+  katex-shot:
+    build:
+      context: ./webshot
+      dockerfile: Dockerfile
+    image: zatex-oracle-webshot:1.0.0
+    entrypoint: ["render-one", "katex"]
+    network_mode: none
+    volumes:
+      - ./work:/work:rw
+      - ./fonts:/fonts:ro
+      - ../..:/repo:ro
+
+  mathjax-shot:
+    build:
+      context: ./webshot
+      dockerfile: Dockerfile
+    image: zatex-oracle-webshot:1.0.0
+    entrypoint: ["render-one", "mathjax"]
+    network_mode: none
+    volumes:
+      - ./work:/work:rw
+      - ./fonts:/fonts:ro
+      - ../..:/repo:ro
+
+  luatex-shot:
+    build:
+      context: ./texlive
+      dockerfile: Dockerfile
+    image: zatex-oracle-texlive:1.0.0
+    network_mode: none
+    volumes:
+      - ./work:/work:rw
+      - ./fonts:/fonts:ro
+      - ../..:/repo:ro
+
+  zatex-shot:
+    build:
+      context: ./zatex
+      dockerfile: Dockerfile
+    image: zatex-oracle-zatex:1.0.0
+    network_mode: none
+    volumes:
+      - ./work:/work:rw
+      - ./fonts:/fonts:ro
+      - ../..:/repo:ro
+      # Warm Zig cache + installed binary across `run` invocations
+      # (content-addressed; outputs stay deterministic).
+      - zatex-build:/tmp/zp
+
+volumes:
+  zatex-build:

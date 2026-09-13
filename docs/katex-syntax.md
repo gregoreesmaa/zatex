@@ -23,7 +23,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\"` | `\text{\"{a}}` | ![](renders/quot.png) |  |
 | `\$` | `\$` | ![](renders/dollar.png) |  |
 | `\,` | `a\,\,{b}` | ![](renders/comma.png) |  |
-| `\.` | `\text{\.{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\.` | `\text{\.{a}}` | ![](renders/dot.png) |  |
 | `\:` | `a\:\:{b}` | ![](renders/colon.png) |  |
 | `\;` | `a\n\;\;{b}` | ![](renders/semi.png) |  |
 | `_` | `x_i` | ![](renders/us.png) |  |
@@ -448,7 +448,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\H` | `\text{\H{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\H` | `\text{\H{a}}` | ![](renders/h.png) |  |
 | `\Harr` | — | — | owner #1 |
 | `\hArr` | — | — | owner #1 |
 | `\harr` | — | — | owner #1 |
@@ -1152,7 +1152,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\v` | `\text{\v{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\v` | `\text{\v{a}}` | ![](renders/v.png) |  |
 | `\varcoppa` | — | — | goldens: rej-unsup-varcoppa |
 | `\varDelta` | — | — | owner #1 |
 | `\varepsilon` | `\varepsilon` | ![](renders/varepsilon.png) |  |

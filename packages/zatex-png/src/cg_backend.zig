@@ -46,6 +46,20 @@ pub const Font = struct {
         const db: i32 = if (bot >= 0) 0 else scale1000(self.upm, @as(i32, @intFromFloat(@ceil(-bot))));
         return .{ ha, db };
     }
+
+    /// True ink box `[x_min, y_min, x_max, y_max]`, y up from the
+    /// baseline at 1000 units, unclipped (v4 provider hook). Blank
+    /// glyphs report all zeros, which the core skips.
+    pub fn inkBounds1000(self: *const Font, glyph: u16) [4]i32 {
+        var r: cg.CGRect = .{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
+        const g: cg.CGGlyph = glyph;
+        _ = cg.CTFontGetBoundingRectsForGlyphs(self.ctunits, cg.kCTFontOrientationDefault, @ptrCast(&g), @ptrCast(&r), 1);
+        const x0 = scale1000(self.upm, @as(i32, @intFromFloat(@floor(r.origin.x))));
+        const y0 = scale1000(self.upm, @as(i32, @intFromFloat(@floor(r.origin.y))));
+        const x1 = scale1000(self.upm, @as(i32, @intFromFloat(@ceil(r.origin.x + r.size.width))));
+        const y1 = scale1000(self.upm, @as(i32, @intFromFloat(@ceil(r.origin.y + r.size.height))));
+        return .{ x0, y0, x1, y1 };
+    }
 };
 
 fn scale1000(upm: u16, v: i32) i32 {
@@ -80,11 +94,13 @@ pub const Canvas = struct {
     }
 
     /// One CTFont per run at `size_px`, released by `Run.end` — the
-    /// same object lifetime the renderer always had.
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64) error{RenderInit}!Run {
+    /// same object lifetime the renderer always had. `x_scale`
+    /// stretches ink horizontally (wide accents, brace spans —
+    /// issues #31/#37); 1 draws unchanged.
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64) error{RenderInit}!Run {
         const ct = cg.CTFontCreateWithGraphicsFont(font.cgfont, size_px, null, null);
         if (ct == null) return error.RenderInit;
-        return .{ .ctx = self.ctx, .ct = ct };
+        return .{ .ctx = self.ctx, .ct = ct, .x_scale = x_scale };
     }
 
     /// Snapshot the canvas and write an 8-bit RGBA PNG to `out_path`.
@@ -116,11 +132,23 @@ pub const Canvas = struct {
 pub const Run = struct {
     ctx: cg.CGContextRef,
     ct: cg.CTFontRef,
+    x_scale: f64,
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
-        const pos = cg.CGPoint{ .x = x, .y = y };
         const gl: cg.CGGlyph = glyph;
-        cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&pos), 1, self.ctx);
+        if (self.x_scale == 1) {
+            const pos = cg.CGPoint{ .x = x, .y = y };
+            cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&pos), 1, self.ctx);
+            return;
+        }
+        // Stretched ink: draw in a translated + x-scaled CTM so the
+        // glyph origin stays at (x, y) while ink widens rightward.
+        cg.CGContextSaveGState(self.ctx);
+        cg.CGContextTranslateCTM(self.ctx, x, y);
+        cg.CGContextScaleCTM(self.ctx, self.x_scale, 1);
+        const origin = cg.CGPoint{ .x = 0, .y = 0 };
+        cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&origin), 1, self.ctx);
+        cg.CGContextRestoreGState(self.ctx);
     }
 
     pub fn end(self: *Run) void {

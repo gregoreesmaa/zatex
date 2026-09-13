@@ -51,6 +51,7 @@ pub fn expectSameLayout(a: ir.Layout, b: ir.Layout) !void {
         try std.testing.expectEqual(x.size_units, y.size_units);
         try std.testing.expectEqual(x.x, y.x);
         try std.testing.expectEqual(x.baseline_y, y.baseline_y);
+        try std.testing.expectEqual(x.x_scale, y.x_scale);
         try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
     }
     for (a.rules, b.rules) |x, y| try std.testing.expectEqual(x, y);
@@ -103,6 +104,52 @@ pub fn layoutText(l: ir.Layout, out: []u8) []u8 {
     }
     if (f.trunc and f.pos >= 3) @memcpy(out[f.pos - 3 ..][0..3], "...");
     return out[0..f.pos];
+}
+
+/// Geometry identity: same ink-box footprint (width, height, depth).
+/// Wrappers that emit nothing (`\phantom`) legitimately change the run
+/// list while the footprint must not (issue #40: phantom width
+/// preservation, color invariance at the geometry level).
+pub fn expectSameFootprint(a: ir.Layout, b: ir.Layout) !void {
+    try std.testing.expectEqual(a.width, b.width);
+    try std.testing.expectEqual(a.height_above, b.height_above);
+    try std.testing.expectEqual(a.depth_below, b.depth_below);
+}
+
+/// Geometry identity: same ink box, same run/rule geometry, paint
+/// ignored. `\\color` scopes paint runs without moving them (issue
+/// #35) while `expectSameLayout` compares paint too, so color
+/// invariance (issue #40) asserts through here: geometry must match
+/// exactly while the paint assertions live next to it (never vacuous).
+pub fn expectSameGeometry(a: ir.Layout, b: ir.Layout) !void {
+    try std.testing.expectEqual(a.width, b.width);
+    try std.testing.expectEqual(a.height_above, b.height_above);
+    try std.testing.expectEqual(a.depth_below, b.depth_below);
+    try std.testing.expectEqual(a.runs.len, b.runs.len);
+    try std.testing.expectEqual(a.rules.len, b.rules.len);
+    for (a.runs, b.runs) |x, y| {
+        try std.testing.expectEqual(x.font_id, y.font_id);
+        try std.testing.expectEqual(x.size_units, y.size_units);
+        try std.testing.expectEqual(x.x, y.x);
+        try std.testing.expectEqual(x.baseline_y, y.baseline_y);
+        try std.testing.expectEqual(x.x_scale, y.x_scale);
+        try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
+    }
+    for (a.rules, b.rules) |x, y| {
+        try std.testing.expectEqual(x.x, y.x);
+        try std.testing.expectEqual(x.y, y.y);
+        try std.testing.expectEqual(x.w, y.w);
+        try std.testing.expectEqual(x.h, y.h);
+    }
+}
+
+/// Canonical-dump identity: the `layoutText` bytes must match exactly.
+/// Same relation as `expectSameLayout`, asserted through the shared
+/// text dump (issue #40: color invariance via the canonical IR dump).
+pub fn expectSameDump(a: ir.Layout, b: ir.Layout, bufa: []u8, bufb: []u8) !void {
+    const ta = layoutText(a, bufa);
+    const tb = layoutText(b, bufb);
+    try std.testing.expectEqualStrings(ta, tb);
 }
 
 const Fmt = struct {

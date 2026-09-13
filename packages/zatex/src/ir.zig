@@ -7,20 +7,31 @@
 
 /// One positioned run of glyphs from a single host font at one size.
 /// Coordinates are integer font units; y is the alphabetic baseline.
+/// `color` is 0xRRGGBBAA paint (`\color` scope, issue #35); null means
+/// the ambient (host default) paint. Runs never merge across colors.
 pub const Run = struct {
     font_id: u16,
     size_units: u16,
     x: i32,
     baseline_y: i32,
     glyphs: []const u16,
+    color: ?u32 = null,
+    /// Horizontal raster scale in per-mille (1000 = identity): wide
+    /// accents and brace spans stretch one glyph to the construction
+    /// width (issues #31/#37). Additive: existing constructions omit
+    /// it and render unstretched.
+    x_scale: u16 = 1000,
 };
 
 /// One filled rect in font units (fraction bars, radical vincula, rules).
+/// `color` paints `\colorbox` backgrounds and `\fcolorbox` frames
+/// (issue #35); null means the ambient paint.
 pub const Rule = struct {
     x: i32,
     y: i32,
     w: u32,
     h: u32,
+    color: ?u32 = null,
 };
 
 /// A fully laid-out formula: its ink box plus all marks.

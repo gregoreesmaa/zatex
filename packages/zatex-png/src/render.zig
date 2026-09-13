@@ -42,37 +42,62 @@ pub fn renderToPng(
     // alike. (On Quartz this means leaving the CTM untouched: flipping
     // it renders glyphs upside down.)
     const H: f64 = @floatFromInt(h);
-    // Rules (fraction bars, vincula) are plain filled rects.
+    // Rules (fraction bars, vincula, colorbox backgrounds) are plain
+    // filled rects, each in its own paint (issue #35).
     for (layout.rules) |r| {
         const rx = @as(f64, @floatFromInt(r.x)) * s + pad;
         const rw = @as(f64, @floatFromInt(r.w)) * s;
         const rh = @as(f64, @floatFromInt(r.h)) * s;
         const ry = ruleOriginY(r.y, r.h, s, pad, H);
+        setPaint(&canvas, r.color);
         canvas.fillRect(rx, ry, rw, rh);
     }
 
     // Runs: one backend run per run size, glyph origins stepped with
     // the same integer advances the core measured, scaled once to
-    // pixels.
+    // pixels. Runs never merge across colors, so one setPaint per run
+    // is exact (issue #35).
     for (layout.runs) |run| {
         const px_size: f64 = @as(f64, @floatFromInt(run.size_units)) *
             @as(f64, @floatFromInt(px_per_em)) / 1000.0;
         if (px_size <= 0 or run.glyphs.len == 0) continue;
-        var rf = try canvas.beginRun(&font.handle, px_size);
+        // Raster stretch (issues #31/#37): the core lays out the
+        // construction width and stamps the stretch factor; ink and
+        // pen advances scale together so stepped origins stay exact.
+        const sx: f64 = @as(f64, @floatFromInt(run.x_scale)) / 1000.0;
+        setPaint(&canvas, run.color);
+        var rf = try canvas.beginRun(&font.handle, px_size, sx);
         defer rf.end();
         var x_units: i64 = run.x;
         const base_y: f64 = glyphBaseY(run.baseline_y, s, pad, H);
         for (run.glyphs) |g| {
             const gx: f64 = @as(f64, @floatFromInt(x_units)) * s + pad;
             rf.drawGlyph(g, gx, base_y);
-            x_units += @divTrunc(
+            const step: i64 = @divTrunc(
                 @as(i64, font.advance1000(g)) * @as(i64, run.size_units),
                 1000,
             );
+            // Identity scales step exactly as before.
+            x_units += @divTrunc(step * @as(i64, run.x_scale), 1000);
         }
     }
 
     try canvas.writePng(out_path);
+}
+
+/// Select the paint for one IR run/rule: ambient (null) is black ink;
+/// otherwise the 0xRRGGBBAA word the core stamped (issue #35).
+fn setPaint(canvas: *backend.impl.Canvas, color: ?u32) void {
+    const c = color orelse {
+        canvas.setFill(0, 0, 0, 1);
+        return;
+    };
+    const f = struct {
+        fn b(v: u32) f64 {
+            return @as(f64, @floatFromInt(v)) / 255.0;
+        }
+    }.b;
+    canvas.setFill(f((c >> 24) & 0xFF), f((c >> 16) & 0xFF), f((c >> 8) & 0xFF), f(c & 0xFF));
 }
 
 fn ceilU(v: f64) usize {

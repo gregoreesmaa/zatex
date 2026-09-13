@@ -76,6 +76,8 @@ pub extern fn CGContextSetRGBFillColor(
 pub extern fn CGContextFillRect(c: CGContextRef, rect: CGRect) void;
 pub extern fn CGContextTranslateCTM(c: CGContextRef, tx: f64, ty: f64) void;
 pub extern fn CGContextScaleCTM(c: CGContextRef, sx: f64, sy: f64) void;
+pub extern fn CGContextSaveGState(c: CGContextRef) void;
+pub extern fn CGContextRestoreGState(c: CGContextRef) void;
 pub extern fn CGBitmapContextCreateImage(c: CGContextRef) CGImageRef;
 pub extern fn CGDataProviderCreateWithFilename(filename: [*:0]const u8) CGDataProviderRef;
 pub extern fn CGFontCreateWithDataProvider(provider: CGDataProviderRef) CGFontRef;

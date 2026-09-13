@@ -93,6 +93,64 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Portability matrix (issue #50): every backend builds, the software
+  # backend's own suite runs under both selections, and the software
+  # rasterizer re-renders the corpus dimension-identical to CoreGraphics
+  # (layout determinism — dimensions, never pixels, per AGENTS.md §4).
+  # iOS/Android full links need SDK/NDK runners (see
+  # packages/zatex-png/README.md); here their backend files at least
+  # compile-check.
+  backends:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Backend suites (CoreGraphics and software selections)
+        working-directory: packages/zatex-png
+        run: |
+          zig build test --summary all
+          zig build -Dbackend=software test --summary all
+      - name: Cross-compile all backends
+        working-directory: packages/zatex-png
+        run: |
+          zig build -Dtarget=x86_64-linux
+          zig build -Dtarget=aarch64-linux
+          zig build -Dtarget=x86_64-windows
+      - name: iOS/Android backend files compile-check (SDK/NDK link on device runners)
+        working-directory: packages/zatex-png
+        run: |
+          zig build-obj src/ios_backend.zig -target aarch64-macos -O Debug --cache-dir /tmp/zig-objcache
+          zig build-obj src/android_backend.zig -target aarch64-linux -O Debug --cache-dir /tmp/zig-objcache
+      - name: Software-vs-CoreGraphics dimension equality (same tree)
+        working-directory: packages/zatex-png
+        run: |
+          ./screenshots/render.sh /tmp/shots-cg
+          zig build -Dbackend=software
+          ./zig-out/bin/zatex-png --corpus screenshots/corpus.json --outdir /tmp/shots-sw --px 48
+          python3 ../../tools/dim_equal.py /tmp/shots-cg /tmp/shots-sw
+
+  # Native Linux proof (issue #50): the software backend is the default
+  # there, so this builds, tests, and renders natively — a working
+  # binary, not just a cross-link. Pixel baselines stay macOS-scoped
+  # (compare_shots.py is calibrated same-rasterizer), so Linux asserts
+  # run-success plus dimension determinism, never pixels.
+  linux-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Build, test, and render natively on Linux
+        working-directory: packages/zatex-png
+        run: |
+          zig build test --summary all
+          zig build
+          ./zig-out/bin/zatex-png "x^2" /tmp/smoke.png
+          ./zig-out/bin/zatex-png --corpus screenshots/corpus.json --outdir /tmp/shots-linux --px 48
+
   # Visual regression: re-render every checked-in PNG and fail on real
   # pixel drift, so each PR carries eyeballable screenshots. Layout is
   # deterministic (dimensions must match exactly), but CoreText

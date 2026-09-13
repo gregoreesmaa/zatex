@@ -179,6 +179,11 @@ const Walker = struct {
             .boxed => |b| try self.node(b),
             .cancel => |b| try self.node(b),
             .lap => |l| try self.node(l.body),
+            // KaTeX a11y order ("not equals"): modifier first.
+            .not => |nt| {
+                try self.word("not");
+                try self.node(nt.base);
+            },
             .smash => |s| try self.node(s.body),
             .raisebox => |r| try self.node(r.body),
             .rule => try self.word("rule"),

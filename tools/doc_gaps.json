@@ -3,10 +3,6 @@
   "kind": "overclaim",
   "note": "inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math"
  },
- "\\.": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
- },
  "\\Bra": {
   "kind": "engine",
   "note": "bra-ket notation missing; KaTeX accepts"
@@ -14,10 +10,6 @@
  "\\Braket": {
   "kind": "engine",
   "note": "bra-ket notation missing; KaTeX accepts"
- },
- "\\H": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
  "\\Ket": {
   "kind": "engine",
@@ -126,10 +118,6 @@
  "\\underbracket": {
   "kind": "engine",
   "note": "bracket underline missing; KaTeX accepts"
- },
- "\\v": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
  "\\vcenter": {
   "kind": "engine",

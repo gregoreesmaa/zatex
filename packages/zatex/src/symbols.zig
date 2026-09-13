@@ -488,24 +488,21 @@ pub fn glueBetween(left: AtomClass, right: AtomClass) u16 {
     const thick: u16 = 278; // 5mu
     const med: u16 = 222; // 4mu
     const thin: u16 = 167; // 3mu
-    // Rel pairs with anything (except nothing pairs): thick.
+    // Rel pairs (KaTeX 0.18.7 HTML adjacency probes, issue #36): thick
+    // against Ord/Op/Open/Inner, and against Punct/Close on the left;
+    // zero against Rel/Close/Punct/Bin on the right, against Open/Bin
+    // on the left, and Rel-Rel (so `\not` overlays add no width).
     if (left == .Rel or right == .Rel) {
-        // TeX excludes some Rel pairs? No: Rel-* and *-Rel are thick
-        // except when the other side cannot take space (Open/Close/
-        // Punct handled below per TeX: no space between Rel and
-        // Open? Actually TeX table: Rel-Open IS thick? TeX Book: space
-        // is inserted unless in the "no space" list: Ord-Op? Let me
-        // encode the standard no-space exceptions explicitly.
-        if (left == .Open or right == .Close or left == .Punct or right == .Punct) {
-            // TeX: (Rel,Open)? The table row Rel: columns Ord Op Bin
-            // Rel Open Close Punct Inner = thick thick * thick thick
-            // thick 0 thick. So Rel-Close and Rel-Punct get space!
-            // Only Punct on the left or ... row Punct: all 0.
-            if (left == .Punct) return 0;
-            if (right == .Punct and left != .Rel) return 0;
-            return thick;
+        if (left == .Rel) {
+            return switch (right) {
+                .Ord, .Op, .Open, .Inner => thick,
+                else => 0,
+            };
         }
-        return thick;
+        return switch (left) {
+            .Ord, .Op, .Inner, .Close, .Punct => thick,
+            else => 0,
+        };
     }
     if (left == .Punct or right == .Punct) return 0;
     if (left == .Open or right == .Close) return 0;
@@ -612,9 +609,11 @@ pub fn lookupDelim(name: []const u8) ?DelimEntry {
 /// Math accents: name → accent glyph. Always spacing forms, never
 /// combining marks: combining-mark ink hangs left of a zero advance
 /// and unshaped drawing cannot recover it. `wide` marks the stretchy
-/// family (`\widehat` etc.) which grows with the nucleus. `vec`,
-/// `dddot`, `ddddot` have no spacing form and keep combining marks
-/// until stretchy accents land.
+/// family (`\widehat` etc.) which grows with the nucleus. `vec` has
+/// no spacing form and keeps its combining mark; `dddot`/`ddddot`
+/// keep table entries only as identifiers — the parser expands them
+/// to dot-run oversets (KaTeX `defineMacro` parity), so the native
+/// path never lays out U+20DB/U+20DC.
 pub const Accent = struct {
     cp: u21,
     wide: bool,
@@ -701,8 +700,9 @@ test "accents use spacing forms, never combining marks" {
     const std = @import("std");
     // Regression pin for accent misplacement: combining-mark ink hangs
     // left of a zero advance and unshaped drawing cannot recover it, so
-    // accents must resolve to spacing glyphs. Only vec/dddot/ddddot
-    // have no spacing form (see the table comment above).
+    // accents must resolve to spacing glyphs. Only vec has no spacing
+    // form (see the table comment above); dddot/ddddot entries are
+    // parser-level identifiers expanded to oversets before layout.
     for (all_accents) |a| {
         const combining = (a.cp >= 0x0300 and a.cp <= 0x036F) or
             (a.cp >= 0x20D0 and a.cp <= 0x20FF);
@@ -766,6 +766,18 @@ test "large operators carry limit defaults" {
     try std.testing.expect(lookup("sin").?.func);
 }
 
+/// Two-word limit operators (`lim inf`, ...): KaTeX macro expansion of
+/// `\liminf`, `\limsup` (and amsopn `\injlim`, `\projlim`). Single
+/// source of truth for the layout core (thin-kern join) and the
+/// MathML walker (U+2009 join); issue #36.
+pub fn splitLimitOp(text: []const u8) ?[2][]const u8 {
+    if (eq(text, "liminf")) return .{ "lim", "inf" };
+    if (eq(text, "limsup")) return .{ "lim", "sup" };
+    if (eq(text, "injlim")) return .{ "inj", "lim" };
+    if (eq(text, "projlim")) return .{ "proj", "lim" };
+    return null;
+}
+
 test "bin degrades at list head and after open" {
     const std = @import("std");
     try std.testing.expect(degradeBin(null));
@@ -780,4 +792,21 @@ test "rel spacing is thick, ord-ord is zero" {
     try std.testing.expectEqual(@as(u16, 278), glueBetween(.Ord, .Rel));
     try std.testing.expectEqual(@as(u16, 0), glueBetween(.Ord, .Ord));
     try std.testing.expectEqual(@as(u16, 222), glueBetween(.Ord, .Bin));
+}
+
+test "rel pairs match pinned KaTeX adjacency" {
+    // Probed against KaTeX 0.18.7 HTML (`=\sim`, `x=)y`, `(=x)`, `x=,y`,
+    // `x,=y`, `(x)=y`, `x=(y)`): thick against Ord/Op/Open/Inner (and
+    // Punct/Close on the left); zero against Rel/Close/Punct on the
+    // right, Open on the left, and Rel-Rel (issue #36: `\not` overlay).
+    const std = @import("std");
+    try std.testing.expectEqual(@as(u16, 0), glueBetween(.Rel, .Rel));
+    try std.testing.expectEqual(@as(u16, 0), glueBetween(.Rel, .Close));
+    try std.testing.expectEqual(@as(u16, 0), glueBetween(.Rel, .Punct));
+    try std.testing.expectEqual(@as(u16, 0), glueBetween(.Open, .Rel));
+    try std.testing.expectEqual(@as(u16, 278), glueBetween(.Rel, .Ord));
+    try std.testing.expectEqual(@as(u16, 278), glueBetween(.Rel, .Op));
+    try std.testing.expectEqual(@as(u16, 278), glueBetween(.Rel, .Open));
+    try std.testing.expectEqual(@as(u16, 278), glueBetween(.Close, .Rel));
+    try std.testing.expectEqual(@as(u16, 278), glueBetween(.Punct, .Rel));
 }
