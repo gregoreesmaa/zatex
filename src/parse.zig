@@ -70,6 +70,15 @@ pub fn useLimits(style: Style, o: OpDesc) bool {
     };
 }
 
+/// Canonical TeX glue widths in thousandths of an em (1mu = 1/18em).
+/// Single source of truth for `.space` payloads (issue 16): the parser
+/// produces them, `layout.zig` measures them, `mathml.zig` serializes
+/// them. No other file may hard-code these widths.
+pub const space_thin: i16 = 167; // 3mu: `\,` (negated for `\!`)
+pub const space_med: i16 = 222; // 4mu: `\:`
+pub const space_thick: i16 = 278; // 5mu: `\;`
+pub const space_interword: i16 = 333; // `\ `, `~`, text spaces
+
 pub const Idx = u16;
 pub const NONE: Idx = 0xFFFF;
 
@@ -1064,7 +1073,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
             // KaTeX has no `$` delimiters inside math input.
             if (t.cp == '$') return ctx.fail(t.pos, "can't use '$' in math mode");
             if (t.cp == '~') {
-                const id: ?Idx = try ctx.allocNode(.{ .space = 333 });
+                const id: ?Idx = try ctx.allocNode(.{ .space = space_interword });
                 return id;
             }
             if (t.cp == '\'') {
@@ -1606,11 +1615,11 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         '#' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '#' } }),
         '_' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '_' } }),
         '|' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x2016 } }),
-        ' ' => return ctx.allocNode(.{ .space = 333 }),
-        ',' => return ctx.allocNode(.{ .space = 167 }),
-        ':' => return ctx.allocNode(.{ .space = 222 }),
-        ';' => return ctx.allocNode(.{ .space = 278 }),
-        '!' => return ctx.allocNode(.{ .space = -167 }),
+        ' ' => return ctx.allocNode(.{ .space = space_interword }),
+        ',' => return ctx.allocNode(.{ .space = space_thin }),
+        ':' => return ctx.allocNode(.{ .space = space_med }),
+        ';' => return ctx.allocNode(.{ .space = space_thick }),
+        '!' => return ctx.allocNode(.{ .space = -space_thin }),
         // No `\/` arm: KaTeX has no italic-correction escape, in math
         // or text mode — it falls through to "undefined control sequence".
         '\\' => return ctx.allocNode(.{ .newline = {} }),
