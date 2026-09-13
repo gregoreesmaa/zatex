@@ -16,8 +16,9 @@ no untracked float in the contract.
 * **Hosts** (`read`, other apps) draw `Run`s through their own glyph
   cache/atlas and fill `Rule`s as rects. This is the fastest path: zero
   parsing and zero rasterization at showtime.
-* **Future emitters** (out of repo by decision) walk the same tree:
-  MathML first, SVG later, PNG last. Emitters contain no layout math.
+* **Emitters** walk the same tree: MathML ships in the core,
+  `packages/zatex-png` renders PNG (macOS-only backend), SVG is future.
+  Emitters contain no layout math.
 
 ## Stable calling contract (frozen 2026-09-12)
 

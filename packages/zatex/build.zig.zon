@@ -1,0 +1,13 @@
+.{
+    .name = .zatex,
+    .version = "0.0.0",
+    // Changing this has security and trust implications.
+    .fingerprint = 0xe37639758f5b3e1d,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
