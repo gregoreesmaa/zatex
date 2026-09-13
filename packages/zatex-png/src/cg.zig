@@ -7,7 +7,8 @@
 const builtin = @import("builtin");
 
 comptime {
-    if (builtin.os.tag != .macos) @compileError("zatex-png: macOS-only (CoreGraphics backend)");
+    const tag = builtin.os.tag;
+    if (tag != .macos and tag != .ios) @compileError("zatex-png: CoreGraphics backend needs macOS or iOS");
 }
 
 // CoreFoundation (all refs are opaque; caller CFReleases everything).

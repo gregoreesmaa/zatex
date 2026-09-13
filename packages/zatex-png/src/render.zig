@@ -6,7 +6,7 @@
 //! core's top-left-origin coordinates mapped through H - y.
 const std = @import("std");
 const zatex = @import("zatex");
-const cg = @import("cg.zig");
+const backend = @import("backend.zig");
 const Font = @import("font.zig").Font;
 
 pub const Error = error{
@@ -30,23 +30,17 @@ pub fn renderToPng(
     const h: usize = @max(1, ceilU((@as(f64, @floatFromInt(layout.height_above)) +
         @as(f64, @floatFromInt(layout.depth_below))) * s + 2 * pad));
 
-    const space = cg.CGColorSpaceCreateDeviceRGB();
-    if (space == null) return error.RenderInit;
-    defer cg.CFRelease(space);
-    const ctx = cg.CGBitmapContextCreate(null, w, h, 8, w * 4, space, cg.bitmap_info);
-    if (ctx == null) return error.RenderInit;
-    defer cg.CFRelease(ctx);
+    var canvas = try backend.impl.Canvas.create(w, h);
+    defer canvas.close();
 
     // White background, black ink.
-    cg.CGContextSetRGBFillColor(ctx, 1, 1, 1, 1);
-    cg.CGContextFillRect(ctx, .{
-        .origin = .{ .x = 0, .y = 0 },
-        .size = .{ .width = @floatFromInt(w), .height = @floatFromInt(h) },
-    });
-    cg.CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
-    // No CTM flip (it renders glyphs upside down). A bitmap context
-    // with the identity CTM is y-up, so every y-down layout coordinate
-    // maps through H - y — glyph baselines and rule rects alike.
+    canvas.setFill(1, 1, 1, 1);
+    canvas.fillRect(0, 0, @floatFromInt(w), @floatFromInt(h));
+    canvas.setFill(0, 0, 0, 1);
+    // The canvas is y-up (origin bottom-left), so every y-down layout
+    // coordinate maps through H - y — glyph baselines and rule rects
+    // alike. (On Quartz this means leaving the CTM untouched: flipping
+    // it renders glyphs upside down.)
     const H: f64 = @floatFromInt(h);
     // Rules (fraction bars, vincula) are plain filled rects.
     for (layout.rules) |r| {
@@ -54,28 +48,23 @@ pub fn renderToPng(
         const rw = @as(f64, @floatFromInt(r.w)) * s;
         const rh = @as(f64, @floatFromInt(r.h)) * s;
         const ry = ruleOriginY(r.y, r.h, s, pad, H);
-        cg.CGContextFillRect(ctx, .{
-            .origin = .{ .x = rx, .y = ry },
-            .size = .{ .width = rw, .height = rh },
-        });
+        canvas.fillRect(rx, ry, rw, rh);
     }
 
-    // Runs: one CTFont per run size, glyph origins stepped with the
-    // same integer advances the core measured, scaled once to pixels.
+    // Runs: one backend run per run size, glyph origins stepped with
+    // the same integer advances the core measured, scaled once to
+    // pixels.
     for (layout.runs) |run| {
         const px_size: f64 = @as(f64, @floatFromInt(run.size_units)) *
             @as(f64, @floatFromInt(px_per_em)) / 1000.0;
         if (px_size <= 0 or run.glyphs.len == 0) continue;
-        const ct = cg.CTFontCreateWithGraphicsFont(font.cgfont, px_size, null, null);
-        if (ct == null) return error.RenderInit;
-        defer cg.CFRelease(ct);
+        var rf = try canvas.beginRun(&font.handle, px_size);
+        defer rf.end();
         var x_units: i64 = run.x;
         const base_y: f64 = glyphBaseY(run.baseline_y, s, pad, H);
         for (run.glyphs) |g| {
             const gx: f64 = @as(f64, @floatFromInt(x_units)) * s + pad;
-            const pos = cg.CGPoint{ .x = gx, .y = base_y };
-            const gl: cg.CGGlyph = g;
-            cg.CTFontDrawGlyphs(ct, @ptrCast(&gl), @ptrCast(&pos), 1, ctx);
+            rf.drawGlyph(g, gx, base_y);
             x_units += @divTrunc(
                 @as(i64, font.advance1000(g)) * @as(i64, run.size_units),
                 1000,
@@ -83,27 +72,7 @@ pub fn renderToPng(
         }
     }
 
-    const img = cg.CGBitmapContextCreateImage(ctx);
-    if (img == null) return error.RenderInit;
-    defer cg.CFRelease(img);
-    const url = cg.CFURLCreateFromFileSystemRepresentation(
-        null,
-        out_path.ptr,
-        @intCast(out_path.len),
-        false,
-    );
-    if (url == null) return error.PngWrite;
-    defer cg.CFRelease(url);
-    // UTI built directly (avoids the kUTTypePNG data symbol, which
-    // newer SDK link stubs may not export).
-    const png_uti = cg.CFStringCreateWithCString(null, "public.png", cg.kCFStringEncodingUTF8);
-    if (png_uti == null) return error.PngWrite;
-    defer cg.CFRelease(png_uti);
-    const dest = cg.CGImageDestinationCreateWithURL(url, png_uti, 1, null);
-    if (dest == null) return error.PngWrite;
-    defer cg.CFRelease(dest);
-    cg.CGImageDestinationAddImage(dest, img, null);
-    if (!cg.CGImageDestinationFinalize(dest)) return error.PngWrite;
+    try canvas.writePng(out_path);
 }
 
 fn ceilU(v: f64) usize {
