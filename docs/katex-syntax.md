@@ -50,7 +50,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\AA` | `\AA` | ![](renders/aa.png) |  |
 | `\aa` | `\aa` | ![](renders/aa-2.png) |  |
 | `\above` | — | — | owner #1 |
-| `\abovewithdelims` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\abovewithdelims` | — | — | goldens: rej-unsup-abovewithdelims |
 | `\acute` | `\acute{x}` | ![](renders/acute.png) |  |
 | `\AE` | `\text{\AE}` | ![](renders/ae.png) |  |
 | `\ae` | `\text{\ae}` | ![](renders/ae-2.png) |  |
@@ -68,8 +68,8 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\alpha` | `x \alpha y` | ![](renders/alpha-2.png) |  |
 | `\amalg` | `x \amalg y` | ![](renders/amalg.png) |  |
 | `\And` | — | — | owner #1 |
-| `\and` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\ang` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\and` | — | — | goldens: rej-unsup-and |
+| `\ang` | — | — | goldens: rej-unsup-ang |
 | `\angl` | — | — | owner #1 |
 | `\angln` | — | — | owner #1 |
 | `\angle` | `x \angle y` | ![](renders/angle.png) |  |
@@ -86,14 +86,14 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\argmax` | — | — | owner #1 |
 | `\argmin` | — | — | owner #1 |
 | `{array}` | `\begin{array}{cc\|c}a&b&c\\\hline d&e&f\end{array}` | ![](renders/array.png) |  |
-| `\array` | — | — | KaTeX rejects too; no reject row yet (owner #6) |
+| `\array` | — | — | goldens: rej-unsup-array |
 | `\arraystretch` | `\renewcommand{\arraystretch}{1.5}\begin{matrix}a\\b\end{matrix}` | *no render (engine)* | renewcommand of arraystretch rejected; KaTeX accepts |
-| `\Arrowvert` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\arrowvert` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Arrowvert` | — | — | goldens: rej-unsup-arrowvert |
+| `\arrowvert` | — | — | goldens: rej-unsup-arrowvert-2 |
 | `\ast` | `x \ast y` | ![](renders/ast.png) |  |
 | `\asymp` | `x \asymp y` | ![](renders/asymp.png) |  |
 | `\atop` | `{a\atop b}` | ![](renders/atop.png) |  |
-| `\atopwithdelims` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\atopwithdelims` | — | — | goldens: rej-unsup-atopwithdelims |
 
 ## B
 
@@ -108,7 +108,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\barwedge` | — | — | owner #1 |
 | `\Bbb` | — | — | owner #1 |
 | `\Bbbk` | — | — | owner #1 |
-| `\bbox` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bbox` | — | — | goldens: rej-unsup-bbox |
 | `\bcancel` | — | — | owner #7 |
 | `\because` | — | — | owner #1 |
 | `\begin` | `\begin{pmatrix}a\end{pmatrix}` | ![](renders/begin.png) |  |
@@ -118,7 +118,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\beth` | `x \beth y` | ![](renders/beth.png) |  |
 | `\between` | — | — | owner #1 |
 | `\bf` | — | — | owner #1 |
-| `\bfseries` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bfseries` | — | — | goldens: rej-unsup-bfseries |
 | `\big` | `\big(x\big)` | ![](renders/big.png) |  |
 | `\Big` | `\Big(x\Big)` | ![](renders/big-2.png) |  |
 | `\bigcap` | `\bigcap_{i=1}^n x` | ![](renders/bigcap.png) |  |
@@ -137,13 +137,13 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\bigm` | `a\bigm\|b` | ![](renders/bigm.png) |  |
 | `\Bigm` | `a\Bigm\|b` | ![](renders/bigm-2.png) |  |
 | `\bigodot` | `\bigodot_{i=1}^n x` | ![](renders/bigodot.png) |  |
-| `\bigominus` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bigominus` | — | — | goldens: rej-unsup-bigominus |
 | `\bigoplus` | `\bigoplus_{i=1}^n x` | ![](renders/bigoplus.png) |  |
-| `\bigoslash` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bigoslash` | — | — | goldens: rej-unsup-bigoslash |
 | `\bigotimes` | `\bigotimes_{i=1}^n x` | ![](renders/bigotimes.png) |  |
 | `\bigr` | `\bigl(x\bigr)` | ![](renders/bigr.png) |  |
 | `\Bigr` | `\Bigl(x\Bigr)` | ![](renders/bigr-2.png) |  |
-| `\bigsqcap` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bigsqcap` | — | — | goldens: rej-unsup-bigsqcap |
 | `\bigsqcup` | — | — | owner #1 |
 | `\bigstar` | — | — | owner #1 |
 | `\bigtriangledown` | `x \bigtriangledown y` | ![](renders/bigtriangledown.png) |  |
@@ -179,10 +179,10 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\braket` | `\braket{x}{y}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
 | `\Braket` | `\Braket{x}{y}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
 | `\brace` | — | — | owner #2 |
-| `\bracevert` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\bracevert` | — | — | goldens: rej-unsup-bracevert |
 | `\brack` | — | — | owner #2 |
 | `\breve` | `\breve{x}` | ![](renders/breve.png) |  |
-| `\buildrel` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\buildrel` | — | — | goldens: rej-unsup-buildrel |
 | `\bull` | — | — | owner #1 |
 | `\bullet` | `x \bullet y` | ![](renders/bullet.png) |  |
 | `\Bumpeq` | — | — | owner #1 |
@@ -192,22 +192,22 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\C` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\C` | — | — | goldens: rej-unsup-c |
 | `\cal` | — | — | owner #1 |
 | `\cancel` | `\cancel{x}` | ![](renders/cancel.png) |  |
-| `\cancelto` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cancelto` | — | — | goldens: rej-unsup-cancelto |
 | `\Cap` | — | — | owner #1 |
 | `\cap` | `x \cap y` | ![](renders/cap.png) |  |
 | `{cases}` | `f(x)=\begin{cases}1&x>0\\0&x=0\end{cases}` | ![](renders/cases.png) |  |
-| `\cases` | — | — | KaTeX rejects too; no reject row yet (owner #6) |
+| `\cases` | — | — | goldens: rej-unsup-cases |
 | `{CD}` | `\begin{CD}a@>b>>c\end{CD}` | *no render (overclaim)* | pinned KaTeX rejects CD; table needs a reject row |
 | `\cdot` | `x \cdot y` | ![](renders/cdot.png) |  |
 | `\cdotp` | `x \cdotp y` | ![](renders/cdotp.png) |  |
 | `\cdots` | `x \cdots y` | ![](renders/cdots.png) |  |
 | `\ce` | — | — | owner #1 |
-| `\cee` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cee` | — | — | goldens: rej-unsup-cee |
 | `\centerdot` | `x \centerdot y` | ![](renders/centerdot.png) |  |
-| `\cf` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cf` | — | — | goldens: rej-unsup-cf |
 | `use `\ce` instead` | — | — | owner #14 |
 | `\cfrac` | `\cfrac{a}{b}` | ![](renders/cfrac.png) |  |
 | `\char` | — | — | owner #1 |
@@ -226,8 +226,8 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\circleddash` | — | — | owner #1 |
 | `\circledR` | `x \circledR y` | ![](renders/circledr.png) |  |
 | `\circledS` | `x \circledS y` | ![](renders/circleds.png) |  |
-| `\class` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\cline` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\class` | — | — | goldens: rej-unsup-class |
+| `\cline` | — | — | goldens: rej-unsup-cline |
 | `\clubs` | — | — | owner #1 |
 | `\clubsuit` | `x \clubsuit y` | ![](renders/clubsuit.png) |  |
 | `\cnums` | — | — | owner #1 |
@@ -252,8 +252,8 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\complement` | — | — | owner #1 |
 | `\Complex` | — | — | owner #1 |
 | `\cong` | `x \cong y` | ![](renders/cong.png) |  |
-| `\Coppa` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\coppa` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Coppa` | — | — | goldens: rej-unsup-coppa |
+| `\coppa` | — | — | goldens: rej-unsup-coppa-2 |
 | `\coprod` | `\coprod_{i=1}^n x` | ![](renders/coprod.png) |  |
 | `\copyright` | — | — | owner #1 |
 | `\cos` | `\cos x` | ![](renders/cos.png) |  |
@@ -264,7 +264,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\coth` | `\coth x` | ![](renders/coth.png) |  |
 | `\cr` | `\begin{matrix}a\cr b\end{matrix}` | *no render (engine)* | in-matrix \cr exhausts buffers (NoSpace); KaTeX accepts |
 | `\csc` | `\csc x` | ![](renders/csc.png) |  |
-| `\cssId` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\cssId` | — | — | goldens: rej-unsup-cssid |
 | `\ctg` | — | — | owner #1 |
 | `\cth` | — | — | owner #1 |
 | `\Cup` | — | — | owner #1 |
@@ -306,7 +306,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\delta` | `x \delta y` | ![](renders/delta.png) |  |
 | `\Delta` | `x \Delta y` | ![](renders/delta-2.png) |  |
 | `\det` | `\det x` | ![](renders/det.png) |  |
-| `\Digamma` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Digamma` | — | — | goldens: rej-unsup-digamma |
 | `\digamma` | `x \digamma y` | ![](renders/digamma.png) |  |
 | `\dfrac` | `\dfrac{a}{b}` | ![](renders/dfrac.png) |  |
 | `\diagdown` | — | — | owner #1 |
@@ -316,7 +316,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\diamonds` | — | — | owner #1 |
 | `\diamondsuit` | `x \diamondsuit y` | ![](renders/diamondsuit.png) |  |
 | `\dim` | `\dim x` | ![](renders/dim.png) |  |
-| `\displaylines` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\displaylines` | — | — | goldens: rej-unsup-displaylines |
 | `\displaystyle` | `{\displaystyle\sum_i x}` | ![](renders/displaystyle.png) |  |
 | `\div` | `x \div y` | ![](renders/div.png) |  |
 | `\divideontimes` | — | — | owner #1 |
@@ -347,28 +347,28 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | --- | --- | --- | --- |
 | `\edef` | `\edef\e{z}\e` | *no render (engine)* | edef macro definition missing; KaTeX accepts |
 | `\ell` | `x \ell y` | ![](renders/ell.png) |  |
-| `\else` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\em` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\else` | — | — | goldens: rej-unsup-else |
+| `\em` | — | — | goldens: rej-unsup-em |
 | `\emph` | — | — | owner #7 |
 | `\empty` | — | — | owner #1 |
 | `\emptyset` | `x \emptyset y` | ![](renders/emptyset.png) |  |
-| `\enclose` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\enclose` | — | — | goldens: rej-unsup-enclose |
 | `\end` | `\begin{pmatrix}a\end{pmatrix}` | ![](renders/end.png) |  |
 | `\endgroup` | — | — | owner #1 |
 | `\enspace` | — | — | owner #1 |
 | `\Epsilon` | `x \Epsilon y` | ![](renders/epsilon.png) |  |
 | `\epsilon` | `x \epsilon y` | ![](renders/epsilon-2.png) |  |
-| `\eqalign` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\eqalignno` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\eqalign` | — | — | goldens: rej-unsup-eqalign |
+| `\eqalignno` | — | — | goldens: rej-unsup-eqalignno |
 | `\eqcirc` | `x \eqcirc y` | ![](renders/eqcirc.png) |  |
 | `\Eqcolon` | — | — | owner #1 |
 | `\eqcolon` | — | — | owner #1 |
 | `{equation}` | `\begin{equation}a=b\end{equation}` | *no render (overclaim)* | pinned KaTeX rejects equation; table needs a reject row |
 | `{equation\*}` | `\begin{equation*}a=b\end{equation*}` | *no render (overclaim)* | pinned KaTeX rejects equation*; table needs a reject row |
-| `{eqnarray}` | — | — | KaTeX rejects too; no reject row yet (owner #14) |
+| `{eqnarray}` | — | — | goldens: rej-unsup-eqnarray |
 | `\Eqqcolon` | — | — | owner #1 |
 | `\eqqcolon` | — | — | owner #1 |
-| `\eqref` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\eqref` | — | — | goldens: rej-unsup-eqref |
 | `\eqsim` | — | — | owner #1 |
 | `\eqslantgtr` | — | — | owner #1 |
 | `\eqslantless` | — | — | owner #1 |
@@ -378,7 +378,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\Eta` | `x \Eta y` | ![](renders/eta.png) |  |
 | `\eta` | `x \eta y` | ![](renders/eta-2.png) |  |
 | `\eth` | `x \eth y` | ![](renders/eth.png) |  |
-| `\euro` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\euro` | — | — | goldens: rej-unsup-euro |
 | `\exist` | — | — | owner #1 |
 | `\exists` | `x \exists y` | ![](renders/exists.png) |  |
 | `\exp` | `\exp x` | ![](renders/exp.png) |  |
@@ -391,7 +391,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\fallingdotseq` | — | — | owner #1 |
 | `\fbox` | — | — | owner #7 |
 | `\fcolorbox` | `\fcolorbox{red}{#ff0}{x}` | ![](renders/fcolorbox.png) |  |
-| `\fi` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\fi` | — | — | goldens: rej-unsup-fi |
 | `\Finv` | `x \Finv y` | ![](renders/finv.png) |  |
 | `\flat` | `x \flat y` | ![](renders/flat.png) |  |
 | `\footnotesize` | — | — | owner #1 |
@@ -413,9 +413,9 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\gcd` | `\gcd x` | ![](renders/gcd.png) |  |
 | `\gdef` | `\gdef\g{y}\g` | ![](renders/gdef.png) |  |
 | `\ge` | `x \ge y` | ![](renders/ge.png) |  |
-| `\geneuro` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\geneuronarrow` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\geneurowide` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\geneuro` | — | — | goldens: rej-unsup-geneuro |
+| `\geneuronarrow` | — | — | goldens: rej-unsup-geneuronarrow |
+| `\geneurowide` | — | — | goldens: rej-unsup-geneurowide |
 | `\genfrac` | `\genfrac(){0pt}{1}{a}{b}` | ![](renders/genfrac.png) |  |
 | `\geq` | `x \geq y` | ![](renders/geq.png) |  |
 | `\geqq` | — | — | owner #1 |
@@ -451,12 +451,12 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\hat` | `\hat{x}` | ![](renders/hat.png) |  |
 | `\hbar` | `x \hbar y` | ![](renders/hbar.png) |  |
 | `\hbox` | — | — | owner #7 |
-| `\hbox to` | — | — | KaTeX rejects too; no reject row yet (owner #7) |
+| `\hbox to` | — | — | KaTeX accepts (sweep-proven); owner #7 |
 | `\hdashline` | `\begin{array}{c}a\\\hdashline b\end{array}` | ![](renders/hdashline.png) |  |
 | `\hearts` | — | — | owner #1 |
 | `\heartsuit` | `x \heartsuit y` | ![](renders/heartsuit.png) |  |
-| `\hfil` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\hfill` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\hfil` | — | — | goldens: rej-unsup-hfil |
+| `\hfill` | — | — | goldens: rej-unsup-hfill |
 | `\hline` | `\begin{array}{c}a\\\hline b\end{array}` | ![](renders/hline.png) |  |
 | `\hom` | `\hom x` | ![](renders/hom.png) |  |
 | `\hookleftarrow` | `x \hookleftarrow y` | ![](renders/hookleftarrow.png) |  |
@@ -478,13 +478,13 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
 | `\i` | `\text{\i}` | ![](renders/i.png) |  |
-| `\idotsint` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\iddots` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\if` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\idotsint` | — | — | goldens: rej-unsup-idotsint |
+| `\iddots` | — | — | goldens: rej-unsup-iddots |
+| `\if` | — | — | goldens: rej-unsup-if |
 | `\iff` | — | — | owner #1 |
-| `\ifmode` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\ifx` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\iiiint` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\ifmode` | — | — | goldens: rej-unsup-ifmode |
+| `\ifx` | — | — | goldens: rej-unsup-ifx |
+| `\iiiint` | — | — | goldens: rej-unsup-iiiint |
 | `\iiint` | `\iiint_{i=1}^n x` | ![](renders/iiint.png) |  |
 | `\iint` | `\iint_{i=1}^n x` | ![](renders/iint.png) |  |
 | `\Im` | `x \Im y` | ![](renders/im.png) |  |
@@ -506,7 +506,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\iota` | `x \iota y` | ![](renders/iota-2.png) |  |
 | `\isin` | — | — | owner #1 |
 | `\it` | — | — | owner #1 |
-| `\itshape` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\itshape` | — | — | goldens: rej-unsup-itshape |
 
 ## JK
 
@@ -522,18 +522,18 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\kern` | `a\kern2ptb` | ![](renders/kern.png) |  |
 | `\Ket` | `\Ket{x}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
 | `\ket` | `\ket{x}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
-| `\Koppa` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\koppa` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Koppa` | — | — | goldens: rej-unsup-koppa |
+| `\koppa` | — | — | goldens: rej-unsup-koppa-2 |
 
 ## L
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\L` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\l` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\L` | — | — | goldens: rej-unsup-l |
+| `\l` | — | — | goldens: rej-unsup-l-2 |
 | `\Lambda` | `x \Lambda y` | ![](renders/lambda.png) |  |
 | `\lambda` | `x \lambda y` | ![](renders/lambda-2.png) |  |
-| `\label` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\label` | — | — | goldens: rej-unsup-label |
 | `\land` | `x \land y` | ![](renders/land.png) |  |
 | `\lang` | `x \lang y` | ![](renders/lang.png) |  |
 | `\langle` | `x \langle y` | ![](renders/langle.png) |  |
@@ -555,7 +555,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\left` | `\left(x\right)` | ![](renders/left.png) |  |
 | `\leftarrow` | `x \leftarrow y` | ![](renders/leftarrow.png) |  |
 | `\Leftarrow` | `x \Leftarrow y` | ![](renders/leftarrow-2.png) |  |
-| `\LeftArrow` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\LeftArrow` | — | — | goldens: rej-unsup-leftarrow |
 | `\leftarrowtail` | — | — | owner #1 |
 | `\leftharpoondown` | `x \leftharpoondown y` | ![](renders/leftharpoondown.png) |  |
 | `\leftharpoonup` | `x \leftharpoonup y` | ![](renders/leftharpoonup.png) |  |
@@ -565,10 +565,10 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\leftrightarrows` | — | — | owner #1 |
 | `\leftrightharpoons` | — | — | owner #1 |
 | `\leftrightsquigarrow` | — | — | owner #1 |
-| `\leftroot` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\leftroot` | — | — | goldens: rej-unsup-leftroot |
 | `\leftthreetimes` | — | — | owner #1 |
 | `\leq` | `x \leq y` | ![](renders/leq.png) |  |
-| `\leqalignno` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\leqalignno` | — | — | goldens: rej-unsup-leqalignno |
 | `\leqq` | — | — | owner #1 |
 | `\leqslant` | — | — | owner #1 |
 | `\lessapprox` | `x \lessapprox y` | ![](renders/lessapprox.png) |  |
@@ -612,7 +612,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\looparrowleft` | — | — | owner #1 |
 | `\looparrowright` | — | — | owner #1 |
 | `\lor` | `x \lor y` | ![](renders/lor.png) |  |
-| `\lower` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\lower` | — | — | goldens: rej-unsup-lower |
 | `\lozenge` | — | — | owner #1 |
 | `\lparen` | — | — | owner #1 |
 | `\Lrarr` | — | — | owner #1 |
@@ -660,14 +660,14 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\mathsf` | `\mathsf{H}` | ![](renders/mathsf.png) |  |
 | `\mathsterling` | — | — | owner #1 |
 | `\mathstrut` | `x\mathstrut y` | *no render (engine)* | strut missing; KaTeX accepts |
-| `\mathtip` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mathtip` | — | — | goldens: rej-unsup-mathtip |
 | `\mathtt` | `\mathtt{I}` | ![](renders/mathtt.png) |  |
 | `{matrix}` | `\begin{matrix}a&b\\c&d\end{matrix}` | ![](renders/matrix.png) |  |
 | `{matrix\*}` | `\begin{matrix*}a&b\\c&d\end{matrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
 | `\max` | `\max x` | ![](renders/max.png) |  |
-| `\mbox` | — | — | KaTeX rejects too; no reject row yet (owner #7) |
-| `\md` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\mdseries` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mbox` | — | — | goldens: rej-unsup-mbox |
+| `\md` | — | — | goldens: rej-unsup-md |
+| `\mdseries` | — | — | goldens: rej-unsup-mdseries |
 | `\measuredangle` | `x \measuredangle y` | ![](renders/measuredangle.png) |  |
 | `\medspace` | — | — | owner #1 |
 | `\mho` | `x \mho y` | ![](renders/mho.png) |  |
@@ -677,20 +677,20 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\minuscolon` | — | — | owner #1 |
 | `\minuscoloncolon` | — | — | owner #1 |
 | `\minuso` | — | — | owner #1 |
-| `\mit` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mit` | — | — | goldens: rej-unsup-mit |
 | `\mkern` | — | — | owner #1 |
-| `\mmlToken` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mmlToken` | — | — | goldens: rej-unsup-mmltoken |
 | `\mod` | `x\mod y` | *no render (engine)* | mod spacing missing; KaTeX accepts |
 | `\models` | `x \models y` | ![](renders/models.png) |  |
-| `\moveleft` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\moveright` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\moveleft` | — | — | goldens: rej-unsup-moveleft |
+| `\moveright` | — | — | goldens: rej-unsup-moveright |
 | `\mp` | `x \mp y` | ![](renders/mp.png) |  |
 | `\mskip` | — | — | owner #1 |
-| `\mspace` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\mspace` | — | — | goldens: rej-unsup-mspace |
 | `\Mu` | `x \Mu y` | ![](renders/mu.png) |  |
 | `\mu` | `x \mu y` | ![](renders/mu-2.png) |  |
-| `\multicolumn` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `{multiline}` | — | — | KaTeX rejects too; no reject row yet (owner #14) |
+| `\multicolumn` | — | — | goldens: rej-unsup-multicolumn |
+| `{multiline}` | — | — | goldens: rej-unsup-multiline |
 | `\multimap` | — | — | owner #1 |
 
 ## N
@@ -710,8 +710,8 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\negthinspace` | — | — | owner #1 |
 | `\neq` | `x \neq y` | ![](renders/neq.png) |  |
 | `\newcommand` | `\newcommand{\f}{x^2}\f` | ![](renders/newcommand.png) |  |
-| `\newenvironment` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\Newextarrow` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\newenvironment` | — | — | goldens: rej-unsup-newenvironment |
+| `\Newextarrow` | — | — | goldens: rej-unsup-newextarrow |
 | `\newline` | — | — | owner #1 |
 | `\nexists` | `x \nexists y` | ![](renders/nexists.png) |  |
 | `\ngeq` | — | — | owner #1 |
@@ -733,7 +733,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\noexpand` | — | — | owner #1 |
 | `\nolimits` | `\sum\nolimits_{i} x` | ![](renders/nolimits.png) |  |
 | `\nonumber` | `\begin{aligned}a&=b\nonumber\end{aligned}` | *no render (engine)* | equation numbering context missing; KaTeX accepts |
-| `\normalfont` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\normalfont` | — | — | goldens: rej-unsup-normalfont |
 | `\normalsize` | — | — | owner #1 |
 | `\not` | `a\not\in b` | ![](renders/not.png) |  |
 | `\notag` | `\begin{aligned}a&=b\notag\end{aligned}` | *no render (engine)* | equation numbering context missing; KaTeX accepts |
@@ -774,11 +774,11 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\odot` | `x \odot y` | ![](renders/odot.png) |  |
 | `\OE` | `\text{\OE}` | ![](renders/oe.png) |  |
 | `\oe` | `\text{\oe}` | ![](renders/oe-2.png) |  |
-| `\officialeuro` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\officialeuro` | — | — | goldens: rej-unsup-officialeuro |
 | `\oiiint` | — | — | owner #3 |
 | `\oiint` | — | — | owner #3 |
 | `\oint` | `\oint_{i=1}^n x` | ![](renders/oint.png) |  |
-| `\oldstyle` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\oldstyle` | — | — | goldens: rej-unsup-oldstyle |
 | `\omega` | `x \omega y` | ![](renders/omega.png) |  |
 | `\Omega` | `x \Omega y` | ![](renders/omega-2.png) |  |
 | `\Omicron` | — | — | owner #1 |
@@ -788,7 +788,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\operatorname\*` | `\operatorname*{lim}_{n}` | ![](renders/operatornamestar.png) |  |
 | `\operatornamewithlimits` | `\operatornamewithlimits{lim}_n` | *no render (engine)* | with-limits operator name missing; KaTeX accepts |
 | `\oplus` | `x \oplus y` | ![](renders/oplus.png) |  |
-| `\or` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\or` | — | — | goldens: rej-unsup-or |
 | `\origof` | — | — | owner #1 |
 | `\oslash` | `x \oslash y` | ![](renders/oslash.png) |  |
 | `\otimes` | `x \otimes y` | ![](renders/otimes.png) |  |
@@ -801,12 +801,12 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\overleftrightarrow` | — | — | owner #5 |
 | `\overline` | `x \overline y` | ![](renders/overline.png) |  |
 | `\overlinesegment` | — | — | owner #5 |
-| `\overparen` | — | — | KaTeX rejects too; no reject row yet (owner #5) |
+| `\overparen` | — | — | goldens: rej-unsup-overparen |
 | `\Overrightarrow` | — | — | owner #1 |
 | `\overrightarrow` | `x \overrightarrow y` | ![](renders/overrightarrow.png) |  |
 | `\overrightharpoon` | — | — | owner #1 |
 | `\overset` | `\overset{!}{=}` | ![](renders/overset.png) |  |
-| `\overwithdelims` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\overwithdelims` | — | — | goldens: rej-unsup-overwithdelims |
 | `\owns` | `x \owns y` | ![](renders/owns.png) |  |
 
 ## P
@@ -814,9 +814,9 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
 | `\P` | `\P` | ![](renders/p.png) |  |
-| `\pagecolor` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\pagecolor` | — | — | goldens: rej-unsup-pagecolor |
 | `\parallel` | `x \parallel y` | ![](renders/parallel.png) |  |
-| `\part` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\part` | — | — | goldens: rej-unsup-part |
 | `\partial` | `x \partial y` | ![](renders/partial.png) |  |
 | `\perp` | `x \perp y` | ![](renders/perp.png) |  |
 | `\phantom` | `\phantom{x}y` | ![](renders/phantom.png) |  |
@@ -825,12 +825,12 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\phi` | `x \phi y` | ![](renders/phi-2.png) |  |
 | `\Pi` | `x \Pi y` | ![](renders/pi.png) |  |
 | `\pi` | `x \pi y` | ![](renders/pi-2.png) |  |
-| `{picture}` | — | — | KaTeX rejects too; no reject row yet (owner #14) |
+| `{picture}` | — | — | goldens: rej-unsup-picture |
 | `\pitchfork` | — | — | owner #1 |
 | `\plim` | — | — | owner #1 |
 | `\plusmn` | — | — | owner #1 |
 | `\pm` | `x \pm y` | ![](renders/pm.png) |  |
-| `\pmatrix` | — | — | KaTeX rejects too; no reject row yet (owner #6) |
+| `\pmatrix` | — | — | goldens: rej-unsup-pmatrix |
 | `{pmatrix}` | `\begin{pmatrix}a&b\\c&d\end{pmatrix}` | ![](renders/pmatrix.png) |  |
 | `{pmatrix\*}` | `\begin{pmatrix*}a&b\\c&d\end{pmatrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
 | `\pmb` | `\pmb{x}` | *no render (engine)* | poor-man's bold missing; KaTeX accepts |
@@ -859,12 +859,12 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\Q` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Q` | — | — | goldens: rej-unsup-q |
 | `\qquad` | `x\qquad y` | ![](renders/qquad.png) |  |
 | `\quad` | `x\quad y` | ![](renders/quad.png) |  |
 | `\R` | — | — | owner #1 |
 | `\r` | `\r{a}` | ![](renders/r.png) |  |
-| `\raise` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\raise` | — | — | goldens: rej-unsup-raise |
 | `\raisebox` | `\raisebox{2pt}{x}` | ![](renders/raisebox.png) |  |
 | `\rang` | `x \rang y` | ![](renders/rang.png) |  |
 | `\rangle` | `x \rangle y` | ![](renders/rangle.png) |  |
@@ -881,12 +881,12 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\real` | — | — | owner #1 |
 | `\Reals` | — | — | owner #1 |
 | `\reals` | — | — | owner #1 |
-| `\ref` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\ref` | — | — | goldens: rej-unsup-ref |
 | `\reflectbox` | — | — | owner #1 |
 | `\relax` | — | — | owner #1 |
 | `\renewcommand` | `\renewcommand{\sum}{S}\sum` | ![](renders/renewcommand.png) |  |
-| `\renewenvironment` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\require` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\renewenvironment` | — | — | goldens: rej-unsup-renewenvironment |
+| `\require` | — | — | goldens: rej-unsup-require |
 | `\restriction` | — | — | owner #1 |
 | `\rfloor` | `x \rfloor y` | ![](renders/rfloor.png) |  |
 | `\rgroup` | — | — | owner #4 |
@@ -908,15 +908,15 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\rlap` | `\rlap{x}y` | ![](renders/rlap.png) |  |
 | `\rm` | — | — | owner #1 |
 | `\rmoustache` | — | — | owner #4 |
-| `\root` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\rotatebox` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\root` | — | — | goldens: rej-unsup-root |
+| `\rotatebox` | — | — | goldens: rej-unsup-rotatebox |
 | `\rparen` | — | — | owner #1 |
 | `\rq` | — | — | owner #1 |
 | `\rrbracket` | — | — | owner #1 |
 | `\Rrightarrow` | — | — | owner #1 |
 | `\Rsh` | — | — | owner #1 |
 | `\rtimes` | — | — | owner #1 |
-| `\Rule` | — | — | KaTeX rejects too; no reject row yet (owner #7) |
+| `\Rule` | — | — | goldens: rej-unsup-rule |
 | `\rule` | `\rule{1em}{2pt}` | ![](renders/rule.png) |  |
 | `\rVert` | `x \rVert y` | ![](renders/rvert.png) |  |
 | `\rvert` | `x \rvert y` | ![](renders/rvert-2.png) |  |
@@ -926,11 +926,11 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
 | `\S` | `\S` | ![](renders/s.png) |  |
-| `\Sampi` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\sampi` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\sc` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\scalebox` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\scr` | — | — | KaTeX rejects too; no reject row yet (owner #7) |
+| `\Sampi` | — | — | goldens: rej-unsup-sampi |
+| `\sampi` | — | — | goldens: rej-unsup-sampi-2 |
+| `\sc` | — | — | goldens: rej-unsup-sc |
+| `\scalebox` | — | — | goldens: rej-unsup-scalebox |
+| `\scr` | — | — | goldens: rej-unsup-scr |
 | `\scriptscriptstyle` | `{\scriptscriptstyle\sum_i x}` | ![](renders/scriptscriptstyle.png) |  |
 | `\scriptsize` | — | — | owner #1 |
 | `\scriptstyle` | `{\scriptstyle\sum_i x}` | ![](renders/scriptstyle.png) |  |
@@ -940,15 +940,15 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\sect` | `\sect` | ![](renders/sect.png) |  |
 | `\set` | — | — | owner #1 |
 | `\Set` | `\Set{x\|x>0}` | *no render (engine)* | set notation missing; KaTeX accepts |
-| `\setlength` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\setlength` | — | — | goldens: rej-unsup-setlength |
 | `\setminus` | `x \setminus y` | ![](renders/setminus.png) |  |
 | `\sf` | — | — | owner #1 |
 | `\sharp` | `x \sharp y` | ![](renders/sharp.png) |  |
 | `\shortmid` | — | — | owner #1 |
 | `\shortparallel` | — | — | owner #1 |
-| `\shoveleft` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\shoveright` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\sideset` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\shoveleft` | — | — | goldens: rej-unsup-shoveleft |
+| `\shoveright` | — | — | goldens: rej-unsup-shoveright |
+| `\sideset` | — | — | goldens: rej-unsup-sideset |
 | `\Sigma` | `x \Sigma y` | ![](renders/sigma.png) |  |
 | `\sigma` | `x \sigma y` | ![](renders/sigma-2.png) |  |
 | `\sim` | `x \sim y` | ![](renders/sim.png) |  |
@@ -959,9 +959,9 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\sinh` | `\sinh x` | ![](renders/sinh.png) |  |
 | `\sixptsize` | — | — | owner #1 |
 | `\sh` | — | — | owner #1 |
-| `\skew` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\skip` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\sl` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\skew` | — | — | goldens: rej-unsup-skew |
+| `\skip` | — | — | goldens: rej-unsup-skip |
+| `\sl` | — | — | goldens: rej-unsup-sl |
 | `\small` | — | — | owner #1 |
 | `\smallfrown` | — | — | owner #1 |
 | `\smallint` | — | — | owner #1 |
@@ -970,9 +970,9 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\smallsmile` | — | — | owner #1 |
 | `\smash` | `\smash[t]{x}^{2}` | ![](renders/smash.png) |  |
 | `\smile` | `x \smile y` | ![](renders/smile.png) |  |
-| `\smiley` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\smiley` | — | — | goldens: rej-unsup-smiley |
 | `\sout` | `\sout{x}` | *no render (engine)* | strikeout missing; KaTeX accepts |
-| `\Space` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Space` | — | — | goldens: rej-unsup-space |
 | `\space` | — | — | owner #1 |
 | `\spades` | — | — | owner #1 |
 | `\spadesuit` | `x \spadesuit y` | ![](renders/spadesuit.png) |  |
@@ -989,12 +989,12 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\ss` | `\text{\ss}` | ![](renders/ss.png) |  |
 | `\stackrel` | — | — | owner #1 |
 | `\star` | `x \star y` | ![](renders/star.png) |  |
-| `\Stigma` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\stigma` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\strut` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\style` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Stigma` | — | — | goldens: rej-unsup-stigma |
+| `\stigma` | — | — | goldens: rej-unsup-stigma-2 |
+| `\strut` | — | — | goldens: rej-unsup-strut |
+| `\style` | — | — | goldens: rej-unsup-style |
 | `\sub` | — | — | owner #1 |
-| `{subarray}` | — | — | KaTeX rejects too; no reject row yet (owner #14) |
+| `{subarray}` | — | — | KaTeX accepts with alignment arg (sweep-proven); owner #14 |
 | `\sube` | — | — | owner #1 |
 | `\Subset` | — | — | owner #1 |
 | `\subset` | `x \subset y` | ![](renders/subset.png) |  |
@@ -1064,15 +1064,15 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\textquoteright` | `\text{\textquoteright}` | ![](renders/textquoteright.png) |  |
 | `\textregistered` | `\textregistered` | ![](renders/textregistered.png) |  |
 | `\textrm` | `\textrm{x}` | ![](renders/textrm.png) |  |
-| `\textsc` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\textsc` | — | — | goldens: rej-unsup-textsc |
 | `\textsf` | `\textsf{x}` | ![](renders/textsf.png) |  |
 | `\textsterling` | `\text{\textsterling}` | ![](renders/textsterling.png) |  |
 | `\textstyle` | `{\textstyle\sum_i x}` | ![](renders/textstyle.png) |  |
-| `\texttip` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\texttip` | — | — | goldens: rej-unsup-texttip |
 | `\texttt` | `\texttt{x}` | ![](renders/texttt.png) |  |
 | `\textunderscore` | `\text{\textunderscore}` | ![](renders/textunderscore.png) |  |
 | `\textup` | — | — | owner #1 |
-| `\textvisiblespace` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\textvisiblespace` | — | — | goldens: rej-unsup-textvisiblespace |
 | `\tfrac` | `\tfrac{a}{b}` | ![](renders/tfrac.png) |  |
 | `\tg` | — | — | owner #1 |
 | `\th` | — | — | owner #1 |
@@ -1086,10 +1086,10 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\thinspace` | — | — | owner #1 |
 | `\tilde` | `\tilde{x}` | ![](renders/tilde-2.png) |  |
 | `\times` | `x \times y` | ![](renders/times.png) |  |
-| `\Tiny` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\Tiny` | — | — | goldens: rej-unsup-tiny |
 | `\tiny` | — | — | owner #1 |
 | `\to` | `x \to y` | ![](renders/to.png) |  |
-| `\toggle` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\toggle` | — | — | goldens: rej-unsup-toggle |
 | `\top` | `x \top y` | ![](renders/top.png) |  |
 | `\triangle` | — | — | owner #1 |
 | `\triangledown` | — | — | owner #1 |
@@ -1120,12 +1120,12 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\underrightarrow` | — | — | owner #5 |
 | `\underline` | `x \underline y` | ![](renders/underline.png) |  |
 | `\underlinesegment` | — | — | owner #5 |
-| `\underparen` | — | — | KaTeX rejects too; no reject row yet (owner #5) |
+| `\underparen` | — | — | goldens: rej-unsup-underparen |
 | `\underset` | `\underset{*}{+}` | ![](renders/underset.png) |  |
-| `\unicode` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\unicode` | — | — | goldens: rej-unsup-unicode |
 | `\unlhd` | `x \unlhd y` | ![](renders/unlhd.png) |  |
 | `\unrhd` | `x \unrhd y` | ![](renders/unrhd.png) |  |
-| `\up` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\up` | — | — | goldens: rej-unsup-up |
 | `\Uparrow` | `x \Uparrow y` | ![](renders/uparrow.png) |  |
 | `\uparrow` | `x \uparrow y` | ![](renders/uparrow-2.png) |  |
 | `\Updownarrow` | `x \Updownarrow y` | ![](renders/updownarrow.png) |  |
@@ -1133,8 +1133,8 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\upharpoonleft` | — | — | owner #1 |
 | `\upharpoonright` | — | — | owner #1 |
 | `\uplus` | `x \uplus y` | ![](renders/uplus.png) |  |
-| `\uproot` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\upshape` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\uproot` | — | — | goldens: rej-unsup-uproot |
+| `\upshape` | — | — | goldens: rej-unsup-upshape |
 | `\Upsilon` | `x \Upsilon y` | ![](renders/upsilon.png) |  |
 | `\upsilon` | `x \upsilon y` | ![](renders/upsilon-2.png) |  |
 | `\upuparrows` | — | — | owner #1 |
@@ -1147,7 +1147,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
 | `\v` | `\v{x}` | ![](renders/v.png) |  |
-| `\varcoppa` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\varcoppa` | — | — | goldens: rej-unsup-varcoppa |
 | `\varDelta` | — | — | owner #1 |
 | `\varepsilon` | `x \varepsilon y` | ![](renders/varepsilon.png) |  |
 | `\varGamma` | — | — | owner #1 |
@@ -1168,7 +1168,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\varrho` | `x \varrho y` | ![](renders/varrho.png) |  |
 | `\varSigma` | — | — | owner #1 |
 | `\varsigma` | `x \varsigma y` | ![](renders/varsigma.png) |  |
-| `\varstigma` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\varstigma` | — | — | goldens: rej-unsup-varstigma |
 | `\varsubsetneq` | — | — | owner #1 |
 | `\varsubsetneqq` | — | — | owner #1 |
 | `\varsupsetneq` | — | — | owner #1 |
@@ -1192,9 +1192,9 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\verb` | `\verb\|x\|` | ![](renders/verb.png) |  |
 | `\Vert` | `x \Vert y` | ![](renders/vert.png) |  |
 | `\vert` | `x \vert y` | ![](renders/vert-2.png) |  |
-| `\vfil` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\vfill` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
-| `\vline` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\vfil` | — | — | goldens: rej-unsup-vfil |
+| `\vfill` | — | — | goldens: rej-unsup-vfill |
+| `\vline` | — | — | goldens: rej-unsup-vline |
 | `{Vmatrix}` | `\begin{Vmatrix}a&b\\c&d\end{Vmatrix}` | ![](renders/vmatrix.png) |  |
 | `{Vmatrix\*}` | `\begin{Vmatrix*}a&b\\c&d\end{Vmatrix*}` | *no render (engine)* | starred env names do not lex; KaTeX accepts |
 | `{vmatrix}` | `\begin{vmatrix}a&b\\c&d\end{vmatrix}` | ![](renders/vmatrix-2.png) |  |
@@ -1210,7 +1210,7 @@ Mirror of the KaTeX supported-syntax table with a render of every accepted funct
 | `\weierp` | — | — | owner #1 |
 | `\widecheck` | `\widecheck{x}` | ![](renders/widecheck.png) |  |
 | `\widehat` | `\widehat{x}` | ![](renders/widehat.png) |  |
-| `\wideparen` | — | — | KaTeX rejects too; no reject row yet (owner #1) |
+| `\wideparen` | — | — | goldens: rej-unsup-wideparen |
 | `\widetilde` | `\widetilde{x}` | ![](renders/widetilde.png) |  |
 | `\wp` | `x \wp y` | ![](renders/wp.png) |  |
 | `\wr` | `x \wr y` | ![](renders/wr.png) |  |
