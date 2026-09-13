@@ -59,8 +59,14 @@ jobs:
           base="${{ github.event.pull_request.base.sha || github.sha }}"
           git worktree add /tmp/zatex-base "$base"
           cd /tmp/zatex-base
-          zig build gallery
-          ./zig-out/bin/gallery 2> "$GITHUB_WORKSPACE/gallery-base.html"
+          if zig build gallery 2>/dev/null && ./zig-out/bin/gallery 2> "$GITHUB_WORKSPACE/gallery-base.html"; then
+            echo "base gallery rendered"
+          else
+            # Bootstrap: the gallery tool postdates the base commit (i.e.
+            # this very PR introduces it), so there is no base gallery to
+            # diff against — the diff then lists every row as ADDED.
+            printf '<!DOCTYPE html><html><body><p>No base gallery: the gallery tool postdates the base commit.</p></body></html>\n' > "$GITHUB_WORKSPACE/gallery-base.html"
+          fi
       - name: Diff galleries
         run: |
           python3 tools/gallery_diff.py gallery-base.html gallery-head.html | tee gallery-diff.txt
