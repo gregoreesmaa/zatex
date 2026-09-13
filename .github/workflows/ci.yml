@@ -12,7 +12,11 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
-      - name: Run all tests (full profile, incl. pinned-KaTeX sweep)
+      - name: Run core tests (full profile, incl. pinned-KaTeX sweep)
+        working-directory: packages/zatex-core
+        run: zig build test --summary all
+      - name: Run zatex-png tests
+        working-directory: packages/zatex-png
         run: zig build test --summary all
       - name: Subset-profile size gate (no host-cost growth)
         run: tools/size_gate.sh
@@ -31,4 +35,40 @@ jobs:
           cd tools/katex
           npm ci
           npm run sweep
-          git diff --exit-code ../../goldens/katex_sweep.json
+          git diff --exit-code ../../packages/zatex-core/goldens/katex_sweep.json
+
+  # Visual regression: re-render every checked-in PNG and fail on real
+  # pixel drift, so each PR carries eyeballable screenshots. Layout is
+  # deterministic (dimensions must match exactly), but CoreText
+  # antialiasing coverage varies by a few levels across macOS builds,
+  # so tools/compare_shots.py compares decoded pixels with calibrated
+  # tolerances instead of bytes. Fresh PNGs also upload as artifacts
+  # for comparison under the PR.
+  # NOTE: informational only, not a required gate (per AGENTS.md §4,
+  # required gates compare IR/MathML text, never rendered pixels).
+  screenshots:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Re-render screenshot baselines and fail on drift
+        run: |
+          ./packages/zatex-png/screenshots/render.sh /tmp/shots
+          python3 tools/compare_shots.py packages/zatex-png/screenshots/png /tmp/shots
+      - name: Regenerate docs mirror and fail on drift
+        run: |
+          cp -r docs/renders /tmp/docbase
+          python3 tools/gen_doc_renders.py
+          python3 tools/compare_shots.py /tmp/docbase docs/renders
+          git diff --exit-code docs/katex-syntax.md
+      - name: Attach renders to the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renders
+          path: |
+            /tmp/shots
+            docs/renders
+          retention-days: 14
