@@ -15,6 +15,10 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TABLE = os.path.join(ROOT, "docs", "support-table.md")
+# Pinned KaTeX table (byte-identical to KaTeX/KaTeX@v0.18.7
+# docs/support_table.md; re-fetch on pin bump). Its Source/Rendered
+# columns supply the mirror's example letters (review: exact mirror).
+KATEX_TABLE = os.path.join(ROOT, "tools", "katex", "support_table.md")
 RENDERS = os.path.join(ROOT, "docs", "renders")
 MD = os.path.join(ROOT, "docs", "katex-syntax.md")
 GAPS = os.path.join(ROOT, "tools", "doc_gaps.json")
@@ -38,7 +42,8 @@ EXACT = {
     "(": ("(x)", False),
     ")": ("(x)", False),
     "\\(\u2026\\)": ("\\(x^2\\)", False),
-    "\\": ("\\begin{matrix}a\\\\b\\end{matrix}", True),
+    "\\\\ ": ("\\begin{matrix}a\\\\b\\end{matrix}", True),
+    "\\ ": ("a\\ b", False),
     '\\"': ('\\"o', False),
     "\\$": ("\\$", False),
     "\\,": ("x\\,x", False),
@@ -54,10 +59,15 @@ EXACT = {
     "\\{": ("\\{x\\}", False),
     "\\}": ("\\{x\\}", False),
     "\\|": ("\\|x\\|", False),
-    "\\\\|": ("\\begin{matrix}a\\\\|b\\end{matrix}", True),
+    "|": ("a|b", False),
     "\\~": ("\\~n", False),
     "^": ("x^2", False),
     "\\^": ("\\^{x}", False),
+    "_": ("x_i", False),
+    ">": ("x>y", False),
+    "[": ("[x]", False),
+    "]": ("x]", False),
+    "~": ("a~b", False),
     # Single letters.
     "\\H": ("\\H{o}", False),
     "\\O": ("\\text{\\O}", False),
@@ -247,7 +257,6 @@ ENV = {
     "Vmatrix": "\\begin{Vmatrix}a&b\\\\c&d\\end{Vmatrix}",
     "smallmatrix": "\\bigl(\\begin{smallmatrix}a&b\\\\c&d\\end{smallmatrix}\\bigr)",
     "array": "\\begin{array}{cc|c}a&b&c\\\\\\hline d&e&f\\end{array}",
-    "darray": "\\begin{darray}{c}a\\\\b\\end{darray}",
     "aligned": "\\begin{aligned}a&=b+c\\\\d&=e\\end{aligned}",
     "alignedat": "\\begin{alignedat}{2}a&=b&c&=d\\end{alignedat}",
     "alignat": "\\begin{alignat}{2}a&=b&c&=d\\end{alignat}",
@@ -288,8 +297,8 @@ def example_for(fn):
         return EXACT[fn]
     if fn.startswith("{") and fn.endswith("}"):
         inner = fn[1:-1]
-        star = inner.endswith("\\*")
-        name = inner[:-2] if star else inner
+        star = inner.endswith("*")
+        name = inner[:-1] if star else inner
         if name in ENV:
             tex = ENV[name]
             if star:
@@ -314,10 +323,13 @@ def example_for(fn):
     return None
 
 
+# Fixed slugs for renders whose derived name would mislead: `\ ` and
+# `\\ ` both derive from bare whitespace (`dash`), hiding what they show.
+SLUG_PIN = {"\\ ": "ctrlspace", "\\\\ ": "newline"}
+
+
 def slug_for(fn, used):
-    if fn == "\\":
-        fn = "\\break"
-    s = fn.lower()
+    s = SLUG_PIN.get(fn, fn).lower()
     for a, b in [("\\", ""), ("{", ""), ("}", ""), ("*", "star"),
                  ("|", "pipe"), ("&", "amp"), ("^", "pow"), ("~", "tilde"),
                  ("<", "lt"), (">", "gt"), ("=", "eq"), ("(", "lp"),
@@ -340,7 +352,7 @@ def slug_for(fn, used):
 def parse_table(path):
     sections = []
     current = None
-    row_re = re.compile(r"^\| `(.*)` \| (\w+) \| (.*) \|$")
+    row_re = re.compile(r"^\| `(.*)` \| ([\w-]+) \| (.*) \|$")
     for line in open(path):
         m = re.match(r"## (.*)", line.rstrip("\n"))
         if m:
@@ -357,35 +369,211 @@ def parse_table(path):
     return sections
 
 
+def katex_name(cell):
+    """Unescape a function-name cell (`\\X` -> `X` for symbol names).
+    Only the name column uses this; example spans stay verbatim."""
+    raw = cell.lstrip()
+    had = raw != raw.rstrip(' ')
+    raw = raw.rstrip(' ')
+    if had and raw.endswith(chr(92)):
+        raw += ' '
+    raw = raw.replace('&#060;', '<').replace('&#124;', '|')
+    buf = []
+    i = 0
+    while i < len(raw):
+        c = raw[i]
+        if c == chr(92) and i + 1 < len(raw) and not raw[i + 1].isalnum() and not raw[i + 1].isspace():
+            buf.append(raw[i + 1])
+            i += 2
+        else:
+            buf.append(c)
+            i += 1
+    return ''.join(buf)
+
+
+def clean_sep(s):
+    return re.sub(r'[ \t\n]|<br[ \t\n]*/?>|&[a-z]+;', '', s)
+
+
+def katex_examples(path):
+    """Map fn -> [src_tex|None, ren_tex|None, ren_display] from the
+    vendored KaTeX table, VERBATIM (code spans and $..$ math render
+    literally upstream; only the fn name column needs unescaping).
+
+    Source spans join with newlines; prose between spans truncates
+    (e.g. href notes) with a report; single-char edge text is kept
+    (the leading `a` cell). Rendered strips one $ pair ($$ is
+    display). Empty/comment-only tex maps to None.
+    """
+    out = {}
+    logical = []
+    for raw_line in open(path, encoding='utf-8'):
+        line = raw_line.rstrip(chr(10))
+        if line.startswith('|'):
+            logical.append(line)
+        elif line.strip() != '' and not line.startswith('#') and logical:
+            logical[-1] += chr(10) + line
+    for line in logical:
+        # One upstream row ({pmatrix}) lacks its trailing pipe; tolerate
+        # the quirk here rather than editing the vendored fixture.
+        parts = line.split('|')
+        cells = parts[1:-1] if line.endswith('|') else parts[1:]
+        if len(cells) < 3:
+            continue
+        first = cells[0].lstrip()
+        if first.startswith('Symbol/Function') or re.fullmatch(r':-+', first.strip()):
+            continue
+        rest = cells[1:]
+        fn = katex_name(cells[0])
+        src_tex, ren_tex, ren_disp = None, None, False
+        segs = re.split('(`[^`]*`)', rest[1])
+        chunks = []
+        if clean_sep(segs[0]) != '':
+            if len(clean_sep(segs[0])) == 1:
+                chunks.append(clean_sep(segs[0]))
+            else:
+                print("katex source leading prose dropped: %s <- %s" % (fn, segs[0].strip()[:40]))
+        for j in range(1, len(segs), 2):
+            # KaTeX nests presentational $..$ (math-italic) inside code
+            # spans; unwrap to the plain equation (literal \$ survives).
+            chunks.append(re.sub(r'(?<!\\)\$([^$]+?)(?<!\\)\$', r'\1',
+                                 segs[j][1:-1]))
+            if j + 1 < len(segs):
+                mid = segs[j + 1]
+                if mid == '' or clean_sep(mid) == '':
+                    continue
+                tail = clean_sep(mid)
+                if len(tail) == 1 and j + 2 >= len(segs):
+                    chunks.append(tail)
+                else:
+                    print("katex source truncated: %s at %s" % (fn, mid.strip()[:40]))
+                    break
+        if chunks:
+            t = chr(10).join(chunks)
+            if not (t.strip() == '' or t.lstrip().startswith('%')):
+                src_tex = t
+        rend = rest[0].strip()
+        if rend.startswith('$$') and rend.endswith('$$') and len(rend) > 4:
+            t = rend[2:-2]
+            if not (t.strip() == '' or t.lstrip().startswith('%')):
+                ren_tex, ren_disp = t, True
+        elif rend.startswith('$') and rend.endswith('$') and len(rend) > 2:
+            t = rend[1:-1]
+            if not (t.strip() == '' or t.lstrip().startswith('%')):
+                ren_tex, ren_disp = t, False
+        out[fn] = [src_tex, ren_tex, ren_disp]
+    return out
+
+
 def md_escape(tex):
     # Backticks need no backslash escaping; pipes and newlines do.
     return tex.replace("|", "\\|").replace("\n", "\\n")
+
+
+def kx_covers(fn, tex):
+    """True when tex exercises fn (KaTeX's example is usable as-is).
+
+    Single-char functions are covered by construction. `{env}` needs
+    its begin tag; commands need the command with a non-letter after
+    it (so `\\bar` in `\\barwedge` does not count). When neither
+    KaTeX's tex nor ours contains the function (e.g. `#` params),
+    KaTeX's still wins.
+    """
+    if len(fn) == 1:
+        return True
+    if fn.startswith('{') and fn.endswith('}'):
+        return (chr(92) + 'begin{' + fn[1:-1] + '}') in tex
+    if not fn.startswith(chr(92)):
+        return fn in tex
+    i = tex.find(fn)
+    while i >= 0:
+        j = i + len(fn)
+        nxt = tex[j:j + 1]
+        if j >= len(tex) or not nxt.isascii() or not nxt.isalpha():
+            return True
+        i = tex.find(fn, i + 1)
+    return False
+
+
+def resolve_example(fn, kx):
+    """(tex, display, tier). KaTeX's source spans first, then its
+    rendered column, then the local derivation. Each tier must
+    exercise fn (single chars exempt); the first covering tier wins,
+    else the first existing tex wins (e.g. `#` params). None only
+    when no tier covers the row at all. A winning KaTeX tex this
+    engine cannot render becomes a gap entry, never a silent
+    substitute."""
+    ours = example_for(fn)
+    tiers = []
+    entry = kx.get(fn)
+    if entry is not None:
+        src_tex, ren_tex, ren_disp = entry
+        if src_tex is not None:
+            tiers.append((src_tex, ours[1] if ours is not None else False, "katex-source"))
+        if ren_tex is not None:
+            tiers.append((ren_tex, ren_disp, "katex-rendered"))
+    if ours is not None:
+        tiers.append((ours[0], ours[1], "local"))
+    first = None
+    for tex, disp, tier in tiers:
+        if first is None:
+            first = (tex, disp, tier)
+        if kx_covers(fn, tex):
+            return tex, disp, tier
+    if first is not None:
+        return first
+    return None
+
+
+def render_batch(cli, cli_dir, tmp, corp_path, px, entries):
+    """Render (slug, tex, display) entries into tmp; return failed slugs."""
+    for name in os.listdir(tmp):
+        if name.endswith(".png"):
+            os.remove(os.path.join(tmp, name))
+    corpus = [{"id": slug, "tex": tex, "display": disp, "expect": "accept"}
+              for slug, tex, disp in entries]
+    json.dump(corpus, open(corp_path, "w"))
+    proc = subprocess.run(
+        [cli, "--corpus", corp_path, "--outdir", tmp, "--px", str(px)],
+        cwd=cli_dir, capture_output=True, text=True,
+    )
+    failed = set(re.findall(r"row '([^']+)' failed", proc.stdout + proc.stderr))
+    for slug, _, _ in entries:
+        if slug not in failed and not os.path.exists(os.path.join(tmp, slug + ".png")):
+            failed.add(slug)
+    return failed
 
 
 def main():
     sections = parse_table(TABLE)
     gaps = json.load(open(GAPS))
     gap_fns = set(gaps)
+    kx = katex_examples(KATEX_TABLE)
     # Resolve examples; fail on uncovered accept rows.
     used_slugs = set()
-    jobs = []  # (section, row, slug, tex, display)
+    jobs = []  # [section, row, slug, tex, display]
+    tiers = {}
     missing = []
     for sec in sections:
         for row in sec["rows"]:
             if row["status"] != "accept":
                 continue
-            ex = example_for(row["fn"])
+            ex = resolve_example(row["fn"], kx)
             if ex is None:
                 missing.append(row["fn"])
                 continue
-            tex, display = ex
+            tex, display, tier = ex
+            tiers[tier] = tiers.get(tier, 0) + 1
             slug = slug_for(row["fn"], used_slugs)
-            jobs.append((sec, row, slug, tex, display))
+            jobs.append([sec, row, slug, tex, display])
     if missing:
         print("no example rule for %d accept rows:" % len(missing))
         for fn in missing:
             print("  " + fn)
         return 1
+    print("example tiers: %s" % ", ".join(
+        "%s=%d" % (t, tiers.get(t, 0))
+        for t in ("katex-source", "katex-rendered", "local")))
     print("%d accept rows, %d with examples" % (
         sum(1 for s in sections for r in s["rows"] if r["status"] == "accept"),
         len(jobs),
@@ -398,24 +586,11 @@ def main():
     # full accounting below.
     tmp = os.path.join(RENDERS, ".tmp")
     os.makedirs(RENDERS, exist_ok=True)
-    corpus = [{"id": slug, "tex": tex, "display": disp, "expect": "accept"}
-              for _, _, slug, tex, disp in jobs]
-    corp_path = os.path.join(tmp, "corpus.json")
     os.makedirs(tmp, exist_ok=True)
-    for name in os.listdir(tmp):
-        if name.endswith(".png"):
-            os.remove(os.path.join(tmp, name))
-    json.dump(corpus, open(corp_path, "w"))
-    proc = subprocess.run(
-        [CLI, "--corpus", corp_path, "--outdir", tmp, "--px", str(PX)],
-        cwd=CLI_DIR, capture_output=True, text=True,
-    )
-    log = proc.stdout + proc.stderr
-    failed = set(re.findall(r"row '([^']+)' failed", log))
-    by_slug = {slug: (sec, row, tex, disp) for sec, row, slug, tex, disp in jobs}
-    for slug in by_slug:
-        if slug not in failed and not os.path.exists(os.path.join(tmp, slug + ".png")):
-            failed.add(slug)
+    corp_path = os.path.join(tmp, "corpus.json")
+    by_slug = {j[2]: j for j in jobs}
+    failed = render_batch(CLI, CLI_DIR, tmp, corp_path, PX,
+                          [(j[2], j[3], j[4]) for j in jobs])
     failed_fns = set(by_slug[s][1]["fn"] for s in failed)
     unexpected = failed_fns - gap_fns
     stale = gap_fns - failed_fns
@@ -444,10 +619,17 @@ def main():
         os.rename(src, dst)
     gap_info = gaps
     with open(MD, "w") as out:
-        out.write("# KaTeX syntax mirror\n\n")
-        out.write("Mirror of the KaTeX supported-syntax table with a render "
-                  "of every accepted function. Generated by "
-                  "`tools/gen_doc_renders.py` — do not edit.\n\n")
+        out.write("# KaTeX syntax mirror (generated — do not edit)\n\n")
+        out.write("A render of every accepted function, generated from "
+                  "`docs/support-table.md` by `tools/gen_doc_renders.py` "
+                  "(renders via `zatex-png` into `docs/renders/`; expected "
+                  "render gaps live in `tools/doc_gaps.json`). Status, "
+                  "evidence, and ownership live in the support table — "
+                  "edit that, never this file. Examples use KaTeX's own "
+                  "equations (Source column of the vendored pinned table, "
+                  "else its Rendered column); rows whose KaTeX example "
+                  "this engine cannot render yet are gap-listed with "
+                  "KaTeX's equation.\n\n")
         for sec in sections:
             out.write("## %s\n\n" % sec["title"])
             out.write("| Function | Example | Render | Note |\n")

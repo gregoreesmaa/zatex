@@ -16,6 +16,9 @@ pub const Font = struct {
     bytes: []u8,
     ot: otmath.Font,
     cgfont: cg.CGFontRef,
+    /// CoreText font at `upm` points, so ink boxes arrive in font
+    /// units for the extents callback below.
+    ctunits: cg.CTFontRef,
     alloc: std.mem.Allocator,
 
     /// Load a font file (the pinned fixture in CI). Caller owns the
@@ -38,10 +41,13 @@ pub const Font = struct {
         defer cg.CFRelease(dp);
         const gf = cg.CGFontCreateWithDataProvider(dp);
         if (gf == null) return error.FontLoad;
-        return .{ .bytes = bytes, .ot = ot, .cgfont = gf, .alloc = alloc };
+        const ctu = cg.CTFontCreateWithGraphicsFont(gf, @floatFromInt(ot.upm), null, null);
+        if (ctu == null) return error.FontLoad;
+        return .{ .bytes = bytes, .ot = ot, .cgfont = gf, .ctunits = ctu, .alloc = alloc };
     }
 
     pub fn close(self: *Font) void {
+        cg.CFRelease(self.ctunits);
         cg.CFRelease(self.cgfont);
         self.alloc.free(self.bytes);
     }
@@ -56,6 +62,7 @@ pub const Font = struct {
             .glyphId = gid,
             .advance = adv,
             .ruleThickness = rule,
+            .extents = ext,
             .glyphVariant = variant,
             .italicCorrection = italic,
         };
@@ -106,5 +113,21 @@ pub const Font = struct {
         const self: *const Font = @ptrCast(@alignCast(ctx));
         const v = otmath.italicCorrection(self.ot, glyph) catch 0;
         return self.scale1000(v);
+    }
+
+    /// Real ink extents from CoreText (font units, baseline-relative):
+    /// [height_above, depth_below] at 1000 units. Blank glyphs (space)
+    /// report [0, 0], which the core handles as width-only boxes.
+    fn ext(ctx: *const anyopaque, font_id: u16, glyph: u16) [2]i32 {
+        _ = font_id;
+        const self: *const Font = @ptrCast(@alignCast(ctx));
+        var r: cg.CGRect = .{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
+        const g: cg.CGGlyph = glyph;
+        _ = cg.CTFontGetBoundingRectsForGlyphs(self.ctunits, cg.kCTFontOrientationDefault, @ptrCast(&g), @ptrCast(&r), 1);
+        const top = r.origin.y + r.size.height;
+        const bot = r.origin.y;
+        const ha: i32 = if (top <= 0) 0 else self.scale1000(@as(i32, @intFromFloat(@ceil(top))));
+        const db: i32 = if (bot >= 0) 0 else self.scale1000(@as(i32, @intFromFloat(@ceil(-bot))));
+        return .{ ha, db };
     }
 };

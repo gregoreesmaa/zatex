@@ -96,6 +96,14 @@ pub extern fn CTFontDrawGlyphs(
     count: usize,
     context: CGContextRef,
 ) void;
+pub const kCTFontOrientationDefault: c_uint = 0;
+pub extern fn CTFontGetBoundingRectsForGlyphs(
+    font: CTFontRef,
+    orientation: c_uint,
+    glyphs: [*]const CGGlyph,
+    boundingRects: [*]CGRect,
+    count: CFIndex,
+) CGRect;
 
 // ImageIO.
 pub const CGImageDestinationRef = ?*anyopaque;

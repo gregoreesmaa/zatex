@@ -609,8 +609,12 @@ pub fn lookupDelim(name: []const u8) ?DelimEntry {
     return null;
 }
 
-/// Combining accents: name → combining codepoint. `wide` marks the
-/// stretchy family (`\widehat` etc.) which grows with the nucleus.
+/// Math accents: name → accent glyph. Always spacing forms, never
+/// combining marks: combining-mark ink hangs left of a zero advance
+/// and unshaped drawing cannot recover it. `wide` marks the stretchy
+/// family (`\widehat` etc.) which grows with the nucleus. `vec`,
+/// `dddot`, `ddddot` have no spacing form and keep combining marks
+/// until stretchy accents land.
 pub const Accent = struct {
     cp: u21,
     wide: bool,
@@ -619,22 +623,22 @@ pub const Accent = struct {
 const AccentEntry = struct { name: []const u8, cp: u21, wide: bool };
 
 const accents = [_]AccentEntry{
-        .{ .name = "hat", .cp = 0x0302, .wide = false },
-        .{ .name = "widehat", .cp = 0x0302, .wide = true },
-        .{ .name = "check", .cp = 0x030C, .wide = false },
-        .{ .name = "widecheck", .cp = 0x030C, .wide = true },
-        .{ .name = "grave", .cp = 0x0300, .wide = false },
-        .{ .name = "acute", .cp = 0x0301, .wide = false },
-        .{ .name = "tilde", .cp = 0x0303, .wide = false },
-        .{ .name = "widetilde", .cp = 0x0303, .wide = true },
-        .{ .name = "bar", .cp = 0x0304, .wide = false },
-        .{ .name = "breve", .cp = 0x0306, .wide = false },
+        .{ .name = "hat", .cp = 0x005E, .wide = false },
+        .{ .name = "widehat", .cp = 0x005E, .wide = true },
+        .{ .name = "check", .cp = 0x02C7, .wide = false },
+        .{ .name = "widecheck", .cp = 0x02C7, .wide = true },
+        .{ .name = "grave", .cp = 0x0060, .wide = false },
+        .{ .name = "acute", .cp = 0x00B4, .wide = false },
+        .{ .name = "tilde", .cp = 0x007E, .wide = false },
+        .{ .name = "widetilde", .cp = 0x007E, .wide = true },
+        .{ .name = "bar", .cp = 0x00AF, .wide = false },
+        .{ .name = "breve", .cp = 0x02D8, .wide = false },
         .{ .name = "vec", .cp = 0x20D7, .wide = false },
-        .{ .name = "dot", .cp = 0x0307, .wide = false },
-        .{ .name = "ddot", .cp = 0x0308, .wide = false },
+        .{ .name = "dot", .cp = 0x02D9, .wide = false },
+        .{ .name = "ddot", .cp = 0x00A8, .wide = false },
         .{ .name = "dddot", .cp = 0x20DB, .wide = false },
         .{ .name = "ddddot", .cp = 0x20DC, .wide = false },
-        .{ .name = "mathring", .cp = 0x030A, .wide = false },
+        .{ .name = "mathring", .cp = 0x02DA, .wide = false },
 };
 
 /// Every named accent, for coverage probes.
@@ -691,6 +695,24 @@ test "unknown names miss" {
     const std = @import("std");
     try std.testing.expect(lookup("nope") == null);
     try std.testing.expect(lookup("") == null);
+}
+
+test "accents use spacing forms, never combining marks" {
+    const std = @import("std");
+    // Regression pin for accent misplacement: combining-mark ink hangs
+    // left of a zero advance and unshaped drawing cannot recover it, so
+    // accents must resolve to spacing glyphs. Only vec/dddot/ddddot
+    // have no spacing form (see the table comment above).
+    for (all_accents) |a| {
+        const combining = (a.cp >= 0x0300 and a.cp <= 0x036F) or
+            (a.cp >= 0x20D0 and a.cp <= 0x20FF);
+        const keep_combining = std.mem.eql(u8, a.name, "vec") or
+            std.mem.eql(u8, a.name, "dddot") or
+            std.mem.eql(u8, a.name, "ddddot");
+        try std.testing.expect(!combining or keep_combining);
+    }
+    try std.testing.expectEqual(@as(u21, 0x007E), lookupAccent("tilde").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x005E), lookupAccent("hat").?.cp);
 }
 
 test "pinned KaTeX codepoints and classes" {

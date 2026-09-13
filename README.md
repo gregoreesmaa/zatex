@@ -77,8 +77,10 @@ for the OpenType metrics reader) modules — the same shape
 * `packages/zatex-png/src/` — CLI, CoreGraphics backend, font loader.
   `packages/zatex-png/screenshots/` — visual regression corpus + baselines.
 * `docs/ir.md` — the layout IR: what every emitter consumes.
-  `docs/katex-syntax.md` — KaTeX syntax mirror with a render per function.
-  `docs/tolerance.md`, `docs/support-table.md` — test policy and scope.
+  `docs/support-table.md` — KaTeX coverage status per function (the single
+  editable source). `docs/katex-syntax.md` — its generated render mirror
+  (do not edit; regen via `python3 tools/gen_doc_renders.py`).
+  `docs/tolerance.md` — differential test policy.
 * `tools/katex/` — pinned-KaTeX sweep harness (`corpus.json`, `sweep.mjs`).
 
 See [AGENTS.md](AGENTS.md) for the contributor contract.
