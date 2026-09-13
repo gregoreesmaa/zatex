@@ -25,6 +25,9 @@ typedef struct zatex_metrics {
     // Optional (may be NULL): taller glyph variant, italic correction.
     uint16_t (*glyph_variant)(const void *ctx, uint16_t font, uint16_t glyph, int32_t min_height);
     int32_t (*italic_correction)(const void *ctx, uint16_t font, uint16_t glyph);
+    // Optional (may be NULL, v3): MathKern cut-in for glyph at correction
+    // height; corner: 0 top_right, 1 top_left, 2 bottom_right, 3 bottom_left.
+    int32_t (*kern_correction)(const void *ctx, uint16_t font, uint16_t glyph, int32_t height, uint32_t corner);
 } zatex_metrics_t;
 
 typedef struct zatex_run {

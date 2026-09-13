@@ -31,9 +31,15 @@ pub const Const = enum(u8) {
     space_after_script = 17,
     upper_limit_gap_min = 18,
     lower_limit_gap_min = 20,
+    stack_top_shift_up = 22,
+    stack_bottom_shift_down = 24,
     stack_gap_min = 26,
     stretch_stack_gap_above_min = 30,
     stretch_stack_gap_below_min = 31,
+    frac_num_shift_up = 32,
+    frac_num_display_shift_up = 33,
+    frac_den_shift_down = 34,
+    frac_den_display_shift_down = 35,
     frac_num_gap_min = 36,
     frac_rule = 38,
     frac_den_gap_min = 39,
@@ -176,21 +182,21 @@ pub fn glyphId(f: Font, cp: u21) Error!u16 {
     }
     if (best12 != 0) {
         if (try u16be(b, best12) == 12) {
-            if (try u32be(b, best12 + 4) == 0) {
-                const ng = try u32be(b, best12 + 12);
-                var g: usize = 0;
-                while (g < ng) : (g += 1) {
-                    const base = best12 + 16 + g * 12;
-                    const first = try u32be(b, base);
-                    const last = try u32be(b, base + 4);
-                    if (cp >= first and cp <= last) {
-                        const gid = try u32be(b, base + 8) + (cp - first);
-                        if (gid >= f.num_glyphs) return 0;
-                        return @intCast(gid);
-                    }
+            // Format 12: groups follow the 16-byte header (ngroups at
+            // +12). No length gate: the header length is never zero.
+            const ng = try u32be(b, best12 + 12);
+            var g: usize = 0;
+            while (g < ng) : (g += 1) {
+                const base = best12 + 16 + g * 12;
+                const first = try u32be(b, base);
+                const last = try u32be(b, base + 4);
+                if (cp >= first and cp <= last) {
+                    const gid = try u32be(b, base + 8) + (cp - first);
+                    if (gid >= f.num_glyphs) return 0;
+                    return @intCast(gid);
                 }
-                return 0;
             }
+            return 0;
         }
     }
     if (best4 != 0) return cmap4(b, best4, cp, f.num_glyphs);
@@ -326,6 +332,56 @@ pub fn vertVariant(f: Font, glyph: u16, min_advance: i32) Error!u16 {
     return tallest;
 }
 
+/// MathKern corner for script cut-ins (sup/sub positioning).
+pub const KernCorner = enum {
+    top_right,
+    top_left,
+    bottom_right,
+    bottom_left,
+};
+
+/// MathKern cut-in for `glyph` at correction `height` (font units,
+/// measured upward for top corners, downward for bottom corners).
+/// Returns 0 when the font has no kern table, the glyph is uncovered,
+/// or the corner is NULL — hosts treat 0 as "no cut-in". The vendored
+/// reference font carries no MathKern table (verified offset 0), so
+/// real-font calibration asserts graceful zeros while selection logic
+/// is pinned by the synthetic fixture below.
+pub fn kernCorrection(f: Font, glyph: u16, height: i32, corner: KernCorner) Error!i32 {
+    if (f.math_off == 0) return error.UnsupportedTable;
+    const b = f.bytes;
+    // MathGlyphInfo holds four offsets (italics, top-accent,
+    // extended-shape, kern); kern absent (0) means no cut-ins.
+    const ki_rel = try u16be(b, f.glyph_info_off + 6);
+    if (ki_rel == 0) return 0;
+    const ki = f.glyph_info_off + ki_rel;
+    const cov_rel = try u16be(b, ki);
+    if (cov_rel == 0) return 0;
+    const idx = (try coverageIndex(b, ki + cov_rel, glyph)) orelse return 0;
+    const count = try u16be(b, ki + 2);
+    if (idx >= count) return 0;
+    const rec = ki + 4 + idx * 8;
+    const corner_off: usize = switch (corner) {
+        .top_right => 0,
+        .top_left => 2,
+        .bottom_right => 4,
+        .bottom_left => 6,
+    };
+    const t_rel = try u16be(b, rec + corner_off);
+    if (t_rel == 0) return 0;
+    const t = ki + t_rel;
+    const n = try u16be(b, t);
+    // CorrectionHeight[n] are MathValueRecords (value i16 + device
+    // u16); KernValues[n+1] follow as i16s. First height at or above
+    // the query wins, else the last value (OpenType MATH semantics).
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        const h = try i16be(b, t + 2 + i * 4);
+        if (height <= h) break;
+    }
+    return try i16be(b, t + 2 + n * 4 + i * 2);
+}
+
 /// Italic correction in font units (0 when uncovered).
 pub fn italicCorrection(f: Font, glyph: u16) Error!i32 {
     if (f.math_off == 0) return error.UnsupportedTable;
@@ -412,4 +468,241 @@ test "reference italic correction matches ground truth" {
     try std.testing.expectEqual(@as(i32, 16), try italicCorrection(r.font, x));
     const xi = try glyphId(r.font, 0x03BE);
     try std.testing.expectEqual(@as(i32, 0), try italicCorrection(r.font, xi));
+}
+
+test "reference stack/fraction/over/under constants match ground truth" {
+    // fontTools cross-checks (issue #26): StackGap/FractionShift/
+    // RadicalGap families in font units.
+    const r = try loadRef();
+    defer std.testing.allocator.free(r.bytes);
+    try std.testing.expectEqual(@as(i16, 444), try constant(r.font, .stack_top_shift_up));
+    try std.testing.expectEqual(@as(i16, 345), try constant(r.font, .stack_bottom_shift_down));
+    try std.testing.expectEqual(@as(i16, 120), try constant(r.font, .stack_gap_min));
+    try std.testing.expectEqual(@as(i16, 200), try constant(r.font, .stretch_stack_gap_above_min));
+    try std.testing.expectEqual(@as(i16, 167), try constant(r.font, .stretch_stack_gap_below_min));
+    try std.testing.expectEqual(@as(i16, 394), try constant(r.font, .frac_num_shift_up));
+    try std.testing.expectEqual(@as(i16, 677), try constant(r.font, .frac_num_display_shift_up));
+    try std.testing.expectEqual(@as(i16, 345), try constant(r.font, .frac_den_shift_down));
+    try std.testing.expectEqual(@as(i16, 686), try constant(r.font, .frac_den_display_shift_down));
+    try std.testing.expectEqual(@as(i16, 40), try constant(r.font, .frac_num_gap_min));
+    try std.testing.expectEqual(@as(i16, 40), try constant(r.font, .frac_den_gap_min));
+    try std.testing.expectEqual(@as(i16, 40), try constant(r.font, .overbar_rule));
+    try std.testing.expectEqual(@as(i16, 120), try constant(r.font, .overbar_gap));
+    try std.testing.expectEqual(@as(i16, 40), try constant(r.font, .underbar_rule));
+    try std.testing.expectEqual(@as(i16, 120), try constant(r.font, .underbar_gap));
+    try std.testing.expectEqual(@as(i16, 50), try constant(r.font, .radical_gap));
+    try std.testing.expectEqual(@as(i16, 148), try constant(r.font, .radical_display_gap));
+    try std.testing.expectEqual(@as(i16, 160), try constant(r.font, .subsup_gap_min));
+    try std.testing.expectEqual(@as(i16, 56), try constant(r.font, .space_after_script));
+    try std.testing.expectEqual(@as(i16, 200), try constant(r.font, .upper_limit_gap_min));
+    try std.testing.expectEqual(@as(i16, 167), try constant(r.font, .lower_limit_gap_min));
+}
+
+test "reference bracket/brace/sum variants grow monotonically" {
+    const r = try loadRef();
+    defer std.testing.allocator.free(r.bytes);
+    const br = try glyphId(r.font, '[');
+    try std.testing.expectEqual(@as(u16, 60), br);
+    try std.testing.expectEqual(br, try vertVariant(r.font, br, 500));
+    try std.testing.expectEqual(@as(u16, 2461), try vertVariant(r.font, br, 2000));
+    const brace = try glyphId(r.font, '{');
+    try std.testing.expectEqual(@as(u16, 92), brace);
+    try std.testing.expectEqual(@as(u16, 2459), try vertVariant(r.font, brace, 2000));
+    const sum = try glyphId(r.font, 0x2211);
+    try std.testing.expectEqual(@as(u16, 3060), sum);
+    try std.testing.expectEqual(sum, try vertVariant(r.font, sum, 500));
+    try std.testing.expectEqual(@as(u16, 3074), try vertVariant(r.font, sum, 1200));
+    // Beyond the tallest falls back to it (no assemblies parsed).
+    try std.testing.expectEqual(@as(u16, 3074), try vertVariant(r.font, sum, 100000));
+}
+
+test "reference font carries no kern table: cut-ins are zero" {
+    // fontTools confirms MathKernInfo is absent in Latin Modern Math,
+    // so every corner/height must read back graceful zeros.
+    const r = try loadRef();
+    defer std.testing.allocator.free(r.bytes);
+    const x = try glyphId(r.font, 'x');
+    const sum = try glyphId(r.font, 0x2211);
+    for ([_]u16{ x, sum }) |gid| {
+        for ([_]KernCorner{ .top_right, .top_left, .bottom_right, .bottom_left }) |c| {
+            for ([_]i32{ 0, 100, 1000 }) |h| {
+                try std.testing.expectEqual(@as(i32, 0), try kernCorrection(r.font, gid, h, c));
+            }
+        }
+    }
+}
+
+// Minimal synthetic font with a MathKern table: pins corner routing
+// and height selection without depending on any real font carrying
+// kern data (none vendored does).
+const KernFixture = struct {
+    buf: [512]u8 = .{0} ** 512,
+    pos: usize = 0,
+
+    fn w16(self: *KernFixture, v: u16) void {
+        self.buf[self.pos] = @intCast(v >> 8);
+        self.buf[self.pos + 1] = @intCast(v & 0xFF);
+        self.pos += 2;
+    }
+
+    fn w32(self: *KernFixture, v: u32) void {
+        self.w16(@intCast(v >> 16));
+        self.w16(@intCast(v & 0xFFFF));
+    }
+
+    fn bytes(self: *KernFixture) []const u8 {
+        return self.buf[0..self.pos];
+    }
+};
+
+test "kern corner routing and height selection" {
+    // Hand-laid MATH bytes (see kernCorrection): coverage {7}, one
+    // record with TR heights [100, 300] -> kerns [10, 20, 30] and BR
+    // heights [200] -> kerns [5, 15]; TL/BL NULL.
+    var f = KernFixture{};
+    // --- sfnt header: version + 6 tables ---
+    f.w32(0x00010000);
+    f.w16(6);
+    f.w16(0);
+    f.w16(0);
+    f.w16(0);
+    const dir_at = f.pos;
+    // Reserve 6 x 16-byte records (tag, checksum, offset, length).
+    const tags = [_]u32{ 0x68656164, 0x6D617870, 0x636D6170, 0x686D7478, 0x68686561, 0x4D415448 };
+    for (tags) |t| {
+        f.w32(t);
+        f.w32(0);
+        f.w32(0);
+        f.w32(0);
+    }
+    var starts: [6]usize = .{ 0, 0, 0, 0, 0, 0 };
+    var lens: [6]usize = .{ 0, 0, 0, 0, 0, 0 };
+    // head: upm at +18.
+    starts[0] = f.pos;
+    for (0..9) |_| f.w16(0);
+    f.w16(1000);
+    lens[0] = f.pos - starts[0];
+    // maxp: numglyphs at +4.
+    starts[1] = f.pos;
+    f.w32(0);
+    f.w16(8);
+    lens[1] = f.pos - starts[1];
+    // cmap: one (3,10) -> format12 group [0x78, 0x78] -> gid 7.
+    starts[2] = f.pos;
+    f.w16(0);
+    f.w16(1);
+    f.w16(3);
+    f.w16(10);
+    f.w32(20);
+    // pad to subtable at cmap+20
+    while (f.pos < starts[2] + 20) f.w16(0);
+    f.w16(12);
+    f.w16(0);
+    f.w32(28);
+    f.w32(0);
+    f.w32(1);
+    f.w32(0x78);
+    f.w32(0x78);
+    f.w32(7);
+    lens[2] = f.pos - starts[2];
+    // hmtx: 2 advances.
+    starts[3] = f.pos;
+    f.w16(600);
+    f.w16(700);
+    lens[3] = f.pos - starts[3];
+    // hhea: hmetrics at +34.
+    starts[4] = f.pos;
+    for (0..17) |_| f.w16(0);
+    f.w16(2);
+    lens[4] = f.pos - starts[4];
+    // MATH: version + const/glyphinfo/variants offsets.
+    starts[5] = f.pos;
+    const math_at = f.pos;
+    f.w32(0x00010000);
+    f.w16(190); // const (padding zeros: nothing reads it here)
+    f.w16(10); // glyphinfo (content follows immediately)
+    f.w16(200); // variants (dummy: load stores the offset only)
+    // glyphinfo at math+12: ital/accent/ext/kern offsets.
+    const gio = f.pos;
+    _ = gio;
+    f.w16(0);
+    f.w16(0);
+    f.w16(0);
+    const kern_rel_at = f.pos;
+    f.w16(0); // patched to kern table below
+    // kern info table.
+    const ki = f.pos;
+    const cov_rel_at = f.pos;
+    f.w16(0); // patched: coverage follows records
+    f.w16(1); // one record
+    const tr_rel_at = f.pos;
+    f.w16(0);
+    f.w16(0); // TL NULL
+    const br_rel_at = f.pos;
+    f.w16(0);
+    f.w16(0); // BL NULL
+    // coverage format1 {7}.
+    const cov = f.pos;
+    f.w16(1);
+    f.w16(1);
+    f.w16(7);
+    // TR table: heights [100, 300] -> kerns [10, 20, 30].
+    const tr = f.pos;
+    f.w16(2);
+    f.w16(100);
+    f.w16(0);
+    f.w16(300);
+    f.w16(0);
+    f.w16(10);
+    f.w16(20);
+    f.w16(30);
+    // BR table: heights [200] -> kerns [5, 15].
+    const br = f.pos;
+    f.w16(1);
+    f.w16(200);
+    f.w16(0);
+    f.w16(5);
+    f.w16(15);
+    // variants dummy.
+    while (f.pos < math_at + 200) f.w16(0);
+    f.w16(0);
+    lens[5] = f.pos - starts[5];
+    // Patch directory + internals.
+    for (0..6) |k| {
+        const at = dir_at + k * 16 + 8;
+        f.buf[at] = @intCast(starts[k] >> 24);
+        f.buf[at + 1] = @intCast((starts[k] >> 16) & 0xFF);
+        f.buf[at + 2] = @intCast((starts[k] >> 8) & 0xFF);
+        f.buf[at + 3] = @intCast(starts[k] & 0xFF);
+        const ln = dir_at + k * 16 + 12;
+        f.buf[ln] = @intCast(lens[k] >> 24);
+        f.buf[ln + 1] = @intCast((lens[k] >> 16) & 0xFF);
+        f.buf[ln + 2] = @intCast((lens[k] >> 8) & 0xFF);
+        f.buf[ln + 3] = @intCast(lens[k] & 0xFF);
+    }
+    const patch = struct {
+        fn u16at(buf: *[512]u8, at: usize, v: usize) void {
+            buf[at] = @intCast(v >> 8);
+            buf[at + 1] = @intCast(v & 0xFF);
+        }
+    }.u16at;
+    patch(&f.buf, kern_rel_at, ki - (math_at + 10));
+    patch(&f.buf, cov_rel_at, cov - ki);
+    patch(&f.buf, tr_rel_at, tr - ki);
+    patch(&f.buf, br_rel_at, br - ki);
+    const font = try load(f.bytes());
+    try std.testing.expectEqual(@as(u16, 7), try glyphId(font, 'x'));
+    // TR selection: at-or-below first height, between, above last.
+    try std.testing.expectEqual(@as(i32, 10), try kernCorrection(font, 7, 0, .top_right));
+    try std.testing.expectEqual(@as(i32, 10), try kernCorrection(font, 7, 100, .top_right));
+    try std.testing.expectEqual(@as(i32, 20), try kernCorrection(font, 7, 101, .top_right));
+    try std.testing.expectEqual(@as(i32, 20), try kernCorrection(font, 7, 300, .top_right));
+    try std.testing.expectEqual(@as(i32, 30), try kernCorrection(font, 7, 301, .top_right));
+    // BR selection.
+    try std.testing.expectEqual(@as(i32, 5), try kernCorrection(font, 7, 200, .bottom_right));
+    try std.testing.expectEqual(@as(i32, 15), try kernCorrection(font, 7, 201, .bottom_right));
+    // NULL corners and uncovered glyphs read zero.
+    try std.testing.expectEqual(@as(i32, 0), try kernCorrection(font, 7, 100, .top_left));
+    try std.testing.expectEqual(@as(i32, 0), try kernCorrection(font, 7, 100, .bottom_left));
+    try std.testing.expectEqual(@as(i32, 0), try kernCorrection(font, 3, 100, .top_right));
 }

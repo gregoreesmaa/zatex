@@ -16,6 +16,7 @@ pub const CMetrics = extern struct {
     rule_thickness: ?*const fn (ctx: ?*const anyopaque, font: u16, kind: u32) callconv(.c) i32,
     glyph_variant: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16, min_height: i32) callconv(.c) u16 = null,
     italic_correction: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) i32 = null,
+    kern_correction: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16, height: i32, corner: u32) callconv(.c) i32 = null,
 };
 
 pub const CRun = extern struct {
@@ -93,6 +94,11 @@ const Host = struct {
         const f = h.m.italic_correction orelse return 0;
         return f(h.m.ctx, font, glyph);
     }
+    fn kern(ctx: *const anyopaque, font: u16, glyph: u16, height: i32, corner: zatex.contract.KernCorner) i32 {
+        const h: *const Host = @ptrCast(@alignCast(ctx));
+        const f = h.m.kern_correction orelse return 0;
+        return f(h.m.ctx, font, glyph, height, @intFromEnum(corner));
+    }
 };
 
 /// Lay out one UTF-8 formula. All buffers are caller-owned. `src_len`
@@ -135,6 +141,7 @@ export fn zatex_layout_utf8(
         .ruleThickness = Host.rule,
         .glyphVariant = Host.variant,
         .italicCorrection = Host.italic,
+        .kernCorrection = Host.kern,
     };
     // Reinterpret caller buffers as Zig slices.
     const runs_z = (runs_ptr orelse return STATUS_NO_SPACE)[0..runs_cap];
@@ -308,6 +315,9 @@ test "cabi adversarial provider stays total and deterministic" {
         fn gid0(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) u16 {
             return 0;
         }
+        fn kern30(_: ?*const anyopaque, _: u16, _: u16, _: i32, _: u32) callconv(.c) i32 {
+            return 30;
+        }
     };
     const base: CMetrics = .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = null };
     const cfgs = [_]CMetrics{
@@ -316,6 +326,7 @@ test "cabi adversarial provider stays total and deterministic" {
         .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = S.ruleHuge },
         .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = S.ruleNeg },
         .{ .ctx = null, .glyph_id = S.gid0, .advance = null, .rule_thickness = null },
+        .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = null, .kern_correction = S.kern30 },
         base,
     };
     const src = "x+\\frac{a}{b}";

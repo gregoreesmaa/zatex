@@ -36,6 +36,14 @@ fn layoutCase(
 const Ref = struct {
     bytes: []u8,
     font: otmath.Font,
+    /// Test knobs (all neutral by default):
+    /// - `no_italic` zeroes italic corrections.
+    /// - `kern_caps` answers every kern query with canned cut-ins
+    ///   (`sup` for top-right, `sub` for bottom-right).
+    /// - `extents_mul` scales the (otherwise default 700/250) extents.
+    no_italic: bool = false,
+    kern_caps: ?struct { sup: i32, sub: i32 } = null,
+    extents_mul: u32 = 1,
 
     fn load() !Ref {
         return loadFrom(vendored_path);
@@ -69,6 +77,8 @@ const Ref = struct {
             .ruleThickness = rule,
             .glyphVariant = variant,
             .italicCorrection = italic,
+            .kernCorrection = kern,
+            .extents = ext,
         };
     }
 
@@ -111,8 +121,37 @@ const Ref = struct {
     fn italic(ctx: *const anyopaque, font_id: u16, glyph: u16) i32 {
         _ = font_id;
         const self: *const Ref = @ptrCast(@alignCast(ctx));
+        if (self.no_italic) return 0;
         const v = otmath.italicCorrection(self.font, glyph) catch 0;
         return self.scale1000(v);
+    }
+
+    fn kern(ctx: *const anyopaque, font_id: u16, glyph: u16, height: i32, corner: contract.KernCorner) i32 {
+        _ = font_id;
+        const self: *const Ref = @ptrCast(@alignCast(ctx));
+        if (self.kern_caps) |caps| {
+            return switch (corner) {
+                .top_right => caps.sup,
+                .bottom_right => caps.sub,
+                else => 0,
+            };
+        }
+        const oc: otmath.KernCorner = switch (corner) {
+            .top_right => .top_right,
+            .top_left => .top_left,
+            .bottom_right => .bottom_right,
+            .bottom_left => .bottom_left,
+        };
+        const v = otmath.kernCorrection(self.font, glyph, height, oc) catch 0;
+        return self.scale1000(v);
+    }
+
+    fn ext(ctx: *const anyopaque, font_id: u16, glyph: u16) [2]i32 {
+        _ = font_id;
+        _ = glyph;
+        const self: *const Ref = @ptrCast(@alignCast(ctx));
+        const m: i32 = @intCast(self.extents_mul);
+        return .{ 700 * m, 250 * m };
     }
 };
 
@@ -477,6 +516,189 @@ test "metamorphic: frac clears numerator and denominator" {
     try std.testing.expect(ft >= nt + dt + @as(i64, f.rules[0].h));
     try inv.expectNonNegative(f);
     try inv.expectContained(f);
+}
+
+// ---------------------------------------------------------------------------
+// OpenType MATH calibration probes (issue #26). Integer units only;
+// KaTeX-structural agreement is guarded by the parity sweep, while
+// metrics-sensitive widths are pinned here against the real font.
+// ---------------------------------------------------------------------------
+
+// Real-font kern reads zero (no MathKern table in Latin Modern Math),
+// so canned-zero and live-zero providers agree byte-for-byte.
+test "calibration: absent kern table reads graceful zeros" {
+    var ref = try Ref.load();
+    defer ref.free();
+    ref.kern_caps = .{ .sup = 0, .sub = 0 };
+    var r0: [64]zatex.ir.Run = undefined;
+    var l0: [16]zatex.ir.Rule = undefined;
+    var g0: [512]u16 = undefined;
+    const canned = try layoutCase(&ref, "x^2_1", false, &r0, &l0, &g0);
+    ref.kern_caps = null;
+    var r1: [64]zatex.ir.Run = undefined;
+    var l1: [16]zatex.ir.Rule = undefined;
+    var g1: [512]u16 = undefined;
+    const live = try layoutCase(&ref, "x^2_1", false, &r1, &l1, &g1);
+    try inv.expectSameLayout(canned, live);
+}
+
+// Canned cut-ins tuck scripts by exact integers: TR answers sups,
+// BR answers subs. Deltas are collected per run so no run-order
+// assumption sneaks in.
+test "calibration: kern cut-ins tuck sup/sub exactly" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_]struct { src: []const u8, want: [2]i32 }{
+        .{ .src = "x^2_1", .want = .{ 40, 20 } },
+        .{ .src = "x^2", .want = .{ 40, 0 } },
+        .{ .src = "x_1", .want = .{ 20, 0 } },
+    };
+    for (cases) |c| {
+        ref.kern_caps = .{ .sup = 40, .sub = 20 };
+        var ra: [64]zatex.ir.Run = undefined;
+        var la: [16]zatex.ir.Rule = undefined;
+        var ga: [512]u16 = undefined;
+        const a = try layoutCase(&ref, c.src, false, &ra, &la, &ga);
+        ref.kern_caps = null;
+        var rb: [64]zatex.ir.Run = undefined;
+        var lb: [16]zatex.ir.Rule = undefined;
+        var gb: [512]u16 = undefined;
+        const b = try layoutCase(&ref, c.src, false, &rb, &lb, &gb);
+        try std.testing.expectEqual(a.runs.len, b.runs.len);
+        var got = [_]i32{ 0, 0 };
+        var n: usize = 0;
+        for (a.runs, b.runs) |x, y| {
+            try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
+            try std.testing.expectEqual(x.baseline_y, y.baseline_y);
+            const dx = y.x - x.x;
+            try std.testing.expect(dx >= 0);
+            if (dx > 0) {
+                try std.testing.expect(n < got.len);
+                got[n] = dx;
+                n += 1;
+            }
+        }
+        // Order-free compare of the (up-to-two) deltas.
+        var matched = [_]bool{ false, false };
+        var want_n: usize = 0;
+        for (c.want) |w| if (w > 0) {
+            want_n += 1;
+        };
+        try std.testing.expectEqual(want_n, n);
+        for (got[0..n]) |d| {
+            var hit = false;
+            for (c.want, 0..) |w, k| {
+                if (!matched[k] and w == d) {
+                    matched[k] = true;
+                    hit = true;
+                    break;
+                }
+            }
+            try std.testing.expect(hit);
+        }
+    }
+}
+
+// Clamp policy: cut-ins saturate at the script gap and floor at zero,
+// so hostile hooks can neither overlap scripts nor push them outward.
+test "calibration: cut-ins clamp to the script gap" {
+    var ref = try Ref.load();
+    defer ref.free();
+    ref.kern_caps = .{ .sup = 1000, .sub = 1000 };
+    var ra: [64]zatex.ir.Run = undefined;
+    var la: [16]zatex.ir.Rule = undefined;
+    var ga: [512]u16 = undefined;
+    const big = try layoutCase(&ref, "x^2_1", false, &ra, &la, &ga);
+    ref.kern_caps = .{ .sup = -50, .sub = -50 };
+    var rb: [64]zatex.ir.Run = undefined;
+    var lb: [16]zatex.ir.Rule = undefined;
+    var gb: [512]u16 = undefined;
+    const neg = try layoutCase(&ref, "x^2_1", false, &rb, &lb, &gb);
+    ref.kern_caps = null;
+    var rc: [64]zatex.ir.Run = undefined;
+    var lc: [16]zatex.ir.Rule = undefined;
+    var gc: [512]u16 = undefined;
+    const plain = try layoutCase(&ref, "x^2_1", false, &rc, &lc, &gc);
+    try std.testing.expectEqual(big.runs.len, plain.runs.len);
+    var saw_gap = false;
+    for (big.runs, plain.runs) |x, y| {
+        const dx = y.x - x.x;
+        // Inline script gap is 60mu: huge cut-ins saturate there.
+        try std.testing.expect(dx == 0 or dx == 60);
+        if (dx == 60) saw_gap = true;
+    }
+    try std.testing.expect(saw_gap);
+    try inv.expectSameLayout(neg, plain);
+}
+
+// Italic-correction application: the accent over an italic nucleus
+// shifts by half the correction (x: 16/2 = 8 at text size).
+test "calibration: italic correction centers accents" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var ra: [32]zatex.ir.Run = undefined;
+    var la: [8]zatex.ir.Rule = undefined;
+    var ga: [128]u16 = undefined;
+    const a = try layoutCase(&ref, "\\hat{x}", false, &ra, &la, &ga);
+    ref.no_italic = true;
+    var rb: [32]zatex.ir.Run = undefined;
+    var lb: [8]zatex.ir.Rule = undefined;
+    var gb: [128]u16 = undefined;
+    const b = try layoutCase(&ref, "\\hat{x}", false, &rb, &lb, &gb);
+    try std.testing.expectEqual(a.width, b.width);
+    try std.testing.expectEqual(a.runs.len, b.runs.len);
+    var shifts: usize = 0;
+    for (a.runs, b.runs) |x, y| {
+        try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
+        const dx = y.x - x.x;
+        if (dx != 0) {
+            try std.testing.expectEqual(@as(i32, -8), dx);
+            shifts += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 1), shifts);
+}
+
+// Layout-box vs ink-box split: advances drive widths, extents drive
+// heights. Doubling extents doubles the ink height; widths don't move.
+test "calibration: extents drive heights, advances drive widths" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var ra: [16]zatex.ir.Run = undefined;
+    var la: [4]zatex.ir.Rule = undefined;
+    var ga: [64]u16 = undefined;
+    const a = try layoutCase(&ref, "x", false, &ra, &la, &ga);
+    try std.testing.expectEqual(@as(u32, 700), a.height_above);
+    try std.testing.expectEqual(@as(u32, 250), a.depth_below);
+    ref.extents_mul = 2;
+    var rb: [16]zatex.ir.Run = undefined;
+    var lb: [4]zatex.ir.Rule = undefined;
+    var gb: [64]u16 = undefined;
+    const b = try layoutCase(&ref, "x", false, &rb, &lb, &gb);
+    try std.testing.expectEqual(@as(u32, 1400), b.height_above);
+    try std.testing.expectEqual(@as(u32, 500), b.depth_below);
+    try std.testing.expectEqual(a.width, b.width);
+}
+
+// Stretchy fences select taller variants through the provider.
+test "calibration: tall braces use brace variants" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const brace = try otmath.glyphId(ref.font, '{');
+    try std.testing.expectEqual(@as(u16, 92), brace);
+    var runs: [64]zatex.ir.Run = undefined;
+    var rules: [16]zatex.ir.Rule = undefined;
+    var glyphs: [512]u16 = undefined;
+    const tall = try layoutCase(
+        &ref,
+        "\\left\\{\\frac{\\frac{a}{b}}{\\frac{c}{d}}\\right\\}",
+        false,
+        &runs,
+        &rules,
+        &glyphs,
+    );
+    try std.testing.expect(tall.runs.len > 0 and tall.runs[0].glyphs.len > 0);
+    try std.testing.expect(tall.runs[0].glyphs[0] != brace);
 }
 
 // Re-layout of the same input + metrics is identical IR text.
