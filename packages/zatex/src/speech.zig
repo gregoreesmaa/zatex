@@ -119,6 +119,7 @@ const Walker = struct {
             .font => |f| try self.node(f.body),
             .pmb => |p| try self.node(p.body),
             .vcenter => |v| try self.node(v.body),
+            .circled => |c| try self.node(c.body),
             .text => |t| {
                 const toks = parse.toksOf(self.ctx, t.toks);
                 for (toks) |tok| {

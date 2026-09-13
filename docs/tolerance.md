@@ -33,6 +33,12 @@ MathML text, never rendered pixels.
   children pass through.
 - `\href` emits an `mrow href` wrapper while KaTeX puts `href` on the
   child; the wrapper shell is dropped, children pass through.
+- A single-child `mrow` shell drops on both sides. KaTeX merges
+  adjacent runs before row-wrapping (`buildExpression` then `makeRow`),
+  so a group whose leaves merge to one child passes through bare
+  (e.g. `\phase{30}` yields `menclose` + `mn` directly); our emitter
+  wraps every multi-leaf group. One child in a row groups nothing, so
+  the shell carries identical layout meaning on both sides.
 
 Adding a normalization requires a comment here explaining why the two
 shapes carry identical layout meaning. Normalizations never hide an

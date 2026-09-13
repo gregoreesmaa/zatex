@@ -216,6 +216,44 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         // Poor-man's bold is a paint style (KaTeX text-shadow), so
         // layout is the bare body box, bit-identically.
         .pmb => |p| return layoutNode(lc, style, p.body),
+        .circled => |c| {
+            // Math-mode circle overlay (issue #51 review): the same
+            // natural-size U+25EF, centered over the body and tucked
+            // 194mu above its top, as the text-span overlay — an
+            // overlay, so the width never grows (a wider-than-body
+            // circle clamps at the left edge, brace precedent).
+            const body = try layoutNode(lc, style, c.body);
+            const bb = lc.boxes[body];
+            const size = style.sizeUnits();
+            const font: u16 = @intFromEnum(contract.FontId.rm);
+            const cg = lc.glyphId(font, 0x25EF);
+            const caw = @divTrunc(lc.advance(font, cg) * size, 1000);
+            const ce = lc.extents(font, cg);
+            const caha = @divTrunc(ce[0] * size, 1000);
+            const cadb = @divTrunc(ce[1] * size, 1000);
+            const cb = try lc.allocBox(.{
+                .w = caw,
+                .ha = caha,
+                .db = cadb,
+                .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = cg } },
+                .invisible = false,
+            });
+            const lift = @divTrunc(@as(i32, 194) * size, 1000);
+            const s = try lc.allocKids(2);
+            lc.bkids[s] = .{ .box = body, .dx = 0, .dy = 0 };
+            lc.bkids[s + 1] = .{ .box = cb, .dx = @max(@divTrunc(bb.w - caw, 2), 0), .dy = bb.ha + lift - caha };
+            const ha = bb.ha + lift;
+            var db = bb.db;
+            const cabot = cadb - (bb.ha + lift - caha);
+            if (cabot > db) db = cabot;
+            return lc.allocBox(.{
+                .w = bb.w,
+                .ha = ha,
+                .db = db,
+                .kind = .{ .list = .{ .start = s, .len = 2 } },
+                .invisible = false,
+            });
+        },
         .vcenter => |v| {
             // KaTeX parity (pinned 0.18.7 HTML, issue #51): shift
             // the body so the math axis halves its total — the same
@@ -571,6 +609,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .font => |f| return classOf(pc, f.body),
         .pmb => |p| return classOf(pc, p.body),
         .vcenter => |v| return classOf(pc, v.body),
+        .circled => |c| return classOf(pc, c.body),
         .text => return .Ord,
         .env => return .Ord,
         .substack => return .Ord,
@@ -936,9 +975,11 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
                 var sub_bot: ?i32 = null;
                 // Rule-drawn brackets fill their box edge to edge, so
                 // the ink top/bottom IS the box top/bottom (KaTeX 0.2em
-                // outer kern applies off it, no glyph lookup involved).
+                // outer kern applies off it, no glyph lookup involved)
+                // — except the overbracket's 30mu transparent crown:
+                // the label kerns off the bar top.
                 if (is_bracket) {
-                    if (stack_sup) sup_top = bb.ha;
+                    if (stack_sup) sup_top = bb.ha - @divTrunc(@as(i32, if (o.kind == .overbracket) 30 else 0) * style.sizeUnits(), 1000);
                     if (stack_sub) sub_bot = bb.db;
                 }
                 if (!is_bracket and lc.ink(rfont, bgly) != null) {
@@ -1654,6 +1695,11 @@ fn nucleusFirstCp(pc: *const parse.ParseCtx, id: Idx) u21 {
         .font => |f| return nucleusFirstCp(pc, f.body),
         .style => |s| return nucleusFirstCp(pc, s.body),
         .classwrap => |c| return nucleusFirstCp(pc, c.body),
+        .pmb => |p| return nucleusFirstCp(pc, p.body),
+        .vcenter => |v| return nucleusFirstCp(pc, v.body),
+        .circled => |c| return nucleusFirstCp(pc, c.body),
+        .sout => |b| return nucleusFirstCp(pc, b),
+        .phase => |b| return nucleusFirstCp(pc, b),
         else => return 'x',
     }
 }
@@ -1757,11 +1803,14 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             // Brace / arrow overs: glyph above or below the nucleus,
             // extensible-arrow labels in script style.
             if (o.kind == .overbracket or o.kind == .underbracket) {
-                // KaTeX parity (pinned 0.18.7 `horizBrace.ts`, issue
+                // KaTeX parity (pinned 0.18.7 `stretchy.ts`, issue
                 // #51): square brackets are drawn from strokes, not a
                 // font glyph — minimum span 1.6em, 0.1em clearance off
-                // the nucleus, the bar arm's-length below
-                // armheight+0.3em (legs span it), thickness 120mu.
+                // the nucleus. The SVG paths decompose exactly: legs
+                // 290mu + bar 120mu, plus 30mu transparent above the
+                // over-bar (overbracket height 440, underbracket 410),
+                // so growth over the nucleus is 540mu over / 510mu
+                // under.
                 const is_under = o.kind == .underbracket;
                 const nuc = try layoutNode(lc, style, o.nucleus);
                 const nb = lc.boxes[nuc];
@@ -1769,7 +1818,8 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 const w = if (nb.w > minw) nb.w else minw;
                 const sth = @divTrunc(@as(i32, 120) * size, 1000);
                 const cgap = @divTrunc(@as(i32, 100) * size, 1000);
-                const drop = @divTrunc(@as(i32, if (is_under) 1030 else 730) * size, 1000);
+                const drop = @divTrunc(@as(i32, 290) * size, 1000);
+                const tpad = if (is_under) 0 else @divTrunc(@as(i32, 30) * size, 1000);
                 const bar = try lc.allocBox(.{
                     .w = w,
                     .ha = sth,
@@ -1794,7 +1844,7 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                     lc.bkids[s + 3] = .{ .box = leg, .dx = w - sth, .dy = ly };
                     return lc.allocBox(.{
                         .w = w,
-                        .ha = ly + drop + sth,
+                        .ha = ly + drop + sth + tpad,
                         .db = nb.db,
                         .kind = .{ .list = .{ .start = s, .len = 4 } },
                         .invisible = false,

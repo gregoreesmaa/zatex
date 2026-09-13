@@ -224,6 +224,10 @@ const Walker = struct {
                 try self.cmd("vcenter");
                 try self.arg(v.body);
             },
+            .circled => |c| {
+                try self.cmd("textcircled");
+                try self.arg(c.body);
+            },
             .font => |f| {
                 try self.cmd(switch (f.fam) {
                     .rm => "mathrm",
@@ -346,7 +350,20 @@ const Walker = struct {
                 try self.arg(h.body);
             },
             .htmlwrap => |b| try self.node(b),
-            .classwrap => |c| try self.node(c.body),
+            .classwrap => |c| {
+                // Round-trip the wrapper (issue #51 review): dropping
+                // it silently changes limit placement, so re-emit the
+                // command plus any explicit limit control.
+                try self.cmd(switch (c.class) {
+                    .Op => "mathop",
+                    .Rel => "mathrel",
+                    .Inner => "mathinner",
+                    else => return error.Unsupported,
+                });
+                try self.arg(c.body);
+                if (c.limits == .on) try self.cmd("limits");
+                if (c.limits == .off) try self.cmd("nolimits");
+            },
             .phantom => |p| {
                 if (p.keep_h and p.keep_v) try self.cmd("phantom");
                 if (p.keep_h and !p.keep_v) try self.cmd("hphantom");
@@ -731,6 +748,11 @@ test "serializer: round-trip keeps MathML identical" {
         "\\displaystyle\\sum_i x",
         "0123",
         "xyz",
+        "\\mathop{x}_{y}",
+        "\\mathop{x}\\limits_{y}",
+        "\\mathop{x}\\nolimits_{y}",
+        "\\mathrel{x}",
+        "\\mathinner{x}",
     };
     for (cases) |src| {
         for ([_]bool{ false, true }) |display| {

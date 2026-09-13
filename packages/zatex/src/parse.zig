@@ -49,15 +49,15 @@ pub fn opBase(ctx: *const ParseCtx, id: Idx) ?OpDesc {
             },
             .style => |s| cur = s.body,
             // An Op wrapper is itself the operator (KaTeX \mathop
-            // always takes display limits); other classes are
-            // transparent like .font/.color.
+            // defaults limits:false — only explicit \limits stacks
+            // it); other classes are transparent like .font/.color.
             .classwrap => |c| {
                 if (c.class == .Op) return .{
                     .cp = 0,
                     .large = false,
                     .func = true,
-                    .limits = .auto,
-                    .lim_def = true,
+                    .limits = c.limits,
+                    .lim_def = false,
                 };
                 cur = c.body;
             },
@@ -366,10 +366,13 @@ pub const Node = union(enum) {
     },
     /// Atom-class wrapper (`\mathinner`/`\mathop`/`\mathrel`, issue
     /// #51): transparent geometry, forced outer spacing class; an Op
-    /// wrapper additionally takes display limits via `opBase`.
+    /// wrapper additionally takes explicit limits via `opBase`
+    /// (KaTeX `\mathop` defaults limits:false — only `\limits`
+    /// stacks it).
     classwrap: struct {
         class: symbols.AtomClass,
         body: Idx,
+        limits: LimitsMode,
     },
     font: struct {
         fam: FontFam,
@@ -378,6 +381,11 @@ pub const Node = union(enum) {
     /// Poor-man's bold: KaTeX keeps the same glyphs and bolds via a
     /// text-shadow style (never a font switch).
     pmb: struct {
+        body: Idx,
+    },
+    /// Circled math (`\textcircled` in math mode, issue #51): a
+    /// circle overlay over the body (KaTeX `mover` with U+25EF).
+    circled: struct {
         body: Idx,
     },
     /// Vertically centered box: the body is shifted so the math axis
@@ -1083,6 +1091,13 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                     const last = buf[n - 1];
                     switch (ctx.nodes[last]) {
                         .op => |*o| o.limits = if (isName(t, "limits")) .on else .off,
+                        // Explicit `\limits`/`\nolimits` after an Op
+                        // wrapper mutates it (KaTeX Parser.ts accepts
+                        // limit controls after any `op`); other
+                        // classes keep rejecting below.
+                        .classwrap => |*c| if (c.class == .Op) {
+                            c.limits = if (isName(t, "limits")) .on else .off;
+                        } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                         // Explicit `\limits`/`\nolimits` after a word
                         // operator parses but never moves scripts
                         // (KaTeX 0.18.7: only the star stacks).
@@ -1460,6 +1475,13 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                     const last = buf[n - 1];
                     switch (ctx.nodes[last]) {
                         .op => |*o| o.limits = if (isName(t, "limits")) .on else .off,
+                        // Explicit `\limits`/`\nolimits` after an Op
+                        // wrapper mutates it (KaTeX Parser.ts accepts
+                        // limit controls after any `op`); other
+                        // classes keep rejecting below.
+                        .classwrap => |*c| if (c.class == .Op) {
+                            c.limits = if (isName(t, "limits")) .on else .off;
+                        } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                         // Explicit `\limits`/`\nolimits` after a word
                         // operator parses but never moves scripts
                         // (KaTeX 0.18.7: only the star stacks).
@@ -1655,7 +1677,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         try subsetGate(false);
         const body = try parseGroupOrAtom(ctx, depth);
         const class: symbols.AtomClass = if (tokNameEq(name, "mathop")) .Op else if (tokNameEq(name, "mathrel")) .Rel else .Inner;
-        return ctx.allocNode(.{ .classwrap = .{ .class = class, .body = body } });
+        return ctx.allocNode(.{ .classwrap = .{ .class = class, .body = body, .limits = .auto } });
     }
     if (tokNameEq(name, "verb")) {
         try subsetGate(false);
@@ -1863,7 +1885,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
                 } }),
             };
             const group = try finishGroup(ctx, &kids);
-            return ctx.allocNode(.{ .classwrap = .{ .class = .Inner, .body = group } });
+            return ctx.allocNode(.{ .classwrap = .{ .class = .Inner, .body = group, .limits = .auto } });
         }
         return ctx.allocNode(.{ .delim = .{
             .left = if (is_bra) fence else bar,
@@ -1915,6 +1937,14 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         try subsetGate(false);
         const body = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .phase = body });
+    }
+    if (tokNameEq(name, "textcircled")) {
+        // Math-mode circled (KaTeX parity: strict-mode warning
+        // there, never a reject): full-only like math `\sout`
+        // while the `\text` token path stays subset-free.
+        try subsetGate(false);
+        const body = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .circled = .{ .body = body } });
     }
     if (tokNameEq(name, "quad")) return ctx.allocNode(.{ .space = 1000 });
     if (tokNameEq(name, "qquad")) return ctx.allocNode(.{ .space = 2000 });
@@ -3199,7 +3229,7 @@ fn isBuiltin(name: []const u8) bool {
         "KaTeX", "LaTeX", "TeX", "operatornamewithlimits", "mathstrut",
         "bra", "ket", "Bra", "Ket",
         "phantom", "hphantom", "vphantom", "llap", "rlap", "clap",
-        "cancel", "bcancel", "sout", "phase", "quad", "qquad", "enskip", "hspace", "vspace",
+        "cancel", "bcancel", "sout", "phase", "textcircled", "quad", "qquad", "enskip", "hspace", "vspace",
         "kern", "mkern", "mskip", "hskip", "newcommand", "renewcommand",
         "providecommand", "def", "gdef", "edef", "xdef", "global", "let", "over", "atop", "choose", "brace",
         "brack", "limits", "nolimits", "not", "overset", "underset",

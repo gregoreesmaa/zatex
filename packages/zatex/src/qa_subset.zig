@@ -176,6 +176,12 @@ const full_only_markers = [_]struct { mark: []const u8, why: []const u8 }{
     .{ .mark = "\\overline", .why = "over/under-constructs are full-only" },
     .{ .mark = "\\underline", .why = "over/under-constructs are full-only" },
     .{ .mark = "\\overbrace", .why = "over/under-constructs are full-only" },
+    .{ .mark = "\\overbracket", .why = "over/under-constructs are full-only" },
+    .{ .mark = "\\underbracket", .why = "over/under-constructs are full-only" },
+    .{ .mark = "\\vcenter", .why = "vcenter/phase are full-only" },
+    .{ .mark = "\\phase", .why = "vcenter/phase are full-only" },
+    .{ .mark = "\\sout", .why = "strikeout is full-only" },
+    .{ .mark = "\\textcircled", .why = "math-mode circled is full-only" },
     .{ .mark = "arrow", .why = "extensible arrows are full-only" },
     .{ .mark = "\\not", .why = "negation is full-only" },
     .{ .mark = "\\genfrac", .why = "generalized fractions are full-only" },
@@ -332,3 +338,5 @@ test "qa45s subset fallback is honest and allowlisted" {
     try std.testing.expectEqual(@as(usize, 0), n_stale);
     try std.testing.expectEqual(@as(usize, 0), n_uncovered);
 }
+
+

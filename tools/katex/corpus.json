@@ -5156,5 +5156,59 @@
   "tex": "x_",
   "display": true,
   "expect": "reject"
+ },
+ {
+  "id": "sw-overbracket",
+  "tex": "\\overbracket{x+1}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-underbracket",
+  "tex": "\\underbracket{x}_{y}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-pmb",
+  "tex": "\\pmb{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-vcenter",
+  "tex": "\\vcenter{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-phase",
+  "tex": "\\phase{30}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-cr",
+  "tex": "\\begin{matrix}a&b\\cr c&d\\end{matrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-textcircled",
+  "tex": "\\textcircled{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-textsout",
+  "tex": "\\text{\\sout{abc}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sw-mathsout",
+  "tex": "\\sout{abc}",
+  "display": false,
+  "expect": "accept"
  }
 ]

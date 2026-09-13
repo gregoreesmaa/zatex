@@ -489,107 +489,77 @@ const Writer = struct {
         return .{ .s = j, .e = j + 1, .after = j + 1 };
     }
 
-    // Circled span: base chars each with a combining enclosing
-    // circle (layout draws one overlay circle; inside mtext the
-    // combining form renders the same).
-    fn textCircledSpan(self: *Writer, toks: []const parse.Tok, s: usize, e: usize) Error!void {
-        var k = s;
-        while (k < e) : (k += 1) {
-            const t = toks[k];
-            if (t.kind == .char) {
-                if (t.cp == ' ') self.byte(' ') else self.escCp(t.cp);
-                self.escCp(0x20DD);
-            } else if (t.kind == .lbrace or t.kind == .rbrace) {
-            } else if (t.kind == .newline) {
-                self.byte(' ');
-            } else if (t.kind == .ctrl and symbols.lookupText(t.name) != null) {
-                self.escCp(symbols.lookupText(t.name).?);
-                self.escCp(0x20DD);
-            } else return error.Invalid;
-        }
-    }
-
-    // Strikeout span: every content unit struck with a combining
-    // long stroke (KaTeX wraps mtext in menclose horizontalstrike;
-    // inside mtext the combining form renders the same).
-    fn textSoutSpan(self: *Writer, toks: []const parse.Tok, s: usize, e: usize) Error!void {
-        var k = s;
-        while (k < e) {
-            const t = toks[k];
-            switch (t.kind) {
-                .char => {
-                    if (t.cp == ' ') self.byte(' ') else if (t.cp == '~') self.escCp(0xA0) else self.escCp(t.cp);
-                    self.escCp(0x0336);
-                    k += 1;
-                },
-                .lbrace, .rbrace => k += 1,
-                .newline => {
-                    self.byte(' ');
-                    self.escCp(0x0336);
-                    k += 1;
-                },
-                .ctrl => {
-                    if (symbols.lookupText(t.name)) |tcp| {
-                        self.escCp(tcp);
-                        self.escCp(0x0336);
-                        k += 1;
-                    } else if (symbols.lookupTextArg(t.name)) |ta| {
-                        const sp = try textArgSpan(toks, k);
-                        if (ta == .circled) {
-                            try self.textCircledSpan(toks, sp.s, sp.e);
-                            self.escCp(0x0336);
-                        } else {
-                            try self.textSoutSpan(toks, sp.s, sp.e);
-                        }
-                        k = sp.after;
-                    } else if (parse.textAccentCp(t.name[0]) != null) {
-                        var idx = k;
-                        try self.textAccentTok(toks, &idx, t.name[0]);
-                        self.escCp(0x0336);
-                        k = idx + 1;
-                    } else return error.Invalid;
-                },
-                else => return error.Invalid,
-            }
-        }
-    }
-
-    // Argument-taking text commands (textcircled, sout).
+    // Argument-taking text commands (textcircled, sout): KaTeX
+    // parity (pinned 0.18.7, issue #51 review) builds these
+    // STRUCTURALLY — menclose strike / mover circle — never with
+    // combining characters. The body re-enters text emission, so
+    // nesting resolves through the same dispatch; an empty body
+    // keeps KaTeX's empty row.
     fn textArg(self: *Writer, toks: []const parse.Tok, i: *usize, ta: symbols.TextArg) Error!void {
         const sp = try textArgSpan(toks, i.*);
         if (ta == .circled) {
-            try self.textCircledSpan(toks, sp.s, sp.e);
+            self.str("<mover accent=\"true\"><mrow>");
+            try self.textBody(toks[sp.s..sp.e], true);
+            self.str("</mrow><mo>◯</mo></mover>");
         } else {
-            try self.textSoutSpan(toks, sp.s, sp.e);
+            self.str("<menclose notation=\"horizontalstrike\"><mrow>");
+            try self.textBody(toks[sp.s..sp.e], true);
+            self.str("</mrow></menclose>");
         }
         i.* = sp.after - 1;
     }
 
-    fn textBody(self: *Writer, toks: []const parse.Tok) Error!void {
+    // True when the range holds an argument-taking text command
+    // (pure classification, no errors — cannot drift the accept set).
+    fn hasStructural(toks: []const parse.Tok) bool {
+        for (toks) |tk| {
+            if (tk.kind == .ctrl and symbols.lookupTextArg(tk.name) != null) return true;
+        }
+        return false;
+    }
+
+    // Text row (KaTeX parity, issue #51 review): a range with
+    // structural commands wraps in `mrow`; pure text material emits
+    // bare (one `mtext` run, or nothing for braces-only — the caller
+    // row-wraps that to KaTeX's empty row). Single-fragment rows
+    // normalize away in the parity gate, matching KaTeX's
+    // run-merge-then-row rule.
+    fn textRow(self: *Writer, toks: []const parse.Tok) Error!void {
+        if (!hasStructural(toks)) return self.textBody(toks, true);
+        self.str("<mrow>");
+        try self.textBody(toks, true);
+        self.str("</mrow>");
+    }
+
+    // Fragmenting text emission: text runs become `mtext` leaves
+    // while argument-taking commands (sout/circled) emit
+    // structurally inline. With `managed == false` the caller owns
+    // the `mtext` shell (non-rm variants, colorbox bodies) and runs
+    // emit inline exactly as before.
+    fn textBody(self: *Writer, toks: []const parse.Tok, managed: bool) Error!void {
         var i: usize = 0;
+        var open = false;
         while (i < toks.len) : (i += 1) {
             const tk = toks[i];
             switch (tk.kind) {
-                .char => {
-                    // `~` is U+00A0 in text (KaTeX parity); the `\~`
-                    // accent command is handled below.
-                    if (tk.cp == ' ') {
-                        self.byte(' ');
-                    } else if (tk.cp == '~') {
-                        self.escCp(0xA0);
-                    } else self.escCp(tk.cp);
-                },
                 // Grouping braces are transparent in text (KaTeX parity).
                 .lbrace, .rbrace => {},
-                .newline => self.byte(' '),
                 .ctrl => {
+                    if (symbols.lookupTextArg(tk.name)) |ta| {
+                        if (managed and open) {
+                            self.str("</mtext>");
+                            open = false;
+                        }
+                        try self.textArg(toks, &i, ta);
+                        continue;
+                    }
+                    if (managed and !open) {
+                        self.str("<mtext>");
+                        open = true;
+                    }
                     // Full-profile text commands (layout parity).
                     if (symbols.lookupText(tk.name)) |tcp| {
                         self.escCp(tcp);
-                        continue;
-                    }
-                    if (symbols.lookupTextArg(tk.name)) |ta| {
-                        try self.textArg(toks, &i, ta);
                         continue;
                     }
                     const c = tk.name[0];
@@ -612,9 +582,28 @@ const Writer = struct {
                         else => try self.textAccentTok(toks, &i, c),
                     }
                 },
-                else => return error.Invalid,
+                else => {
+                    if (managed and !open) {
+                        self.str("<mtext>");
+                        open = true;
+                    }
+                    switch (tk.kind) {
+                        .char => {
+                            // `~` is U+00A0 in text (KaTeX parity); the `\~`
+                            // accent command is handled above.
+                            if (tk.cp == ' ') {
+                                self.byte(' ');
+                            } else if (tk.cp == '~') {
+                                self.escCp(0xA0);
+                            } else self.escCp(tk.cp);
+                        },
+                        .newline => self.byte(' '),
+                        else => return error.Invalid,
+                    }
+                },
             }
         }
+        if (managed and open) self.str("</mtext>");
     }
 
     /// Literal color-spec token range to an attribute value.
@@ -887,6 +876,13 @@ const Writer = struct {
                 try self.node(p.body, face);
                 self.str("</mstyle>");
             },
+            // Math-mode circled (issue #51 review, pinned 0.18.7):
+            // mover with the circle operator, body row like KaTeX.
+            .circled => |c| {
+                self.str("<mover accent=\"true\">");
+                try self.node(c.body, face);
+                self.str("<mo>◯</mo></mover>");
+            },
             .vcenter => |v| {
                 self.str("<mpadded class=\"vcenter\">");
                 try self.node(v.body, face);
@@ -894,14 +890,14 @@ const Writer = struct {
             },
             .text => |t| {
                 if (t.fam == .rm) {
-                    self.str("<mtext>");
+                    try self.textRow(parse.toksOf(self.pc, t.toks));
                 } else {
                     self.str("<mtext mathvariant=\"");
                     self.str(variantFor(t.fam));
                     self.str("\">");
+                    try self.textBody(parse.toksOf(self.pc, t.toks), false);
+                    self.str("</mtext>");
                 }
-                try self.textBody(parse.toksOf(self.pc, t.toks));
-                self.str("</mtext>");
             },
             .env => |e| try self.env(e, face),
             .substack => |r| {
@@ -993,7 +989,7 @@ const Writer = struct {
                     self.str("<mrow></mrow>");
                 } else {
                     self.str("<mtext>");
-                    try self.textBody(toks);
+                    try self.textBody(toks, false);
                     self.str("</mtext>");
                 }
                 self.str("</mstyle></mpadded>");

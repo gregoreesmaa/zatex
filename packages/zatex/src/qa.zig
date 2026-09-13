@@ -1605,15 +1605,29 @@ test "qa53 negative kern overlaps runs" {
     try std.testing.expectEqual(@as(?i32, 250), xr);
 }
 
-test "qa54 mathop takes display limits" {
-    // Issue #51 (KaTeX \mathop parity): subscripts on an Op wrapper
-    // stack below in display mode but sit aside in text mode, so the
-    // display construction is strictly deeper.
+test "qa54 mathop sides scripts unless forced" {
+    // Issue #51 (KaTeX \mathop parity, pinned 0.18.7 op.ts): a bare
+    // Op wrapper is limits:false — scripts sit aside in BOTH modes,
+    // so display and text boxes match; explicit \limits stacks in
+    // both modes, and \limits after \mathrel is rejected ("Limit
+    // controls must follow a math operator").
     var b1: B = .{};
     const d = try lay("\\mathop{x}_{y}", true, &b1);
     var b2: B = .{};
     const t = try lay("\\mathop{x}_{y}", false, &b2);
-    try std.testing.expect(d.depth_below > t.depth_below);
+    try std.testing.expectEqual(t.width, d.width);
+    try std.testing.expectEqual(t.height_above, d.height_above);
+    try std.testing.expectEqual(t.depth_below, d.depth_below);
+    var b3: B = .{};
+    const dl = try lay("\\mathop{x}\\limits_{y}", true, &b3);
+    var b4: B = .{};
+    const tl = try lay("\\mathop{x}\\limits_{y}", false, &b4);
+    try std.testing.expect(dl.depth_below > d.depth_below);
+    try std.testing.expectEqual(dl.depth_below, tl.depth_below);
+    var b5: B = .{};
+    var diag = zatex.Diag.empty();
+    const r = zatex.layoutDiag("\\mathrel{x}\\limits_{y}", .{}, stubProvider(), &b5.runs, &b5.rules, &b5.glyphs, &diag);
+    try std.testing.expectError(error.Invalid, r);
 }
 
 test "qa55 operatorname star takes display limits" {
@@ -1769,7 +1783,7 @@ test "qa70 textcircled overlays a circle" {
     try std.testing.expect(circ.height_above > bare.height_above);
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\text{\\textcircled a}", .{}, &buf);
-    try expectGolden("textcircled", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>a⃝</mtext></mrow></math>", got);
+    try expectGolden("textcircled", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><mover accent=\"true\"><mrow><mtext>a</mtext></mrow><mo>◯</mo></mover></mrow></mrow></math>", got);
 }
 
 test "qa71 sout strikes text" {
@@ -1781,7 +1795,7 @@ test "qa71 sout strikes text" {
     try std.testing.expectEqual(@as(u32, 1500), l.rules[0].w);
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\text{\\sout{abc}}", .{}, &buf);
-    try expectGolden("sout-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>a̶b̶c̶</mtext></mrow></math>", got);
+    try expectGolden("sout-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><menclose notation=\"horizontalstrike\"><mrow><mtext>abc</mtext></mrow></menclose></mrow></mrow></math>", got);
 }
 
 test "qa73 overbracket draws a square bracket" {
@@ -1793,13 +1807,33 @@ test "qa73 overbracket draws a square bracket" {
     const bare = try lay("x+1", false, &b2);
     var b3: B = .{};
     const br = try lay("\\overbracket{x+1}", false, &b3);
-    try std.testing.expect(br.height_above > bare.height_above);
+    // Absolute KaTeX geometry (pinned stretchy.ts: legs 290 + bar
+    // 120 + 30 transparent crown + 100 kern, rule-drawn so stub
+    // and host fonts agree exactly).
+    try std.testing.expectEqual(bare.height_above + 540, br.height_above);
+    try std.testing.expectEqual(bare.depth_below, br.depth_below);
     var b4: B = .{};
     const narrow = try lay("\\overbracket{i}", false, &b4);
     try std.testing.expectEqual(@as(u32, 1600), narrow.width);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\overbracket{x+1}", .{}, &buf);
     try expectGolden("overbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow><mo>&#x23B4;</mo></mover></mrow></math>", got);
+}
+
+test "qa79 math-mode textcircled is a mover" {
+    // Issue #51 review (KaTeX parity): math-mode \textcircled is
+    // accepted (strict warning in KaTeX, not a reject) and builds a
+    // mover with the circle operator; the overlay tucks exactly
+    // 194mu above the body top, font-independently.
+    var b1: B = .{};
+    const c = try lay("\\textcircled{a}", false, &b1);
+    var b2: B = .{};
+    const bare = try lay("a", false, &b2);
+    try std.testing.expectEqual(bare.height_above + 194, c.height_above);
+    try std.testing.expectEqual(bare.width, c.width);
+    var buf: [8192]u8 = undefined;
+    const got = try zatex.mathml("\\textcircled{a}", .{}, &buf);
+    try expectGolden("circled-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover accent=\"true\"><mi>a</mi><mo>◯</mo></mover></mrow></math>", got);
 }
 
 test "qa78 cr is a full row-separator alias" {
@@ -1901,7 +1935,10 @@ test "qa74 underbracket mirrors below" {
     const bare = try lay("x", false, &b2);
     var b3: B = .{};
     const br = try lay("\\underbracket{x}", false, &b3);
-    try std.testing.expect(br.depth_below > bare.depth_below);
+    // Absolute KaTeX geometry (pinned stretchy.ts: legs 290 + bar
+    // 120 + 100 kern, no crown below).
+    try std.testing.expectEqual(bare.depth_below + 510, br.depth_below);
+    try std.testing.expectEqual(bare.height_above, br.height_above);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\underbracket{x}", .{}, &buf);
     try expectGolden("underbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mi>x</mi><mo>&#x23B5;</mo></munder></mrow></math>", got);
@@ -1960,3 +1997,4 @@ test "qa61 lbrace works after left" {
     const fenced = try lay("\\left\\lbrace x \\right.", false, &b3);
     try std.testing.expect(fenced.width >= bare.width);
 }
+
