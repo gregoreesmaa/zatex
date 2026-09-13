@@ -5,10 +5,10 @@
     .fingerprint = 0xf94ef9699cfd16b3,
     .minimum_zig_version = "0.16.0",
     // Strict hierarchy: renderers depend on the core, never the reverse.
-    // The core package lives at the repo root (package name `zatex`).
+    // The core package lives in packages/zatex (package name `zatex`).
     .dependencies = .{
         .zatex = .{
-            .path = "..",
+            .path = "../zatex",
         },
     },
     .paths = .{

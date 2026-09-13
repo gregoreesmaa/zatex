@@ -15,10 +15,10 @@
 # Platform: macOS/AArch64 only (`size -m`, Mach-O segments, Apple ld).
 # CI pins macos-14 so the baseline is comparable run to run.
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../packages/zatex"
 
 TARGET=8192
-BASELINE_FILE=tools/size_baseline.txt
+BASELINE_FILE=../../tools/size_baseline.txt
 UPDATE=0
 if [ "${1:-}" = "--update-baseline" ]; then UPDATE=1; fi
 
@@ -28,9 +28,9 @@ LIB=zig-out/lib/libzatex.a
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
-zig cc -O3 -Isrc -o "$TMP/with" tools/size_consumer.c "$LIB" -Wl,-dead_strip
+zig cc -O3 -Isrc -o "$TMP/with" ../../tools/size_consumer.c "$LIB" -Wl,-dead_strip
 
-python3 - tools/size_consumer.c "$TMP/stub.c" <<'EOF'
+python3 - ../../tools/size_consumer.c "$TMP/stub.c" <<'EOF'
 import re, sys
 s = open(sys.argv[1]).read().replace('zatex.h', 'zatex_stub.h')
 s = re.sub(r'zatex_(layout_utf8|mathml_utf8|version)', r'stub_\1', s)

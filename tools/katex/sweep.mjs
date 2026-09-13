@@ -35,5 +35,5 @@ for (const c of cases) {
   out.cases.push(row);
 }
 const accepted = out.cases.filter((c) => c.katex_ok).length;
-writeFileSync(process.argv[2] || '../../goldens/katex_sweep.json', JSON.stringify(out, null, 1));
+writeFileSync(process.argv[2] || '../../packages/zatex/goldens/katex_sweep.json', JSON.stringify(out, null, 1));
 console.log(`katex ${pkg.version}: ${accepted}/${out.cases.length} accepted`);

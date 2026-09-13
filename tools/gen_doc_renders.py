@@ -18,7 +18,7 @@ TABLE = os.path.join(ROOT, "docs", "support-table.md")
 RENDERS = os.path.join(ROOT, "docs", "renders")
 MD = os.path.join(ROOT, "docs", "katex-syntax.md")
 GAPS = os.path.join(ROOT, "tools", "doc_gaps.json")
-CLI_DIR = os.path.join(ROOT, "zatex-png")
+CLI_DIR = os.path.join(ROOT, "packages", "zatex-png")
 CLI = os.path.join(CLI_DIR, "zig-out", "bin", "zatex-png")
 PX = 48
 

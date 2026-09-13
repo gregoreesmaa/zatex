@@ -6,7 +6,7 @@
 //!
 //! Batch renders every `accept` row of the corpus to `<id>.png` and
 //! skips rejects; any accept row the engine fails exits nonzero.
-//! Defaults: 48 px em, `../fixtures/fonts/latinmodern-math.otf`
+//! Defaults: 48 px em, `../zatex/fixtures/fonts/latinmodern-math.otf`
 //! (the pinned fixture, so same input renders identical pixels).
 const std = @import("std");
 const zatex = @import("zatex");
@@ -27,7 +27,7 @@ pub fn main(min: std.process.Init.Minimal) !void {
 
     var display = false;
     var px_per_em: u32 = 48;
-    var font_path: []const u8 = "../fixtures/fonts/latinmodern-math.otf";
+    var font_path: []const u8 = "../zatex/fixtures/fonts/latinmodern-math.otf";
     var corpus_path: ?[]const u8 = null;
     var outdir: ?[]const u8 = null;
     var tex: ?[]const u8 = null;

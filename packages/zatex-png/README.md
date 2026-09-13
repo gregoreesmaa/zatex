@@ -2,7 +2,7 @@
 
 KaTeX-compatible LaTeX → PNG screenshots for the zatex monorepo.
 macOS-only backend (CoreGraphics + CoreText); the layout core stays
-portable. Strict hierarchy: `zatex-png` depends on `zatex(-core)`,
+portable. Strict hierarchy: `zatex-png` depends on `zatex`,
 never the reverse, and no layout math lives in this package — it only
 scales the core's integer font units to pixels and draws.
 
@@ -13,7 +13,7 @@ zatex-png [--display] [--px N] [--font PATH] "<tex>" out.png
 zatex-png --corpus PATH --outdir DIR [--px N] [--font PATH]
 ```
 
-Defaults: 48 px per em, `../fixtures/fonts/latinmodern-math.otf` (the
+Defaults: 48 px per em, `../zatex/fixtures/fonts/latinmodern-math.otf` (the
 pinned fixture, so same input renders identical pixels). Batch mode
 renders every `accept` row of the corpus to `<id>.png`, skips rejects,
 and exits nonzero if any accept row fails to lay out.
