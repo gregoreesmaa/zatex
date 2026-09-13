@@ -601,11 +601,14 @@ test "issue37: sqrt root index is scriptscript, raised and tucked" {
     // KaTeX parity (pinned 0.18.7 `sqrt.js`, TeX `\r@@t`): the index
     // is always scriptscript (size 500, not 700), raised 0.6 x (body
     // height - depth) above the baseline, tucked with +5mu / -10mu
-    // bearings. Stub arithmetic for `\sqrt[3]{x}`: rule_top = 860,
-    // body depth 250, so the `3` baseline sits 6*(860-250)/10 = 366
-    // above the main baseline (absolute y 860-366 = 494); bearings
-    // 277/-555 against a 250-wide index normalize the body to x 0
-    // with the index at 305, and the width equals the plain root.
+    // bearings. Stub arithmetic for `\sqrt[3]{x}` (text style, so
+    // phi = theta = 40): clearance0 = 40 + 40/4 = 50, and the stub
+    // surd (950 tall) fits without the overshoot split, so rule_top
+    // = 700 + 50 + 40 = 790. Body depth 250, so the `3` baseline
+    // sits 6*(790-250)/10 = 324 above the main baseline (absolute y
+    // 790-324 = 466); bearings 277/-555 against a 250-wide index
+    // normalize the body to x 0 with the index at 305, and the width
+    // equals the plain root.
     var runs_buf: [32]ir.Run = undefined;
     var rules_buf: [8]ir.Rule = undefined;
     var glyphs_buf: [128]u16 = undefined;
@@ -625,12 +628,14 @@ test "issue37: sqrt root index is scriptscript, raised and tucked" {
             if (g == @as(u16, '3')) {
                 try std.testing.expectEqual(@as(u16, 500), r.size_units);
                 try std.testing.expectEqual(@as(i32, 305), r.x);
-                try std.testing.expectEqual(@as(i32, 494), r.baseline_y);
+                try std.testing.expectEqual(@as(i32, 466), r.baseline_y);
                 saw_index = true;
             }
             if (g == @as(u16, 'x')) {
                 try std.testing.expectEqual(@as(i32, 550), r.x);
-                try std.testing.expectEqual(@as(i32, 860), r.baseline_y);
+                // Absolute from the ink-box top: the radicand sits at
+                // dy 0, so its baseline is the box height (rule_top).
+                try std.testing.expectEqual(@as(i32, 790), r.baseline_y);
                 saw_x = true;
             }
         }

@@ -32,21 +32,23 @@ pub const Color = struct {
 pub const black = Color{ .r = 0, .g = 0, .b = 0, .a = 1 };
 pub const white = Color{ .r = 1, .g = 1, .b = 1, .a = 1 };
 
-/// Flatten `segs` (font units) into device-space lines at `scale`
+/// Flatten `segs` (font units) into device-space lines at (`sx`, `sy`)
 /// (px per font unit) offset by (`ox`, `oy`), returning the used
-/// prefix of `out`. Curves subdivide to 0.25px flatness, depth-capped.
-pub fn flatten(segs: []const Seg, scale: f64, ox: f64, oy: f64, out: []Line) []Line {
+/// prefix of `out`. The split scales exist for run raster-stretch
+/// (wide accents, brace spans — issues #31/#37); uniform text passes
+/// `sx == sy`. Curves subdivide to 0.25px flatness, depth-capped.
+pub fn flatten(segs: []const Seg, sx: f64, sy: f64, ox: f64, oy: f64, out: []Line) []Line {
     var n: usize = 0;
     for (segs) |s| {
-        const ax = ox + s.x[0] * scale;
-        const ay = oy + s.y[0] * scale;
+        const ax = ox + s.x[0] * sx;
+        const ay = oy + s.y[0] * sy;
         if (!s.is_curve) {
             if (n < out.len) {
                 out[n] = .{
                     .x0 = @floatCast(ax),
                     .y0 = @floatCast(ay),
-                    .x1 = @floatCast(ox + s.x[3] * scale),
-                    .y1 = @floatCast(oy + s.y[3] * scale),
+                    .x1 = @floatCast(ox + s.x[3] * sx),
+                    .y1 = @floatCast(oy + s.y[3] * sy),
                 };
                 n += 1;
             }
@@ -54,12 +56,12 @@ pub fn flatten(segs: []const Seg, scale: f64, ox: f64, oy: f64, out: []Line) []L
             n = flattenCubic(
                 ax,
                 ay,
-                ox + s.x[1] * scale,
-                oy + s.y[1] * scale,
-                ox + s.x[2] * scale,
-                oy + s.y[2] * scale,
-                ox + s.x[3] * scale,
-                oy + s.y[3] * scale,
+                ox + s.x[1] * sx,
+                oy + s.y[1] * sy,
+                ox + s.x[2] * sx,
+                oy + s.y[2] * sy,
+                ox + s.x[3] * sx,
+                oy + s.y[3] * sy,
                 out,
                 n,
                 0,

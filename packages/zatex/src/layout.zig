@@ -60,6 +60,12 @@ pub const Box = struct {
     /// Ambient paint (`\color` scope, issue #35); stamped at
     /// allocation, overridden for box backgrounds/frames.
     color: ?u32 = null,
+    /// Horizontal raster scale in per-mille (1000 = identity), set by
+    /// the core when a glyph must span a construction wider than its
+    /// natural advance (wide accents, brace spans — issues #31/#37):
+    /// the layout box keeps the construction width, the backend
+    /// stretches the ink. Runs split on scale change like on color.
+    x_scale: u16 = 1000,
 };
 
 pub const max_boxes: usize = 640;
@@ -141,6 +147,13 @@ pub const LayCtx = struct {
     fn extents(self: *LayCtx, font: u16, glyph: u16) [2]i32 {
         if (self.provider.extents) |f| return f(self.provider.ctx, font, glyph);
         return .{ 700, 250 };
+    }
+    /// True ink box `[x_min, y_min, x_max, y_max]`, y up from the
+    /// baseline, at 1000 units — or null when the provider has no v4
+    /// `inkBounds` hook (callers keep exact v3 behavior then).
+    fn ink(self: *LayCtx, font: u16, glyph: u16) ?[4]i32 {
+        if (self.provider.inkBounds) |f| return f(self.provider.ctx, font, glyph);
+        return null;
     }
 };
 
@@ -269,6 +282,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .boxed => |b| return layoutBoxed(lc, style, b),
         .cancel => |b| return layoutCancel(lc, style, b),
         .lap => |l| return layoutLap(lc, style, l),
+        .not => |nt| return layoutNot(lc, style, nt),
         .smash => |s| {
             const b = try layoutNode(lc, style, s.body);
             const bb = lc.boxes[b];
@@ -434,6 +448,8 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .boxed => return .Ord,
         .cancel => |b| return classOf(pc, b),
         .lap => |l| return classOf(pc, l.body),
+        // KaTeX wraps `\not` in `\mathrel` unconditionally.
+        .not => return .Rel,
         .smash => |s| return classOf(pc, s.body),
         .raisebox => |r| return classOf(pc, r.body),
         .rule => return .Ord,
@@ -483,7 +499,11 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
             .invisible = false,
             .color = fc,
         });
-        lc.bkids[s + n] = .{ .box = top, .dx = -th, .dy = -(bgha + th) };
+        // dy is baseline-shift UP (emit subtracts it): the top bar's
+        // bottom edge sits on the background top edge, the bottom
+        // bar's top edge on the background bottom edge, and the sides
+        // span the full outer box symmetrically (dy = 0).
+        lc.bkids[s + n] = .{ .box = top, .dx = -th, .dy = bgha };
         n += 1;
         const bot = try lc.allocBox(.{
             .w = bgw + 2 * th,
@@ -493,7 +513,7 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
             .invisible = false,
             .color = fc,
         });
-        lc.bkids[s + n] = .{ .box = bot, .dx = -th, .dy = bgdb };
+        lc.bkids[s + n] = .{ .box = bot, .dx = -th, .dy = -bgdb };
         n += 1;
         const side_ha = bgha + th;
         const side_db = bgdb + th;
@@ -505,7 +525,7 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
             .invisible = false,
             .color = fc,
         });
-        lc.bkids[s + n] = .{ .box = left, .dx = -th, .dy = bgdb - bgha };
+        lc.bkids[s + n] = .{ .box = left, .dx = -th, .dy = 0 };
         n += 1;
         const right = try lc.allocBox(.{
             .w = th,
@@ -515,7 +535,7 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
             .invisible = false,
             .color = fc,
         });
-        lc.bkids[s + n] = .{ .box = right, .dx = bgw, .dy = bgdb - bgha };
+        lc.bkids[s + n] = .{ .box = right, .dx = bgw, .dy = 0 };
         n += 1;
     }
     const fw = if (frame != null) bgw + 2 * th else bgw;
@@ -1020,25 +1040,47 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     // inside rise 30mu less. Also makes Dc reachable for the atom grid.
     const rad = try layoutNode(lc, style.cramped(), s.radicand);
     const rb = lc.boxes[rad];
-    const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
-    const gap = 2 * th + @divTrunc((@as(i32, 40) * size), 1000);
-    // Radical sign, grown through the variant hook when available.
+    // KaTeX parity, pinned 0.18.7 `sqrt.js` (TeXbook Rule 11): theta is
+    // the default rule thickness; phi is the x-height in display styles,
+    // theta otherwise. The vinculum uses the radical rule
+    // (`sqrtRuleThickness`, 0.04em on the fixture) — not the fraction
+    // bar, which grows to 0.049 in script styles while the vinculum
+    // does not.
     const font: u16 = @intFromEnum(contract.FontId.rm);
+    const th = lc.ruleTh(font, .fraction_bar);
+    const rw = lc.ruleTh(font, .radical);
+    const phi = if (style.isDisplay()) @divTrunc(x_height_1000 * size, 1000) else th;
+    const clearance0 = th + @divTrunc(phi, 4);
+    // Radical sign, grown through the variant hook when available.
+    // i64 with saturation: adversarial providers may return huge
+    // rules or extents, and layout must stay total (never panic).
     const g0 = lc.glyphId(font, 0x221A);
-    const need = rb.ha + rb.db + gap;
-    const g = lc.variant(font, g0, @divTrunc(need * 1000, size));
+    const need64: i64 = @as(i64, rb.ha) + rb.db + clearance0 + th;
+    const arg64 = @divTrunc(need64 * 1000, size);
+    const argcut = std.math.clamp(arg64, @as(i64, std.math.minInt(i32)), @as(i64, std.math.maxInt(i32)));
+    const g = lc.variant(font, g0, @intCast(argcut));
     const gadv = lc.advance(font, g);
     const ge = lc.extents(font, g);
     const gw = @divTrunc(gadv * size, 1000);
     const gha = @divTrunc(ge[0] * size, 1000);
     const gdb = @divTrunc(ge[1] * size, 1000);
+    // An oversized radical splits its excess half above (the clearance
+    // grows, lifting the rule) and half below — KaTeX's `delimDepth`
+    // adjustment, so the tail never takes the whole overshoot.
+    const delim_depth: i64 = @as(i64, gha) + gdb - rw;
+    var clearance = clearance0;
+    if (delim_depth > @as(i64, rb.ha) + rb.db + clearance0) {
+        const grown = @divTrunc(delim_depth + clearance0 - rb.ha - rb.db, 2);
+        const growncut = std.math.clamp(grown, @as(i64, std.math.minInt(i32)), @as(i64, std.math.maxInt(i32)));
+        clearance = @intCast(growncut);
+    }
     // Rule sits above the radicand; the radical rises to meet it.
-    const rule_top = rb.ha + gap + th;
+    const rule_top = rb.ha + clearance + rw;
     const kern: i32 = @divTrunc((@as(i32, 50) * size), 1000);
     const over: i32 = @divTrunc((@as(i32, 40) * size), 1000);
     const rad_x = gw + kern;
     const content_w = rad_x + rb.w + over;
-    const rule_y = rule_top - @divTrunc(th, 2);
+    const rule_y = rule_top - @divTrunc(rw, 2);
     const s1 = try lc.allocKids(3);
     // Radical glyph positioned so its top meets the rule.
     const rad_dy = rule_top - gha;
@@ -1053,8 +1095,8 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     lc.bkids[s1 + 1] = .{ .box = rad, .dx = rad_x, .dy = 0 };
     const ruleb = try lc.allocBox(.{
         .w = rb.w + over + kern,
-        .ha = @divTrunc(th + 1, 2),
-        .db = th - @divTrunc(th + 1, 2),
+        .ha = @divTrunc(rw + 1, 2),
+        .db = rw - @divTrunc(rw + 1, 2),
         .kind = .{ .rule = {} },
         .invisible = false,
     });
@@ -1219,6 +1261,15 @@ fn layoutBig(lc: *LayCtx, style: parse.Style, b: anytype) Error!u16 {
     });
 }
 
+/// Raster stretch factor (per-mille) to span `span` with a glyph of
+/// natural width `nat`: stretch-only, so narrow constructions keep
+/// the centered fixed glyph bit-identically (issues #31/#37).
+fn spanScale(span: i32, nat: i32) u16 {
+    if (nat <= 0 or span <= nat) return 1000;
+    const q = @divTrunc(span * 1000, nat);
+    return if (q > 65535) 65535 else @intCast(q);
+}
+
 fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const size = style.sizeUnits();
     const nuc = try layoutNode(lc, style, a.nucleus);
@@ -1238,6 +1289,55 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const clearance = if (nb.ha < xh) nb.ha else xh;
     const skew1000 = lc.italicCorr(font, lc.glyphId(font, nucleusFirstCp(lc.pctx, a.nucleus)));
     const skew = @divTrunc(skew1000 * @as(i32, size), 1000);
+    // v4 ink refinement (null hook = exact v3 behavior): the clipped
+    // extents above lose where ink really starts, so low-sitting
+    // accents (`~`, ink bottom +193mu) would nestle into the nucleus
+    // while high ones (`^`, ink bottom +562mu) clear it. Calibrated
+    // against pinned KaTeX 0.18.7 ground-truth pixels (check 94, hat
+    // 125, dot 141, vec 94, tilde ~160mu): accent ink must clear the
+    // nucleus top by at least `min_gap` (130mu), and zero-advance
+    // combining marks (U+20D7 ink hangs left of its origin) center by
+    // ink, not advance.
+    const min_gap: i32 = @divTrunc(@as(i32, 130) * size, 1000);
+    const ink = lc.ink(font, g);
+    var ink_ax: ?i32 = null;
+    var ink_lift: ?i32 = null;
+    if (ink) |ib| {
+        const ix0 = @divTrunc(ib[0] * size, 1000);
+        const iy0 = @divTrunc(ib[1] * size, 1000);
+        const ix1 = @divTrunc(ib[2] * size, 1000);
+        if (ix1 > ix0) {
+            const inkw = ix1 - ix0;
+            if (adv == 0) ink_ax = @divTrunc(nb.w - inkw, 2) - ix0 + @divTrunc(skew, 2);
+            ink_lift = nb.ha + min_gap - iy0;
+        }
+    }
+    // KaTeX parity (pinned 0.18.7 `defineMacro`): `\dddot` / `\ddddot`
+    // stack three / four period glyphs, not the combining marks
+    // U+20DB/U+20DC. The row behaves like one accent glyph below.
+    const n_dots: usize = if (a.cp == 0x20DB) 3 else if (a.cp == 0x20DC) 4 else 0;
+    var dot_boxes: [4]u16 = undefined;
+    var dot_aw: i32 = aw;
+    var dot_aha: i32 = aha;
+    var dot_adb: i32 = adb;
+    if (n_dots > 0) {
+        const dg = lc.glyphId(font, '.');
+        const dadv = @divTrunc(lc.advance(font, dg) * size, 1000);
+        const de = lc.extents(font, dg);
+        dot_aw = dadv * @as(i32, @intCast(n_dots));
+        dot_aha = @divTrunc(de[0] * size, 1000);
+        dot_adb = @divTrunc(de[1] * size, 1000);
+        for (dot_boxes[0..n_dots], 0..) |*db, i| {
+            db.* = try lc.allocBox(.{
+                .w = dadv,
+                .ha = dot_aha,
+                .db = dot_adb,
+                .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = dg } },
+                .invisible = false,
+            });
+            _ = i;
+        }
+    }
     const ab = try lc.allocBox(.{
         .w = aw,
         .ha = aha,
@@ -1247,12 +1347,62 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     });
     // KaTeX widths (issue #31): a narrow accent lives in a zero-width
     // `accent-body` (a wider-than-base accent overhangs symmetrically)
-    // and a wide accent stretches to the nucleus span — which the IR
-    // cannot draw, so the host stretches the centered glyph. Either
-    // way the construction is exactly as wide as the nucleus.
+    // and a wide accent stretches to the nucleus span via the run
+    // raster scale (the layout box keeps the span; the backend
+    // stretches the ink). Either way the construction is exactly as
+    // wide as the nucleus.
     const w = nb.w;
-    const ax = @divTrunc(nb.w - aw, 2) + @divTrunc(skew, 2);
-    const ay = nb.ha - clearance + adb;
+    var ax = ink_ax orelse @divTrunc(nb.w - aw, 2) + @divTrunc(skew, 2);
+    if (a.wide and n_dots == 0) {
+        const sc = spanScale(nb.w, aw);
+        if (sc > 1000) {
+            lc.boxes[ab].x_scale = sc;
+            lc.boxes[ab].w = nb.w;
+            ax = @divTrunc(skew, 2);
+        }
+    }
+    var ay = nb.ha - clearance + adb;
+    if (ink_lift) |lift| {
+        // Ink must clear the nucleus top (uniform floor; the base
+        // rule already clears it for high-sitting accents, so this
+        // only ever lifts low ones).
+        if (lift > ay) ay = lift;
+    }
+    if (n_dots > 0) {
+        // Dot runs center like oversets: the box is the wider of the
+        // nucleus and the row, both centered, so no run ever starts
+        // left of the ink box (non-negativity invariant). Period ink
+        // sits on its baseline, so the row takes the same minimum-gap
+        // lift as low accents when the hook reports ink.
+        const dw = if (nb.w > dot_aw) nb.w else dot_aw;
+        const dax = @divTrunc(dw - dot_aw, 2) + @divTrunc(skew, 2);
+        var day = nb.ha - clearance + dot_adb;
+        if (lc.ink(font, lc.glyphId(font, '.'))) |pib| {
+            const piy0 = @divTrunc(pib[1] * size, 1000);
+            const pix1 = @divTrunc(pib[2] * size, 1000);
+            if (pix1 > @divTrunc(pib[0] * size, 1000)) {
+                const plift = nb.ha + min_gap - piy0;
+                if (plift > day) day = plift;
+            }
+        }
+        const s = try lc.allocKids(1 + n_dots);
+        lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(dw - nb.w, 2), .dy = 0 };
+        const dadv_each = @divTrunc(dot_aw, @as(i32, @intCast(n_dots)));
+        for (dot_boxes[0..n_dots], 0..) |db, i| {
+            lc.bkids[s + 1 + i] = .{
+                .box = db,
+                .dx = dax + dadv_each * @as(i32, @intCast(i)),
+                .dy = day,
+            };
+        }
+        return lc.allocBox(.{
+            .w = dw,
+            .ha = day + dot_aha,
+            .db = nb.db,
+            .kind = .{ .list = .{ .start = s, .len = @intCast(1 + n_dots) } },
+            .invisible = false,
+        });
+    }
     const s = try lc.allocKids(2);
     lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
     lc.bkids[s + 1] = .{ .box = ab, .dx = @divTrunc(w - nb.w, 2) + ax, .dy = ay };
@@ -1439,8 +1589,9 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             const nuc = try layoutNode(lc, style, o.nucleus);
             const nb = lc.boxes[nuc];
             // KaTeX stretches the brace to the nucleus span: the box is
-            // the nucleus width (the single host glyph is centered on it
-            // and never widens it). Arrows keep the max — their
+            // the nucleus width and the single host glyph raster-stretches
+            // to it (stretch-only: a wider fixed glyph keeps the old
+            // centered/clamped behavior). Arrows keep the max — their
             // stretch rules differ and are out of scope here.
             const is_brace = o.kind == .overbrace or o.kind == .underbrace;
             const w = if (is_brace) nb.w else if (nb.w > gw) nb.w else gw;
@@ -1448,7 +1599,15 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             // without leaving the ink box (negative run x breaks the
             // non-negativity invariant); clamp it at the left edge —
             // it overhangs right, toward the following material.
-            const gx = if (is_brace) @max(@divTrunc(w - gw, 2), 0) else @divTrunc(w - gw, 2);
+            var gx = if (is_brace) @max(@divTrunc(w - gw, 2), 0) else @divTrunc(w - gw, 2);
+            if (is_brace) {
+                const sc = spanScale(w, gw);
+                if (sc > 1000) {
+                    lc.boxes[gb].x_scale = sc;
+                    lc.boxes[gb].w = w;
+                    gx = 0;
+                }
+            }
             const s = try lc.allocKids(2);
             if (!is_under) {
                 const gy = nb.ha + gap + gdb;
@@ -2131,6 +2290,48 @@ fn layoutCancel(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     });
 }
 
+/// Negation overlay (`\not X`, issue #36): the U+0338 slash struck
+/// over the bound base at the same baseline. The reference slash ink
+/// hangs left of its origin (text combining design), so the v4 ink
+/// hook centers it on the base; without the hook the advance middle
+/// is the fallback (never worse than the old left-edge draw). Clamped
+/// at the left edge like brace clamping when the ink is wider.
+fn layoutNot(lc: *LayCtx, style: parse.Style, n: anytype) Error!u16 {
+    const size = style.sizeUnits();
+    const font: u16 = @intFromEnum(contract.FontId.rm);
+    const base = try layoutNode(lc, style, n.base);
+    const bb = lc.boxes[base];
+    const sg = lc.glyphId(font, 0x0338);
+    const sadv = @divTrunc(lc.advance(font, sg) * size, 1000);
+    const se = lc.extents(font, sg);
+    const sha = @divTrunc(se[0] * size, 1000);
+    const sdb = @divTrunc(se[1] * size, 1000);
+    const sb = try lc.allocBox(.{
+        .w = sadv,
+        .ha = sha,
+        .db = sdb,
+        .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = sg } },
+        .invisible = false,
+    });
+    var dx = @divTrunc(bb.w - sadv, 2);
+    if (lc.ink(font, sg)) |ib| {
+        const ix0 = @divTrunc(ib[0] * size, 1000);
+        const ix1 = @divTrunc(ib[2] * size, 1000);
+        if (ix1 > ix0) dx = @divTrunc(bb.w - (ix1 - ix0), 2) - ix0;
+    }
+    dx = @max(dx, 0);
+    const s = try lc.allocKids(2);
+    lc.bkids[s] = .{ .box = base, .dx = 0, .dy = 0 };
+    lc.bkids[s + 1] = .{ .box = sb, .dx = dx, .dy = 0 };
+    return lc.allocBox(.{
+        .w = bb.w,
+        .ha = if (bb.ha > sha) bb.ha else sha,
+        .db = if (bb.db > sdb) bb.db else sdb,
+        .kind = .{ .list = .{ .start = s, .len = 2 } },
+        .invisible = false,
+    });
+}
+
 fn layoutLap(lc: *LayCtx, style: parse.Style, l: anytype) Error!u16 {
     const b = try layoutNode(lc, style, l.body);
     const bb = lc.boxes[b];
@@ -2164,6 +2365,7 @@ const EmitCtx = struct {
     open_font: u16 = 0,
     open_size: u16 = 0,
     open_color: ?u32 = null,
+    open_scale: u16 = 1000,
     open_y: i32 = 0,
     /// Expected pen x for run continuation.
     open_x: i32 = 0,
@@ -2181,6 +2383,7 @@ const EmitCtx = struct {
                 .baseline_y = self.open_y,
                 .glyphs = self.glyphs[self.open_start..self.ng],
                 .color = self.open_color,
+                .x_scale = self.open_scale,
             };
             self.nr += 1;
         }
@@ -2194,8 +2397,9 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
         .glyph => |g| {
             if (!b.invisible) {
                 // Break runs on position gaps: expected pen must equal x.
-                // Color boundaries split runs too (issue #35).
-                if (ec.has_open and (ec.open_font != g.font or ec.open_size != g.size or ec.open_color != b.color or ec.open_y != base or ec.open_x != x)) {
+                // Color and raster-scale boundaries split runs too
+                // (issues #35, #31).
+                if (ec.has_open and (ec.open_font != g.font or ec.open_size != g.size or ec.open_color != b.color or ec.open_scale != b.x_scale or ec.open_y != base or ec.open_x != x)) {
                     ec.closeRun();
                 }
                 if (!ec.has_open) {
@@ -2203,6 +2407,7 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     ec.open_font = g.font;
                     ec.open_size = g.size;
                     ec.open_color = b.color;
+                    ec.open_scale = b.x_scale;
                     ec.open_y = base;
                     ec.open_start = ec.ng;
                     ec.open_run_x = x;

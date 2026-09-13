@@ -48,9 +48,9 @@ comptime {
         @compileError("zatex-png backend must expose Font, Canvas, and Run");
     }
     if (!@hasDecl(I.Font, "load") or !@hasDecl(I.Font, "close") or
-        !@hasDecl(I.Font, "extents1000"))
+        !@hasDecl(I.Font, "extents1000") or !@hasDecl(I.Font, "inkBounds1000"))
     {
-        @compileError("zatex-png backend Font must expose load/close/extents1000");
+        @compileError("zatex-png backend Font must expose load/close/extents1000/inkBounds1000");
     }
     if (!@hasDecl(I.Canvas, "create") or !@hasDecl(I.Canvas, "close") or
         !@hasDecl(I.Canvas, "setFill") or !@hasDecl(I.Canvas, "fillRect") or

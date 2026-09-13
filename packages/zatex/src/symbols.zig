@@ -609,9 +609,11 @@ pub fn lookupDelim(name: []const u8) ?DelimEntry {
 /// Math accents: name → accent glyph. Always spacing forms, never
 /// combining marks: combining-mark ink hangs left of a zero advance
 /// and unshaped drawing cannot recover it. `wide` marks the stretchy
-/// family (`\widehat` etc.) which grows with the nucleus. `vec`,
-/// `dddot`, `ddddot` have no spacing form and keep combining marks
-/// until stretchy accents land.
+/// family (`\widehat` etc.) which grows with the nucleus. `vec` has
+/// no spacing form and keeps its combining mark; `dddot`/`ddddot`
+/// keep table entries only as identifiers — the parser expands them
+/// to dot-run oversets (KaTeX `defineMacro` parity), so the native
+/// path never lays out U+20DB/U+20DC.
 pub const Accent = struct {
     cp: u21,
     wide: bool,
@@ -698,8 +700,9 @@ test "accents use spacing forms, never combining marks" {
     const std = @import("std");
     // Regression pin for accent misplacement: combining-mark ink hangs
     // left of a zero advance and unshaped drawing cannot recover it, so
-    // accents must resolve to spacing glyphs. Only vec/dddot/ddddot
-    // have no spacing form (see the table comment above).
+    // accents must resolve to spacing glyphs. Only vec has no spacing
+    // form (see the table comment above); dddot/ddddot entries are
+    // parser-level identifiers expanded to oversets before layout.
     for (all_accents) |a| {
         const combining = (a.cp >= 0x0300 and a.cp <= 0x036F) or
             (a.cp >= 0x20D0 and a.cp <= 0x20FF);

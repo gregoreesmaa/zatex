@@ -15,11 +15,12 @@ if [ -z "$font" ]; then
     exit 1
   fi
 fi
-export ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache
-export ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache
-if [ ! -x /tmp/zp/bin/zatex-png ]; then
-  (cd /repo/packages/zatex-png && zig build --prefix /tmp/zp)
-fi
+export ZIG_LOCAL_CACHE_DIR=/tmp/zp/cache/local
+export ZIG_GLOBAL_CACHE_DIR=/tmp/zp/cache/global
+# Always build: /tmp/zp persists on a named volume (see compose.yml), so
+# a warm cache makes the no-change rebuild seconds; skipping the build
+# when a binary exists would test a stale checkout after tree changes.
+(cd /repo/packages/zatex-png && zig build --prefix /tmp/zp)
 tex=$(cat "$texfile")
 if [ "$display" = "1" ]; then dflag="--display"; else dflag=""; fi
 exec /tmp/zp/bin/zatex-png $dflag \

@@ -41,7 +41,14 @@ pub const KernCorner = enum(u32) {
 /// - `kernCorrection` (v3) returns the MathKern cut-in of `glyph` at
 ///   correction `height` for `corner`; the core applies top-right
 ///   cut-ins to superscripts and bottom-right cut-ins to subscripts.
-pub const provider_version: u32 = 3;
+/// - `inkBounds` (v4) returns the true ink box of `glyph` as
+///   `[x_min, y_min, x_max, y_max]` at 1000 units, y UP from the
+///   baseline (unclipped: parts below/left of the origin stay
+///   negative). The core uses it only for accent placement: centering
+///   zero-advance combining marks by ink (e.g. U+20D7 whose ink hangs
+///   left of the origin) and lifting low-sitting accents (e.g. `~`)
+///   clear of the nucleus. Null behaves exactly as v3.
+pub const provider_version: u32 = 4;
 pub const MetricsProvider = struct {
     ctx: *const anyopaque,
     glyphId: *const fn (ctx: *const anyopaque, font: u16, codepoint: u21) u16,
@@ -56,6 +63,7 @@ pub const MetricsProvider = struct {
     glyphVariant: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16, min_height: i32) u16 = null,
     italicCorrection: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32 = null,
     kernCorrection: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16, height: i32, corner: KernCorner) i32 = null,
+    inkBounds: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16) [4]i32 = null,
 };
 
 /// Every failure the engine can ever report. Variants are added, never

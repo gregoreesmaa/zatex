@@ -55,3 +55,9 @@ services:
       - ./work:/work:rw
       - ./fonts:/fonts:ro
       - ../..:/repo:ro
+      # Warm Zig cache + installed binary across `run` invocations
+      # (content-addressed; outputs stay deterministic).
+      - zatex-build:/tmp/zp
+
+volumes:
+  zatex-build:

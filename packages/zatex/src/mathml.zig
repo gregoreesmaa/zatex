@@ -323,13 +323,6 @@ fn mergeNot(buf: []u8) usize {
     return n;
 }
 
-/// Whether a node is the `\not` slash (Rel U+0338 atom), which the
-/// parser always wraps in an rlap overlay (issue #36).
-fn isNotSlash(pc: *const parse.ParseCtx, id: parse.Idx) bool {
-    const nn = parse.nodeAt(pc, id);
-    return nn == .atom and nn.atom.cp == 0x0338;
-}
-
 fn utf8Width(lead: u8) usize {
     if (lead < 0x80) return 1;
     if (lead & 0xE0 == 0xC0) return 2;
@@ -922,16 +915,16 @@ const Writer = struct {
                 try self.node(b, face);
                 self.str("</menclose>");
             },
+            .not => |nt| {
+                // Mark-first element order, exactly what the old rlap
+                // overlay produced, so `mergeNot` fuses KaTeX-identical
+                // output (`<mo>=</mo>` + mark → `<mo>=mark</mo>`). The
+                // mark bytes match `mergeNot`'s mark list.
+                self.str("<mo>\xcc\xb8</mo>");
+                try self.node(nt.base, face);
+                return;
+            },
             .lap => |l| {
-                // `\not` is an rlap slash overlay: emit the atom bare so
-                // `mergeNot` folds it onto the next element (KaTeX
-                // `buildExpression` parity). A user `\rlap` can never
-                // contain the bare slash atom (text mode rejects `\not`),
-                // so this shape is unambiguous.
-                if (l.kind == .rlap and isNotSlash(self.pc, l.body)) {
-                    try self.node(l.body, face);
-                    return;
-                }
                 // KaTeX offsets laps via lspace (rlap needs none).
                 self.str("<mpadded");
                 switch (l.kind) {

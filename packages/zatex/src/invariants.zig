@@ -51,6 +51,7 @@ pub fn expectSameLayout(a: ir.Layout, b: ir.Layout) !void {
         try std.testing.expectEqual(x.size_units, y.size_units);
         try std.testing.expectEqual(x.x, y.x);
         try std.testing.expectEqual(x.baseline_y, y.baseline_y);
+        try std.testing.expectEqual(x.x_scale, y.x_scale);
         try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
     }
     for (a.rules, b.rules) |x, y| try std.testing.expectEqual(x, y);
@@ -131,6 +132,7 @@ pub fn expectSameGeometry(a: ir.Layout, b: ir.Layout) !void {
         try std.testing.expectEqual(x.size_units, y.size_units);
         try std.testing.expectEqual(x.x, y.x);
         try std.testing.expectEqual(x.baseline_y, y.baseline_y);
+        try std.testing.expectEqual(x.x_scale, y.x_scale);
         try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
     }
     for (a.rules, b.rules) |x, y| {

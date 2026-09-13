@@ -396,6 +396,12 @@ pub const Node = union(enum) {
         body: Idx,
         kind: LapKind,
     },
+    /// Negation overlay (`\\not X`): the U+0338 slash struck over
+    /// `base` (KaTeX `\\mathrel{\\mathrlap\\@not}`). Unlike `.lap`,
+    /// the operand is bound so layout can center the slash on it.
+    not: struct {
+        base: Idx,
+    },
     smash: struct {
         body: Idx,
         keep_t: bool,
@@ -1411,13 +1417,15 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         return ctx.allocNode(.{ .over = .{ .kind = kind, .nucleus = base, .extra = sup, .under = NONE } });
     }
     if (tokNameEq(name, "not")) {
-        // Zero-width Rel overlay (KaTeX `\mathrel{\mathrlap\@not}`):
-        // the slash takes no space and the Rel class keeps the outer
-        // side bearings (`\not =` is as wide as `=`). The MathML
-        // renderer folds it textually onto the next element.
+        // Bound-operand overlay (KaTeX `\mathrel{\mathrlap\@not}`):
+        // binding `base` lets layout center the U+0338 slash on it
+        // (an unbound rlap cannot see the sibling width). The Rel
+        // class keeps the outer side bearings (`\not =` is as wide
+        // as `=`). The MathML renderer folds the slash textually onto
+        // the base element.
         try subsetGate(false);
-        const slash = try ctx.allocNode(.{ .atom = .{ .class = .Rel, .font = .rm, .cp = 0x0338 } });
-        return ctx.allocNode(.{ .lap = .{ .body = slash, .kind = .rlap } });
+        const base = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .not = .{ .base = base } });
     }
     if (tokNameEq(name, "begin")) {
         try subsetGate(false);

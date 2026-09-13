@@ -58,6 +58,21 @@ pub const Font = struct {
         return .{ ha, db };
     }
 
+    /// True ink box from CFF outlines, y up from the baseline at 1000
+    /// units, unclipped (v4 provider hook). Blank or undecodable
+    /// glyphs report all zeros, which the core skips.
+    pub fn inkBounds1000(self: *const Font, glyph: u16) [4]i32 {
+        var scratch: [512]sw_font.Seg = undefined;
+        const bb = sw_font.outlineBbox(&self.cff, glyph, &scratch) catch return .{ 0, 0, 0, 0 };
+        const b = bb orelse return .{ 0, 0, 0, 0 };
+        return .{
+            self.scale1000(@intFromFloat(@floor(b[0]))),
+            self.scale1000(@intFromFloat(@floor(b[1]))),
+            self.scale1000(@intFromFloat(@ceil(b[2]))),
+            self.scale1000(@intFromFloat(@ceil(b[3]))),
+        };
+    }
+
     fn scale1000(self: *const Font, v: i32) i32 {
         return @divTrunc(v * 1000, self.upm);
     }
@@ -110,8 +125,8 @@ pub const Canvas = struct {
         sw_raster.fillRect(self.pixels, self.w, self.h, x, y, w, h, self.fill);
     }
 
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64) error{RenderInit}!Run {
-        return .{ .canvas = self, .font = font, .size_px = size_px };
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64) error{RenderInit}!Run {
+        return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale };
     }
 
     /// Write the canvas as 8-bit RGBA PNG to `out_path`.
@@ -124,6 +139,9 @@ pub const Run = struct {
     canvas: *Canvas,
     font: *const Font,
     size_px: f64,
+    /// Horizontal raster stretch (1 = identity): wide accents and
+    /// brace spans (issues #31/#37).
+    x_scale: f64,
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
         const c = self.canvas;
@@ -131,7 +149,7 @@ pub const Run = struct {
         if (scale <= 0) return;
         const segs = sw_font.outline(&self.font.cff, glyph, c.segs) catch return;
         if (segs.len == 0) return;
-        const lines = sw_raster.flatten(segs, scale, x, y, c.lines);
+        const lines = sw_raster.flatten(segs, scale * self.x_scale, scale, x, y, c.lines);
         sw_raster.fillLines(c.pixels, c.w, c.h, lines, c.fill, c.row_cov);
     }
 
@@ -189,7 +207,7 @@ test "software extents agree with CoreText ink boxes" {
         var worst: i32 = 0;
         var over2: usize = 0;
         var g: u32 = 0;
-        while (g < 4802) : (g += 1) {
+        while (g < sw.cff.num_glyphs) : (g += 1) {
             const glyph: u16 = @intCast(g);
             const a = sw.extents1000(glyph);
             const b = cgf.extents1000(glyph);
@@ -202,7 +220,7 @@ test "software extents agree with CoreText ink boxes" {
             }
             if (d > 2) over2 += 1;
         }
-        std.debug.print("sw-vs-coretext extents: worst={d} (glyph {d}), rows>2: {d}/4802\n", .{ worst, worst_glyph, over2 });
+        std.debug.print("sw-vs-coretext extents: worst={d} (glyph {d}), rows>2: {d}/{d}\n", .{ worst, worst_glyph, over2, sw.cff.num_glyphs });
         try std.testing.expect(over2 == 0);
     }
 }

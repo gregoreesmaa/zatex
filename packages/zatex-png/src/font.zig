@@ -53,6 +53,7 @@ pub const Font = struct {
             .extents = ext,
             .glyphVariant = variant,
             .italicCorrection = italic,
+            .inkBounds = ink,
         };
     }
 
@@ -109,5 +110,12 @@ pub const Font = struct {
         _ = font_id;
         const self: *const Font = @ptrCast(@alignCast(ctx));
         return self.handle.extents1000(glyph);
+    }
+
+    /// True ink box for accent placement (v4 hook).
+    fn ink(ctx: *const anyopaque, font_id: u16, glyph: u16) [4]i32 {
+        _ = font_id;
+        const self: *const Font = @ptrCast(@alignCast(ctx));
+        return self.handle.inkBounds1000(glyph);
     }
 };

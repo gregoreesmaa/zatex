@@ -4,3 +4,9 @@ zig-out/
 node_modules/
 zatex_stub.h
 docs/renders/.tmp/
+# oracle-diff sweep staging (issue #39): case files, staged fonts, and
+# per-run renders. (Committed copies predate this rule; untrack with
+# `git rm -r --cached` if they churn.)
+tools/oracle-diff/work/
+tools/oracle-diff/fonts/
+tools/oracle-diff/webshot/public/

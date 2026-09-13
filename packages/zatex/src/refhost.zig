@@ -467,14 +467,20 @@ test "metamorphic: x vs {x} vs x{} are byte-identical" {
     }
 }
 
-// Surd clearance: the radical box clears the radicand by the rule
-// gap plus the bar (integer units from the live provider).
+// Surd clearance: KaTeX parity, pinned 0.18.7 `sqrt.js` (TeXbook
+// Rule 11). In text style the clearance above the radicand is
+// theta + theta/4 and the vinculum is the radical rule (integer
+// units from the live provider); an oversized radical only ever
+// grows the clearance, so the minimum stands. Inners with sups sit
+// up to 30mu lower because the radicand is cramped (TeX).
 test "metamorphic: sqrt clears its radicand" {
     var ref = try Ref.load();
     defer ref.free();
     const prov = ref.provider();
     const th = prov.ruleThickness(prov.ctx, 0, .fraction_bar);
+    const rw = prov.ruleThickness(prov.ctx, 0, .radical);
     try std.testing.expect(th > 0);
+    try std.testing.expect(rw > 0);
     for ([_][]const u8{ "x", "\\frac{a}{b}", "x^2" }) |inner| {
         var cbuf: [128]u8 = undefined;
         const src = try std.fmt.bufPrint(&cbuf, "\\sqrt{{{s}}}", .{inner});
@@ -489,9 +495,7 @@ test "metamorphic: sqrt clears its radicand" {
         // Exactly one added rule: the radical bar (the inner frac
         // keeps its own bar).
         try std.testing.expectEqual(a.rules.len + 1, b.rules.len);
-        // Clearance is the rule gap plus the bar; inners with sups sit
-        // up to 30mu lower because the radicand is cramped (TeX).
-        const want: i64 = @as(i64, a.height_above) + 2 * @as(i64, th) + 40 + @as(i64, th) - 30;
+        const want: i64 = @as(i64, a.height_above) + @as(i64, th) + @divTrunc(@as(i64, th), 4) + @as(i64, rw) - 30;
         try std.testing.expect(@as(i64, b.height_above) >= want);
         try std.testing.expect(b.depth_below >= a.depth_below);
         try std.testing.expect(b.width > a.width);

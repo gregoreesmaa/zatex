@@ -1331,3 +1331,148 @@ test "qa48 delimiter extents move with provider metrics" {
 }
 
 
+
+test "qa48 fcolorbox frame surrounds background" {
+    // KaTeX fbox model: content + 3pt (300mu) padding, frame one rule
+    // thickness outside the background. Stub 'A' is 500/700/250,
+    // bar 40: bg is 1100 wide, 1000 above, 550 below; the frame adds
+    // 40 on every side (outer 1180/1040/590). Pins the dy-sign fix:
+    // top bar spans y 0..40, bottom 1590..1630, sides 0..1630.
+    var b: B = .{};
+    const l = try lay("\\fcolorbox{red}{aqua}{A}", false, &b);
+    try std.testing.expectEqual(@as(u32, 1180), l.width);
+    try std.testing.expectEqual(@as(u32, 1040), l.height_above);
+    try std.testing.expectEqual(@as(u32, 590), l.depth_below);
+    try std.testing.expectEqual(@as(usize, 5), l.rules.len);
+    // bg, top, bottom, left, right (emission order).
+    const want = [_][4]i64{
+        .{ 0, 40, 1100, 1550 },
+        .{ -40, 0, 1180, 40 },
+        .{ -40, 1590, 1180, 40 },
+        .{ -40, 0, 40, 1630 },
+        .{ 1100, 0, 40, 1630 },
+    };
+    for (l.rules, want) |r, w| {
+        try std.testing.expectEqual(w[0], r.x);
+        try std.testing.expectEqual(w[1], r.y);
+        try std.testing.expectEqual(@as(u32, @intCast(w[2])), r.w);
+        try std.testing.expectEqual(@as(u32, @intCast(w[3])), r.h);
+    }
+}
+
+const InkStub = struct {
+    // Stub advances with LM-like ink bounds on accent glyphs (bounds
+    // measured from the reference font); every other glyph reports a
+    // degenerate box, which the core must ignore exactly.
+    fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+        return @truncate(cp);
+    }
+    fn advance(_: *const anyopaque, _: u16, glyph: u16) i32 {
+        // Combining vec has no advance, like the real font.
+        return if (glyph == 0x20D7) 0 else 500;
+    }
+    fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+        return 40;
+    }
+    fn inkBounds(_: *const anyopaque, _: u16, glyph: u16) [4]i32 {
+        return switch (glyph) {
+            '~' => .{ 0, 193, 555, 307 },
+            0x20D7 => .{ -472, 521, -56, 711 },
+            '.' => .{ 86, 0, 192, 106 },
+            0x02D9 => .{ 85, 551, 192, 657 },
+            else => .{ 0, 0, 0, 0 },
+        };
+    }
+};
+
+fn inkProvider() zatex.MetricsProvider {
+    const S = struct {
+        var dummy: u8 = 0;
+    };
+    return .{
+        .ctx = &S.dummy,
+        .glyphId = InkStub.glyphId,
+        .advance = InkStub.advance,
+        .ruleThickness = InkStub.ruleThickness,
+        .inkBounds = InkStub.inkBounds,
+    };
+}
+
+fn layInk(src: []const u8, b: *ProvBuf) !zatex.ir.Layout {
+    var diag = zatex.Diag.empty();
+    return zatex.layoutDiag(src, .{}, inkProvider(), &b.runs, &b.rules, &b.glyphs, &diag);
+}
+
+test "qa48 ink lift raises low accents clear" {
+    // Tilde ink bottom (+193) would nestle into the nucleus under the
+    // v3 rule (ay = 700-431+250 = 519, bottom at 519+193 = 712 barely
+    // above the 700 top); the v4 hook lifts it to a uniform 130mu
+    // daylight: ay = 700+130-193 = 637, height 637+700 = 1337.
+    // Calibrated against KaTeX ground-truth pixels (tilde ~160mu).
+    var b: ProvBuf = .{};
+    const l = try layInk("\\tilde{x}", &b);
+    try std.testing.expectEqual(@as(u32, 500), l.width);
+    try std.testing.expectEqual(@as(u32, 1337), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+    const ax = try glyphX(l, '~');
+    try std.testing.expectEqual(@as(i32, 0), ax);
+}
+
+test "qa48 ink centers combining marks by ink" {
+    // U+20D7 ink hangs left of its zero-advance origin (-472..-56);
+    // centering by advance would park the arrow left of the nucleus
+    // (the reported vec bug). Ink-centering: ax = (500-416)/2+472.
+    var b: ProvBuf = .{};
+    const l = try layInk("\\vec{F}", &b);
+    const ax = try glyphX(l, 0x20D7);
+    try std.testing.expectEqual(@as(i32, 514), ax);
+}
+
+test "qa48 ink dots stack with daylight" {
+    // Dot-run row (3 periods, 1500 wide) centers over the nucleus and
+    // lifts to the same 130mu floor (period ink bottom +0).
+    var b: ProvBuf = .{};
+    const l = try layInk("\\dddot{x}", &b);
+    try std.testing.expectEqual(@as(u32, 1500), l.width);
+    try std.testing.expectEqual(@as(u32, 1530), l.height_above);
+    var found = false;
+    for (l.runs) |r| {
+        if (r.glyphs.len == 3 and r.glyphs[0] == '.' and r.x == 0) found = true;
+    }
+    try std.testing.expect(found);
+}
+
+test "qa48 ink degenerate box behaves as v3" {
+    // Glyphs outside the ink table (degenerate zeros) lay out exactly
+    // as with a null hook: bit-identical IR.
+    var b1: ProvBuf = .{};
+    const hooked = try layInk("\\hat{x}", &b1);
+    var b2: B = .{};
+    const plain = try lay("\\hat{x}", false, &b2);
+    try inv.expectSameLayout(hooked, plain);
+}
+
+test "qa48 span stretches wide accents and braces" {
+    // Wide accents and brace spans raster-stretch one glyph to the
+    // construction width (issues #31/#37): the layout box keeps the
+    // span, the run stamps the per-mille factor. Stub advances are
+    // uniform 500: AB spans 1000 (scale 2000), the a+b nucleus spans
+    // 1944 (scale 3888). Narrow accents keep identity (1000).
+    var b1: ProvBuf = .{};
+    const w = try layProv("\\widecheck{AB}", stubProvider(), &b1);
+    var wscale: ?u16 = null;
+    for (w.runs) |r| {
+        for (r.glyphs) |g| { if (g == 0x02C7) wscale = r.x_scale; }
+    }
+    try std.testing.expectEqual(@as(?u16, 2000), wscale);
+    var b2: ProvBuf = .{};
+    const o = try layProv("\\overbrace{a+b}", stubProvider(), &b2);
+    var bscale: ?u16 = null;
+    for (o.runs) |r| {
+        for (r.glyphs) |g| { if (g == 0x23DE) bscale = r.x_scale; }
+    }
+    try std.testing.expectEqual(@as(?u16, 3888), bscale);
+    var b3: ProvBuf = .{};
+    const n = try layProv("\\hat{x}", stubProvider(), &b3);
+    for (n.runs) |r| try std.testing.expectEqual(@as(u16, 1000), r.x_scale);
+}

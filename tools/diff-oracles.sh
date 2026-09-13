@@ -80,6 +80,10 @@ fail=0
 while read -r id display; do
   [ -n "$id" ] || continue
   echo "== $id"
+  # Drop stale renders first: a failed engine must report missing,
+  # never silently compare last run's PNG.
+  rm -f "$od/work/$id.zatex.png" "$od/work/$id.katex.png" \
+        "$od/work/$id.mathjax.png" "$od/work/$id.luatex.png"
   $compose run --rm zatex-shot \
       "/work/$id.tex" "$display" "/work/$id.zatex.png" < /dev/null || fail=1
   $compose run --rm katex-shot \
@@ -89,6 +93,17 @@ while read -r id display; do
   $compose run --rm luatex-shot \
       "/work/$id.tex" "$display" "/work/$id.luatex.png" < /dev/null || fail=1
 done < "$od/work/cases.tsv"
+
+# Showcase crop (PR #52 review): tight ink-bbox crop of every engine
+# render before comparing and showcasing (luatex arrives full-page;
+# the webshot oracles already clip at capture, re-crop is uniform).
+# Unmatched globs are skipped quietly by crop.py.
+# shellcheck disable=SC2086
+if ls "$od/work"/*.zatex.png "$od/work"/*.katex.png \
+      "$od/work"/*.mathjax.png "$od/work"/*.luatex.png >/dev/null 2>&1; then
+  python3 "$od/crop.py" "$od/work"/*.zatex.png "$od/work"/*.katex.png \
+      "$od/work"/*.mathjax.png "$od/work"/*.luatex.png || fail=1
+fi
 
 for f in "$od/work"/*.zatex.png "$od/work"/*.katex.png \
          "$od/work"/*.mathjax.png "$od/work"/*.luatex.png; do

@@ -92,8 +92,12 @@ const body = engine === "katex"
      <script src="/mathjax/tex-chtml.js"></script>
      <script>MathJax.startup.promise.then(() => {
        // Direct conversion (no delimiter scanning): deterministic,
-       // and independent of document-typeset quirks.
-       const node = MathJax.tex2chtml(${texJS}, {display: ${display}});
+       // and independent of document-typeset quirks. The Promise
+       // variant (not the sync tex2chtml) so autoloaded extensions
+       // such as [tex]/color resolve via MathJax's retry machinery
+       // instead of escaping as a "MathJax retry" conversion error.
+       return MathJax.tex2chtmlPromise(${texJS}, {display: ${display}});
+     }).then((node) => {
        document.getElementById("m").appendChild(node);
        return document.fonts.ready;
      }).then(() => { document.title = "ready"; })

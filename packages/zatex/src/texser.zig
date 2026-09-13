@@ -358,16 +358,11 @@ const Walker = struct {
                 try self.cmd("cancel");
                 try self.arg(b);
             },
+            .not => |nt| {
+                try self.cmd("not");
+                try self.arg(nt.base);
+            },
             .lap => |l| {
-                // `\not` parses to an rlap slash overlay (issue #36);
-                // round-trip it as `\not`, not `\rlap`.
-                if (l.kind == .rlap) {
-                    const nn = parse.nodeAt(self.ctx, l.body);
-                    if (nn == .atom and nn.atom.cp == 0x0338) {
-                        try self.cmd("not");
-                        return;
-                    }
-                }
                 try self.cmd(switch (l.kind) {
                     .llap => "llap",
                     .rlap => "rlap",

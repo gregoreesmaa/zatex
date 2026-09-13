@@ -16,6 +16,11 @@ pub const Run = struct {
     baseline_y: i32,
     glyphs: []const u16,
     color: ?u32 = null,
+    /// Horizontal raster scale in per-mille (1000 = identity): wide
+    /// accents and brace spans stretch one glyph to the construction
+    /// width (issues #31/#37). Additive: existing constructions omit
+    /// it and render unstretched.
+    x_scale: u16 = 1000,
 };
 
 /// One filled rect in font units (fraction bars, radical vincula, rules).
