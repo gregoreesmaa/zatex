@@ -5,6 +5,15 @@
 //! atoms with `glueBetween`; hosts resolve glyphs via the provider, so
 //! these tables carry no font data.
 
+const build_options = @import("build_options");
+const contract = @import("contract.zig");
+
+/// Active build profile: `full` compiles the complete engine, `subset`
+/// the embeddable core. Full-only coverage below keys off this so the
+/// subset closure (and its size ratchet) stays untouched.
+const active_profile: contract.Profile =
+    @import("std").meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
+
 /// TeX atom classes. Spacing between adjacent atoms derives from the
 /// pair of classes (see `glueBetween`), matching TeX Book p.170 with
 /// KaTeX's observable behavior.
@@ -109,7 +118,7 @@ const greek_upper = [_]Entry{
     .{ .name = "digamma", .sym = S(0x03DD, .Ord) },
 };
 
-const operators = [_]Entry{
+const operators_base = [_]Entry{
     // Large operators with limits by default.
     .{ .name = "sum", .sym = L(0x2211) },
     .{ .name = "prod", .sym = L(0x220F) },
@@ -362,6 +371,16 @@ const operators = [_]Entry{
     .{ .name = "cdotp", .sym = S(0x22C5, .Punct) },
 };
 
+/// Full-profile symbol coverage: nationals KaTeX accepts in math mode
+/// (pinned-proven). Empty in `subset` so its closure stays untouched.
+const operators_full = if (active_profile == .full) [_]Entry{
+    .{ .name = "sect", .sym = S(0x00A7, .Ord) },
+    .{ .name = "aa", .sym = S(0x00E5, .Ord) },
+    .{ .name = "AA", .sym = S(0x00C5, .Ord) },
+} else [_]Entry{};
+
+const operators = operators_base ++ operators_full;
+
 /// ASCII characters with fixed atom classes.
 pub fn asciiClass(cp: u21) ?AtomClass {
     return switch (cp) {
@@ -398,6 +417,60 @@ pub fn lookup(name: []const u8) ?Sym {
 
 /// Every named symbol, for coverage probes and documentation sweeps.
 pub const all_symbols = greek_lower ++ greek_upper ++ operators;
+
+/// Text-mode commands (`\text{\i}`, `\textdollar`, ...): name →
+/// codepoint. KaTeX accepts these inside `\text` (pinned-proven) while
+/// rejecting most of them in math mode, so they live apart from the
+/// math symbol table.
+const TextCmd = struct {
+    name: []const u8,
+    cp: u21,
+};
+const text_cmds = if (active_profile == .full) [_]TextCmd{
+    .{ .name = "i", .cp = 0x0131 },
+    .{ .name = "j", .cp = 0x0237 },
+    .{ .name = "o", .cp = 0x00F8 },
+    .{ .name = "O", .cp = 0x00D8 },
+    .{ .name = "ae", .cp = 0x00E6 },
+    .{ .name = "AE", .cp = 0x00C6 },
+    .{ .name = "ss", .cp = 0x00DF },
+    .{ .name = "oe", .cp = 0x0153 },
+    .{ .name = "OE", .cp = 0x0152 },
+    .{ .name = "aa", .cp = 0x00E5 },
+    .{ .name = "AA", .cp = 0x00C5 },
+    .{ .name = "S", .cp = 0x00A7 },
+    .{ .name = "P", .cp = 0x00B6 },
+    .{ .name = "sect", .cp = 0x00A7 },
+    .{ .name = "textdollar", .cp = 0x0024 },
+    .{ .name = "textsterling", .cp = 0x00A3 },
+    .{ .name = "textellipsis", .cp = 0x2026 },
+    .{ .name = "textendash", .cp = 0x2013 },
+    .{ .name = "textemdash", .cp = 0x2014 },
+    .{ .name = "textquoteleft", .cp = 0x2018 },
+    .{ .name = "textquoteright", .cp = 0x2019 },
+    .{ .name = "textquotedblleft", .cp = 0x201C },
+    .{ .name = "textquotedblright", .cp = 0x201D },
+    .{ .name = "textasciitilde", .cp = 0x007E },
+    .{ .name = "textasciicircum", .cp = 0x005E },
+    .{ .name = "textbar", .cp = 0x007C },
+    .{ .name = "textbardbl", .cp = 0x2016 },
+    .{ .name = "textbraceleft", .cp = 0x007B },
+    .{ .name = "textbraceright", .cp = 0x007D },
+    .{ .name = "textbackslash", .cp = 0x005C },
+    .{ .name = "textdagger", .cp = 0x2020 },
+    .{ .name = "textdaggerdbl", .cp = 0x2021 },
+    .{ .name = "textdegree", .cp = 0x00B0 },
+    .{ .name = "textgreater", .cp = 0x003E },
+    .{ .name = "textless", .cp = 0x003C },
+    .{ .name = "textunderscore", .cp = 0x005F },
+} else [_]TextCmd{};
+
+/// Look up a text-mode command. Returns null for math-only names
+/// (callers report KaTeX-parity `Invalid`).
+pub fn lookupText(name: []const u8) ?u21 {
+    for (text_cmds) |e| if (eq(e.name, name)) return e.cp;
+    return null;
+}
 
 fn eq(a: []const u8, b: []const u8) bool {
     if (a.len != b.len) return false;
@@ -618,6 +691,26 @@ test "pinned KaTeX codepoints and classes" {
     try std.testing.expectEqual(@as(u21, 0x2021), lookup("ddag").?.cp);
     try std.testing.expectEqual(@as(u21, 0x2223), lookup("vert").?.cp);
     try std.testing.expectEqual(@as(u21, 0x2225), lookup("Vert").?.cp);
+    // Nationals KaTeX also accepts in math mode (pinned-proven); the
+    // rest are text-mode-only and live in lookupText.
+    try std.testing.expectEqual(@as(u21, 0x00E5), lookup("aa").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x00C5), lookup("AA").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x00A7), lookup("S").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x00B6), lookup("P").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x00A7), lookup("sect").?.cp);
+    try std.testing.expect(lookup("i") == null);
+    try std.testing.expect(lookup("ae") == null);
+    try std.testing.expect(lookup("textdollar") == null);
+    // Text-mode commands resolve through lookupText instead.
+    try std.testing.expectEqual(@as(u21, 0x0131), lookupText("i").?);
+    try std.testing.expectEqual(@as(u21, 0x00E6), lookupText("ae").?);
+    try std.testing.expectEqual(@as(u21, 0x00DF), lookupText("ss").?);
+    try std.testing.expectEqual(@as(u21, 0x00A7), lookupText("S").?);
+    try std.testing.expectEqual(@as(u21, 0x0024), lookupText("textdollar").?);
+    try std.testing.expectEqual(@as(u21, 0x00B0), lookupText("textdegree").?);
+    try std.testing.expectEqual(@as(u21, 0x005C), lookupText("textbackslash").?);
+    try std.testing.expect(lookupText("alpha") == null);
+    try std.testing.expect(lookupText("sum") == null);
 }
 
 test "large operators carry limit defaults" {
