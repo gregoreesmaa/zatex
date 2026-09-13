@@ -610,6 +610,18 @@
   "expect": "accept"
  },
  {
+  "id": "ctrl-space",
+  "tex": "a\\ b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "tie",
+  "tex": "a~b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "hspace",
   "tex": "a\\hspace{1em}b\\kern2pt c",
   "display": false,

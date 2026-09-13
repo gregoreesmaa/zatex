@@ -115,7 +115,7 @@
   "kind": "engine",
   "note": "xdef macro definition missing; KaTeX accepts"
  },
- "{Bmatrix\\*}": {
+ "{Bmatrix*}": {
   "kind": "engine",
   "note": "starred env names do not lex; KaTeX accepts"
  },
@@ -123,15 +123,15 @@
   "kind": "overclaim",
   "note": "pinned KaTeX rejects CD; table needs a reject row"
  },
- "{Vmatrix\\*}": {
+ "{Vmatrix*}": {
   "kind": "engine",
   "note": "starred env names do not lex; KaTeX accepts"
  },
- "{align\\*}": {
+ "{align*}": {
   "kind": "engine",
   "note": "top-level align missing; KaTeX accepts"
  },
- "{alignat\\*}": {
+ "{alignat*}": {
   "kind": "engine",
   "note": "top-level alignat missing; KaTeX accepts"
  },
@@ -143,13 +143,9 @@
   "kind": "overclaim",
   "note": "pinned KaTeX rejects unstarred align; table needs a reject row"
  },
- "{bmatrix\\*}": {
+ "{bmatrix*}": {
   "kind": "engine",
   "note": "starred env names do not lex; KaTeX accepts"
- },
- "{darray}": {
-  "kind": "engine",
-  "note": "displaystyle array missing; KaTeX accepts"
  },
  "{dcases}": {
   "kind": "engine",
@@ -159,7 +155,7 @@
   "kind": "engine",
   "note": "display right-cases missing; KaTeX accepts"
  },
- "{equation\\*}": {
+ "{equation*}": {
   "kind": "overclaim",
   "note": "pinned KaTeX rejects equation*; table needs a reject row"
  },
@@ -171,11 +167,11 @@
   "kind": "overclaim",
   "note": "pinned KaTeX rejects gather; table needs a reject row"
  },
- "{matrix\\*}": {
+ "{matrix*}": {
   "kind": "engine",
   "note": "starred env names do not lex; KaTeX accepts"
  },
- "{pmatrix\\*}": {
+ "{pmatrix*}": {
   "kind": "engine",
   "note": "starred env names do not lex; KaTeX accepts"
  },
@@ -187,7 +183,7 @@
   "kind": "overclaim",
   "note": "pinned KaTeX rejects standalone split; table needs a reject row"
  },
- "{vmatrix\\*}": {
+ "{vmatrix*}": {
   "kind": "engine",
   "note": "starred env names do not lex; KaTeX accepts"
  }

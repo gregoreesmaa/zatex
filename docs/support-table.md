@@ -1,3 +1,18 @@
+# KaTeX support table (editable source)
+
+Status of every KaTeX function: `accept` (with golden evidence),
+`unsup` / `err-parity` (intentional rejects, with reject-row evidence),
+or `TODO` (with owner issue). This is the single source of truth —
+`docs/katex-syntax.md` is generated from it by
+`tools/gen_doc_renders.py` (renders via `zatex-png` into `docs/renders/`;
+expected render gaps live in `tools/doc_gaps.json`). Edit statuses here,
+never in the mirror.
+
+Row set, names, and order mirror KaTeX 0.18.7 `docs/support_table.md`
+exactly, so the two tables compare side by side (upstream lists
+`\underrightarrow` and `\vcenter` twice each; this table keeps one row
+per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
+
 ## Symbols
 
 | Function | Status | Evidence / owner |
@@ -28,7 +43,7 @@
 
 | `\(…\)` | accept | goldens: frac, text, bigl |
 
-| `\` | accept | goldens: matrix, aligned, alignedat |
+| `\ ` | accept | goldens: ctrl-space |
 
 | `\"` | accept | goldens: text, textaccent |
 
@@ -42,6 +57,8 @@
 
 | `\;` | accept | goldens: spacing |
 
+| `_` | accept | goldens: sub |
+
 | `\_` | accept | goldens: sym-escapes |
 
 | `\`` | accept | goldens: text, textaccent |
@@ -50,11 +67,13 @@
 
 | `\=` | accept | goldens: text |
 
+| `>` | accept | goldens: atom-rel |
+
 | `\>` | TODO | owner #14 |
 
-| `\[` | TODO | owner #14 |
+| `[` | accept | goldens: sqrt-n, atom-open |
 
-| `\]` | TODO | owner #14 |
+| `]` | accept | goldens: sqrt-n, atom-open |
 
 | `{` | accept | goldens: accents, aligned, alignedat |
 
@@ -64,11 +83,15 @@
 
 | `\}` | accept | goldens: sym-escapes |
 
-| `\|` | accept | goldens: array, leftright-dot, middle |
+| `|` | accept | goldens: vert, array |
 
-| `\\|` | accept | goldens: vert, flite-norm2 |
+| `\|` | accept | goldens: array, leftright-dot, middle, flite-norm2 |
+
+| `~` | accept | goldens: tie |
 
 | `\~` | accept | goldens: text, textaccent |
+
+| `\\ ` | accept | goldens: matrix, aligned, alignedat |
 
 | `^` | accept | goldens: boxed, braces, demo-cauchy, atomgrid, flite-euler, rej-malf-sup |
 
@@ -100,13 +123,13 @@
 
 | `{align}` | accept | goldens: aligned, alignedat, array |
 
-| `{align\*}` | accept | goldens: aligned, alignedat, array |
+| `{align*}` | accept | goldens: aligned, alignedat, array |
 
 | `{aligned}` | accept | goldens: aligned, alignedat, array |
 
 | `{alignat}` | accept | goldens: aligned, alignedat, array |
 
-| `{alignat\*}` | accept | goldens: aligned, alignedat, array |
+| `{alignat*}` | accept | goldens: aligned, alignedat, array |
 
 | `{alignedat}` | accept | goldens: alignedat, aligned, array |
 
@@ -298,11 +321,11 @@
 
 | `{Bmatrix}` | accept | goldens: aligned, alignedat, array |
 
-| `{Bmatrix\*}` | accept | goldens: aligned, alignedat, array |
+| `{Bmatrix*}` | accept | goldens: aligned, alignedat, array |
 
 | `{bmatrix}` | accept | goldens: bmatrix, aligned, alignedat |
 
-| `{bmatrix\*}` | accept | goldens: bmatrix, aligned, alignedat |
+| `{bmatrix*}` | accept | goldens: bmatrix, aligned, alignedat |
 
 | `\bmod` | TODO | owner #1 |
 
@@ -387,8 +410,6 @@
 | `\centerdot` | accept | goldens: sym-gal-2 |
 
 | `\cf` | unsup | goldens: rej-unsup-cf |
-
-| `use `\ce` instead` | TODO | owner #14 |
 
 | `\cfrac` | accept | goldens: cfrac |
 
@@ -540,8 +561,6 @@
 
 | `\darr` | TODO | owner #1 |
 
-| `{darray}` | accept | goldens: aligned, alignedat, array |
-
 | `\dashleftarrow` | TODO | owner #1 |
 
 | `\dashrightarrow` | TODO | owner #1 |
@@ -692,7 +711,7 @@
 
 | `{equation}` | accept | goldens: aligned, alignedat, array |
 
-| `{equation\*}` | accept | goldens: aligned, alignedat, array |
+| `{equation*}` | accept | goldens: aligned, alignedat, array |
 
 | `{eqnarray}` | unsup | goldens: rej-unsup-eqnarray |
 
@@ -848,7 +867,7 @@
 
 | `\hbox` | TODO | owner #7 |
 
-| `\hbox to` | TODO | KaTeX accepts (sweep-proven); owner #7 |
+| `\hbox to <dimen>` | TODO | KaTeX accepts (sweep-proven); owner #7 |
 
 | `\hdashline` | accept | goldens: matrix, aligned, alignedat |
 
@@ -1250,7 +1269,7 @@
 
 | `{matrix}` | accept | goldens: matrix, aligned, alignedat |
 
-| `{matrix\*}` | accept | goldens: matrix, aligned, alignedat |
+| `{matrix*}` | accept | goldens: matrix, aligned, alignedat |
 
 | `\max` | accept | goldens: sym-gal-6 |
 
@@ -1482,7 +1501,7 @@
 
 | `\operatorname` | accept | goldens: operatorname, operatorname-star |
 
-| `\operatorname\*` | accept | goldens: operatorname, limits-force, operatorname-star |
+| `\operatorname*` | accept | goldens: operatorname, limits-force, operatorname-star |
 
 | `\operatornamewithlimits` | accept | goldens: limits-force |
 
@@ -1570,7 +1589,7 @@
 
 | `{pmatrix}` | accept | goldens: pmatrix, aligned, alignedat |
 
-| `{pmatrix\*}` | accept | goldens: pmatrix, aligned, alignedat |
+| `{pmatrix*}` | accept | goldens: pmatrix, aligned, alignedat |
 
 | `\pmb` | accept | goldens: sym-greek2 |
 
@@ -1944,7 +1963,7 @@
 | --- | --- | --- |
 | `\tag` | TODO | owner #1 |
 
-| `\tag\*` | TODO | owner #1 |
+| `\tag*` | TODO | owner #1 |
 
 | `\tan` | accept | goldens: sym-gal-8 |
 
@@ -2270,11 +2289,11 @@
 
 | `{Vmatrix}` | accept | goldens: aligned, alignedat, array |
 
-| `{Vmatrix\*}` | accept | goldens: aligned, alignedat, array |
+| `{Vmatrix*}` | accept | goldens: aligned, alignedat, array |
 
 | `{vmatrix}` | accept | goldens: vmatrix, aligned, alignedat |
 
-| `{vmatrix\*}` | accept | goldens: vmatrix, aligned, alignedat |
+| `{vmatrix*}` | accept | goldens: vmatrix, aligned, alignedat |
 
 | `\vphantom` | accept | goldens: overline |
 
@@ -2363,4 +2382,4 @@
 | `\zeta` | accept | goldens: sym-greek |
 
 ---
-Totals: 547 accept, 4 err-parity, 123 unsup, 460 TODO.
+Totals: 552 accept, 4 err-parity, 121 unsup, 459 TODO.
