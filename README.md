@@ -27,8 +27,7 @@ Shared at the root: `docs/` (contracts, policies, the syntax mirror),
 
 ## Use it
 
-Prerequisites: Zig 0.16.0, Python 3 (stdlib only), Node 22 (KaTeX sweep
-only), macOS 14+ for `zatex-png`.
+Prerequisites: Zig 0.16.0; macOS 14+ for `zatex-png`.
 
 ```sh
 # Core: full test suite (incl. pinned-KaTeX differential sweep)
@@ -41,9 +40,8 @@ cd packages/zatex-png && zig build test --summary all
 ./zig-out/bin/zatex-png "x^2" out.png
 ./screenshots/render.sh
 
-# From the repo root: host-cost gate + docs-mirror regen check
+# From the repo root: host-cost gate
 ./tools/size_gate.sh
-python3 tools/gen_doc_renders.py
 ```
 
 Depend on the core from your own Zig package with a path dependency:
@@ -55,6 +53,35 @@ Depend on the core from your own Zig package with a path dependency:
 then `b.dependency("zatex", ...)` and import the `zatex` (and `otmath`,
 for the OpenType metrics reader) modules — the same shape
 `packages/zatex-png/build.zig` uses.
+
+## Tests and docs
+
+Normal use is Zig-only and dependency-less: no runtimes, no package
+managers, no network, no font installs. The test font is vendored
+(`packages/zatex/fixtures/`, test-only, never linked into the core)
+and the KaTeX expectations are checked in as JSON goldens
+(`packages/zatex/goldens/`), so everything below runs offline:
+
+* `zig build test` in `packages/zatex` — core suite, including the
+  pinned-KaTeX differential sweep against the checked-in goldens.
+* `zig build test` in `packages/zatex-png` — CLI logic plus backend
+  coordinate-mapping tests (rendering itself is exercised via the CLI).
+* `./tools/size_gate.sh` — subset-profile host-cost gate (macOS-only:
+  it measures Mach-O `__TEXT` with the system `size` tool).
+* `zatex-png` renders (`./zig-out/bin/zatex-png "x^2" out.png`,
+  `./screenshots/render.sh`) — one backend per OS behind a small
+  `Backend` interface; CoreGraphics (macOS) is implemented, the layout
+  core stays portable and backend-free.
+
+Two maintainer-only workflows need third-party runtimes. Both run in
+CI, so contributors never have to touch them:
+
+* `npm run sweep` in `tools/katex` (Node) — regenerates the goldens
+  from pinned KaTeX 0.18.7; CI fails on drift.
+* Screenshot/docs helpers (`tools/compare_shots.py`,
+  `tools/gen_doc_renders.py` — Python 3 stdlib) — visual regression
+  comparison and the `docs/katex-syntax.md` render mirror; CI fails on
+  drift.
 
 ## Resource contract (mirrors `read`)
 
@@ -79,7 +106,7 @@ for the OpenType metrics reader) modules — the same shape
 * `docs/ir.md` — the layout IR: what every emitter consumes.
   `docs/support-table.md` — KaTeX coverage status per function (the single
   editable source). `docs/katex-syntax.md` — its generated render mirror
-  (do not edit; regen via `python3 tools/gen_doc_renders.py`).
+  (do not edit; generated from the support table, renders by `zatex-png`).
   `docs/tolerance.md` — differential test policy.
 * `tools/katex/` — pinned-KaTeX sweep harness (`corpus.json`, `sweep.mjs`).
 

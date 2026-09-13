@@ -21,9 +21,14 @@ and exits nonzero if any accept row fails to lay out.
 ## Layout
 
 - `src/main.zig` — CLI (single formula or corpus batch).
-- `src/render.zig` — IR → pixels (coordinate mapping + PNG writing).
+- `src/render.zig` — IR → pixels (portable coordinate mapping over a
+  `Backend` canvas; no layout math, ever).
+- `src/font.zig` — font loading: portable `otmath` metrics plus the
+  backend font handle for drawing.
+- `src/backend.zig` — OS selection + the `Backend` interface
+  (`Font`/`Canvas`/`Run`); a new OS adds one file, never touches the
+  callers. `src/cg_backend.zig` — CoreGraphics implementation.
 - `src/cg.zig` — manual CoreGraphics/CoreText/ImageIO bindings.
-- `src/font.zig` — font loading + advances for the core provider.
 - `screenshots/` — visual regression set: curated corpus, checked-in
   baseline PNGs, and `render.sh`. See `screenshots/README.md`.
 

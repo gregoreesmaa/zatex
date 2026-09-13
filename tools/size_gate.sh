@@ -30,17 +30,20 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 
 zig cc -O3 -Isrc -o "$TMP/with" ../../tools/size_consumer.c "$LIB" -Wl,-dead_strip
 
-python3 - ../../tools/size_consumer.c "$TMP/stub.c" <<'EOF'
-import re, sys
-s = open(sys.argv[1]).read().replace('zatex.h', 'zatex_stub.h')
-s = re.sub(r'zatex_(layout_utf8|mathml_utf8|version)', r'stub_\1', s)
-s = s.replace('#include <stdint.h>',
-              '#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <sys/types.h>')
-open(sys.argv[2], 'w').write(s + '''
+# Stub out the real C ABI with no-op twins (POSIX sed only — following
+# this repo's README needs nothing beyond Zig and a POSIX shell).
+sed -E -e 's/zatex\.h/zatex_stub.h/' \
+    -e 's/zatex_(layout_utf8|mathml_utf8|version)/stub_\1/g' \
+    -e 's|#include <stdint.h>|#include <stdint.h>\
+#include <stddef.h>\
+#include <stdbool.h>\
+#include <sys/types.h>|' \
+    ../../tools/size_consumer.c > "$TMP/stub.c"
+cat >> "$TMP/stub.c" <<'EOF'
+
 int32_t stub_layout_utf8(const char *a, size_t b, bool c, const void *d, void *e, size_t f, void *g, size_t h, void *i, size_t j, void *k) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g;(void)h;(void)i;(void)j;(void)k; return 0; }
 ptrdiff_t stub_mathml_utf8(const char *a, size_t b, bool c, char *d, size_t e) { (void)a;(void)b;(void)c;(void)d;(void)e; return 0; }
 uint32_t stub_version(void) { return 0; }
-''')
 EOF
 cat > "$TMP/zatex_stub.h" <<'EOF'
 #include <stdbool.h>
