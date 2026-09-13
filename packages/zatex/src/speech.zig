@@ -336,16 +336,16 @@ fn speakDelim(cp: u21) contract.LayoutError![]const u8 {
 
 fn speakAccent(cp: u21) contract.LayoutError![]const u8 {
     const table = [_]struct { cp: u21, name: []const u8 }{
-        .{ .cp = 0x0302, .name = "hat" },
-        .{ .cp = 0x030C, .name = "check" },
-        .{ .cp = 0x0300, .name = "grave" },
-        .{ .cp = 0x0301, .name = "acute" },
-        .{ .cp = 0x0303, .name = "tilde" },
-        .{ .cp = 0x0304, .name = "bar" },
-        .{ .cp = 0x0306, .name = "breve" },
+        .{ .cp = 0x005E, .name = "hat" },
+        .{ .cp = 0x02C7, .name = "check" },
+        .{ .cp = 0x0060, .name = "grave" },
+        .{ .cp = 0x00B4, .name = "acute" },
+        .{ .cp = 0x007E, .name = "tilde" },
+        .{ .cp = 0x00AF, .name = "bar" },
+        .{ .cp = 0x02D8, .name = "breve" },
         .{ .cp = 0x20D7, .name = "vector" },
-        .{ .cp = 0x0307, .name = "dot" },
-        .{ .cp = 0x0308, .name = "double dot" },
+        .{ .cp = 0x02D9, .name = "dot" },
+        .{ .cp = 0x00A8, .name = "double dot" },
     };
     for (table) |row| if (row.cp == cp) return row.name;
     return error.Unsupported;
@@ -407,4 +407,10 @@ test "speech: unmapped symbols are Unsupported, not guessed" {
     var out: [256]u8 = undefined;
     // U+22C8 (Join) parses but has no speech name.
     try std.testing.expectError(error.Unsupported, speak("\\Join", false, &out));
+}
+
+test "speech: accents speak their names" {
+    var out: [256]u8 = undefined;
+    try std.testing.expectEqualStrings("M, tilde", try speak("\\tilde{M}", false, &out));
+    try std.testing.expectEqualStrings("x, hat", try speak("\\hat{x}", false, &out));
 }

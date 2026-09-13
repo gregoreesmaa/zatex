@@ -1,7 +1,23 @@
 {
+ "\\\"": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
+ },
+ "\\'": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
+ },
  "\\(\u2026\\)": {
   "kind": "overclaim",
   "note": "inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math"
+ },
+ "\\.": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
+ },
+ "\\=": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
  "\\Bra": {
   "kind": "engine",
@@ -11,6 +27,10 @@
   "kind": "engine",
   "note": "bra-ket notation missing; KaTeX accepts"
  },
+ "\\H": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
+ },
  "\\Ket": {
   "kind": "engine",
   "note": "bra-ket notation missing; KaTeX accepts"
@@ -19,9 +39,13 @@
   "kind": "engine",
   "note": "set notation missing; KaTeX accepts"
  },
- "\\arraystretch": {
+ "\\^": {
   "kind": "engine",
-  "note": "renewcommand of arraystretch rejected; KaTeX accepts"
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
+ },
+ "\\`": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
  "\\bra": {
   "kind": "engine",
@@ -47,9 +71,17 @@
   "kind": "engine",
   "note": "global prefix missing; KaTeX accepts"
  },
+ "\\href": {
+  "kind": "engine",
+  "note": "\\KaTeX logo command missing; KaTeX accepts"
+ },
  "\\ket": {
   "kind": "engine",
   "note": "bra-ket notation missing; KaTeX accepts"
+ },
+ "\\left": {
+  "kind": "engine",
+  "note": "lbrace/rbrace delimiters after \\left/\\right unsupported; KaTeX accepts"
  },
  "\\mathinner": {
   "kind": "engine",
@@ -79,6 +111,10 @@
   "kind": "engine",
   "note": "equation numbering context missing; KaTeX accepts"
  },
+ "\\operatorname*": {
+  "kind": "engine",
+  "note": "\\limits placement unsupported; KaTeX accepts"
+ },
  "\\operatornamewithlimits": {
   "kind": "engine",
   "note": "with-limits operator name missing; KaTeX accepts"
@@ -95,6 +131,10 @@
   "kind": "engine",
   "note": "poor-man's bold missing; KaTeX accepts"
  },
+ "\\r": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
+ },
  "\\sout": {
   "kind": "engine",
   "note": "strikeout missing; KaTeX accepts"
@@ -103,9 +143,21 @@
   "kind": "engine",
   "note": "enclosing circle missing; KaTeX accepts"
  },
+ "\\textregistered": {
+  "kind": "engine",
+  "note": "\\textregistered inside \\text unsupported; KaTeX accepts"
+ },
+ "\\u": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
+ },
  "\\underbracket": {
   "kind": "engine",
   "note": "bracket underline missing; KaTeX accepts"
+ },
+ "\\v": {
+  "kind": "engine",
+  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
  "\\vcenter": {
   "kind": "engine",
