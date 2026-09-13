@@ -9,10 +9,14 @@
 //! size; shifts and clearances are fixed thousandths-of-em constants
 //! documented at each site (TeX-derived, simplified micro-typography).
 const std = @import("std");
+const build_options = @import("build_options");
 const contract = @import("contract.zig");
 const ir = @import("ir.zig");
 const parse = @import("parse.zig");
 const symbols = @import("symbols.zig");
+
+const active_profile: contract.Profile =
+    std.meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
 
 const Error = contract.LayoutError;
 const Idx = parse.Idx;
@@ -1167,9 +1171,14 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
             .rbrace => cp = '}',
             .newline => is_space = true,
             .ctrl => {
-                // Text-mode command (`\i`, `\textdollar`, ...).
-                if (symbols.lookupText(tk.name)) |tcp| {
-                    cp = tcp;
+                // Text-mode command (`\i`, `\textdollar`, ...; full
+                // profile only).
+                const tcp = if (comptime active_profile == .full)
+                    symbols.lookupText(tk.name)
+                else
+                    null;
+                if (tcp) |c2| {
+                    cp = c2;
                 } else {
                     const c = tk.name[0];
                     switch (c) {
@@ -1359,13 +1368,16 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
         row_ha[r] = h;
         row_db[r] = d;
     }
-    // Baselines from the top.
+    // Row dy shifts from the table (first-row) baseline, stored in
+    // place: the first-row baseline is row_ha[0], so later rows shift
+    // down (negative). The emit loop below stays a plain load per row.
     var row_base: [64]i32 = undefined;
     var y: i32 = 0;
+    const r0 = row_ha[0];
     r = 0;
     while (r < nrows) : (r += 1) {
         y += row_ha[r];
-        row_base[r] = y;
+        row_base[r] = r0 - y;
         y += row_db[r] + row_gap;
     }
     const total_h = y - row_gap;
@@ -1395,11 +1407,10 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
         cx += colw[c] + 2 * half_sep;
         if (vlines[c + 1]) cx += vline_w;
     }
+    const table_base = total_h - r0;
     r = 0;
     while (r < nrows) : (r += 1) {
-        // dy is the baseline shift up from the table baseline, which
-        // is the first-row baseline: rows below shift down (negative).
-        const base = row_base[0] - row_base[r];
+        const base = row_base[r];
         var cc: usize = 0;
         while (cc < ncols_per_row[r]) : (cc += 1) {
             const cell = cells[r][cc];
@@ -1440,14 +1451,10 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     }
     const s = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
-    // dy convention: baseline shift UP from parent baseline. Row
-    // baselines are absolute here; the table baseline is the FIRST
+    // dy convention: baseline shift UP from parent baseline; `base`
+    // above is already table-relative. The table baseline is the FIRST
     // row baseline (TeX: arrays center on the axis — v1 uses the
     // first-row baseline, documented).
-    const table_base = total_h - row_base[0];
-    // Shift everything so the first row baseline is at table_base...
-    // parts already use `base` = table-relative; the table box
-    // baseline = table_base with ha=db split:
     return lc.allocBox(.{
         .w = total_w,
         .ha = total_h - table_base,
@@ -1516,22 +1523,23 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
     for (widths[0..n]) |cw| {
         if (cw > w) w = cw;
     }
-    // Stack from the top; baseline = first row baseline.
+    // Stack dy shifts from the first-row baseline in place; the emit
+    // loop below stays a plain load per row.
     var y: i32 = 0;
+    const b0 = heights[0][0];
     var k: usize = 0;
     var bases: [64]i32 = undefined;
     while (k < n) : (k += 1) {
         y += heights[k][0];
-        bases[k] = y;
+        bases[k] = b0 - y;
         y += heights[k][1] + gap;
     }
     const total = y - gap;
-    const first_base = total - bases[0];
+    const first_base = total - b0;
     k = 0;
     while (k < n) : (k += 1) {
         if (nparts >= 128) return error.NoSpace;
-        // Same dy convention: shift up from the first-row baseline.
-        parts[nparts] = .{ .box = ids[k], .dx = @divTrunc(w - widths[k], 2), .dy = bases[0] - bases[k] };
+        parts[nparts] = .{ .box = ids[k], .dx = @divTrunc(w - widths[k], 2), .dy = bases[k] };
         nparts += 1;
     }
     const s = try lc.allocKids(nparts);
