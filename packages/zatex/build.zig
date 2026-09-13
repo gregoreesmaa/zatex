@@ -84,6 +84,26 @@ pub fn build(b: *std.Build) void {
     const run_refhost_tests = b.addRunArtifact(refhost_tests);
     test_step.dependOn(&run_refhost_tests.step);
 
+    // Speech strings + copy-as-LaTeX serializer (host-side walkers).
+    const speech_mod = b.addModule("speech", .{
+        .root_source_file = b.path("src/speech.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    speech_mod.addImport("zatex", mod);
+    const speech_tests = b.addTest(.{ .root_module = speech_mod });
+    const run_speech_tests = b.addRunArtifact(speech_tests);
+    test_step.dependOn(&run_speech_tests.step);
+    const texser_mod = b.addModule("texser", .{
+        .root_source_file = b.path("src/texser.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    texser_mod.addImport("zatex", mod);
+    const texser_tests = b.addTest(.{ .root_module = texser_mod });
+    const run_texser_tests = b.addRunArtifact(texser_tests);
+    test_step.dependOn(&run_texser_tests.step);
+
     // Fixed-seed grammar fuzzer (test-only, zero-dependency).
     const fuzz_mod = b.addModule("fuzz", .{
         .root_source_file = b.path("src/fuzz.zig"),

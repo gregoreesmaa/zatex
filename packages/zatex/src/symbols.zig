@@ -581,6 +581,29 @@ const delims = [_]DelimEntry{
 /// Every named delimiter, for coverage probes.
 pub const all_delims = delims;
 
+/// Canonical command name (no backslash) for a codepoint: operators,
+/// then delimiters, then accents; null when unmapped. First match
+/// wins, so shared codepoints canonicalize to one spelling (the
+/// copy-as-LaTeX serializer relies on this).
+pub fn commandFor(cp: u21) ?[]const u8 {
+    for (all_symbols) |e| if (e.sym.cp == cp) return e.name;
+    for (all_delims) |d| if (d.cp == cp) return d.name;
+    for (all_accents) |a| if (a.cp == cp) return a.name;
+    return null;
+}
+
+/// Canonical delimiter name (no backslash) for a codepoint.
+pub fn delimFor(cp: u21) ?[]const u8 {
+    for (all_delims) |d| if (d.cp == cp) return d.name;
+    return null;
+}
+
+/// Canonical accent name (no backslash) for a codepoint + width.
+pub fn accentFor(cp: u21, wide: bool) ?[]const u8 {
+    for (all_accents) |a| if (a.cp == cp and a.wide == wide) return a.name;
+    return null;
+}
+
 pub fn lookupDelim(name: []const u8) ?DelimEntry {
     for (delims) |d| if (eq(d.name, name)) return d;
     return null;
