@@ -207,3 +207,53 @@ test "reference: scaled fences use taller variants" {
     try std.testing.expect(tall.runs[0].glyphs[0] != 9);
     try std.testing.expect(tall.width > flat.width);
 }
+
+// Math-mode textords (`\S`, `\aa`, ...) lay out via the symbol table,
+// and text-mode-only commands (`\i`, `\textdollar`, ...) lay out inside
+// `\text` (KaTeX parity, pinned-proven per mode).
+test "reference: textord nationals lay out" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const formulas = [_][]const u8{
+        "\\S \\P \\sect \\aa \\AA",
+        "\\text{\\i \\j \\o \\O \\ae \\AE \\ss \\oe \\OE}",
+        "\\text{\\S \\P \\sect \\aa}",
+        "\\text{\\textdollar \\textsterling \\textdegree \\textellipsis}",
+        "\\text{\\textendash \\textemdash \\textbackslash \\textbar}",
+    };
+    for (formulas) |src| {
+        var runs: [16]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [64]u16 = undefined;
+        const l = try zatex.layoutFull(src, .{}, ref.provider(), &runs, &rules, &glyphs);
+        try std.testing.expect(l.width > 0 and l.runs.len > 0);
+    }
+}
+
+// Row stacks must land inside the ink box: every run baseline and
+// rule rect stays within [0, height_above + depth_below]. Guards the
+// table-baseline dy convention in the array/substack emitters.
+test "reference: array rows stay inside the ink box" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const formulas = [_][]const u8{
+        "\\begin{matrix} a & b \\\\ c & d \\end{matrix}",
+        "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}",
+        "\\begin{array}{c} a \\\\ \\hline \\\\ b \\end{array}",
+        "\\sum_{\\substack{a \\\\ b}} x",
+    };
+    for (formulas) |src| {
+        var runs: [64]zatex.ir.Run = undefined;
+        var rules: [16]zatex.ir.Rule = undefined;
+        var glyphs: [512]u16 = undefined;
+        const l = try zatex.layoutFull(src, .{ .display_mode = true }, ref.provider(), &runs, &rules, &glyphs);
+        const total: i64 = @as(i64, l.height_above) + @as(i64, l.depth_below);
+        try std.testing.expect(total > 0 and l.runs.len > 0);
+        for (l.runs) |r| {
+            try std.testing.expect(r.baseline_y >= 0 and r.baseline_y <= total);
+        }
+        for (l.rules) |r| {
+            try std.testing.expect(r.y >= 0 and @as(i64, r.y) + @as(i64, r.h) <= total);
+        }
+    }
+}
