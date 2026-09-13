@@ -15,7 +15,7 @@
 # Platform: macOS/AArch64 only (`size -m`, Mach-O segments, Apple ld).
 # CI pins macos-14 so the baseline is comparable run to run.
 set -eu
-cd "$(dirname "$0")/../packages/zatex-core"
+cd "$(dirname "$0")/../packages/zatex"
 
 TARGET=8192
 BASELINE_FILE=../../tools/size_baseline.txt

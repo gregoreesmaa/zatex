@@ -18,7 +18,7 @@ apps like [read](../read) that budget kilobytes, not megabytes.
 
 | Package | What | Path |
 | --- | --- | --- |
-| `zatex` (core) | Parser, macro expander, layout, MathML, C ABI. Portable Zig. | `packages/zatex-core/` |
+| `zatex` (core) | Parser, macro expander, layout, MathML, C ABI. Portable Zig. | `packages/zatex/` |
 | `zatex-png` | LaTeX → PNG CLI + visual regression set. macOS-only backend. Depends on the core, never the reverse. | `packages/zatex-png/` |
 
 Shared at the root: `docs/` (contracts, policies, the syntax mirror),
@@ -32,7 +32,7 @@ only), macOS 14+ for `zatex-png`.
 
 ```sh
 # Core: full test suite (incl. pinned-KaTeX differential sweep)
-cd packages/zatex-core && zig build test --summary all
+cd packages/zatex && zig build test --summary all
 
 # PNG renderer + its tests
 cd packages/zatex-png && zig build test --summary all
@@ -49,7 +49,7 @@ python3 tools/gen_doc_renders.py
 Depend on the core from your own Zig package with a path dependency:
 
 ```zig
-.zatex = .{ .path = "path/to/zatex/packages/zatex-core" },
+.zatex = .{ .path = "path/to/zatex/packages/zatex" },
 ```
 
 then `b.dependency("zatex", ...)` and import the `zatex` (and `otmath`,
@@ -70,10 +70,10 @@ for the OpenType metrics reader) modules — the same shape
 
 ## Layout
 
-* `packages/zatex-core/src/` — library core (`zatex.zig` root, `ir.zig`
+* `packages/zatex/src/` — library core (`zatex.zig` root, `ir.zig`
   output types, `mathml.zig`, `cabi.zig` + `zatex.h`).
-* `packages/zatex-core/fixtures/` — test-only font fixture (never linked
-  into the core). `packages/zatex-core/goldens/` — pinned-KaTeX sweep.
+* `packages/zatex/fixtures/` — test-only font fixture (never linked
+  into the core). `packages/zatex/goldens/` — pinned-KaTeX sweep.
 * `packages/zatex-png/src/` — CLI, CoreGraphics backend, font loader.
   `packages/zatex-png/screenshots/` — visual regression corpus + baselines.
 * `docs/ir.md` — the layout IR: what every emitter consumes.

@@ -13,7 +13,7 @@ jobs:
         with:
           version: 0.16.0
       - name: Run core tests (full profile, incl. pinned-KaTeX sweep)
-        working-directory: packages/zatex-core
+        working-directory: packages/zatex
         run: zig build test --summary all
       - name: Run zatex-png tests
         working-directory: packages/zatex-png
@@ -35,7 +35,7 @@ jobs:
           cd tools/katex
           npm ci
           npm run sweep
-          git diff --exit-code ../../packages/zatex-core/goldens/katex_sweep.json
+          git diff --exit-code ../../packages/zatex/goldens/katex_sweep.json
 
   # Visual regression: re-render every checked-in PNG and fail on real
   # pixel drift, so each PR carries eyeballable screenshots. Layout is
