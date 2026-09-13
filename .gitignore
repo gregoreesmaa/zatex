@@ -3,3 +3,4 @@ zig-out/
 .DS_Store
 node_modules/
 zatex_stub.h
+docs/renders/.tmp/
