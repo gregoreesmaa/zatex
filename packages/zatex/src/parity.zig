@@ -226,3 +226,16 @@ test "sweep agreement with pinned KaTeX" {
     }
     std.debug.print("\nparity: {d} accept, {d} reject, {d} declared-divergence\n", .{ n_ok, n_rej, n_only });
 }
+
+test "text accents lay out: tilde command, braced args" {
+    // `\\~` is an accent (not nbsp) and `\\'{a}` takes a braced arg
+    // (KaTeX parity); both must lay out, not come back Invalid.
+    var runs: [1024]zatex.ir.Run = undefined;
+    var rules: [128]zatex.ir.Rule = undefined;
+    var glyphs: [8192]u16 = undefined;
+    var diag = zatex.Diag.empty();
+    const a = try zatex.layoutDiag("\\text{\\~{a}}", .{}, stubProvider(), &runs, &rules, &glyphs, &diag);
+    try std.testing.expect(a.width > 0);
+    const b = try zatex.layoutDiag("\\text{\\'{a}}", .{}, stubProvider(), &runs, &rules, &glyphs, &diag);
+    try std.testing.expect(b.width > 0);
+}

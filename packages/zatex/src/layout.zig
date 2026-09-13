@@ -1190,14 +1190,17 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
         var is_space = false;
         switch (tk.kind) {
             .char => {
-                if (tk.cp == ' ') {
+                // `~` is a non-breaking space in text (KaTeX parity);
+                // the `\~` accent command is handled below.
+                if (tk.cp == ' ' or tk.cp == '~') {
                     is_space = true;
                 } else {
                     cp = tk.cp;
                 }
             },
-            .lbrace => cp = '{',
-            .rbrace => cp = '}',
+            // Grouping braces are transparent in text (KaTeX parity);
+            // `\{` / `\}` stay literal via the `.ctrl` arm below.
+            .lbrace, .rbrace => continue,
             .newline => is_space = true,
             .ctrl => {
                 // Text-mode command (`\i`, `\textdollar`, ...; full
@@ -1213,12 +1216,20 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
                     switch (c) {
                         '{', '}', '%', '&', '#', '_', '$', ',', ':', ';', '!', '|', '/' => cp = c,
                         ' ' => is_space = true,
-                        '~' => is_space = true,
                         else => {
-                            // Text accent: precompose with the next char.
+                            // Text accent: precompose with the next
+                            // char; KaTeX also takes a braced single
+                            // letter (`\'{a}`).
                             const acc = parse.textAccentCp(c) orelse return error.Invalid;
                             if (i + 1 >= toks.len) return error.Invalid;
-                            const nx = toks[i + 1];
+                            var nx = toks[i + 1];
+                            if (nx.kind == .lbrace) {
+                                if (i + 3 >= toks.len) return error.Invalid;
+                                if (toks[i + 2].kind != .char or toks[i + 3].kind != .rbrace)
+                                    return error.Invalid;
+                                nx = toks[i + 2];
+                                i += 2;
+                            }
                             if (nx.kind != .char) return error.Invalid;
                             i += 1;
                             cp = parse.precompose(acc, nx.cp) orelse return error.Invalid;

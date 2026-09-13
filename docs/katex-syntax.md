@@ -15,12 +15,12 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `&` | `\begin{matrix}\na & b \\\nc & d\n\end{matrix}` | ![](renders/amp.png) |  |
 | `\&` | `\&` | ![](renders/amp-2.png) |  |
 | `'` | `'` | ![](renders/prime.png) |  |
-| `\'` | `\text{\'{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\'` | `\text{\'{a}}` | ![](renders/prime-2.png) |  |
 | `(` | `(` | ![](renders/lp.png) |  |
 | `)` | `)` | ![](renders/rp.png) |  |
 | `\(…\)` | `\text{\(\frac a b\)}` | *no render (overclaim)* | inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math |
 | `\ ` | `a\ b` | ![](renders/ctrlspace.png) |  |
-| `\"` | `\text{\"{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\"` | `\text{\"{a}}` | ![](renders/quot.png) |  |
 | `\$` | `\$` | ![](renders/dollar.png) |  |
 | `\,` | `a\,\,{b}` | ![](renders/comma.png) |  |
 | `\.` | `\text{\.{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
@@ -28,9 +28,9 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\;` | `a\n\;\;{b}` | ![](renders/semi.png) |  |
 | `_` | `x_i` | ![](renders/us.png) |  |
 | `\_` | `\_` | ![](renders/us-2.png) |  |
-| `\`` | `\text{\`{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\`` | `\text{\`{a}}` | ![](renders/fn.png) |  |
 | `<` | `<` | ![](renders/lt.png) |  |
-| `\=` | `\text{\={a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\=` | `\text{\={a}}` | ![](renders/eq.png) |  |
 | `>` | `>` | ![](renders/gt.png) |  |
 | `\>` | — | — | owner #14 |
 | `[` | `[` | ![](renders/fn-2.png) |  |
@@ -45,7 +45,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\~` | `\text{\~{a}}` | ![](renders/tilde-2.png) |  |
 | `\\ ` | `\begin{matrix}\na & b \\\nc & d\n\end{matrix}` | ![](renders/newline.png) |  |
 | `^` | `x^i` | ![](renders/pow.png) |  |
-| `\^` | `\text{\^{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\^` | `\text{\^{a}}` | ![](renders/pow-2.png) |  |
 
 ## A
 
@@ -868,7 +868,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\qquad` | `a\qquad\qquad{b}` | ![](renders/qquad.png) |  |
 | `\quad` | `a\quad\quad{b}` | ![](renders/quad.png) |  |
 | `\R` | — | — | owner #1 |
-| `\r` | `\text{\r{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\r` | `\text{\r{a}}` | ![](renders/r.png) |  |
 | `\raise` | — | — | goldens: rej-unsup-raise |
 | `\raisebox` | `h\raisebox{2pt}{ighe}r` | ![](renders/raisebox.png) |  |
 | `\rang` | `\langle A\rang` | ![](renders/rang.png) |  |
@@ -1112,7 +1112,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\u` | `\text{\u{a}}` | *no render (engine)* | text-mode accent inside \text unsupported; KaTeX accepts |
+| `\u` | `\text{\u{a}}` | ![](renders/u.png) |  |
 | `\Uarr` | — | — | owner #1 |
 | `\uArr` | — | — | owner #1 |
 | `\uarr` | — | — | owner #1 |

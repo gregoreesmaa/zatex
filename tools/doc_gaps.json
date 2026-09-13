@@ -1,21 +1,9 @@
 {
- "\\\"": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
- },
- "\\'": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
- },
  "\\(\u2026\\)": {
   "kind": "overclaim",
   "note": "inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math"
  },
  "\\.": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
- },
- "\\=": {
   "kind": "engine",
   "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
@@ -38,14 +26,6 @@
  "\\Set": {
   "kind": "engine",
   "note": "set notation missing; KaTeX accepts"
- },
- "\\^": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
- },
- "\\`": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
  "\\bra": {
   "kind": "engine",
@@ -131,10 +111,6 @@
   "kind": "engine",
   "note": "poor-man's bold missing; KaTeX accepts"
  },
- "\\r": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
- },
  "\\sout": {
   "kind": "engine",
   "note": "strikeout missing; KaTeX accepts"
@@ -146,10 +122,6 @@
  "\\textregistered": {
   "kind": "engine",
   "note": "\\textregistered inside \\text unsupported; KaTeX accepts"
- },
- "\\u": {
-  "kind": "engine",
-  "note": "text-mode accent inside \\text unsupported; KaTeX accepts"
  },
  "\\underbracket": {
   "kind": "engine",

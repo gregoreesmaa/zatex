@@ -436,20 +436,34 @@ const Writer = struct {
             const tk = toks[i];
             switch (tk.kind) {
                 .char => {
-                    if (tk.cp == ' ') self.byte(' ') else self.escCp(tk.cp);
+                    // `~` is U+00A0 in text (KaTeX parity); the `\~`
+                    // accent command is handled below.
+                    if (tk.cp == ' ') {
+                        self.byte(' ');
+                    } else if (tk.cp == '~') {
+                        self.escCp(0xA0);
+                    } else self.escCp(tk.cp);
                 },
-                .lbrace => self.byte('{'),
-                .rbrace => self.byte('}'),
+                // Grouping braces are transparent in text (KaTeX parity).
+                .lbrace, .rbrace => {},
                 .newline => self.byte(' '),
                 .ctrl => {
                     const c = tk.name[0];
                     switch (c) {
                         '{', '}', '%', '&', '#', '_', '$', ',', ':', ';', '!', '|', '/' => self.escCp(c),
-                        ' ', '~' => self.byte(' '),
+                        ' ' => self.byte(' '),
                         else => {
+                            // Braced single letters too (`\'{a}`).
                             const acc = parse.textAccentCp(c) orelse return error.Invalid;
                             if (i + 1 >= toks.len) return error.Invalid;
-                            const nx = toks[i + 1];
+                            var nx = toks[i + 1];
+                            if (nx.kind == .lbrace) {
+                                if (i + 3 >= toks.len) return error.Invalid;
+                                if (toks[i + 2].kind != .char or toks[i + 3].kind != .rbrace)
+                                    return error.Invalid;
+                                nx = toks[i + 2];
+                                i += 2;
+                            }
                             if (nx.kind != .char) return error.Invalid;
                             i += 1;
                             self.escCp(parse.precompose(acc, nx.cp) orelse return error.Invalid);
@@ -1208,6 +1222,37 @@ test "sum renders msubsup structurally" {
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
     try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "<msubsup>") != null);
+}
+
+test "text tilde command precomposes, it is not nbsp" {
+    // Regression: `.ctrl '~'` took the nbsp arm while `.char '~'`
+    // emitted a visible glyph — exactly swapped. KaTeX emits bare ã
+    // (grouping braces are transparent in text mode).
+    var pc = parse.ParseCtx.init("\\text{\\~{a}}");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mtext>\xc3\xa3</mtext>", out[0..w.pos]);
+}
+
+test "text braced accent arg precomposes like the bare form" {
+    // KaTeX accepts `\'{a}` as well as `\'a`, both rendering á.
+    var pc = parse.ParseCtx.init("\\text{\\'{a}}");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mtext>\xc3\xa1</mtext>", out[0..w.pos]);
+}
+
+test "text tilde char is nbsp, matching KaTeX" {
+    var pc = parse.ParseCtx.init("\\text{a~b}");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "a\xc2\xa0b") != null);
 }
 
 test "color wraps body in mathcolor mstyle" {
