@@ -1142,7 +1142,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\ll` | accept | goldens: sym-gal-5 |
 
-| `\llap` | accept | goldens: demo-fourier, int, int-display |
+| `\llap` | accept | goldens: lap, lap-llap-sub |
 
 | `\llbracket` | accept | goldens: sym-llbracket |
 
@@ -1240,7 +1240,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\mathchoice` | accept | goldens: mathchoice, demo-fourier, int |
 
-| `\mathclap` | accept | goldens: sum, demo-cauchy, demo-sumsq |
+| `\mathclap` | accept | goldens: lap-clap-sub, lap-clap-sub-text, lap-clap-sup |
 
 | `\mathclose` | accept | goldens: t-mathclose |
 
@@ -1750,7 +1750,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\risingdotseq` | accept | goldens: sym-risingdotseq |
 
-| `\rlap` | accept | goldens: demo-fourier, int, int-display |
+| `\rlap` | accept | goldens: lap-rlap-sub |
 
 | `\rm` | accept | goldens: rm |
 

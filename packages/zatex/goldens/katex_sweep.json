@@ -1350,6 +1350,56 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded lspace=\"-1width\" width=\"0px\"><mtext>x</mtext></mpadded><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">\\llap{x}y</annotation></semantics></math>"
   },
   {
+   "id": "lap-clap-sub",
+   "tex": "\\sum_{\\mathclap{x}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mo>∑</mo><mpadded lspace=\"-0.5width\" width=\"0px\"><mi>x</mi></mpadded></msub></mrow><annotation encoding=\"application/x-tex\">\\sum_{\\mathclap{x}}</annotation></semantics></math>"
+  },
+  {
+   "id": "lap-clap-sub-text",
+   "tex": "\\sum_{\\mathclap{1\\le i\\le n}} x_{i}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mo>∑</mo><mpadded lspace=\"-0.5width\" width=\"0px\"><mrow><mn>1</mn><mo>≤</mo><mi>i</mi><mo>≤</mo><mi>n</mi></mrow></mpadded></msub><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\sum_{\\mathclap{1\\le i\\le n}} x_{i}</annotation></semantics></math>"
+  },
+  {
+   "id": "lap-clap-sup",
+   "tex": "\\sum^{\\mathclap{x}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mo>∑</mo><mpadded lspace=\"-0.5width\" width=\"0px\"><mi>x</mi></mpadded></msup></mrow><annotation encoding=\"application/x-tex\">\\sum^{\\mathclap{x}}</annotation></semantics></math>"
+  },
+  {
+   "id": "lap-llap-sub",
+   "tex": "\\sum_{\\llap{x}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mo>∑</mo><mpadded lspace=\"-1width\" width=\"0px\"><mtext>x</mtext></mpadded></msub></mrow><annotation encoding=\"application/x-tex\">\\sum_{\\llap{x}}</annotation></semantics></math>"
+  },
+  {
+   "id": "lap-rlap-sub",
+   "tex": "\\sum_{\\rlap{x}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mo>∑</mo><mpadded width=\"0px\"><mtext>x</mtext></mpadded></msub></mrow><annotation encoding=\"application/x-tex\">\\sum_{\\rlap{x}}</annotation></semantics></math>"
+  },
+  {
    "id": "rej-unknown",
    "tex": "\\nope",
    "display": false,

@@ -2406,6 +2406,41 @@ test "qa86 operatorname forced limits stack in every style (issue #98)" {
     try std.testing.expect(s.width > f.width);
 }
 
+test "qa87 clap subscripts center on the script anchor (issue #78)" {
+    // KaTeX parity (pinned 0.18.7): a lap subscript is a zero-width
+    // box (`mpadded lspace="-0.5width" width="0px"`) whose content
+    // centers on the side-script anchor at the script drop. Anchor
+    // and drop follow the pinned script contracts (qa43 60mu gap,
+    // qa42 260mu drop); this test locks the LAP-relative geometry —
+    // exact centering, shared drop, zero construct width — so the
+    // PR-#74-era misplacement (content at the base origin, undropped)
+    // can never return. Sweep lap-clap-* rows pin the MathML side.
+    var bp: B = .{};
+    const p = try lay("\\sum_{n}", false, &bp);
+    const anchor = try glyphX(p, 0xD45B); // mathit n
+    try std.testing.expectEqual(@as(i32, 560), anchor); // base 500 + 60mu gap
+    const adv = @as(i32, @intCast(p.width)) - anchor; // 350: script advance
+    var b1: B = .{};
+    const l = try lay("\\sum_{\\mathclap{1\\le i\\le n}} x_{i}", false, &b1);
+    const y_base = try baseY(l, 0x2211); // sum
+    // Every content glyph shares the script drop ...
+    for ([_]u16{ 0x31, 0x2264, 0xD456, 0xD45B }) |g| {
+        try std.testing.expectEqual(y_base + 260, try baseY(l, g));
+    }
+    // ... and the content centers exactly on the anchor: first
+    // origin plus last end mirror about it (stub-exact: -703 and
+    // 1473 + 350 over anchor 560).
+    const first = try glyphX(l, 0x31);
+    const last = try glyphX(l, 0xD45B);
+    try std.testing.expectEqual(2 * anchor, first + last + adv);
+    // The zero-width sub adds no construct width past the anchor ...
+    var b2: B = .{};
+    const q = try lay("\\sum_{\\mathclap{x}}", false, &b2);
+    try std.testing.expectEqual(@as(u32, @intCast(anchor)), q.width);
+    // ... while the follower still lays out past it.
+    try std.testing.expect(try glyphX(l, 0xD465) > anchor); // mathit x
+}
+
 
 
 

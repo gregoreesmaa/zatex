@@ -808,6 +808,36 @@
   "expect": "accept"
  },
  {
+  "id": "lap-clap-sub",
+  "tex": "\\sum_{\\mathclap{x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-clap-sub-text",
+  "tex": "\\sum_{\\mathclap{1\\le i\\le n}} x_{i}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-clap-sup",
+  "tex": "\\sum^{\\mathclap{x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-llap-sub",
+  "tex": "\\sum_{\\llap{x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-rlap-sub",
+  "tex": "\\sum_{\\rlap{x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "rej-unknown",
   "tex": "\\nope",
   "display": false,
