@@ -323,7 +323,8 @@ def score_one_case(args):
         tags.append("katex-outlier")
     return {"case": case, "score": score, "per": per,
             "spread": spread, "missing": missing,
-            "tag": " ".join(tags), "katex_outlier": katex_outlier}
+            "tag": " ".join(tags), "katex_outlier": katex_outlier,
+            "engines": [e for e in ENGINES if e in norm]}
 
 
 def default_jobs():
@@ -349,6 +350,17 @@ def build_report(rawdir, outdir, corpus, jobs=1):
         with Pool(min(jobs, len(tasks))) as pool:
             rows = list(pool.imap(score_one_case, tasks))
     rows = [r for r in rows if r is not None]
+    # Link integrity: every render the rows reference must exist on disk
+    # under exactly that name. Catches missing renders and case drift
+    # between corpus ids and filenames (invisible on case-insensitive
+    # filesystems, dead links on GitHub). Fail loudly: a report with
+    # dead images is broken output, not a triage aid.
+    refs = set("%s.%s.png" % (r["case"]["id"], e)
+               for r in rows for e in r["engines"])
+    missing = refs - set(os.listdir(pngdir))
+    if missing:
+        raise ValueError("report references missing renders: %s"
+                         % sorted(missing))
     rows.sort(key=lambda r: (r["score"] is None, r["score"]
                              if r["score"] is not None else 0.0))
     lines = []
@@ -391,8 +403,12 @@ def build_report(rawdir, outdir, corpus, jobs=1):
         iss = "" if c.get("issue") is None else "#%d" % c["issue"]
         # Issue #59: inline images (shown directly, not links — the
         # report's point is the visible differences) in engine order.
+        # Only rendered engines get an image: unrendered ones have no
+        # file, and linking them produces dead images (the row's tag
+        # column already records them via "missing:...").
         imgs = "<br>".join(
-            "![%s](png/%s.%s.png)" % (e[0].upper(), c["id"], e) for e in ENGINES)
+            "![%s](png/%s.%s.png)" % (e[0].upper(), c["id"], e)
+            for e in r["engines"])
         miss = (" missing:" + ",".join(r["missing"])) if r["missing"] else ""
         lines.append("| %s %s | %s | %s | %s | %s | %s | %.3f | %s%s | %s |" % (
             c["id"], iss, src, sc, f("katex"), f("luatex"), f("mathjax"),
@@ -476,6 +492,12 @@ def selfcheck():
     for eng, kind in oracle_kinds.items():
         img = synth_image(48, 32, kind)
         write_png(os.path.join(raw, "ambig.%s.png" % eng), 48, 32, img[2])
+    # part: only zatex+katex rendered (luatex/mathjax missing, as happens
+    # for real amsmath-gap rows) — the row must not reference their PNGs.
+    cases.append({"id": "part", "tex": "x", "display": False, "issue": None})
+    for eng in ("zatex", "katex"):
+        img = synth_image(48, 32, "bar")
+        write_png(os.path.join(raw, "part.%s.png" % eng), 48, 32, img[2])
     out = os.path.join(tmp, "out")
     rows = build_report(raw, out, cases)
     order = [r["case"]["id"] for r in rows]
@@ -504,6 +526,18 @@ def selfcheck():
     check("normalized pngs written per engine",
           all(os.path.exists(os.path.join(out, "png", "%s.%s.png" % (i, e)))
               for i in ("agree", "solo", "ambig") for e in ENGINES))
+    # No dead image references: every png/ link in the report resolves.
+    import re
+    md = open(os.path.join(out, "report.md")).read()
+    refs = set(re.findall(r"png/(\S+?\.png)", md))
+    on_disk = set(os.listdir(os.path.join(out, "png")))
+    check("every referenced render exists (no dead images)",
+          refs <= on_disk)
+    part_md = [ln for ln in md.splitlines() if ln.startswith("| part ")]
+    check("missing-engine row omits unrendered engines",
+          len(part_md) == 1 and "part.luatex.png" not in part_md[0]
+          and "part.mathjax.png" not in part_md[0]
+          and "missing:luatex,mathjax" in part_md[0])
     # Corpus fixture sanity: known #30-#38 divergences are represented.
     issues = set()
     for path in (os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -514,6 +548,14 @@ def selfcheck():
                     issues.add(row["issue"])
     check("fixture corpus covers issues 30-37 divergences",
           set(range(30, 38)) <= issues)
+    # Corpus ids derive every staged/render filename: two ids differing
+    # only by case collide on case-insensitive filesystems (one tex
+    # clobbers the other, both rows score the same renders) and produce
+    # dead links on case-sensitive hosts. Forbid them outright.
+    ids = [row["id"] for row in json.load(open(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "corpus.json")))]
+    check("corpus ids unique case-insensitively (no filename collision)",
+          len({i.lower() for i in ids}) == len(ids))
     if fails:
         print("%d FAILURES" % len(fails))
         return 1

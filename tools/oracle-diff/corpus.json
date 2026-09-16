@@ -55,7 +55,7 @@
  {"id": "sym-greek", "tex": "\\alpha\\beta\\gamma\\delta\\epsilon\\varepsilon\\zeta\\eta\\theta\\vartheta", "display": false, "issue": null},
  {"id": "sym-greek2", "tex": "\\iota\\kappa\\lambda\\mu\\nu\\xi\\pi\\varpi\\rho\\varrho", "display": false, "issue": null},
  {"id": "sym-greek3", "tex": "\\sigma\\varsigma\\tau\\upsilon\\phi\\varphi\\chi\\psi\\omega", "display": false, "issue": null},
- {"id": "sym-Greek", "tex": "\\Gamma\\Delta\\Theta\\Lambda\\Xi\\Pi\\Sigma\\Phi\\Psi\\Omega", "display": false, "issue": null},
+ {"id": "sym-greek-upper", "tex": "\\Gamma\\Delta\\Theta\\Lambda\\Xi\\Pi\\Sigma\\Phi\\Psi\\Omega", "display": false, "issue": null},
  {"id": "atom-bin", "tex": "a+b-c*d", "display": false, "issue": null},
  {"id": "atom-rel", "tex": "a=b<c>d\\leq e\\geq f\\neq g", "display": false, "issue": null},
  {"id": "atom-open", "tex": "(a)[b]", "display": false, "issue": null},
