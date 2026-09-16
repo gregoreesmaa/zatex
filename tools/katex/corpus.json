@@ -9505,5 +9505,65 @@
   "tex": "\\char\"263A",
   "display": false,
   "expect": "accept"
+ },
+ {
+  "id": "sym-circledS",
+  "tex": "\\circledS",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Finv",
+  "tex": "\\Finv",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Game",
+  "tex": "\\Game",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-digamma",
+  "tex": "\\digamma",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-triangleleft",
+  "tex": "\\triangleleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-triangleright",
+  "tex": "\\triangleright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "verb",
+  "tex": "\\verb!\\frac a b!",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathbf-A",
+  "tex": "\\mathbf{A}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathit-A",
+  "tex": "\\mathit{A}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textit-x",
+  "tex": "\\textit{AaBb}",
+  "display": false,
+  "expect": "accept"
  }
 ]

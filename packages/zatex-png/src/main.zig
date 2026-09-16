@@ -6,8 +6,10 @@
 //!
 //! Batch renders every `accept` row of the corpus to `<id>.png` and
 //! skips rejects; any accept row the engine fails exits nonzero.
-//! Defaults: 48 px em, `../zatex/fixtures/fonts/latinmodern-math.otf`
-//! (the pinned fixture, so same input renders identical pixels).
+//! Defaults: 48 px em and the vendored fixture stack (Latin Modern
+//! Math first, then the KaTeX faces, then system STIX when present),
+//! so same input renders identical pixels. `--font PATH` keeps the
+//! legacy single-file host instead of the stack.
 const std = @import("std");
 const zatex = @import("zatex");
 const Font = @import("font.zig").Font;
@@ -19,6 +21,27 @@ const usage =
     \\
 ;
 
+/// Default fixture stack (issue #92): same files, same roles, same
+/// order as the core reference host, so CLI pixels match refhost
+/// metrics exactly. Paths are CWD-relative like the old default.
+const default_stack = [_]Font.StackFile{
+    .{ .path = "../zatex/fixtures/fonts/latinmodern-math.otf", .role = .lm },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Main-Regular.otf", .role = .main },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Main-Bold.otf", .role = .main_bold },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Main-Italic.otf", .role = .main_italic },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Main-BoldItalic.otf", .role = .main_bi },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Math-Italic.otf", .role = .math_italic },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_AMS-Regular.otf", .role = .ams },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_SansSerif-Regular.otf", .role = .sans },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Typewriter-Regular.otf", .role = .typewriter },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Caligraphic-Regular.otf", .role = .cal },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Fraktur-Regular.otf", .role = .frak },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Script-Regular.otf", .role = .script },
+    .{ .path = "../zatex/fixtures/fonts/STIXTwoMath-overline.otf", .role = .stix },
+    .{ .path = "/System/Library/Fonts/Supplemental/STIXTwoMath.otf", .role = .stix, .required = false },
+    .{ .path = "/Library/Fonts/STIXTwoMath.otf", .role = .stix, .required = false },
+};
+
 pub fn main(min: std.process.Init.Minimal) !void {
     const alloc = std.heap.c_allocator;
     // initAllocator on every OS: the plain init() is a compile error on
@@ -29,7 +52,7 @@ pub fn main(min: std.process.Init.Minimal) !void {
 
     var display = false;
     var px_per_em: u32 = 48;
-    var font_path: []const u8 = "../zatex/fixtures/fonts/latinmodern-math.otf";
+    var font_path: ?[]const u8 = null;
     var corpus_path: ?[]const u8 = null;
     var outdir: ?[]const u8 = null;
     var tex: ?[]const u8 = null;
@@ -61,10 +84,18 @@ pub fn main(min: std.process.Init.Minimal) !void {
         }
     }
 
-    var font = Font.load(alloc, font_path) catch |e| {
-        std.debug.print("zatex-png: cannot load font '{s}': {s}\n", .{ font_path, @errorName(e) });
-        return e;
-    };
+    var font: Font = undefined;
+    if (font_path) |fp| {
+        font = Font.load(alloc, fp) catch |e| {
+            std.debug.print("zatex-png: cannot load font '{s}': {s}\n", .{ fp, @errorName(e) });
+            return e;
+        };
+    } else {
+        font = Font.loadStack(alloc, &default_stack) catch |e| {
+            std.debug.print("zatex-png: cannot load fixture stack: {s}\n", .{@errorName(e)});
+            return e;
+        };
+    }
     defer font.close();
 
     if (corpus_path) |cp| {
@@ -339,4 +370,8 @@ test "nextRow scans the fixed corpus shape" {
     try std.testing.expect(b.display);
     try std.testing.expectEqualStrings("reject", b.expect);
     try std.testing.expect(nextRow(doc, &pos) == null);
+}
+
+test "font stack tests execute" {
+    std.testing.refAllDecls(@import("font.zig"));
 }

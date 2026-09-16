@@ -74,12 +74,28 @@ pub fn build(b: *std.Build) void {
     });
     refhost_mod.addImport("zatex", mod);
     refhost_mod.addImport("invariants", invariants_mod);
-    const otm = b.addModule("otmath_link", .{
-        .root_source_file = b.path("src/otmath.zig"),
+    // NOTE: the shared `otmath` module (issue #92): `fontstack` and
+    // `refhost` must resolve one instance — one file in two modules
+    // is a hard error, and `fontstack` crosses into `zatex-png`
+    // through this same instance.
+    refhost_mod.addImport("otmath", otmath_mod);
+    // Multi-face host font stack (issue #92; host/tool code, never
+    // in the subset library). Exposed by name so `zatex-png` links it.
+    const fontstack_mod = b.addModule("fontstack", .{
+        .root_source_file = b.path("src/fontstack.zig"),
         .target = target,
         .optimize = optimize,
     });
-    refhost_mod.addImport("otmath", otm);
+    fontstack_mod.addImport("zatex", mod);
+    // NOTE: the shared `otmath` module, never `otmath_link` — the
+    // latter is refhost-local; fontstack crosses into `zatex-png`,
+    // which resolves the same `otmath` instance through the package
+    // dependency, and one file in two modules is a hard error.
+    fontstack_mod.addImport("otmath", otmath_mod);
+    const fontstack_tests = b.addTest(.{ .root_module = fontstack_mod });
+    const run_fontstack_tests = b.addRunArtifact(fontstack_tests);
+    test_step.dependOn(&run_fontstack_tests.step);
+    refhost_mod.addImport("fontstack", fontstack_mod);
     const refhost_tests = b.addTest(.{ .root_module = refhost_mod });
     const run_refhost_tests = b.addRunArtifact(refhost_tests);
     test_step.dependOn(&run_refhost_tests.step);

@@ -68,6 +68,7 @@ pub fn build(b: *std.Build) void {
     mod.addOptions("build_options", opts);
     mod.addImport("zatex", zatex_dep.module("zatex"));
     mod.addImport("otmath", zatex_dep.module("otmath"));
+    mod.addImport("fontstack", zatex_dep.module("fontstack"));
     if (backend_is_cg) {
         mod.linkFramework("CoreGraphics", .{});
         mod.linkFramework("CoreText", .{});
@@ -99,6 +100,7 @@ pub fn build(b: *std.Build) void {
     render_mod.addOptions("build_options", opts);
     render_mod.addImport("zatex", zatex_dep.module("zatex"));
     render_mod.addImport("otmath", zatex_dep.module("otmath"));
+    render_mod.addImport("fontstack", zatex_dep.module("fontstack"));
     if (backend_is_cg) {
         render_mod.linkFramework("CoreGraphics", .{});
         render_mod.linkFramework("CoreText", .{});

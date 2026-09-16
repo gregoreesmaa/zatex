@@ -86,19 +86,43 @@ pub fn renderToPng(
         // Faux-italic slant as a dimensionless ratio (issue #77).
         const sh: f64 = @as(f64, @floatFromInt(run.x_shear)) / 1000.0;
         setPaint(&canvas, run.color);
-        var rf = try canvas.beginRun(&font.handle, px_size, sx, sh, run.mirrored);
-        defer rf.end();
         var x_units: i64 = run.x;
         const base_y: f64 = glyphBaseY(run.baseline_y, s, pad, H);
-        for (run.glyphs) |g| {
-            const gx: f64 = @as(f64, @floatFromInt(x_units)) * s + pad + shift;
-            rf.drawGlyph(g, gx, base_y);
-            const step: i64 = @divTrunc(
-                @as(i64, font.advance1000(g)) * @as(i64, run.size_units),
-                1000,
-            );
-            // Identity scales step exactly as before.
-            x_units += @divTrunc(step * @as(i64, run.x_scale), 1000);
+        // Multi-face (issue #92): consecutive glyphs from one face
+        // draw under one backend run; the pen still steps with the
+        // unified advances, so split points stay exact.
+        var gi: usize = 0;
+        while (gi < run.glyphs.len) {
+            const df = font.drawFace(run.glyphs[gi]) orelse {
+                // Unowned id (no face loaded it): still step the pen.
+                const step0: i64 = @divTrunc(
+                    @as(i64, font.advance1000(run.glyphs[gi])) * @as(i64, run.size_units),
+                    1000,
+                );
+                x_units += @divTrunc(step0 * @as(i64, run.x_scale), 1000);
+                gi += 1;
+                continue;
+            };
+            var gj = gi + 1;
+            while (gj < run.glyphs.len) {
+                const dn = font.drawFace(run.glyphs[gj]) orelse break;
+                if (dn.handle != df.handle) break;
+                gj += 1;
+            }
+            var rf = try canvas.beginRun(df.handle, px_size, sx, sh, run.mirrored);
+            while (gi < gj) : (gi += 1) {
+                const g = run.glyphs[gi];
+                const face_gid = (font.drawFace(g) orelse df).gid;
+                const gx: f64 = @as(f64, @floatFromInt(x_units)) * s + pad + shift;
+                rf.drawGlyph(face_gid, gx, base_y);
+                const step: i64 = @divTrunc(
+                    @as(i64, font.advance1000(g)) * @as(i64, run.size_units),
+                    1000,
+                );
+                // Identity scales step exactly as before.
+                x_units += @divTrunc(step * @as(i64, run.x_scale), 1000);
+            }
+            rf.end();
         }
     }
 
@@ -129,19 +153,19 @@ fn fontShiftMetrics(font: *const Font) ShiftMetrics {
         }
         fn ink(ptr: *const anyopaque, glyph: u16) i32 {
             const f: *const Font = @ptrCast(@alignCast(ptr));
-            return f.handle.inkBounds1000(glyph)[0];
+            return f.inkBounds1000(glyph)[0];
         }
         fn inkR(ptr: *const anyopaque, glyph: u16) i32 {
             const f: *const Font = @ptrCast(@alignCast(ptr));
-            return f.handle.inkBounds1000(glyph)[2];
+            return f.inkBounds1000(glyph)[2];
         }
         fn top(ptr: *const anyopaque, glyph: u16) i32 {
             const f: *const Font = @ptrCast(@alignCast(ptr));
-            return f.handle.inkBounds1000(glyph)[3];
+            return f.inkBounds1000(glyph)[3];
         }
         fn bot(ptr: *const anyopaque, glyph: u16) i32 {
             const f: *const Font = @ptrCast(@alignCast(ptr));
-            return f.handle.inkBounds1000(glyph)[1];
+            return f.inkBounds1000(glyph)[1];
         }
     };
     return .{ .ptr = font, .advance1000 = W.adv, .inkLeft1000 = W.ink, .inkRight1000 = W.inkR, .inkTop1000 = W.top, .inkBottom1000 = W.bot };

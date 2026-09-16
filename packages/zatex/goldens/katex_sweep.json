@@ -16008,6 +16008,106 @@
    "note": null,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">☺</mi></mrow><annotation encoding=\"application/x-tex\">\\char&quot;263A</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-circledS",
+   "tex": "\\circledS",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">Ⓢ</mi></mrow><annotation encoding=\"application/x-tex\">\\circledS</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-Finv",
+   "tex": "\\Finv",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">Ⅎ</mi></mrow><annotation encoding=\"application/x-tex\">\\Finv</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-Game",
+   "tex": "\\Game",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">⅁</mi></mrow><annotation encoding=\"application/x-tex\">\\Game</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-digamma",
+   "tex": "\\digamma",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">ϝ</mi></mrow><annotation encoding=\"application/x-tex\">\\digamma</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-triangleleft",
+   "tex": "\\triangleleft",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>◃</mo></mrow><annotation encoding=\"application/x-tex\">\\triangleleft</annotation></semantics></math>"
+  },
+  {
+   "id": "sym-triangleright",
+   "tex": "\\triangleright",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>▹</mo></mrow><annotation encoding=\"application/x-tex\">\\triangleright</annotation></semantics></math>"
+  },
+  {
+   "id": "verb",
+   "tex": "\\verb!\\frac a b!",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"monospace\">\\frac a b</mtext></mrow><annotation encoding=\"application/x-tex\">\\verb!\\frac a b!</annotation></semantics></math>"
+  },
+  {
+   "id": "mathbf-A",
+   "tex": "\\mathbf{A}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"bold\">A</mi></mrow><annotation encoding=\"application/x-tex\">\\mathbf{A}</annotation></semantics></math>"
+  },
+  {
+   "id": "mathit-A",
+   "tex": "\\mathit{A}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>A</mi></mrow><annotation encoding=\"application/x-tex\">\\mathit{A}</annotation></semantics></math>"
+  },
+  {
+   "id": "textit-x",
+   "tex": "\\textit{AaBb}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"italic\">AaBb</mtext></mrow><annotation encoding=\"application/x-tex\">\\textit{AaBb}</annotation></semantics></math>"
   }
  ]
 }
