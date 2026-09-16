@@ -1495,24 +1495,44 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool) Err
                         }));
                         continue;
                     }
-                    const rest = try parseFormula(ctx, depth, frame, null);
+                    // Issue #110 (pinned KaTeX 0.18.7): like the
+                    // old-style font rest, a color rest stops at an
+                    // infix (`\color{red}a\\over b` colors the
+                    // numerator only) — the #94 stop flag + put/continue.
+                    var stopped = false;
+                    const rest = try parseFormula(ctx, depth, frame, &stopped);
+                    const decl = try ctx.allocNode(.{
+                        .color = .{ .body = rest, .spec = spec },
+                    });
+                    if (stopped) {
+                        try put(&buf, &n, decl);
+                        continue;
+                    }
                     // parseFormula consumed the frame end; wrap rest.
                     if (n >= 512) return error.NoSpace;
                     var nb: [512]u16 = undefined;
                     @memcpy(nb[0..n], buf[0..n]);
-                    nb[n] = try ctx.allocNode(.{
-                        .color = .{ .body = rest, .spec = spec },
-                    });
+                    nb[n] = decl;
                     return finishGroup(ctx, nb[0 .. n + 1]);
                 }
                 if (full_only and (isStyleName(t.name))) {
                     _ = try ctx.next();
                     const st = styleFor(t.name);
-                    const rest = try parseFormula(ctx, depth, frame, null);
+                    // Issue #110: style rests stop at infixes too
+                    // (`\displaystyle a\\over b` styles the numerator
+                    // only) — same #94 mechanism as color above. (Size
+                    // declarations keep consuming through: KaTeX sizes
+                    // the whole frac.)
+                    var stopped = false;
+                    const rest = try parseFormula(ctx, depth, frame, &stopped);
+                    const styled = try ctx.allocNode(.{ .style = .{ .style = st, .body = rest } });
+                    if (stopped) {
+                        try put(&buf, &n, styled);
+                        continue;
+                    }
                     // parseFormula consumed the frame end; wrap rest.
                     const g = try finishGroup(ctx, buf[0..n]);
                     _ = g;
-                    const styled = try ctx.allocNode(.{ .style = .{ .style = st, .body = rest } });
                     // Rebuild: prefix + styled (rest already includes
                     // everything after the style command).
                     var nb: [512]u16 = undefined;

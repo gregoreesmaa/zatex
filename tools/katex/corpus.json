@@ -312,6 +312,12 @@
   "expect": "accept"
  },
  {
+  "id": "displaystyle-over-split",
+  "tex": "\\displaystyle a\\over b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "operatorname",
   "tex": "\\operatorname{sin} x",
   "display": false,
@@ -624,6 +630,12 @@
  {
   "id": "color",
   "tex": "\\color{red}{x} + y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "color-over-split",
+  "tex": "\\color{red}a\\over b",
   "display": false,
   "expect": "accept"
  },

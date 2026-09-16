@@ -2339,6 +2339,22 @@ test "display sums stack, integrals do not" {
     try std.testing.expect(std.mem.indexOf(u8, f, "<munderover>") != null);
 }
 
+test "color and style rests stop at over infixes" {
+    // Issue #110 (pinned 0.18.7): declaration rests split at the
+    // infix like the #94 font rest — numerator only, denominator
+    // plain — braced or not. Size declarations keep consuming
+    // through (whole frac), unchanged.
+    var out: [512]u8 = undefined;
+    const c = try render("\\color{red}a\\over b", .{}, &out);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", c);
+    var out2: [512]u8 = undefined;
+    const cb = try render("{\\color{red}a\\over b}", .{}, &out2);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", cb);
+    var out3: [512]u8 = undefined;
+    const d = try render("\\displaystyle a\\over b", .{}, &out3);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle displaystyle=\"true\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", d);
+}
+
 test "cancel directions match KaTeX menclose notations" {
     // Issue #107 (pinned 0.18.7): `\cancel` strikes up, `\bcancel`
     // down (it used to alias `\cancel` and serialize up), `\xcancel`

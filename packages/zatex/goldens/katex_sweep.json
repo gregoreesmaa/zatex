@@ -522,6 +522,16 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"true\"><munder><mo>∑</mo><mi>i</mi></munder><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">{\\displaystyle \\sum_i x}</annotation></semantics></math>"
   },
   {
+   "id": "displaystyle-over-split",
+   "tex": "\\displaystyle a\\over b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\displaystyle a\\over b</annotation></semantics></math>"
+  },
+  {
    "id": "operatorname",
    "tex": "\\operatorname{sin} x",
    "display": false,
@@ -1041,6 +1051,16 @@
    "note": null,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"red\"><mi>x</mi><mo>+</mo><mi>y</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\color{red}{x} + y</annotation></semantics></math>"
+  },
+  {
+   "id": "color-over-split",
+   "tex": "\\color{red}a\\over b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\color{red}a\\over b</annotation></semantics></math>"
   },
   {
    "id": "href",

@@ -508,7 +508,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\colonsim` | accept | goldens: t-colonsim |
 
-| `\color` | accept | goldens: color, color-hex, color-macro |
+| `\color` | accept | goldens: color, color-hex, color-macro, color-over-split |
 
 | `\colorbox` | accept | goldens: colorbox |
 
@@ -644,7 +644,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\displaylines` | unsup | goldens: rej-unsup-displaylines |
 
-| `\displaystyle` | accept | goldens: displaystyle, sum, demo-cauchy |
+| `\displaystyle` | accept | goldens: displaystyle, displaystyle-over-split, sum, demo-cauchy |
 
 | `\div` | accept | goldens: sym-gal-3 |
 
