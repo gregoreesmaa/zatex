@@ -18,6 +18,8 @@ jobs:
       - name: Run zatex-png tests
         working-directory: packages/zatex-png
         run: zig build test --summary all
+      - name: Every png source test executes (issue #106)
+        run: tools/check_test_roots.sh
       - name: Subset-profile size gate (no host-cost growth)
         run: tools/size_gate.sh
 

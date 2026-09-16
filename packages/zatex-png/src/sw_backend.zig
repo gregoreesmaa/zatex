@@ -273,3 +273,14 @@ test "software extents agree with CoreText ink boxes" {
         try std.testing.expect(over2 == 0);
     }
 }
+
+test {
+    // Issue #106: an imported file's tests never execute on their own
+    // (the sw binary ran 8 = backend 4 + font 2 + raster 2, with the
+    // `sw_png` round-trip absent). Reference every software-stack
+    // module so this suite root runs their tests; the four tests
+    // above run as the root file itself.
+    std.testing.refAllDecls(@import("sw_font.zig"));
+    std.testing.refAllDecls(@import("sw_raster.zig"));
+    std.testing.refAllDecls(@import("sw_png.zig"));
+}
