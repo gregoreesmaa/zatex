@@ -8,7 +8,14 @@ stands alone. It pre-sorts a review queue; it decides nothing.
 Staging: per-case renders live in `tools/oracle-diff/work/` (gitignored
 staging, never committed). The latest full-sweep triage report is
 checked in at `zig-out/oracle-diff/report.md` (+ `png/`) so reviewers
-can browse it without running Docker. Each engine renders the whole
+can browse it without running Docker. `zig-out/` is gitignored, so a
+sweep commit must force-add the whole referenced set (`git add -f
+zig-out/oracle-diff/report.md zig-out/oracle-diff/png`) — a partial
+add leaves dead images on GitHub. `report.py` asserts every `png/`
+link resolves and fails the sweep otherwise. Corpus ids must be unique
+case-insensitively: each id derives staged/render filenames, and two
+ids differing only by case clobber each other on case-insensitive
+filesystems while producing dead links on case-sensitive hosts. Each engine renders the whole
 `cases.tsv` in one container (issue #69: one Chromium launch per web
 engine, one `zig build` for ZaTeX, one container per engine — instead
 of one container start per case per engine), and the four engine
