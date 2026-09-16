@@ -399,6 +399,12 @@ pub const Node = union(enum) {
         class: symbols.AtomClass,
         font: FontFam,
         cp: u21,
+        /// KaTeX textord (issue #109): math-mode symbols from the
+        /// text table (`\%`, Greek capitals, ...) plus every
+        /// `\char` result. MathML renders these `mi` with an
+        /// explicit variant (KaTeX symbolsOrd); layout spacing
+        /// keeps `class` untouched.
+        textord: bool = false,
     },
     /// Upright or symbolic operator; `text` holds word operators
     /// (`sin`, user `\operatorname`); empty for single-glyph ops.
@@ -1726,6 +1732,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     .class = .Ord,
                     .font = .rm,
                     .cp = 0x2032,
+                    .textord = true,
                 } });
                 const base = try ctx.allocNode(.{ .group = .{ .start = 0, .len = 0 } });
                 return try ctx.allocNode(.{ .supsub = .{
@@ -1742,7 +1749,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                 .mathit
             else
                 .rm;
-            const id: ?Idx = try ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = t.cp } });
+            const id: ?Idx = try ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = t.cp, .textord = symbols.isTextordCp(t.cp) } });
             return id;
         },
         .lbrace => {
@@ -1950,6 +1957,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
                 .class = .Ord,
                 .font = .rm,
                 .cp = 0x2032,
+                .textord = true,
             } });
             nsup += 1;
             prime_made = true;
@@ -2349,7 +2357,7 @@ fn charAccum(num: u64, base: u32, d: u64) u64 {
 /// `\char` result: KaTeX `\@char` returns a `textord` node — an
 /// Ord-class roman atom, exactly like a symbol-table hit.
 fn charAtom(ctx: *ParseCtx, cp: u21) Error!Idx {
-    return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = cp } });
+    return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = cp, .textord = true } });
 }
 
 /// `\char` (KaTeX `macros.js` + `\@char` parity): decimal, `'octal`,
@@ -3228,7 +3236,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
                 .text = text,
             } });
         }
-        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp } });
+        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextord(name) } });
     }
     if (symbols.lookupDelim(name)) |d| {
         // Bare delimiter (no `\left`): fixed-size atom in the
@@ -3247,12 +3255,12 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     switch (c) {
         '{' => return ctx.allocNode(.{ .atom = .{ .class = .Open, .font = .rm, .cp = '{' } }),
         '}' => return ctx.allocNode(.{ .atom = .{ .class = .Close, .font = .rm, .cp = '}' } }),
-        '$' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '$' } }),
-        '%' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '%' } }),
-        '&' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '&' } }),
-        '#' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '#' } }),
-        '_' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '_' } }),
-        '|' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x2016 } }),
+        '$' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '$', .textord = true } }),
+        '%' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '%', .textord = true } }),
+        '&' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '&', .textord = true } }),
+        '#' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '#', .textord = true } }),
+        '_' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '_', .textord = true } }),
+        '|' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x2016, .textord = true } }),
         ' ' => return ctx.allocNode(.{ .nbsp = {} }),
         ',' => return ctx.allocNode(.{ .space = space_thin }),
         ':' => return ctx.allocNode(.{ .space = space_med }),
@@ -3280,7 +3288,7 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     // table as multi-letter names (KaTeX parity, full profile only).
     if (comptime active_profile == .full) {
         if (symbols.lookup(t.name)) |sym| {
-            return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp } });
+            return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextord(t.name) } });
         }
     }
     return ctx.fail(t.pos, "undefined control sequence");

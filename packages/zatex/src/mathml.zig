@@ -784,7 +784,7 @@ const Writer = struct {
         if (self.overflow) return error.NoSpace;
         const n = parse.nodeAt(self.pc, id);
         switch (n) {
-            .atom => |a| self.atom(a.class, self.effFam(face, a.font), a.cp),
+            .atom => |a| self.atom(a.class, self.effFam(face, a.font), a.cp, a.textord, face.fam == null),
             .op => |o| {
                 if (o.func) {
                     self.str("<mi>");
@@ -1518,7 +1518,7 @@ const Writer = struct {
         return face.fam orelse f;
     }
 
-    fn atom(self: *Writer, class: @import("symbols.zig").AtomClass, fam: parse.FontFam, c: u21) void {
+    fn atom(self: *Writer, class: @import("symbols.zig").AtomClass, fam: parse.FontFam, c: u21, textord: bool, bare: bool) void {
         switch (class) {
             // KaTeX `atom` ParseNodes (every symbol group except
             // mathord/textord) render as mo — inner symbols included.
@@ -1530,10 +1530,12 @@ const Writer = struct {
                     self.escCp(c);
                     self.str("</mi></mo>");
                 } else if (c == 0x22EE) {
-                    // `\vdots` is a macro for `\varvdots\rule{0pt}{15pt}`;
-                    // KaTeX renders the rule as a fixed strut inside
-                    // its own mrow (ordgroup parity).
-                    self.str("<mrow><mi>");
+                    // `\vdots` is a macro for `\varvdots\rule{0pt}{15pt}`
+                    // (issue #109, pinned 0.18.7): the macro
+                    // expansion is an ordgroup, so KaTeX wraps the
+                    // textord leaf (`mi` with explicit normal) and
+                    // the rule strut in an `mrow` of their own.
+                    self.str("<mrow><mi mathvariant=\"normal\">");
                     self.escCp(c);
                     self.str("</mi>");
                     self.str("<mpadded height=\"0em\" voffset=\"0em\">");
@@ -1547,22 +1549,29 @@ const Writer = struct {
             },
             .Ord => {
                 if (c == 0x22EE) {
-                    // Directly-typed U+22EE takes KaTeX's `\vdots` macro
-                    // shape (mi plus the rule strut).
-                    self.str("<mi>");
+                    // Directly-typed U+22EE funnels through KaTeX's
+                    // `\vdots` macro (pinned 0.18.7, issue #109):
+                    // ordgroup mrow around the textord mi and the
+                    // rule strut, exactly like `\vdots` above.
+                    self.str("<mrow><mi mathvariant=\"normal\">");
                     self.escCp(c);
                     self.str("</mi>");
                     self.str("<mpadded height=\"0em\" voffset=\"0em\">");
                     self.str("<mspace mathbackground=\"black\" width=\"0em\" height=\"1.5em\">");
-                    self.str("</mspace></mpadded>");
+                    self.str("</mspace></mpadded></mrow>");
                 } else if (isDigit(c)) {
                     self.str("<mn>");
                     self.escCp(c);
                     self.str("</mn>");
                 } else if (c == 0x2032) {
-                    // `\prime`: KaTeX textord renders as mo (verified
-                    // against KaTeX 0.18.7 dist source).
-                    self.str("<mo>");
+                    // `\prime`: KaTeX textord renders as mo WITH the
+                    // variant (pinned 0.18.7 `<mo
+                    // mathvariant="normal">`; symbolsOrd has no mo
+                    // default, so it always emits). `\char"2032`
+                    // shares this shape — KaTeX gives it `mi`, a
+                    // nuance for a pathological input with no sweep
+                    // row.
+                    self.str("<mo mathvariant=\"normal\">");
                     self.escCp(c);
                     self.str("</mo>");
                 } else if ((c == 0x0131 or c == 0x0237) and fam == .rm) {
@@ -1575,8 +1584,18 @@ const Writer = struct {
                     self.str("<mi mathvariant=\"normal\">");
                     self.escCp(c);
                     self.str("</mi>");
+                } else if (textord and bare) {
+                    // KaTeX textord (issue #109, pinned 0.18.7
+                    // symbolsOrd): `mi` with an explicit variant
+                    // (normally "normal"; a face wrapper supplies its
+                    // own instead, so faced atoms stay bare here).
+                    self.str("<mi mathvariant=\"");
+                    self.str(variantFor(fam));
+                    self.str("\">");
+                    self.escCp(c);
+                    self.str("</mi>");
                 } else {
-                    // KaTeX mathord/textord render as mi unconditionally.
+                    // KaTeX mathord renders as mi unconditionally.
                     self.str("<mi>");
                     self.escCp(c);
                     self.str("</mi>");
@@ -2174,7 +2193,10 @@ test "vcentcolon nests triple mo, coloneqq is one op char" {
     var out2: [256]u8 = undefined;
     var w2 = Writer{ .pc = &pc2, .buf = &out2 };
     try w2.node(root2, .{ .fam = null, .script = false });
-    try std.testing.expectEqualStrings("<mo><mi>\xe2\x89\x94</mi></mo>", out2[0..w2.pos]);
+    // Issue #109 (pinned 0.18.7 `<mo><mi
+    // mathvariant="normal">≔</mi></mo>`): the inner `\char` is a
+    // textord, so it carries the variant.
+    try std.testing.expectEqualStrings("<mo><mi mathvariant=\"normal\">\xe2\x89\x94</mi></mo>", out2[0..w2.pos]);
 }
 
 test "char scans decimal octal hex and backtick" {
@@ -2184,13 +2206,18 @@ test "char scans decimal octal hex and backtick" {
     var out: [256]u8 = undefined;
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
-    try std.testing.expectEqualStrings("<mi>\xe2\x89\x94</mi>", out[0..w.pos]);
+    // Issue #109 (pinned 0.18.7 `<mi
+    // mathvariant="normal">≔</mi>`): every `\char` result is a
+    // textord, so it carries the variant.
+    try std.testing.expectEqualStrings("<mi mathvariant=\"normal\">\xe2\x89\x94</mi>", out[0..w.pos]);
     var pc2 = parse.ParseCtx.init("\\char65\\char'101\\char`a\\@char{66}");
     const root2 = try parse.parse(&pc2, false);
     var out2: [256]u8 = undefined;
     var w2 = Writer{ .pc = &pc2, .buf = &out2 };
     try w2.node(root2, .{ .fam = null, .script = false });
-    try std.testing.expectEqualStrings("<mrow><mi>A</mi><mi>A</mi><mi>a</mi><mi>B</mi></mrow>", out2[0..w2.pos]);
+    // Issue #109: pinned KaTeX 0.18.7 wraps `\char` output as
+    // `<mi mathvariant="normal">…</mi>` (verified via KaTeX probe).
+    try std.testing.expectEqualStrings("<mrow><mi mathvariant=\"normal\">A</mi><mi mathvariant=\"normal\">A</mi><mi mathvariant=\"normal\">a</mi><mi mathvariant=\"normal\">B</mi></mrow>", out2[0..w2.pos]);
 }
 
 test "char rejects bad digits and code points" {
@@ -2282,14 +2309,16 @@ test "colorbox emits padded background box" {
 }
 
 test "textord symbols emit mi, vdots keeps its strut" {
+    // Issue #109 (pinned 0.18.7 `<mi mathvariant="normal">∞</mi>`,
+    // `<mi mathvariant="normal">∀</mi>`): textords carry the variant.
     var pc = parse.ParseCtx.init("\\infty+\\forall\\vdots");
     const root = try parse.parse(&pc, false);
     var out: [1024]u8 = undefined;
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
     const s = out[0..w.pos];
-    try std.testing.expect(std.mem.indexOf(u8, s, "<mi>\xe2\x88\x9e</mi>") != null);
-    try std.testing.expect(std.mem.indexOf(u8, s, "<mi>\xe2\x88\x80</mi>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<mi mathvariant=\"normal\">\xe2\x88\x9e</mi>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<mi mathvariant=\"normal\">\xe2\x88\x80</mi>") != null);
     try std.testing.expect(std.mem.indexOf(u8, s, "<mpadded height=\"0em\" voffset=\"0em\">") != null);
 }
 
@@ -2327,7 +2356,9 @@ test "builtin func-ops and textord corners match KaTeX tags" {
         // wrong per the KaTeX-side proof.
         "<mrow><mi>lim\u{2009}inf</mi><mo>\u{2061}</mo>" ++
             "<mi>ln</mi><mo>\u{2061}</mo>" ++
-            "<mi>\u{ac}</mi><mo>\u{22d8}</mo>" ++
+            // Issue #109 (pinned 0.18.7 `<mi
+            // mathvariant="normal">¬</mi>`): `\lnot` is a textord.
+            "<mi mathvariant=\"normal\">\u{ac}</mi><mo>\u{22d8}</mo>" ++
             "<mo><mi mathvariant=\"normal\">\u{231e}</mi></mo></mrow>",
         s);
 }

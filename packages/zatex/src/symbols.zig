@@ -746,6 +746,57 @@ pub fn lookup(name: []const u8) ?Sym {
 /// Every named symbol, for coverage probes and documentation sweeps.
 pub const all_symbols = greek_lower ++ greek_upper ++ operators;
 
+/// KaTeX math-mode textords (issue #109, pinned 0.18.7
+/// `symbols.ts`): symbol-table names whose ParseNodes are `textord`,
+/// rendered `mi` with an explicit variant (single-char escapes like
+/// `\%` and literal textord codepoints are marked at their own
+/// construction sites, not here). Audit: `textord_audit.py` output
+/// in the issue — every supported name below, every other KaTeX
+/// textord rejected or accent-pathed.
+pub fn isTextord(name: []const u8) bool {
+    for ([_][]const u8{
+        "Box",          "Delta",        "Diamond",      "Finv",
+        "Game",         "Gamma",        "Im",           "Lambda",
+        "Omega",        "P",            "Phi",          "Pi",
+        "Psi",          "Re",           "S",            "Sigma",
+        "Theta",        "Upsilon",      "Vert",         "Xi",
+        "aleph",        "angle",        "backprime",    "backslash",
+        "beth",         "bigstar",      "blacklozenge", "blacksquare",
+        "blacktriangle", "blacktriangledown", "bot",    "checkmark",
+        "circledR",     "circledS",     "clubsuit",     "complement",
+        "dag",          "daleth",       "ddag",         "degree",
+        "diagdown",     "diagup",       "diamondsuit",  "digamma",
+        "ell",          "emptyset",     "eth",          "exists",
+        "flat",         "forall",       "gimel",        "hbar",
+        "heartsuit",    "hslash",       "infty",        "lnot",
+        "lozenge",      "maltese",      "mathsterling", "measuredangle",
+        "mho",          "nabla",        "natural",      "neg",
+        "nexists",      "partial",      "pounds",       "prime",
+        "sharp",        "spadesuit",    "sphericalangle", "square",
+        "surd",         "top",          "triangle",     "triangledown",
+        "varkappa",     "varnothing",   "vert",         "wp",
+        "yen",
+    }) |n| if (eq(n, name)) return true;
+    return false;
+}
+
+/// Literal codepoints that are KaTeX math-mode textords (issue #109):
+/// `|` plus the Greek-capital and doublestruck letters KaTeX lists
+/// under their literal names (it replaces them with ASCII homoglyphs;
+/// codepoint replacement is out of scope — only the variant is
+/// pinned here). Dotless ı/ȷ keep their dedicated MathML arm and the
+/// backtick lexes as an accent, so neither is listed.
+pub fn isTextordCp(cp: u21) bool {
+    if (cp == '|') return true;
+    return switch (cp) {
+        0x0391, 0x0392, 0x0395, 0x0396, 0x0397, 0x0399, 0x039A,
+        0x039C, 0x039D, 0x039F, 0x03A1, 0x03A4, 0x03A7,
+        0x2102, 0x210D, 0x2115, 0x2119, 0x211A, 0x211D, 0x2124,
+        => true,
+        else => false,
+    };
+}
+
 /// Text-mode commands (`\text{\i}`, `\textdollar`, ...): name →
 /// codepoint. KaTeX accepts these inside `\text` (pinned-proven) while
 /// rejecting most of them in math mode, so they live apart from the
