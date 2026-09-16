@@ -147,6 +147,13 @@ const operators_base = [_]Entry{
     .{ .name = "det", .sym = .{ .cp = 0x64, .class = .Op, .func = true, .limits_default = true } },
     .{ .name = "gcd", .sym = .{ .cp = 0x67, .class = .Op, .func = true, .limits_default = true } },
     .{ .name = "Pr", .sym = .{ .cp = 0x50, .class = .Op, .func = true, .limits_default = true } },
+    // amsopn limit operators (issue #73): KaTeX renders two words
+    // (`arg max`, `inj lim`) via splitLimitOp below; limits stack in
+    // display like `\\lim`. Proven per-row by sweep goldens.
+    .{ .name = "argmax", .sym = .{ .cp = 0x61, .class = .Op, .func = true, .limits_default = true } },
+    .{ .name = "argmin", .sym = .{ .cp = 0x61, .class = .Op, .func = true, .limits_default = true } },
+    .{ .name = "injlim", .sym = .{ .cp = 0x69, .class = .Op, .func = true, .limits_default = true } },
+    .{ .name = "projlim", .sym = .{ .cp = 0x70, .class = .Op, .func = true, .limits_default = true } },
     // Upright function names.
     .{ .name = "sin", .sym = F(0x73) },
     .{ .name = "cos", .sym = F(0x63) },
@@ -170,6 +177,18 @@ const operators_base = [_]Entry{
     .{ .name = "deg", .sym = F(0x64) },
     .{ .name = "arg", .sym = F(0x61) },
     .{ .name = "hom", .sym = F(0x68) },
+    // Trig/hyperbolic aliases (issue #73, KaTeX op.ts group): upright
+    // names, no limits. Proven per-row by sweep goldens.
+    .{ .name = "arcctg", .sym = F(0x61) },
+    .{ .name = "arctg", .sym = F(0x61) },
+    .{ .name = "cosec", .sym = F(0x63) },
+    .{ .name = "cotg", .sym = F(0x63) },
+    .{ .name = "ctg", .sym = F(0x63) },
+    .{ .name = "cth", .sym = F(0x63) },
+    .{ .name = "tg", .sym = F(0x74) },
+    .{ .name = "th", .sym = F(0x74) },
+    .{ .name = "sh", .sym = F(0x73) },
+    .{ .name = "ch", .sym = F(0x63) },
     // Binary operators.
     .{ .name = "pm", .sym = S(0x00B1, .Bin) },
     .{ .name = "mp", .sym = S(0x2213, .Bin) },
@@ -377,6 +396,315 @@ const operators_full = if (active_profile == .full) [_]Entry{
     .{ .name = "sect", .sym = S(0x00A7, .Ord) },
     .{ .name = "aa", .sym = S(0x00E5, .Ord) },
     .{ .name = "AA", .sym = S(0x00C5, .Ord) },
+    // AMS + miscellaneous symbol coverage (issue #73): codepoints and
+    // atom classes pinned against KaTeX 0.18.7 symbols.ts
+    // (mathord/textord -> Ord, bin/rel/open/close/punct/inner pass
+    // through; op-group notes below). Proven per-row by sweep goldens.
+    // AMS binary operators (KaTeX symbols.ts group bin).
+    .{ .name = "And", .sym = S(0x0026, .Bin) },
+    .{ .name = "Cap", .sym = S(0x22D2, .Bin) },
+    .{ .name = "Cup", .sym = S(0x22D3, .Bin) },
+    .{ .name = "barwedge", .sym = S(0x22BC, .Bin) },
+    .{ .name = "bigcirc", .sym = S(0x25EF, .Bin) },
+    .{ .name = "circledast", .sym = S(0x229B, .Bin) },
+    .{ .name = "circledcirc", .sym = S(0x229A, .Bin) },
+    .{ .name = "circleddash", .sym = S(0x229D, .Bin) },
+    .{ .name = "curlyvee", .sym = S(0x22CE, .Bin) },
+    .{ .name = "curlywedge", .sym = S(0x22CF, .Bin) },
+    .{ .name = "divideontimes", .sym = S(0x22C7, .Bin) },
+    .{ .name = "dotplus", .sym = S(0x2214, .Bin) },
+    .{ .name = "doublebarwedge", .sym = S(0x2A5E, .Bin) },
+    .{ .name = "doublecap", .sym = S(0x22D2, .Bin) },
+    .{ .name = "doublecup", .sym = S(0x22D3, .Bin) },
+    .{ .name = "gtrdot", .sym = S(0x22D7, .Bin) },
+    .{ .name = "intercal", .sym = S(0x22BA, .Bin) },
+    .{ .name = "leftthreetimes", .sym = S(0x22CB, .Bin) },
+    .{ .name = "lessdot", .sym = S(0x22D6, .Bin) },
+    .{ .name = "ltimes", .sym = S(0x22C9, .Bin) },
+    .{ .name = "rightthreetimes", .sym = S(0x22CC, .Bin) },
+    .{ .name = "rtimes", .sym = S(0x22CA, .Bin) },
+    .{ .name = "smallsetminus", .sym = S(0x2216, .Bin) },
+    .{ .name = "veebar", .sym = S(0x22BB, .Bin) },
+    // AMS relations (KaTeX symbols.ts group rel).
+    .{ .name = "Bumpeq", .sym = S(0x224E, .Rel) },
+    .{ .name = "Doteq", .sym = S(0x2251, .Rel) },
+    .{ .name = "Lleftarrow", .sym = S(0x21DA, .Rel) },
+    .{ .name = "Lsh", .sym = S(0x21B0, .Rel) },
+    .{ .name = "Rrightarrow", .sym = S(0x21DB, .Rel) },
+    .{ .name = "Rsh", .sym = S(0x21B1, .Rel) },
+    .{ .name = "Subset", .sym = S(0x22D0, .Rel) },
+    .{ .name = "Supset", .sym = S(0x22D1, .Rel) },
+    .{ .name = "Vdash", .sym = S(0x22A9, .Rel) },
+    .{ .name = "Vvdash", .sym = S(0x22AA, .Rel) },
+    .{ .name = "backepsilon", .sym = S(0x220D, .Rel) },
+    .{ .name = "backsim", .sym = S(0x223D, .Rel) },
+    .{ .name = "backsimeq", .sym = S(0x22CD, .Rel) },
+    .{ .name = "because", .sym = S(0x2235, .Rel) },
+    .{ .name = "between", .sym = S(0x226C, .Rel) },
+    .{ .name = "blacktriangleleft", .sym = S(0x25C0, .Rel) },
+    .{ .name = "blacktriangleright", .sym = S(0x25B6, .Rel) },
+    .{ .name = "bumpeq", .sym = S(0x224F, .Rel) },
+    .{ .name = "circeq", .sym = S(0x2257, .Rel) },
+    .{ .name = "circlearrowleft", .sym = S(0x21BA, .Rel) },
+    .{ .name = "circlearrowright", .sym = S(0x21BB, .Rel) },
+    .{ .name = "curlyeqprec", .sym = S(0x22DE, .Rel) },
+    .{ .name = "curlyeqsucc", .sym = S(0x22DF, .Rel) },
+    .{ .name = "curvearrowleft", .sym = S(0x21B6, .Rel) },
+    .{ .name = "curvearrowright", .sym = S(0x21B7, .Rel) },
+    .{ .name = "dashleftarrow", .sym = S(0x21E0, .Rel) },
+    .{ .name = "dashrightarrow", .sym = S(0x21E2, .Rel) },
+    .{ .name = "doteqdot", .sym = S(0x2251, .Rel) },
+    .{ .name = "downdownarrows", .sym = S(0x21CA, .Rel) },
+    .{ .name = "downharpoonleft", .sym = S(0x21C3, .Rel) },
+    .{ .name = "downharpoonright", .sym = S(0x21C2, .Rel) },
+    .{ .name = "eqsim", .sym = S(0x2242, .Rel) },
+    .{ .name = "eqslantgtr", .sym = S(0x2A96, .Rel) },
+    .{ .name = "eqslantless", .sym = S(0x2A95, .Rel) },
+    .{ .name = "fallingdotseq", .sym = S(0x2252, .Rel) },
+    .{ .name = "geqq", .sym = S(0x2267, .Rel) },
+    .{ .name = "geqslant", .sym = S(0x2A7E, .Rel) },
+    .{ .name = "gggtr", .sym = S(0x22D9, .Rel) },
+    .{ .name = "gnapprox", .sym = S(0x2A8A, .Rel) },
+    .{ .name = "gneq", .sym = S(0x2A88, .Rel) },
+    .{ .name = "gneqq", .sym = S(0x2269, .Rel) },
+    .{ .name = "gnsim", .sym = S(0x22E7, .Rel) },
+    .{ .name = "gt", .sym = S(0x003E, .Rel) },
+    .{ .name = "gtreqless", .sym = S(0x22DB, .Rel) },
+    .{ .name = "gtreqqless", .sym = S(0x2A8C, .Rel) },
+    .{ .name = "gtrless", .sym = S(0x2277, .Rel) },
+    .{ .name = "imageof", .sym = S(0x22B7, .Rel) },
+    .{ .name = "leadsto", .sym = S(0x21DD, .Rel) },
+    .{ .name = "leftarrowtail", .sym = S(0x21A2, .Rel) },
+    .{ .name = "leftleftarrows", .sym = S(0x21C7, .Rel) },
+    .{ .name = "leftrightarrows", .sym = S(0x21C6, .Rel) },
+    .{ .name = "leftrightharpoons", .sym = S(0x21CB, .Rel) },
+    .{ .name = "leftrightsquigarrow", .sym = S(0x21AD, .Rel) },
+    .{ .name = "leqq", .sym = S(0x2266, .Rel) },
+    .{ .name = "leqslant", .sym = S(0x2A7D, .Rel) },
+    .{ .name = "lesseqgtr", .sym = S(0x22DA, .Rel) },
+    .{ .name = "lesseqqgtr", .sym = S(0x2A8B, .Rel) },
+    .{ .name = "lessgtr", .sym = S(0x2276, .Rel) },
+    .{ .name = "llless", .sym = S(0x22D8, .Rel) },
+    .{ .name = "lnapprox", .sym = S(0x2A89, .Rel) },
+    .{ .name = "lneq", .sym = S(0x2A87, .Rel) },
+    .{ .name = "lneqq", .sym = S(0x2268, .Rel) },
+    .{ .name = "lnsim", .sym = S(0x22E6, .Rel) },
+    .{ .name = "longmapsto", .sym = S(0x27FC, .Rel) },
+    .{ .name = "looparrowleft", .sym = S(0x21AB, .Rel) },
+    .{ .name = "looparrowright", .sym = S(0x21AC, .Rel) },
+    .{ .name = "lt", .sym = S(0x003C, .Rel) },
+    .{ .name = "multimap", .sym = S(0x22B8, .Rel) },
+    .{ .name = "nLeftarrow", .sym = S(0x21CD, .Rel) },
+    .{ .name = "nLeftrightarrow", .sym = S(0x21CE, .Rel) },
+    .{ .name = "nRightarrow", .sym = S(0x21CF, .Rel) },
+    .{ .name = "nVDash", .sym = S(0x22AF, .Rel) },
+    .{ .name = "nVdash", .sym = S(0x22AE, .Rel) },
+    .{ .name = "ncong", .sym = S(0x2246, .Rel) },
+    .{ .name = "ngeq", .sym = S(0x2271, .Rel) },
+    .{ .name = "ngtr", .sym = S(0x226F, .Rel) },
+    .{ .name = "nleftarrow", .sym = S(0x219A, .Rel) },
+    .{ .name = "nleftrightarrow", .sym = S(0x21AE, .Rel) },
+    .{ .name = "nleq", .sym = S(0x2270, .Rel) },
+    .{ .name = "nless", .sym = S(0x226E, .Rel) },
+    .{ .name = "nparallel", .sym = S(0x2226, .Rel) },
+    .{ .name = "nprec", .sym = S(0x2280, .Rel) },
+    .{ .name = "npreceq", .sym = S(0x22E0, .Rel) },
+    .{ .name = "nrightarrow", .sym = S(0x219B, .Rel) },
+    .{ .name = "nsim", .sym = S(0x2241, .Rel) },
+    .{ .name = "nsubseteq", .sym = S(0x2288, .Rel) },
+    .{ .name = "nsucc", .sym = S(0x2281, .Rel) },
+    .{ .name = "nsucceq", .sym = S(0x22E1, .Rel) },
+    .{ .name = "nsupseteq", .sym = S(0x2289, .Rel) },
+    .{ .name = "ntriangleleft", .sym = S(0x22EA, .Rel) },
+    .{ .name = "ntrianglelefteq", .sym = S(0x22EC, .Rel) },
+    .{ .name = "ntriangleright", .sym = S(0x22EB, .Rel) },
+    .{ .name = "ntrianglerighteq", .sym = S(0x22ED, .Rel) },
+    .{ .name = "nvDash", .sym = S(0x22AD, .Rel) },
+    .{ .name = "nvdash", .sym = S(0x22AC, .Rel) },
+    .{ .name = "origof", .sym = S(0x22B6, .Rel) },
+    .{ .name = "pitchfork", .sym = S(0x22D4, .Rel) },
+    .{ .name = "precapprox", .sym = S(0x2AB7, .Rel) },
+    .{ .name = "preccurlyeq", .sym = S(0x227C, .Rel) },
+    .{ .name = "precnapprox", .sym = S(0x2AB9, .Rel) },
+    .{ .name = "precneqq", .sym = S(0x2AB5, .Rel) },
+    .{ .name = "precnsim", .sym = S(0x22E8, .Rel) },
+    .{ .name = "precsim", .sym = S(0x227E, .Rel) },
+    .{ .name = "restriction", .sym = S(0x21BE, .Rel) },
+    .{ .name = "rightarrowtail", .sym = S(0x21A3, .Rel) },
+    .{ .name = "rightleftarrows", .sym = S(0x21C4, .Rel) },
+    .{ .name = "rightrightarrows", .sym = S(0x21C9, .Rel) },
+    .{ .name = "rightsquigarrow", .sym = S(0x21DD, .Rel) },
+    .{ .name = "risingdotseq", .sym = S(0x2253, .Rel) },
+    .{ .name = "shortmid", .sym = S(0x2223, .Rel) },
+    .{ .name = "shortparallel", .sym = S(0x2225, .Rel) },
+    .{ .name = "smallfrown", .sym = S(0x2322, .Rel) },
+    .{ .name = "smallsmile", .sym = S(0x2323, .Rel) },
+    .{ .name = "subseteqq", .sym = S(0x2AC5, .Rel) },
+    .{ .name = "subsetneqq", .sym = S(0x2ACB, .Rel) },
+    .{ .name = "succapprox", .sym = S(0x2AB8, .Rel) },
+    .{ .name = "succcurlyeq", .sym = S(0x227D, .Rel) },
+    .{ .name = "succnapprox", .sym = S(0x2ABA, .Rel) },
+    .{ .name = "succneqq", .sym = S(0x2AB6, .Rel) },
+    .{ .name = "succnsim", .sym = S(0x22E9, .Rel) },
+    .{ .name = "succsim", .sym = S(0x227F, .Rel) },
+    .{ .name = "supseteqq", .sym = S(0x2AC6, .Rel) },
+    .{ .name = "supsetneqq", .sym = S(0x2ACC, .Rel) },
+    .{ .name = "therefore", .sym = S(0x2234, .Rel) },
+    .{ .name = "thickapprox", .sym = S(0x2248, .Rel) },
+    .{ .name = "thicksim", .sym = S(0x223C, .Rel) },
+    .{ .name = "trianglelefteq", .sym = S(0x22B4, .Rel) },
+    .{ .name = "triangleq", .sym = S(0x225C, .Rel) },
+    .{ .name = "trianglerighteq", .sym = S(0x22B5, .Rel) },
+    .{ .name = "twoheadleftarrow", .sym = S(0x219E, .Rel) },
+    .{ .name = "twoheadrightarrow", .sym = S(0x21A0, .Rel) },
+    .{ .name = "upharpoonleft", .sym = S(0x21BF, .Rel) },
+    .{ .name = "upharpoonright", .sym = S(0x21BE, .Rel) },
+    .{ .name = "upuparrows", .sym = S(0x21C8, .Rel) },
+    .{ .name = "vDash", .sym = S(0x22A8, .Rel) },
+    .{ .name = "varpropto", .sym = S(0x221D, .Rel) },
+    .{ .name = "vartriangle", .sym = S(0x25B3, .Rel) },
+    .{ .name = "vartriangleleft", .sym = S(0x22B2, .Rel) },
+    .{ .name = "vartriangleright", .sym = S(0x22B3, .Rel) },
+    // Short arrow aliases (issue #73, KaTeX rel group): single
+    // codepoints, classes from pinned HTML inner spans.
+    .{ .name = "darr", .sym = S(0x2193, .Rel) },
+    .{ .name = "larr", .sym = S(0x2190, .Rel) },
+    .{ .name = "rarr", .sym = S(0x2192, .Rel) },
+    .{ .name = "uarr", .sym = S(0x2191, .Rel) },
+    .{ .name = "harr", .sym = S(0x2194, .Rel) },
+    .{ .name = "lrarr", .sym = S(0x2194, .Rel) },
+    .{ .name = "Darr", .sym = S(0x21D3, .Rel) },
+    .{ .name = "Larr", .sym = S(0x21D0, .Rel) },
+    .{ .name = "Rarr", .sym = S(0x21D2, .Rel) },
+    .{ .name = "Uarr", .sym = S(0x21D1, .Rel) },
+    .{ .name = "Harr", .sym = S(0x21D4, .Rel) },
+    .{ .name = "Lrarr", .sym = S(0x21D4, .Rel) },
+    .{ .name = "dArr", .sym = S(0x21D3, .Rel) },
+    .{ .name = "lArr", .sym = S(0x21D0, .Rel) },
+    .{ .name = "rArr", .sym = S(0x21D2, .Rel) },
+    .{ .name = "uArr", .sym = S(0x21D1, .Rel) },
+    .{ .name = "hArr", .sym = S(0x21D4, .Rel) },
+    .{ .name = "lrArr", .sym = S(0x21D4, .Rel) },
+    // Wide implication arrows (issue #73): `\;`-spaced by parse
+    // desugar below; the symbols carry the bare codepoints.
+    .{ .name = "iff", .sym = S(0x27FA, .Rel) },
+    .{ .name = "implies", .sym = S(0x27F9, .Rel) },
+    .{ .name = "impliedby", .sym = S(0x27F8, .Rel) },
+    // Negated relations (issue #73): KaTeX renders PUA glyphs from
+    // its own font in HTML but single precomposed codepoints in
+    // MathML (the parity arbiter), which is what these carry.
+    .{ .name = "gvertneqq", .sym = S(0x2269, .Rel) },
+    .{ .name = "lvertneqq", .sym = S(0x2268, .Rel) },
+    .{ .name = "ngeqq", .sym = S(0x2271, .Rel) },
+    .{ .name = "ngeqslant", .sym = S(0x2271, .Rel) },
+    .{ .name = "nleqq", .sym = S(0x2270, .Rel) },
+    .{ .name = "nleqslant", .sym = S(0x2270, .Rel) },
+    .{ .name = "nshortmid", .sym = S(0x2224, .Rel) },
+    .{ .name = "nshortparallel", .sym = S(0x2226, .Rel) },
+    .{ .name = "nsubseteqq", .sym = S(0x2288, .Rel) },
+    .{ .name = "nsupseteqq", .sym = S(0x2289, .Rel) },
+    .{ .name = "varsubsetneq", .sym = S(0x228A, .Rel) },
+    .{ .name = "varsubsetneqq", .sym = S(0x2ACB, .Rel) },
+    .{ .name = "varsupsetneq", .sym = S(0x228B, .Rel) },
+    .{ .name = "varsupsetneqq", .sym = S(0x2ACC, .Rel) },
+    // Membership negations and mirror (issue #73): single MathML
+    // codepoints (`\\notin` renders `\\not\\ni` in KaTeX HTML, but
+    // the parity arbiter is the single `\\u2209`).
+    .{ .name = "notin", .sym = S(0x2209, .Rel) },
+    .{ .name = "notni", .sym = S(0x220C, .Rel) },
+    .{ .name = "mapsfrom", .sym = S(0x21A4, .Rel) },
+    .{ .name = "isin", .sym = S(0x2208, .Rel) },
+    .{ .name = "sub", .sym = S(0x2282, .Rel) },
+    .{ .name = "sube", .sym = S(0x2286, .Rel) },
+    .{ .name = "supe", .sym = S(0x2287, .Rel) },
+    // Ordinary symbols (KaTeX mathord/textord groups).
+    .{ .name = "Box", .sym = S(0x25A1, .Ord) },
+    .{ .name = "Diamond", .sym = S(0x25CA, .Ord) },
+    .{ .name = "bigstar", .sym = S(0x2605, .Ord) },
+    .{ .name = "blacklozenge", .sym = S(0x29EB, .Ord) },
+    .{ .name = "blacksquare", .sym = S(0x25A0, .Ord) },
+    .{ .name = "blacktriangle", .sym = S(0x25B2, .Ord) },
+    .{ .name = "blacktriangledown", .sym = S(0x25BC, .Ord) },
+    .{ .name = "complement", .sym = S(0x2201, .Ord) },
+    .{ .name = "degree", .sym = S(0x00B0, .Ord) },
+    .{ .name = "diagdown", .sym = S(0x2572, .Ord) },
+    .{ .name = "diagup", .sym = S(0x2571, .Ord) },
+    .{ .name = "lozenge", .sym = S(0x25CA, .Ord) },
+    .{ .name = "mathsterling", .sym = S(0x00A3, .Ord) },
+    .{ .name = "omicron", .sym = S(0x03BF, .Ord) },
+    .{ .name = "square", .sym = S(0x25A1, .Ord) },
+    .{ .name = "triangle", .sym = S(0x25B3, .Ord) },
+    .{ .name = "triangledown", .sym = S(0x25BD, .Ord) },
+    .{ .name = "varkappa", .sym = S(0x03F0, .Ord) },
+    // Variant Greek capitals (issue #73): upright singletons, same
+    // codepoints KaTeX MathML carries (no math-italic remap: explicit
+    // codepoints bypass it, like `\\Delta` above).
+    .{ .name = "varDelta", .sym = S(0x0394, .Ord) },
+    .{ .name = "varGamma", .sym = S(0x0393, .Ord) },
+    .{ .name = "varLambda", .sym = S(0x039B, .Ord) },
+    .{ .name = "varOmega", .sym = S(0x03A9, .Ord) },
+    .{ .name = "varPhi", .sym = S(0x03A6, .Ord) },
+    .{ .name = "varPi", .sym = S(0x03A0, .Ord) },
+    .{ .name = "varPsi", .sym = S(0x03A8, .Ord) },
+    .{ .name = "varSigma", .sym = S(0x03A3, .Ord) },
+    .{ .name = "varTheta", .sym = S(0x0398, .Ord) },
+    .{ .name = "varUpsilon", .sym = S(0x03A5, .Ord) },
+    .{ .name = "varXi", .sym = S(0x039E, .Ord) },
+    .{ .name = "Omicron", .sym = S(0x004F, .Ord) },
+    .{ .name = "thetasym", .sym = S(0x03D1, .Ord) },
+    // Aleph/empty/exist aliases + misc ords (issue #73).
+    .{ .name = "alef", .sym = S(0x2135, .Ord) },
+    .{ .name = "alefsym", .sym = S(0x2135, .Ord) },
+    .{ .name = "empty", .sym = S(0x2205, .Ord) },
+    .{ .name = "exist", .sym = S(0x2203, .Ord) },
+    .{ .name = "infin", .sym = S(0x221E, .Ord) },
+    .{ .name = "bull", .sym = S(0x2219, .Bin) },
+    .{ .name = "sdot", .sym = S(0x22C5, .Bin) },
+    .{ .name = "plusmn", .sym = S(0x00B1, .Bin) },
+    .{ .name = "Dagger", .sym = S(0x2021, .Bin) },
+    .{ .name = "lq", .sym = S(0x2018, .Ord) },
+    .{ .name = "image", .sym = S(0x2111, .Ord) },
+    .{ .name = "real", .sym = S(0x211C, .Ord) },
+    .{ .name = "weierp", .sym = S(0x2118, .Ord) },
+    // Blackboard singletons (issue #73): KaTeX MathML carries the
+    // precomposed codepoint (`\\mathbb` exceptions in mathAlpha), so
+    // the zero-arg aliases carry it directly (like `\\Re`/`\\Im`).
+    .{ .name = "Bbbk", .sym = S(0x1D55C, .Ord) },
+    .{ .name = "Complex", .sym = S(0x2102, .Ord) },
+    .{ .name = "cnums", .sym = S(0x2102, .Ord) },
+    .{ .name = "N", .sym = S(0x2115, .Ord) },
+    .{ .name = "natnums", .sym = S(0x2115, .Ord) },
+    .{ .name = "R", .sym = S(0x211D, .Ord) },
+    .{ .name = "Reals", .sym = S(0x211D, .Ord) },
+    .{ .name = "reals", .sym = S(0x211D, .Ord) },
+    .{ .name = "Z", .sym = S(0x2124, .Ord) },
+    // Card suits (issue #73, KaTeX mathord group).
+    .{ .name = "clubs", .sym = S(0x2663, .Ord) },
+    .{ .name = "diamonds", .sym = S(0x2662, .Ord) },
+    .{ .name = "hearts", .sym = S(0x2661, .Ord) },
+    .{ .name = "spades", .sym = S(0x2660, .Ord) },
+    // KaTeX symbols.ts group inner.
+    .{ .name = "mathellipsis", .sym = S(0x2026, .Inner) },
+    // Forced ellipsis forms (issue #73): static mid/centered dots.
+    // (KaTeX switches `\\dots` by follower; the forced forms are the
+    // same codepoints unconditionally.)
+    .{ .name = "dotsb", .sym = S(0x22EF, .Inner) },
+    .{ .name = "dotsc", .sym = S(0x2026, .Inner) },
+    .{ .name = "dotsm", .sym = S(0x22EF, .Inner) },
+    .{ .name = "dotso", .sym = S(0x2026, .Inner) },
+    // Blackboard brackets (issue #73): single MathML codepoints
+    // (`\\u27E6/7`); the KaTeX HTML `{[`/`]}` composite is a font
+    // workaround, observably the same brackets.
+    .{ .name = "llbracket", .sym = S(0x27E6, .Open) },
+    .{ .name = "rrbracket", .sym = S(0x27E7, .Close) },
+    // Large-operator symbols (KaTeX symbols.ts group op; limits behavior
+    // pinned against 0.18.7: bigsqcup stacks in display, intop/smallint
+    // stack in display, oiint/oiiint never stack, smallint never enlarges).
+    .{ .name = "bigsqcup", .sym = L(0x2A06) },
+    .{ .name = "intop", .sym = .{ .cp = 0x222B, .class = .Op, .large_op = true, .limits_default = true } },
+    .{ .name = "oiiint", .sym = I(0x2230) },
+    .{ .name = "oiint", .sym = I(0x222F) },
+    .{ .name = "smallint", .sym = .{ .cp = 0x222B, .class = .Op, .large_op = false, .limits_default = true } },
 } else [_]Entry{};
 
 const operators = operators_base ++ operators_full;
@@ -586,6 +914,16 @@ const delims = [_]DelimEntry{
         .{ .name = "backslash", .cp = 0x005C, .cls = .Ord },
         .{ .name = "lang", .cp = 0x27E8, .cls = .Open },
         .{ .name = "rang", .cp = 0x27E9, .cls = .Close },
+        // Bare-fence aliases (KaTeX open/close groups; shared with subset
+        // like the lbrace precedent above, issue #73).
+        .{ .name = "lbrack", .cp = 0x005B, .cls = .Open },
+        .{ .name = "rbrack", .cp = 0x005D, .cls = .Close },
+        .{ .name = "lparen", .cp = 0x0028, .cls = .Open },
+        .{ .name = "rparen", .cp = 0x0029, .cls = .Close },
+        .{ .name = "lgroup", .cp = 0x27EE, .cls = .Open },
+        .{ .name = "rgroup", .cp = 0x27EF, .cls = .Close },
+        .{ .name = "lmoustache", .cp = 0x23B0, .cls = .Open },
+        .{ .name = "rmoustache", .cp = 0x23B1, .cls = .Close },
 };
 
 /// Every named delimiter, for coverage probes.
@@ -656,6 +994,115 @@ const accents = [_]AccentEntry{
 /// Every named accent, for coverage probes.
 pub const all_accents = accents;
 
+/// KaTeX 0.18.7 Math-Italic accent skews (issue #70): per-codepoint
+/// right shift in mu, extracted from the pinned `katex.min.js` font
+/// metrics (`Math-Italic` map, nonzero `skew` entries only). KaTeX
+/// centers a math accent at nucleus-center + skew; these CM-derived
+/// shifts transfer to our CM-descendant reference metrics (LM Math and
+/// KaTeX advances agree to the unit: M 970 vs 970.14, y 490 vs
+/// 490.28). Sorted by codepoint for binary search; unlisted
+/// codepoints (upright, digits, symbols) shift by 0, exactly as
+/// KaTeX's zero-skew metrics do. Packed `cp << 8 | mu` to keep the
+/// subset-profile tables small.
+const math_italic_skews = [_]u32{
+    0x418B,
+    0x4253,
+    0x4353,
+    0x4438,
+    0x4553,
+    0x4653,
+    0x4753,
+    0x4838,
+    0x496F,
+    0x4AA7,
+    0x4B38,
+    0x4C1C,
+    0x4D53,
+    0x4E53,
+    0x4F53,
+    0x5053,
+    0x5153,
+    0x5253,
+    0x5353,
+    0x5453,
+    0x551C,
+    0x5853,
+    0x5A53,
+    0x6338,
+    0x64A7,
+    0x6538,
+    0x66A7,
+    0x671C,
+    0x6C53,
+    0x6F38,
+    0x7053,
+    0x7153,
+    0x7238,
+    0x7338,
+    0x7453,
+    0x751C,
+    0x761C,
+    0x7753,
+    0x781C,
+    0x7938,
+    0x7A38,
+    0x39353,
+    0x394A7,
+    0x39853,
+    0x39BA7,
+    0x39E53,
+    0x3A038,
+    0x3A353,
+    0x3A538,
+    0x3A653,
+    0x3A838,
+    0x3A953,
+    0x3B11C,
+    0x3B253,
+    0x3B438,
+    0x3B553,
+    0x3B653,
+    0x3B738,
+    0x3B853,
+    0x3B938,
+    0x3BC1C,
+    0x3BD1C,
+    0x3BE6F,
+    0x3BF38,
+    0x3C153,
+    0x3C253,
+    0x3C41C,
+    0x3C51C,
+    0x3C653,
+    0x3C738,
+    0x3C86F,
+    0x3D153,
+    0x3D553,
+    0x3F153,
+    0x3F538,
+    0xE1311C,
+    0xE23753,
+};
+
+/// KaTeX-parity accent skew for a math-italic nucleus codepoint in
+/// mu; 0 for everything else (KaTeX's zero-skew metrics).
+pub fn mathItalicSkew(cp: u21) i32 {
+    const key: u32 = @as(u32, cp) << 8;
+    var lo: usize = 0;
+    var hi: usize = math_italic_skews.len;
+    while (lo < hi) {
+        const mid = lo + (hi - lo) / 2;
+        if (math_italic_skews[mid] < key) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    if (lo < math_italic_skews.len and math_italic_skews[lo] >> 8 == @as(u32, cp)) {
+        return @as(i32, @intCast(math_italic_skews[lo] & 0xFF));
+    }
+    return 0;
+}
 /// Math-mode text accents: control char → spacing accent label
 /// (KaTeX `accent`-group text symbols, allowed in math outside strict
 /// mode). `\t`, `\d`, `\b` have no math-mode accent form.
@@ -788,6 +1235,8 @@ pub fn splitLimitOp(text: []const u8) ?[2][]const u8 {
     if (eq(text, "limsup")) return .{ "lim", "sup" };
     if (eq(text, "injlim")) return .{ "inj", "lim" };
     if (eq(text, "projlim")) return .{ "proj", "lim" };
+    if (eq(text, "argmax")) return .{ "arg", "max" };
+    if (eq(text, "argmin")) return .{ "arg", "min" };
     return null;
 }
 

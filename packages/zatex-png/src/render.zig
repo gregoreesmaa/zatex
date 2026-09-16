@@ -26,7 +26,15 @@ pub fn renderToPng(
 ) Error!void {
     const s: f64 = @as(f64, @floatFromInt(px_per_em)) / 1000.0;
     const pad: f64 = @floatFromInt(pad_px);
-    const w: usize = @max(1, ceilU(@as(f64, @floatFromInt(layout.width)) * s + 2 * pad));
+    // Left-overflow shift (issue #71): zero-width overlaps (`\llap`,
+    // centered `\mathclap`) place runs left of the layout origin, and a
+    // canvas starting at 0 clips that ink while KaTeX shows the
+    // overflow. Measure the leftmost ink edge and shift the origin so
+    // it lands on pad. Only the left edge moves (a non-negative shift):
+    // right/top/bottom keep the advance+pad canvas, whose pads already
+    // absorb ordinary overhang there.
+    const shift: f64 = @as(f64, @floatFromInt(leftShiftUnits(fontShiftMetrics(font), layout.runs, layout.rules))) * s;
+    const w: usize = @max(1, ceilU(@as(f64, @floatFromInt(layout.width)) * s + 2 * pad + shift));
     const h: usize = @max(1, ceilU((@as(f64, @floatFromInt(layout.height_above)) +
         @as(f64, @floatFromInt(layout.depth_below))) * s + 2 * pad));
 
@@ -45,7 +53,7 @@ pub fn renderToPng(
     // Rules (fraction bars, vincula, colorbox backgrounds) are plain
     // filled rects, each in its own paint (issue #35).
     for (layout.rules) |r| {
-        const rx = @as(f64, @floatFromInt(r.x)) * s + pad;
+        const rx = @as(f64, @floatFromInt(r.x)) * s + pad + shift;
         const rw = @as(f64, @floatFromInt(r.w)) * s;
         const rh = @as(f64, @floatFromInt(r.h)) * s;
         const ry = ruleOriginY(r.y, r.h, s, pad, H);
@@ -71,7 +79,7 @@ pub fn renderToPng(
         var x_units: i64 = run.x;
         const base_y: f64 = glyphBaseY(run.baseline_y, s, pad, H);
         for (run.glyphs) |g| {
-            const gx: f64 = @as(f64, @floatFromInt(x_units)) * s + pad;
+            const gx: f64 = @as(f64, @floatFromInt(x_units)) * s + pad + shift;
             rf.drawGlyph(g, gx, base_y);
             const step: i64 = @divTrunc(
                 @as(i64, font.advance1000(g)) * @as(i64, run.size_units),
@@ -83,6 +91,92 @@ pub fn renderToPng(
     }
 
     try canvas.writePng(out_path);
+}
+
+/// Glyph metrics for the left-shift walk: integer thousandths like the
+/// core measures, so the walk stays exact with stub providers in tests.
+const ShiftMetrics = struct {
+    ptr: *const anyopaque,
+    advance1000: *const fn (ptr: *const anyopaque, glyph: u16) i32,
+    inkLeft1000: *const fn (ptr: *const anyopaque, glyph: u16) i32,
+};
+
+fn fontShiftMetrics(font: *const Font) ShiftMetrics {
+    const W = struct {
+        fn adv(ptr: *const anyopaque, glyph: u16) i32 {
+            const f: *const Font = @ptrCast(@alignCast(ptr));
+            return f.advance1000(glyph);
+        }
+        fn ink(ptr: *const anyopaque, glyph: u16) i32 {
+            const f: *const Font = @ptrCast(@alignCast(ptr));
+            return f.handle.inkBounds1000(glyph)[0];
+        }
+    };
+    return .{ .ptr = font, .advance1000 = W.adv, .inkLeft1000 = W.ink };
+}
+
+/// Canvas shift (layout units, >= 0) so left-overflow ink lands on pad.
+/// Walks glyph origins exactly like the draw loop above: origin stepping
+/// uses the same integer advances, and each glyph contributes its true
+/// ink-left edge (ink box is origin-relative thousandths, y-up). Rules
+/// contribute their rect left edge. Pure viewport fit — box coordinates
+/// are untouched, so a zero shift (the common case) renders bit-identical
+/// output to before.
+fn leftShiftUnits(m: ShiftMetrics, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule) u32 {
+    var left: i64 = 0;
+    for (rules) |r| {
+        if (@as(i64, r.x) < left) left = @as(i64, r.x);
+    }
+    for (runs) |run| {
+        if (run.glyphs.len == 0) continue;
+        var x_units: i64 = run.x;
+        for (run.glyphs) |g| {
+            const ink_left = @divTrunc(@as(i64, m.inkLeft1000(m.ptr, g)) * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
+            if (x_units + ink_left < left) left = x_units + ink_left;
+            const step: i64 = @divTrunc(
+                @as(i64, m.advance1000(m.ptr, g)) * @as(i64, run.size_units),
+                1000,
+            );
+            x_units += @divTrunc(step * @as(i64, run.x_scale), 1000);
+        }
+    }
+    return if (left < 0) @intCast(-left) else 0;
+}
+
+test "left shift covers runs and rules, else zero" {
+    const S = struct {
+        fn adv(_: *const anyopaque, g: u16) i32 {
+            return if (g == 'x') 500 else 400;
+        }
+        fn ink(_: *const anyopaque, g: u16) i32 {
+            // `x` overhangs 50 left of its origin; `y` is inset 10.
+            return if (g == 'x') -50 else 10;
+        }
+        var tag: u8 = 0;
+    };
+    const m: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink };
+    // No negative ink: zero shift (bit-identical canvas).
+    const runs_ok = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'} },
+    };
+    try std.testing.expectEqual(@as(u32, 0), leftShiftUnits(m, &runs_ok, &.{}));
+    // llap shape: run at -500 whose glyph overhangs a further 50.
+    const runs_lap = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = -500, .baseline_y = 0, .glyphs = &[_]u16{'x'} },
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'} },
+    };
+    try std.testing.expectEqual(@as(u32, 550), leftShiftUnits(m, &runs_lap, &.{}));
+    // Origins step by advances inside a run: the walk sees the first
+    // `x` at -500 (ink to -550), not just the run origin.
+    const runs_step = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = -500, .baseline_y = 0, .glyphs = &[_]u16{ 'x', 'x' } },
+    };
+    try std.testing.expectEqual(@as(u32, 550), leftShiftUnits(m, &runs_step, &.{}));
+    // Rules contribute their rect left edge.
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = -40, .y = 0, .w = 100, .h = 10 },
+    };
+    try std.testing.expectEqual(@as(u32, 40), leftShiftUnits(m, &runs_ok, &rules));
 }
 
 /// Select the paint for one IR run/rule: ambient (null) is black ink;
