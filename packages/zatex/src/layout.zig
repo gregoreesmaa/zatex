@@ -1568,11 +1568,32 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 // Fences, accents, overs
 // ---------------------------------------------------------------------------
 
-/// One fence glyph sized to at least `need` (total height) when the
-/// variant hook can supply it; otherwise the natural glyph centered
-/// on the math axis.
+/// One fence glyph for `need` (total height, TeX `make_left_right`
+/// target). KaTeX `traverseSequence` tries the Main-face base
+/// delimiter first (pinned 0.18.7 `delimiters.js`): when it covers
+/// `need` it is emitted at natural extents, never grown nor centered
+/// (issue #102 — the Main design carries the heavier KaTeX stroke).
+/// Otherwise the rm glyph grows through the variant hook and the box
+/// centers on the math axis.
 fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32, variant_box: bool) Error!u16 {
     const size = lc.effSize(style);
+    const main_font: u16 = @intFromEnum(contract.FontId.main);
+    const mg = lc.glyphId(main_font, cp);
+    if (mg != 0) {
+        const me = lc.extents(main_font, mg);
+        const mha = @divTrunc(me[0] * size, 1000);
+        const mdb = @divTrunc(me[1] * size, 1000);
+        if (mha + mdb > need) {
+            const madv = lc.advance(main_font, mg);
+            return lc.allocBox(.{
+                .w = @divTrunc(madv * size, 1000),
+                .ha = mha,
+                .db = mdb,
+                .kind = .{ .glyph = .{ .font = main_font, .size = size, .glyph = mg } },
+                .invisible = false,
+            });
+        }
+    }
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const g0 = lc.glyphId(font, cp);
     const g = if (need > 0) lc.variant(font, g0, @divTrunc(need * 1000, size)) else g0;
@@ -1619,12 +1640,22 @@ fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
     if (d.fixed) {
         need = @divTrunc(rule15eNeed(style) * lc.effSize(style), 1000);
     } else {
+        // TeX `make_left_right` target (KaTeX `delimiters.js`,
+        // issue #102): the fence covers the body's max distance
+        // from the axis, grown by delimiterFactor 901/500 with a
+        // 5pt (500mu at 10pt/em) shortfall allowance.
         lc.fence_need = 0;
         const probe = try layoutNode(lc, style, d.body);
         const pb = lc.boxes[probe];
-        const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
-        const clear = if (2 * th > 120) 2 * th else 120;
-        need = pb.ha + pb.db + clear;
+        const size = lc.effSize(style);
+        const axis = @divTrunc(@as(i32, 250) * size, 1000);
+        const dist_a = pb.ha - axis;
+        const dist_b = pb.db + axis;
+        const max_dist = if (dist_a > dist_b) dist_a else dist_b;
+        const shortfall = @divTrunc(@as(i32, 500) * size, 1000);
+        const grow = @divTrunc(max_dist * 901, 500);
+        const span = 2 * max_dist - shortfall;
+        need = if (grow > span) grow else span;
         lc.fence_need = need;
     }
     const body = try layoutNode(lc, style, d.body);

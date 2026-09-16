@@ -1318,7 +1318,9 @@ test "qa48 accent gap moves with provider metrics" {
 test "qa48 delimiter extents move with provider metrics" {
     // Recomputed from the inputs per `layoutDelim`/`layoutFence`: the
     // grown fence centers on the fixed 250mu axis with half extent
-    // (need+1)/2 where need = body.ha + body.db + max(2*th, 120).
+    // (need+1)/2 where need is the TeX `make_left_right` target
+    // (KaTeX `delimiters.js`, issue #102): max body distance from the
+    // axis grown by delimiterFactor 901/500 with a 5pt shortfall.
     // NOTE: the axis itself (250mu) is an engine constant with no
     // provider hook — providers move fences through rule thickness and
     // body extents, which is what this test varies.
@@ -1353,8 +1355,12 @@ test "qa48 delimiter extents move with provider metrics" {
         if (fgap_d < fclear) fds += fclear - fgap_d;
         const fha: i64 = fns + nha;
         const fdb: i64 = fds + ndb;
-        const clear: i64 = @max(2 * @as(i64, s.th), 120);
-        const need: i64 = fha + fdb + clear;
+        const dist_a: i64 = fha - axis;
+        const dist_b: i64 = fdb + axis;
+        const max_dist: i64 = @max(dist_a, dist_b);
+        const grow: i64 = @divTrunc(max_dist * 901, 500);
+        const span: i64 = 2 * max_dist - 500;
+        const need: i64 = @max(grow, span);
         const half: i64 = @divTrunc(need + 1, 2);
         // Fences (and the max with the body) set the outer box.
         const want_ha: i64 = @max(fha, axis + half);
