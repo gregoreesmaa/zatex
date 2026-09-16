@@ -8348,6 +8348,12 @@
   "expect": "accept"
  },
  {
+  "id": "above-0pt",
+  "tex": "a\\above0pt b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "begingroup",
   "tex": "\\begingroup x\\endgroup",
   "display": false,

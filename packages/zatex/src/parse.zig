@@ -1617,6 +1617,9 @@ fn parseInfix(ctx: *ParseCtx, depth: u8, frame: Frame, t: Tok, num: Idx) Error!I
 fn finishInfix(ctx: *ParseCtx, t: Tok, num: Idx, den: Idx, thick: i32) Error!Idx {
     var kind = infixKind(t);
     kind.thick = thick;
+    // `\above` with a non-positive bar means NO rule (issue #105,
+    // pinned 0.18.7 — `a\above0pt b` is barless like `\atop`).
+    if (tokNameEq(t.name, "above") and thick <= 0) kind.bar = false;
     return ctx.allocNode(.{ .frac = .{ .num = num, .den = den, .kind = kind } });
 }
 
@@ -4954,8 +4957,15 @@ fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     const den_t = try ctx.captureArg();
     const left = try singleDelimArg(ctx, l, cmd.pos);
     const right = try singleDelimArg(ctx, r, cmd.pos);
+    // An explicit non-positive bar (`{0pt}`, `{-1pt}`) means NO rule
+    // (issue #105, pinned 0.18.7 — barless like `\binom`); an EMPTY
+    // bar keeps the default rule.
+    var bar = true;
     var thick: i32 = 0;
-    if (thick_t.len > 0) thick = try dimenFromToks(ctx, thick_t, cmd.pos);
+    if (thick_t.len > 0) {
+        thick = try dimenFromToks(ctx, thick_t, cmd.pos);
+        if (thick <= 0) bar = false;
+    }
     var fstyle: ?Style = null;
     if (style_t.len > 0) {
         if (style_t.len != 1) return ctx.fail(cmd.pos, "expected style number");
@@ -4974,7 +4984,7 @@ fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     var body = try ctx.allocNode(.{ .frac = .{
         .num = num,
         .den = den,
-        .kind = .{ .bar = true, .thick = thick },
+        .kind = .{ .bar = bar, .thick = thick },
     } });
     if (left != 0 or right != 0) {
         body = try ctx.allocNode(.{ .delim = .{ .left = left, .right = right, .body = body } });

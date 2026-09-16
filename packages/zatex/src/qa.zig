@@ -2245,6 +2245,39 @@ test "qa83 old-style font declarations scope the rest of the group (issue #94)" 
     try expectGolden("decl-boldsymbol", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold-italic\"><mi>A</mi><mi>a</mi><mi>B</mi><mi>b</mi></mstyle></mrow></math>", gotb);
 }
 
+test "qa84 genfrac zero bar omits the rule (issue #105)" {
+    // KaTeX parity (pinned 0.18.7): an explicit non-positive bar
+    // (`{0pt}`, `{-1pt}`, `\above0pt`) means NO rule — barless like
+    // `\binom` (atop spacing, `linethickness="0"`); an EMPTY bar
+    // keeps the default rule. Vertical construction matches
+    // `\binom` exactly (pinned KaTeX: both 0.7454em tall).
+    // `\dfrac` already matches KaTeX (rule 40 units = 0.04em in both
+    // styles — pinned here, not changed).
+    var b1: B = .{};
+    const g = try lay("\\genfrac(){0pt}{1}{a}{b}", false, &b1);
+    try std.testing.expectEqual(@as(usize, 0), g.rules.len);
+    // Same construction without the style shell (stretchy parens
+    // around a barless stack) lays out bit-identically: the T style
+    // wrapper is geometry-transparent in ambient text style.
+    var b2: B = .{};
+    const ref = try lay("\\left({a\\atop b}\\right)", false, &b2);
+    try std.testing.expectEqual(ref.width, g.width);
+    try std.testing.expectEqual(ref.height_above, g.height_above);
+    try std.testing.expectEqual(ref.depth_below, g.depth_below);
+    var b3: B = .{};
+    const ab = try lay("a\\above0pt b", false, &b3);
+    try std.testing.expectEqual(@as(usize, 0), ab.rules.len);
+    var b4: B = .{};
+    const df = try lay("\\dfrac{a}{b}", false, &b4);
+    var b5: B = .{};
+    const fr = try lay("\\frac{a}{b}", false, &b5);
+    try std.testing.expectEqual(@as(usize, 1), df.rules.len);
+    try std.testing.expectEqual(fr.rules[0].h, df.rules[0].h);
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\genfrac(){0pt}{1}{a}{b}", .{}, &buf);
+    try expectGolden("genfrac-0pt", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle displaystyle=\"false\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow></math>", got);
+}
+
 
 
 

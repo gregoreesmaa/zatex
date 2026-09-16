@@ -14098,6 +14098,16 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac linethickness=\"0.1em\"><mi>a</mi><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">a\\above1pt b</annotation></semantics></math>"
   },
   {
+   "id": "above-0pt",
+   "tex": "a\\above0pt b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">a\\above0pt b</annotation></semantics></math>"
+  },
+  {
    "id": "begingroup",
    "tex": "\\begingroup x\\endgroup",
    "display": false,
