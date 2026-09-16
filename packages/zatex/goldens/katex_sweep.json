@@ -15988,6 +15988,26 @@
    "note": null,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup></mrow><mi>c</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\genfrac(){0pt}{1}{a^2+b^2}{c}</annotation></semantics></math>"
+  },
+  {
+   "id": "109-char41",
+   "tex": "\\char\"41",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">A</mi></mrow><annotation encoding=\"application/x-tex\">\\char&quot;41</annotation></semantics></math>"
+  },
+  {
+   "id": "109-char-smiley",
+   "tex": "\\char\"263A",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">☺</mi></mrow><annotation encoding=\"application/x-tex\">\\char&quot;263A</annotation></semantics></math>"
   }
  ]
 }

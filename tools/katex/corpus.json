@@ -9493,5 +9493,17 @@
   "tex": "\\genfrac(){0pt}{1}{a^2+b^2}{c}",
   "display": false,
   "expect": "accept"
+ },
+ {
+  "id": "109-char41",
+  "tex": "\\char\"41",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "109-char-smiley",
+  "tex": "\\char\"263A",
+  "display": false,
+  "expect": "accept"
  }
 ]
