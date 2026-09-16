@@ -104,4 +104,6 @@ pub const FontId = enum(u16) {
     script = 6,
     bb = 7,
     cal = 8,
+    /// `\bm` bold-italic (issue #73): appended, never renumbered.
+    bold_italic = 9,
 };

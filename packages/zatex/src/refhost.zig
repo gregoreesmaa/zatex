@@ -183,11 +183,28 @@ test "coverage: every emittable glyph resolves" {
     // against the font's cmap): the core still accepts the commands
     // (KaTeX parity) and providers report glyph 0 (.notdef fallback).
     // The exact set is asserted below so font upgrades fail loudly.
-    const known_missing = [_]u21{ 0x03DD, 0x2132, 0x2141, 0x24C8, 0x25B9, 0x25C3, 0x02C9, 0x02CA, 0x02CB };
+    const known_missing = [_]u21{
+        0x03DD, 0x2132, 0x2141, 0x24C8, 0x25B9, 0x25C3, 0x02C9, 0x02CA, 0x02CB,
+        // Issue #73 AMS batch: LM Math lacks these (STIX Two Math, the
+        // documented fallback, carries them; hosts resolve via provider).
+        0x21E0, 0x21E2, 0x22D4, 0x23B0, 0x23B1, 0x2571, 0x2572, 0x2605, 0x29EB,
+        0x2A5E, 0x2AB5, 0x2AB6, 0x2AB7, 0x2AB8, 0x2AB9, 0x2ABA, 0x2AC5, 0x2AC6,
+        0x2ACB, 0x2ACC,
+    };
     var misses: usize = 0;
     var known: usize = 0;
+    // Distinct commands can share a codepoint (`\\varsubsetneqq` is
+    // `\\subsetneqq`'s alias twin, issue #73): count each codepoint
+    // once so the exact-set assertion below stays exact.
+    var seen: [64]u21 = undefined;
+    var nseen: usize = 0;
     const miss = struct {
-        fn m(cp: u21, bad_out: *usize, known_out: *usize, allowed: []const u21) void {
+        fn m(cp: u21, bad_out: *usize, known_out: *usize, allowed: []const u21, seen_out: *[64]u21, nseen_out: *usize) void {
+            for (seen_out.*[0..nseen_out.*]) |s| if (s == cp) return;
+            if (nseen_out.* < seen_out.len) {
+                seen_out.*[nseen_out.*] = cp;
+                nseen_out.* += 1;
+            }
             for (allowed) |k| {
                 if (k == cp) {
                     known_out.* += 1;
@@ -200,16 +217,16 @@ test "coverage: every emittable glyph resolves" {
     }.m;
     for (symbols.all_symbols) |e| {
         if (e.sym.func) continue; // word operators are ASCII letters
-        if ((try otmath.glyphId(ref.font, e.sym.cp)) == 0) miss(e.sym.cp, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, e.sym.cp)) == 0) miss(e.sym.cp, &misses, &known, &known_missing, &seen, &nseen);
     }
     for (symbols.all_delims) |d| {
-        if ((try otmath.glyphId(ref.font, d.cp)) == 0) miss(d.cp, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, d.cp)) == 0) miss(d.cp, &misses, &known, &known_missing, &seen, &nseen);
     }
     for (symbols.all_accents) |a| {
-        if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing, &seen, &nseen);
     }
     for (symbols.all_math_text_accents) |a| {
-        if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing, &seen, &nseen);
     }
     // Bare fence chars, rule/radical signs, arrows, text precomposes.
     const extra = [_]u21{
@@ -218,19 +235,19 @@ test "coverage: every emittable glyph resolves" {
         0x00E1, 0x00E9, 0x00F1, 0x00E7, 0x010D, 0x00E4, 0x00FC,
     };
     for (extra) |cp| {
-        if ((try otmath.glyphId(ref.font, cp)) == 0) miss(cp, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, cp)) == 0) miss(cp, &misses, &known, &known_missing, &seen, &nseen);
     }
     var c: u21 = '0';
     while (c <= '9') : (c += 1) {
-        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing, &seen, &nseen);
     }
     c = 'a';
     while (c <= 'z') : (c += 1) {
-        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing, &seen, &nseen);
     }
     c = 'A';
     while (c <= 'Z') : (c += 1) {
-        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing);
+        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing, &seen, &nseen);
     }
     try std.testing.expectEqual(@as(usize, 0), misses);
     try std.testing.expectEqual(known_missing.len, known);
@@ -647,19 +664,22 @@ test "calibration: cut-ins clamp to the script gap" {
 }
 
 // Italic-correction application: the accent over an italic nucleus
-// shifts by half the correction (x: 16/2 = 8 at text size).
+// shifts by half the correction of the LAID-OUT math glyph (issue
+// #70: `y` is U+1D466 with correction 28, so 28/2 = 14 at text size;
+// the old lookup saw text `y` with 8). The KaTeX table skew (56 for
+// `y`) rides along in both runs, so only the correction half moves.
 test "calibration: italic correction centers accents" {
     var ref = try Ref.load();
     defer ref.free();
     var ra: [32]zatex.ir.Run = undefined;
     var la: [8]zatex.ir.Rule = undefined;
     var ga: [128]u16 = undefined;
-    const a = try layoutCase(&ref, "\\hat{x}", false, &ra, &la, &ga);
+    const a = try layoutCase(&ref, "\\hat{y}", false, &ra, &la, &ga);
     ref.no_italic = true;
     var rb: [32]zatex.ir.Run = undefined;
     var lb: [8]zatex.ir.Rule = undefined;
     var gb: [128]u16 = undefined;
-    const b = try layoutCase(&ref, "\\hat{x}", false, &rb, &lb, &gb);
+    const b = try layoutCase(&ref, "\\hat{y}", false, &rb, &lb, &gb);
     try std.testing.expectEqual(a.width, b.width);
     try std.testing.expectEqual(a.runs.len, b.runs.len);
     var shifts: usize = 0;
@@ -667,7 +687,7 @@ test "calibration: italic correction centers accents" {
         try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
         const dx = y.x - x.x;
         if (dx != 0) {
-            try std.testing.expectEqual(@as(i32, -8), dx);
+            try std.testing.expectEqual(@as(i32, -14), dx);
             shifts += 1;
         }
     }

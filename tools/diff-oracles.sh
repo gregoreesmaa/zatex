@@ -76,23 +76,34 @@ with open(os.path.join(work, "cases.tsv"), "w") as f:
     f.write("\n".join(ids) + "\n")
 EOF
 
+# Drop stale renders first: a failed engine must report missing,
+# never silently compare last run's PNG.
+rm -f "$od"/work/*.zatex.png "$od"/work/*.katex.png \
+      "$od"/work/*.mathjax.png "$od"/work/*.luatex.png
+# One container per engine for the whole cases.tsv (issue #69: ~4
+# container starts and ~2 browser launches instead of ~4 per case).
+# Engines run concurrently — each `compose run` is its own container
+# with its own browser/build dir, so they share nothing but the
+# read-only repo mount and their own /work output names. A per-engine
+# .status file records failure (a background failure must not trigger
+# `set -e`, and `wait` alone only reports the last job).
 fail=0
-while read -r id display; do
-  [ -n "$id" ] || continue
-  echo "== $id"
-  # Drop stale renders first: a failed engine must report missing,
-  # never silently compare last run's PNG.
-  rm -f "$od/work/$id.zatex.png" "$od/work/$id.katex.png" \
-        "$od/work/$id.mathjax.png" "$od/work/$id.luatex.png"
-  $compose run --rm zatex-shot \
-      "/work/$id.tex" "$display" "/work/$id.zatex.png" < /dev/null || fail=1
-  $compose run --rm katex-shot \
-      "/work/$id.tex" "$display" "/work/$id.katex.png" < /dev/null || fail=1
-  $compose run --rm mathjax-shot \
-      "/work/$id.tex" "$display" "/work/$id.mathjax.png" < /dev/null || fail=1
-  $compose run --rm luatex-shot \
-      "/work/$id.tex" "$display" "/work/$id.luatex.png" < /dev/null || fail=1
-done < "$od/work/cases.tsv"
+rm -f "$od"/work/*.status
+$compose run --rm zatex-shot batch /work < /dev/null \
+    >"$od/work/zatex.log" 2>&1 || echo "$?" >"$od/work/zatex.status" &
+$compose run --rm katex-shot batch /work < /dev/null \
+    >"$od/work/katex.log" 2>&1 || echo "$?" >"$od/work/katex.status" &
+$compose run --rm mathjax-shot batch /work < /dev/null \
+    >"$od/work/mathjax.log" 2>&1 || echo "$?" >"$od/work/mathjax.status" &
+$compose run --rm luatex-shot batch /work < /dev/null \
+    >"$od/work/luatex.log" 2>&1 || echo "$?" >"$od/work/luatex.status" &
+wait
+for e in zatex katex mathjax luatex; do
+  if [ -f "$od/work/$e.status" ]; then
+    echo "diff-oracles: $e batch failed (see $od/work/$e.log)" >&2
+    fail=1
+  fi
+done
 
 # Showcase crop (PR #52 review): tight ink-bbox crop of every engine
 # render before comparing and showcasing (luatex arrives full-page;

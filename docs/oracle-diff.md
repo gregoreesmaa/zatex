@@ -8,12 +8,18 @@ stands alone. It pre-sorts a review queue; it decides nothing.
 Staging: per-case renders live in `tools/oracle-diff/work/` (gitignored
 staging, never committed). The latest full-sweep triage report is
 checked in at `zig-out/oracle-diff/report.md` (+ `png/`) so reviewers
-can browse it without running Docker. Before rendering a case the driver deletes
-its four outputs so a failed engine reports missing instead of
-comparing last run's PNG, and after the render loop `crop.py` tight-crops
-every engine's render to its ink bbox in place (the LuaTeX oracle
-arrives as a full page; the webshot oracles already clip at capture) —
-showcased renders are cropped before comparing and showcasing.
+can browse it without running Docker. Each engine renders the whole
+`cases.tsv` in one container (issue #69: one Chromium launch per web
+engine, one `zig build` for ZaTeX, one container per engine — instead
+of one container start per case per engine), and the four engine
+batches run concurrently. Before launching, the driver deletes the
+four output globs so a failed engine reports missing instead of
+comparing last run's PNG (a TeX error sinks only its own row — the
+batch logs `== <id>` progress and continues), and after the batches
+`crop.py` tight-crops every engine's render to its ink bbox in place
+(the LuaTeX oracle arrives as a full page; the webshot oracles
+already clip at capture) — showcased renders are cropped before
+comparing and showcasing.
 
 ## Non-goals (read before citing this tool)
 
@@ -36,7 +42,7 @@ showcased renders are cropped before comparing and showcasing.
 | `katex-shot` | KaTeX 0.18.7 (the reference) | headless Chromium screenshot (`tools/oracle-diff/webshot/`) |
 | `mathjax-shot` | MathJax v3 | headless Chromium screenshot (same image, other entrypoint) |
 | `luatex-shot` | TeX Live `pdflatex` → `pdftoppm -png -r 300` | Knuth-lineage opinion (`tools/oracle-diff/texlive/`). Two oracle-side adaptations: KaTeX `#RRGGBB` colors are rewritten to xcolor `[HTML]` (same rendered color; ZaTeX still gets the raw string), and constructs amsmath/amssymb lack (e.g. `\widecheck`, a mathabx symbol) stay missing renders rather than warped substitutes. |
-| `zatex-shot` | This checkout | `zatex-png --px 48` built from the `/repo` mount (`tools/oracle-diff/zatex/`); always rebuilt per invocation against a warm Zig cache that persists on a named volume (content-addressed, outputs stay deterministic) |
+| `zatex-shot` | This checkout | `zatex-png --px 48` built from the `/repo` mount (`tools/oracle-diff/zatex/`); rebuilt once per sweep against a warm Zig cache that persists on a named volume (content-addressed, outputs stay deterministic) |
 
 `docker compose -f tools/oracle-diff/compose.yml` builds all 4 services;
 every service runs with `network_mode: none`. Base-image digests are

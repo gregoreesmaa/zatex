@@ -155,7 +155,12 @@ EXACT = {
     "\\vphantom": ("\\vphantom{X}y", False),
     "\\boxed": ("\\boxed{x^2}", False),
     "\\fbox": ("\\fbox{x}", False),
-    "\\href": ("\\href{https://example.com}{link}", False),
+    "\\href": ("\\href{https://github.com/gregoreesmaa/zatex}{\\text{ZaTeX}}", False),
+    # Prefix/assignment commands: the generic `x \fn y` derivation is
+    # invalid (missing operands); use the sweep-proven tex instead
+    # (both render `A`, KaTeX-proof: arb-futurelet, arb-long).
+    "\\futurelet": ("\\def\\foo{A}\\futurelet\\a\\foo\\foo", False),
+    "\\long": ("\\long\\def\\foo{A}\\foo", False),
     "\\url": ("\\url{https://example.com/a}", False),
     "\\verb": ("\\verb|x|", False),
     "\\operatorname": ("\\operatorname{sin}x", False),
@@ -245,6 +250,8 @@ EXACT = {
     "\\substack": ("\\sum_{\\substack{a\\\\b}}x", True),
     "\\notag": ("\\begin{aligned}a&=b\\notag\\end{aligned}", True),
     "\\nonumber": ("\\begin{aligned}a&=b\\nonumber\\end{aligned}", True),
+    "\\tag": ("\\tag{1}x", True),
+    "\\tag*": ("\\tag*{a}x", True),
 }
 
 # env name (without braces/star) -> full example. All display mode.
@@ -495,14 +502,44 @@ def kx_covers(fn, tex):
     return False
 
 
+# Local overrides that beat KaTeX's own examples (issue #72): the mirror
+# documents ZaTeX, so brand examples must read ZaTeX, not KaTeX.
+OVERRIDES = {
+    "\\href": ("\\href{https://github.com/gregoreesmaa/zatex}{\\text{ZaTeX}}", False),
+    # No KaTeX-table cell yields an example for these accept rows, so
+    # pin local ones (both render; the `\\\\` one mirrors EXACT's
+    # matrix linebreak, the subarray one mirrors sweep `subarray-l`).
+    "\\\\": ("\\begin{matrix}a\\\\b\\end{matrix}", False),
+    "{subarray}": ("\\sum_{\\begin{subarray}{l}1\\le i\\le n\\end{subarray}}x_i", True),
+    # KaTeX's own example wraps in `$…$` delimiters (rejected in
+    # math input here); same equation without them.
+    "\\dotsm": ("x_1 x_2 \\dotsm x_n", False),
+    # No KaTeX-table cell yields an example (the `to` width is
+    # ignored by both engines); the sweep golden renders in both.
+    "\\hbox to <dimen>": ("\\hbox to 10pt{A}", False),
+    # KaTeX's own examples use shapes outside this engine's text
+    # coverage (an unclosed group, `$` delimiters, nested
+    # text-fonts); the sweep goldens render in both.
+    "\\begingroup": ("\\begingroup x\\endgroup", False),
+    "\\emph": ("\\emph{x}", False),
+    "\\endgroup": ("\\begingroup x\\endgroup", False),
+    "\\hbox": ("\\hbox{x}", False),
+    "\\reflectbox": ("\\reflectbox{x}", False),
+    "\\set": ("\\set{x}", False),
+}
+
+
 def resolve_example(fn, kx):
-    """(tex, display, tier). KaTeX's source spans first, then its
+    """(tex, display, tier). OVERRIDES first, then KaTeX's source spans,
     rendered column, then the local derivation. Each tier must
     exercise fn (single chars exempt); the first covering tier wins,
     else the first existing tex wins (e.g. `#` params). None only
     when no tier covers the row at all. A winning KaTeX tex this
     engine cannot render becomes a gap entry, never a silent
     substitute."""
+    if fn in OVERRIDES:
+        tex, disp = OVERRIDES[fn]
+        return tex, disp, "local-override"
     ours = example_for(fn)
     tiers = []
     entry = kx.get(fn)

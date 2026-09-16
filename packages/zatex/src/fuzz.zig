@@ -45,6 +45,9 @@ const Gen = struct {
     /// needs a separating space, else the lexer fuses them
     /// (`\alpha` + `x` = undefined `\alphax`).
     gap: bool = false,
+    /// A formula holds at most one equation tag (a second `\tag`
+    /// is KaTeX-invalid); reset per `gen` call.
+    tag_used: bool = false,
 
     fn put(self: *Gen, s: []const u8) !void {
         if (self.gap and s.len > 0 and isAlpha(s[0])) {
@@ -85,6 +88,7 @@ const Gen = struct {
     fn gen(self: *Gen, depth: u8, buf: *[512]u8) ?[]const u8 {
         self.buf = buf;
         self.pos = 0;
+        self.tag_used = false;
         self.emit(depth) catch return null;
         return buf[0..self.pos];
     }
@@ -145,6 +149,20 @@ const Gen = struct {
                 try self.put("\\sum_{");
                 try self.emit(depth - 1);
                 try self.put("}^{n}");
+            },
+            9 => {
+                // At most one equation tag per formula (a second is
+                // KaTeX-invalid); later hits degrade to a plain group.
+                // Starred iff a coin lands so both paren shapes run.
+                if (self.tag_used) {
+                    try self.put("{");
+                    try self.emit(depth - 1);
+                    try self.put("}");
+                } else {
+                    self.tag_used = true;
+                    if (self.rnd.uintLessThan(u8, 2) == 0) try self.put("\\tag{1}") else try self.put("\\tag*{a}");
+                    try self.emit(depth - 1);
+                }
             },
             10 => {
                 try self.put("\\overline{");
@@ -219,7 +237,11 @@ test "grammar fuzz: totality and invariants over nested constructs" {
             continue;
         };
         // Inline and display: limit placement and sizing both run.
+        // `\tag` is display-gated by design (KaTeX rejects it in text
+        // mode), so tagged formulas only run display; the text-mode
+        // rejection is pinned by sweep rows and unit tests instead.
         for ([_]bool{ false, true }) |display| {
+            if (!display and std.mem.indexOf(u8, src, "\\tag") != null) continue;
             var ra: [128]zatex.ir.Run = undefined;
             var la: [32]zatex.ir.Rule = undefined;
             var ga: [2048]u16 = undefined;
@@ -284,6 +306,9 @@ test "grammar fuzz: sqrt nesting grows monotonically" {
     while (k < 20) : (k += 1) {
         var bbuf: [512]u8 = undefined;
         const base = g.gen(1, &bbuf) orelse continue;
+        // Tagged bases only lay out in display mode (this nest is
+        // text-mode); the fuzz loop above covers them.
+        if (std.mem.indexOf(u8, base, "\\tag") != null) continue;
         // Copy out of the scratch buffer: levels below borrow it.
         var nest: Nest = .{};
         nest.push(base) catch continue;

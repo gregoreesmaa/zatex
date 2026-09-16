@@ -27,8 +27,10 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
     w.str(">");
     // The root row wraps a lone child unless it already presents
     // as a row (KaTeX `buildMathML`: single rowlike passes through).
+    // An equation tag is the table itself (never `mrow`-wrapped).
     const wrap = switch (parse.nodeAt(&pc, root)) {
         .group => |g| g.len == 1 and !rendersRow(&pc, parse.kidsOf(&pc, g)[0]),
+        .tag => false,
         else => true,
     };
     if (wrap) w.str("<mrow>");
@@ -139,22 +141,56 @@ fn matchOpen(buf: []const u8, at: usize, comptime nm: []const u8) bool {
     return t.len > 0 and !t.closing and !t.self_close and t.nameEqual(nm);
 }
 
+/// Whether an `mtext` run holds kern glue. KaTeX `kern` nodes build a
+/// `SpaceNode`, which is *not* a `MathNode`, so `buildExpression` never
+/// merges them (each keeps its own `mtext`); `spacing` nodes (`\ `, `~`)
+/// and text runs build real `MathNode` `mtext`s, which merge freely.
+/// Pinned by probe: `\>\>` stays two `mtext`s, `\ \ ` folds to one.
+/// The set is exactly the characters the `.space` writer emits into
+/// `mtext` for kern widths (thin U+2009, medium U+2005, thick U+2005 +
+/// U+200A, negative thin U+2009 + separator, negative medium U+205F +
+/// separator, negative thick U+2005 + separator — a base glue char
+/// alone trips the scan). Interword NBSP (U+00A0, the `.nbsp` node) is
+/// `spacing`-origin content and merges. Residual edge: a literal glue
+/// character typed inside `\text` is `MathNode` content in KaTeX (it
+/// merges) but refuses here; no corpus row covers it.
+fn hasGlue(text: []const u8) bool {
+    var i: usize = 0;
+    while (i + 2 < text.len) {
+        if (text[i] == 0xE2 and text[i + 1] == 0x80 and
+            (text[i + 2] == 0x89 or text[i + 2] == 0x85 or text[i + 2] == 0x8A))
+            return true;
+        // Negative medium (U+205F) and the invisible separator
+        // (U+2063) that rides every negative kern.
+        if (text[i] == 0xE2 and text[i + 1] == 0x81 and
+            (text[i + 2] == 0x9F or text[i + 2] == 0xA3))
+            return true;
+        i += 1;
+    }
+    return false;
+}
+
 /// Fold the run at `r` (`<nm>…</nm>` followers with equal open tags),
 /// advancing `n`/`r` past it. Returns false when nothing merges.
 fn tryRun(buf: []u8, n: *usize, r: *usize, comptime nm: []const u8) bool {
     const first = textSpan(buf, r.*, nm);
     if (first.close == 0) return false;
+    // Kern-origin `mtext` runs never fold (see `hasGlue`). Only
+    // `mtext` folds consult it; `mn` folds are unaffected.
+    const check_glue = comptime std.mem.eql(u8, nm, "mtext");
     var cur = first;
     var count: usize = 1;
+    var glue = check_glue and hasGlue(buf[first.text .. first.text + first.text_len]);
     while (true) {
         const nx = cur.next;
         if (nx >= buf.len or !matchOpen(buf, nx, nm)) break;
         const f = textSpan(buf, nx, nm);
         if (f.close == 0 or !std.mem.eql(u8, f.attrs, first.attrs)) break;
+        if (check_glue and hasGlue(buf[f.text .. f.text + f.text_len])) glue = true;
         cur = f;
         count += 1;
     }
-    if (count < 2) return false;
+    if (count < 2 or glue) return false;
     var w = n.*;
     std.mem.copyForwards(u8, buf[w .. w + first.open_len], buf[first.open .. first.open + first.open_len]);
     w += first.open_len;
@@ -239,6 +275,7 @@ fn baseIsFuncOp(pc: *const parse.ParseCtx, id: Idx) bool {
     return switch (parse.nodeAt(pc, id)) {
         .op => |o| o.func,
         .opname => true,
+        .varlim => true,
         else => false,
     };
 }
@@ -439,6 +476,44 @@ const Writer = struct {
         }
     }
 
+    /// One raw `\includegraphics` token toward an `mglyph`
+    /// attribute. Chars escape like KaTeX `utils_escape`
+    /// (`&<>"'`); single-char controls in `#$%&~_^{}` resolve to
+    /// the char itself (KaTeX `parseUrlGroup` unescape — `alt`
+    /// passes `unescape = false` and keeps the backslash form);
+    /// other controls re-emit backslash + name, braces and `^_&`
+    /// literally. Markers vanish.
+    fn graphicsTok(self: *Writer, tok: parse.Tok, unescape: bool) void {
+        switch (tok.kind) {
+            .char => {
+                if (tok.cp == '\'') self.str("&#x27;") else self.escAttr(tok.cp);
+            },
+            .ctrl => {
+                if (unescape and tok.name.len == 1) {
+                    switch (tok.name[0]) {
+                        '#', '$', '%', '&', '~', '_', '^', '{', '}' => {
+                            self.escAttr(tok.name[0]);
+                            return;
+                        },
+                        else => {},
+                    }
+                }
+                self.byte('\\');
+                for (tok.name) |b| self.escAttr(b);
+            },
+            .lbrace => self.byte('{'),
+            .rbrace => self.byte('}'),
+            .sup => self.byte('^'),
+            .sub => self.byte('_'),
+            .amp => self.str("&amp;"),
+            .newline => {
+                self.byte('\\');
+                self.byte('\n');
+            },
+            else => {},
+        }
+    }
+
     /// Text-token range to mtext content (shared by `\text` and boxes).
     // One text accent + base (shared by textBody and sout spans).
     fn textAccentTok(self: *Writer, toks: []const parse.Tok, i: *usize, c: u8) Error!void {
@@ -529,6 +604,22 @@ const Writer = struct {
         self.str("<mrow>");
         try self.textBody(toks, true);
         self.str("</mrow>");
+    }
+
+    /// Equation-tag cell: the body text parenthesized (`\tag`) or
+    /// bare (`\tag*`). The `mrow` shell lets the merge pass fold a
+    /// single-run body into one `mtext` (`(1)`); the sweep-side
+    /// single-child drop removes the shell there, while an empty body
+    /// keeps KaTeX's tripartite `( <mrow></mrow> )` shape (the explicit
+    /// empty row blocks the fold).
+    fn tagCell(self: *Writer, tg: anytype) Error!void {
+        const t = parse.nodeAt(self.pc, tg.body).text;
+        const toks = parse.toksOf(self.pc, t.toks);
+        if (!tg.starred) self.str("<mrow><mtext>(</mtext>");
+        const before = self.pos;
+        try self.textRow(toks);
+        if (self.pos == before) self.str("<mrow></mrow>");
+        if (!tg.starred) self.str("<mtext>)</mtext></mrow>");
     }
 
     // Fragmenting text emission: text runs become `mtext` leaves
@@ -638,6 +729,35 @@ const Writer = struct {
         self.style = outer;
     }
 
+    /// Render a body whose group kids splice inline (no `mrow`
+    /// wrapper): KaTeX `buildExpression` splices function bodies
+    /// directly into the parent (`\phantom{bc}`, `\hphantom{bc}`).
+    fn spliced(self: *Writer, id: Idx, face: Face) Error!void {
+        switch (parse.nodeAt(self.pc, id)) {
+            .group => |g| for (parse.kidsOf(self.pc, g)) |k| try self.node(k, face),
+            else => try self.node(id, face),
+        }
+    }
+
+    /// Unwrap single-child groups to a lone atom codepoint (KaTeX
+    /// `getBaseElem` over ordgroups for `isCharacterBox`); null for
+    /// anything else. Lets `mclass` pull the atom out of its `mi`
+    /// (`\mathpunct{x}` → `<mo>x</mo>`).
+    fn singleAtom(pc: *const parse.ParseCtx, id: Idx) ?u21 {
+        var cur = id;
+        while (true) {
+            switch (parse.nodeAt(pc, cur)) {
+                .group => |g| {
+                    const kids = parse.kidsOf(pc, g);
+                    if (kids.len != 1) return null;
+                    cur = kids[0];
+                },
+                .atom => |a| return a.cp,
+                else => return null,
+            }
+        }
+    }
+
     fn node(self: *Writer, id: Idx, face: Face) Error!void {
         if (self.overflow) return error.NoSpace;
         const n = parse.nodeAt(self.pc, id);
@@ -666,6 +786,17 @@ const Writer = struct {
                     self.cp(o.cp);
                     self.str("</mo>");
                 }
+            },
+            .varlim => |v| {
+                // KaTeX operatorname shape (pinned 0.18.7): the
+                // built under/over body wrapped in an upright `mi`,
+                // then the function-application marker.
+                self.str("<mi>");
+                try self.node(v.body, face);
+                self.str("</mi>");
+                self.str("<mo>");
+                self.cp(0x2061);
+                self.str("</mo>");
             },
             .opname => |o| {
                 self.str("<mi>");
@@ -862,6 +993,33 @@ const Writer = struct {
                 self.style = outer;
                 self.str("</mstyle>");
             },
+            .size => |s| {
+                // KaTeX `sizing` mathmlBuilder: `<mstyle mathsize>`
+                // with `makeEm` formatting (`+n.toFixed(4)+"em"`),
+                // body spliced like `.style` above. Multiplier is
+                // per-mille, so the strings below are exact.
+                self.str("<mstyle mathsize=\"");
+                self.str(switch (s.mult) {
+                    500 => "0.5em",
+                    600 => "0.6em",
+                    700 => "0.7em",
+                    800 => "0.8em",
+                    900 => "0.9em",
+                    1000 => "1em",
+                    1200 => "1.2em",
+                    1440 => "1.44em",
+                    1728 => "1.728em",
+                    2074 => "2.074em",
+                    2488 => "2.488em",
+                    else => "1em",
+                });
+                self.str("\">");
+                switch (parse.nodeAt(self.pc, s.body)) {
+                    .group => |g| for (parse.kidsOf(self.pc, g)) |k| try self.node(k, face),
+                    else => try self.node(s.body, face),
+                }
+                self.str("</mstyle>");
+            },
             .font => |f| {
                 self.str("<mstyle mathvariant=\"");
                 self.str(variantFor(f.fam));
@@ -914,11 +1072,38 @@ const Writer = struct {
                 self.str("</mtable></mstyle>");
             },
             .mathchoice => |c| try self.node(c[0], face),
+            // Interword NBSP (KaTeX `spacing`-origin `mtext`): merges
+            // with neighboring `mtext` runs, unlike kern glue.
+            .nbsp => {
+                self.str("<mtext>");
+                self.cp(0x00A0);
+                self.str("</mtext>");
+            },
             .space => |u| {
-                // Small spacings serialize as text (KaTeX parity);
-                // only measurable glue stays an `mspace`. Widths are
-                // the canonical `parse.space_*` constants (issue 16).
+                // Small spacings serialize as text (KaTeX `SpaceNode`
+                // parity); only measurable glue stays an `mspace`.
+                // Widths are the canonical `parse.space_*` constants
+                // (issue 16). Zero glue (`\allowbreak`, `\nobreak`) is
+                // the bare open+close `<mspace></mspace>` of KaTeX
+                // `symbolsSpacing.ts` (never self-closed: the sweep
+                // normalizer counts open and close tags alike).
                 switch (u) {
+                    0 => self.str("<mspace></mspace>"),
+                    // KaTeX `SpaceNode` parity (pinned 0.18.7): ±1mu
+                    // (0.0556em) is a hair space, like the
+                    // thin/med/thick buckets below — `\mskip1mu`
+                    // (e.g. in `\bmod`) is an `mtext`, never `mspace`.
+                    56 => {
+                        self.str("<mtext>");
+                        self.cp(0x200A);
+                        self.str("</mtext>");
+                    },
+                    -56 => {
+                        self.str("<mtext>");
+                        self.cp(0x200A);
+                        self.cp(0x2063);
+                        self.str("</mtext>");
+                    },
                     parse.space_thin => {
                         self.str("<mtext>");
                         self.cp(0x2009);
@@ -935,14 +1120,25 @@ const Writer = struct {
                         self.cp(0x200A);
                         self.str("</mtext>");
                     },
-                    parse.space_interword => {
-                        self.str("<mtext>");
-                        self.cp(0x00A0);
-                        self.str("</mtext>");
-                    },
                     -parse.space_thin => {
                         self.str("<mtext>");
                         self.cp(0x2009);
+                        self.cp(0x2063);
+                        self.str("</mtext>");
+                    },
+                    // Negative medium/thick kern (pinned 0.18.7 goldens
+                    // `negmedspace`/`negthickspace`): like the positive
+                    // widths but with the invisible separator appended
+                    // (medium uses U+205F, thick reuses U+2005).
+                    -parse.space_med => {
+                        self.str("<mtext>");
+                        self.cp(0x205F);
+                        self.cp(0x2063);
+                        self.str("</mtext>");
+                    },
+                    -parse.space_thick => {
+                        self.str("<mtext>");
+                        self.cp(0x2005);
                         self.cp(0x2063);
                         self.str("</mtext>");
                     },
@@ -958,7 +1154,9 @@ const Writer = struct {
                 self.em(u);
                 self.str("\"/>");
             },
-            .newline => self.str("<mspace linebreak=\"newline\"/>"),
+            // KaTeX emits open+close (never self-closed — the sweep
+            // normalizer counts both); same rule as zero glue above.
+            .newline => self.str("<mspace linebreak=\"newline\"></mspace>"),
             .hline => {},
             .color => |c| {
                 // KaTeX builds the body as a flat expression (no row),
@@ -1013,32 +1211,111 @@ const Writer = struct {
                 self.str("</mrow>");
             },
             .htmlwrap => |b| try self.node(b, face),
-            // KaTeX parity (pinned 0.18.7): \mathop{x} -> <mo>x</mo>,
-            // \mathrel{x} -> <mo>x</mo>; \mathinner{x} is a bare
-            // <mpadded> there, structurally identical to <mrow>,
-            // which is what this emitter knows.
+            .tag => |tg| {
+                // Display equation number (KaTeX `tag` MathML,
+                // pinned 0.18.7): the whole equation in a full-width
+                // table, the tag text right. Empty side cells stay
+                // open+close (the sweep normalizer counts both).
+                self.str("<mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd>");
+                try self.node(tg.formula, face);
+                self.str("</mtd><mtd width=\"50%\"></mtd><mtd>");
+                try self.tagCell(tg);
+                self.str("</mtd></mtr></mtable>");
+            },
+            // KaTeX parity (pinned 0.18.7 `mclass`/`op` builders):
+            // `\mathrel{x}` retypes the lone inner node to `mo`
+            // (`<mo>x</mo>`); longer bodies wrap spliced kids with
+            // no `mrow` (`\mathrel{ab}` → `<mo><mi>a</mi>…</mo>`).
+            // `\mathbin`/`\mathclose`/`\mathopen` retype the same
+            // way; `\mathord` retypes to `mi` instead (`\mathord{x}`
+            // → `<mi>x</mi>`). `\mathop` is op-type, never a
+            // character box: it ALWAYS wraps (`\mathop{x}` →
+            // `<mo><mi>x</mi></mo>`, `\mathop{ab}` →
+            // `<mo><mi>a</mi><mi>b</mi></mo>`). `\mathinner` is a
+            // bare `mpadded` with spliced kids (`\mathinner{x}` →
+            // `<mpadded><mi>x</mi></mpadded>`).
             .classwrap => |c| {
-                if (c.class == .Inner) self.str("<mrow>") else self.str("<mo>");
-                try self.node(c.body, face);
-                if (c.class == .Inner) self.str("</mrow>") else self.str("</mo>");
+                // KaTeX `mclass` with an empty body is a bare tag
+                // (`\mathpunct{}` → `<mo …></mo>`, no `mrow` inside).
+                // A lone atom is pulled out of its `mi` (`\mathpunct{x}`
+                // → `<mo>x</mo>`); longer bodies splice kid-by-kid with
+                // no `mrow` (`\mathrel{ab}` → `<mo><mi>a</mi>…</mo>`).
+                const empty = switch (parse.nodeAt(self.pc, c.body)) {
+                    .group => |g| g.len == 0,
+                    else => false,
+                };
+                if (c.class == .Inner) {
+                    self.str("<mpadded>");
+                } else if (c.class == .Ord) {
+                    self.str("<mi>");
+                } else {
+                    self.str("<mo>");
+                }
+                if (!empty) {
+                    if (c.class == .Op or c.class == .Inner) {
+                        try self.spliced(c.body, face);
+                    } else if (singleAtom(self.pc, c.body)) |atom_cp| {
+                        self.escCp(atom_cp);
+                    } else {
+                        try self.spliced(c.body, face);
+                    }
+                }
+                if (c.class == .Inner) {
+                    self.str("</mpadded>");
+                } else if (c.class == .Ord) {
+                    self.str("</mi>");
+                } else {
+                    self.str("</mo>");
+                }
             },
             .phantom => |p| {
-                self.str("<mphantom>");
-                try self.node(p.body, face);
-                self.str("</mphantom>");
+                // KaTeX parity: `\hphantom` is `\smash{\phantom{…}}`
+                // and `\vphantom` zeroes the width — the smashed axes
+                // zero out inside an `mpadded` shell, while a plain
+                // `\phantom` keeps both axes and needs no shell. Body
+                // kids splice directly (`buildExpression`, no `mrow`).
+                if (p.keep_h and p.keep_v) {
+                    self.str("<mphantom>");
+                    try self.spliced(p.body, face);
+                    self.str("</mphantom>");
+                } else {
+                    self.str("<mpadded");
+                    if (!p.keep_h) self.str(" width=\"0px\"");
+                    if (!p.keep_v) self.str(" height=\"0px\" depth=\"0px\"");
+                    self.str("><mphantom>");
+                    try self.spliced(p.body, face);
+                    self.str("</mphantom></mpadded>");
+                }
             },
             .boxed => |b| {
-                // KaTeX `\fbox` layers an hbox mstyle and a math-in-text
-                // mstyle (both text-style); `\boxed` adds its
-                // displaystyle style node inside those (see parse).
+                // KaTeX `\boxed` layers the enclose hbox mstyle, the
+                // math-in-text mstyle, and the displaystyle style node
+                // the parser adds inside those (see parse).
                 self.str("<menclose notation=\"box\">");
                 self.str("<mstyle scriptlevel=\"0\" displaystyle=\"false\">");
                 self.str("<mstyle scriptlevel=\"0\" displaystyle=\"false\">");
                 try self.node(b, face);
                 self.str("</mstyle></mstyle></menclose>");
             },
+            .fbox => |b| {
+                // KaTeX `\fbox` frames an hbox: one text-style mstyle
+                // around the text body (the parser guarantees `.text`).
+                self.str("<menclose notation=\"box\">");
+                self.str("<mstyle scriptlevel=\"0\" displaystyle=\"false\">");
+                try self.node(b, face);
+                self.str("</mstyle></menclose>");
+            },
+            // Dual-branch content (KaTeX `\html@mathml`): the MathML
+            // emitter renders the semantic (`math`) branch.
+            .htmlmathml => |h| try self.node(h.math, face),
             .cancel => |b| {
                 self.str("<menclose notation=\"updiagonalstrike\">");
+                try self.node(b, face);
+                self.str("</menclose>");
+            },
+            .xcancel => |b| {
+                // KaTeX parity (pinned 0.18.7): both diagonals.
+                self.str("<menclose notation=\"updiagonalstrike downdiagonalstrike\">");
                 try self.node(b, face);
                 self.str("</menclose>");
             },
@@ -1107,6 +1384,38 @@ const Writer = struct {
                 self.str("\" height=\"");
                 self.em(r.h);
                 self.str("\"></mspace></mpadded>");
+            },
+            .graphics => |g| {
+                // KaTeX `includegraphics` mathmlBuilder (pinned
+                // 0.18.7): `<mglyph alt valign? height width? src>`.
+                // `valign`/`height` fold `totalheight` exactly like
+                // the builder (`height` absorbs the depth); `width`
+                // applies only when positive. Sizes format via
+                // `makeEm` (`parse.fmtEm4`).
+                self.str("<mglyph alt=\"");
+                for (parse.toksOf(self.pc, g.alt)) |tk| self.graphicsTok(tk, false);
+                self.str("\"");
+                var nb: [16]u8 = undefined;
+                if (g.th > 0) {
+                    // Saturate the depth delta (absurd magnitudes
+                    // only; clamped inputs cannot overflow i32).
+                    const dd: i64 = @as(i64, g.h) - @as(i64, g.th);
+                    const dc: i32 = @intCast(@min(@max(dd, -2000000000), 2000000000));
+                    self.str(" valign=\"");
+                    self.str(parse.fmtEm4(dc, &nb));
+                    self.str("\"");
+                }
+                self.str(" height=\"");
+                self.str(parse.fmtEm4(if (g.th > 0) g.th else g.h, &nb));
+                self.str("\"");
+                if (g.w > 0) {
+                    self.str(" width=\"");
+                    self.str(parse.fmtEm4(g.w, &nb));
+                    self.str("\"");
+                }
+                self.str(" src=\"");
+                for (parse.toksOf(self.pc, g.src)) |tk| self.graphicsTok(tk, true);
+                self.str("\"></mglyph>");
             },
         }
         if (self.overflow) return error.NoSpace;
@@ -1180,7 +1489,7 @@ const Writer = struct {
             .overline => {
                 self.str("<mover>");
                 try self.node(o.nucleus, face);
-                self.str("<mo>&#xAF;</mo></mover>");
+                self.str("<mo>&#x203E;</mo></mover>");
             },
             .underline => {
                 self.str("<munder>");
@@ -1213,8 +1522,9 @@ const Writer = struct {
             .underleft => try self.arrowUnder(o.nucleus, 0x2190, face),
             .underright => try self.arrowUnder(o.nucleus, 0x2192, face),
             .underboth => try self.arrowUnder(o.nucleus, 0x2194, face),
-            .overset => try self.stackedOp(o.nucleus, o.extra, true, face),
-            .underset => try self.stackedOp(o.nucleus, o.extra, false, face),
+            .overset => try self.stackedOp(o.nucleus, o.extra, true, false, face),
+            .underset => try self.stackedOp(o.nucleus, o.extra, false, false, face),
+            .stackrel => try self.stackedOp(o.nucleus, o.extra, true, true, face),
             .xleft => try self.xarrow(0x2190, o, face),
             .xright => try self.xarrow(0x2192, o, face),
             .xboth => try self.xarrow(0x2194, o, face),
@@ -1223,6 +1533,67 @@ const Writer = struct {
             .xmapsto => try self.xarrow(0x21A6, o, face),
             .xtwoheadleft => try self.xarrow(0x219E, o, face),
             .xtwoheadright => try self.xarrow(0x21A0, o, face),
+            .xdoubleleft => try self.xarrow(0x21D0, o, face),
+            .xdoubleboth => try self.xarrow(0x21D4, o, face),
+            .xdoubleright => try self.xarrow(0x21D2, o, face),
+            .xleftharpoondown => try self.xarrow(0x21BD, o, face),
+            .xleftharpoonup => try self.xarrow(0x21BC, o, face),
+            .xleftrightharpoons => try self.xarrow(0x21CB, o, face),
+            .xlongequal => try self.xarrow(0x003D, o, face),
+            .xrightharpoondown => try self.xarrow(0x21C1, o, face),
+            .xrightharpoonup => try self.xarrow(0x21C0, o, face),
+            .xrightleftharpoons => try self.xarrow(0x21CC, o, face),
+            .xtofrom => try self.xarrow(0x21C4, o, face),
+            .overgroup => {
+                self.str("<mover>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>");
+                self.cp(0x23E0);
+                self.str("</mo></mover>");
+            },
+            .undergroup => {
+                self.str("<munder>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>");
+                self.cp(0x23E1);
+                self.str("</mo></munder>");
+            },
+            // Pinned 0.18.7 replicates an upstream quirk: the
+            // linesegment accents have no MathML codepoint mapping,
+            // so KaTeX emits the literal text `undefined`.
+            .overlinesegment => {
+                self.str("<mover>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>undefined</mo></mover>");
+            },
+            .underlinesegment => {
+                self.str("<munder>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>undefined</mo></munder>");
+            },
+            .overleftharpoon => try self.arrowOver(o.nucleus, 0x21BC, face),
+            .overrightharpoon => try self.arrowOver(o.nucleus, 0x21C0, face),
+            .overRightarrow => try self.arrowOver(o.nucleus, 0x21D2, face),
+            .underbar => {
+                self.str("<munder>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>");
+                self.cp(0x203E);
+                self.str("</mo></munder>");
+            },
+            .utilde => {
+                self.str("<munder>");
+                try self.node(o.nucleus, face);
+                self.str("<mo>~</mo></munder>");
+            },
+            .angl => {
+                // KaTeX parity (pinned 0.18.7): actuarial angle over
+                // a text-scale body (the nucleus is a `.text` node,
+                // so `node` supplies the inner `mtext` exactly).
+                self.str("<menclose notation=\"actuarial\"><mstyle scriptlevel=\"0\" displaystyle=\"false\">");
+                try self.node(o.nucleus, face);
+                self.str("</mstyle></menclose>");
+            },
         }
     }
 
@@ -1231,7 +1602,7 @@ const Writer = struct {
     /// base children wrapped flat in mo, stacked under/over the extra,
     /// and the whole thing wrapped in mi for Ord bases else mo
     /// (KaTeX `binrelClass`: only Bin/Rel bases stay mo).
-    fn stackedOp(self: *Writer, nuc: Idx, extra: Idx, is_over: bool, face: Face) Error!void {
+    fn stackedOp(self: *Writer, nuc: Idx, extra: Idx, is_over: bool, force_rel: bool, face: Face) Error!void {
         const first: Idx = switch (parse.nodeAt(self.pc, nuc)) {
             .group => |g| blk: {
                 const kids = parse.kidsOf(self.pc, g);
@@ -1239,7 +1610,11 @@ const Writer = struct {
             },
             else => nuc,
         };
-        const ord_base = switch (parse.nodeAt(self.pc, first)) {
+        // KaTeX parity: `\stackrel` forces the Rel wrapper
+        // regardless of the base class (pinned 0.18.7
+        // `functions/stacking.ts`); `\overset`/`\underset`
+        // preserve it.
+        const ord_base = !force_rel and switch (parse.nodeAt(self.pc, first)) {
             .atom => |a| a.class != .Bin and a.class != .Rel,
             else => true,
         };
@@ -1310,7 +1685,7 @@ const Writer = struct {
         // wrapping the cell group under the normal row rule.
         const disp_cell = e.kind == .aligned or e.kind == .alignedat or e.kind == .gathered or
             e.kind == .dcases or e.kind == .drcases;
-        const script_cell = e.kind == .smallmatrix;
+        const script_cell = e.kind == .smallmatrix or e.kind == .subarray;
         // Small tables keep a small row gap (KaTeX `arraystretch<1`).
         if (script_cell) self.str("<mstyle scriptlevel=\"1\">");
         // KaTeX `rowlines` parity (issue #33): rule rows between
@@ -1402,6 +1777,7 @@ fn variantFor(fam: parse.FontFam) []const u8 {
         .script => "script",
         .bb => "double-struck",
         .cal => "script",
+        .bolditalic => "bold-italic",
     };
 }
 
@@ -1524,6 +1900,189 @@ test "text tilde char is nbsp, matching KaTeX" {
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
     try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "a\xc2\xa0b") != null);
+}
+
+test "kern mtext runs never merge, spacing runs do" {
+    // KaTeX `kern` nodes build `SpaceNode`s (not `MathNode`s), so
+    // `buildExpression` never folds them; `spacing`-origin NBSP
+    // `mtext`s fold freely. The public `render` runs the merger.
+    var out: [512]u8 = undefined;
+    const kern = try render("\\>\\>", .{}, &out);
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, kern, "<mtext>"));
+    var out2: [512]u8 = undefined;
+    const sp = try render("\\ \\ ", .{}, &out2);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, sp, "<mtext>"));
+}
+
+test "computed kern never aliases interword nbsp" {
+    // `\mskip6mu` is 333-thousandths glue (`<mspace>`), not NBSP —
+    // the value collision that motivated the `.nbsp` node split.
+    var out: [256]u8 = undefined;
+    const s = try render("\\mskip6mu", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<mspace width=\"0.333em\"/>") != null);
+    var out2: [256]u8 = undefined;
+    const n = try render("\\ ", .{}, &out2);
+    try std.testing.expect(std.mem.indexOf(u8, n, "<mtext>\xc2\xa0</mtext>") != null);
+}
+
+test "mu widths round to KaTeX SpaceNode buckets" {
+    // 3mu = 0.1667em is a thin space: truncation gave 166
+    // (`<mspace>`), rounding gives 167 (`space_thin`, `<mtext>`).
+    var out: [256]u8 = undefined;
+    const neg = try render("\\mkern-3mu", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, neg, "<mtext>\xe2\x80\x89\xe2\x81\xa3</mtext>") != null);
+    var out2: [256]u8 = undefined;
+    const pos = try render("\\mskip3mu", .{}, &out2);
+    try std.testing.expect(std.mem.indexOf(u8, pos, "<mtext>\xe2\x80\x89</mtext>") != null);
+}
+
+test "colon builds the KaTeX macro composition" {
+    // `\nobreak\mskip2mu\mathpunct{}\mathchoice{\mkern-3mu}…{:}\mskip6mu`
+    // (KaTeX `macros.ts`), tag-identical to the pinned sweep row.
+    var pc = parse.ParseCtx.init("\\colon");
+    const root = try parse.parse(&pc, false);
+    var out: [512]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mrow><mspace></mspace><mspace width=\"0.111em\"/><mo></mo><mtext>\xe2\x80\x89\xe2\x81\xa3</mtext><mo>:</mo><mspace width=\"0.333em\"/></mrow>", out[0..w.pos]);
+}
+
+test "mathpunct wraps in mo, empty body stays bare" {
+    var pc = parse.ParseCtx.init("\\mathpunct{x}");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mo>x</mo>", out[0..w.pos]);
+    var pc2 = parse.ParseCtx.init("\\mathpunct{}");
+    const root2 = try parse.parse(&pc2, false);
+    var out2: [256]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mo></mo>", out2[0..w2.pos]);
+}
+
+test "mathop always wraps, mathinner is mpadded" {
+    // Pinned 0.18.7: `\mathop` is op-type (never a character box),
+    // `\mathinner` a bare `mpadded` — both splice, never retype.
+    var pc = parse.ParseCtx.init("\\mathop{x}");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mo><mi>x</mi></mo>", out[0..w.pos]);
+    var pc2 = parse.ParseCtx.init("\\mathop{ab}");
+    const root2 = try parse.parse(&pc2, false);
+    var out2: [256]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mo><mi>a</mi><mi>b</mi></mo>", out2[0..w2.pos]);
+    var pc3 = parse.ParseCtx.init("\\mathinner{x}");
+    const root3 = try parse.parse(&pc3, false);
+    var out3: [256]u8 = undefined;
+    var w3 = Writer{ .pc = &pc3, .buf = &out3 };
+    try w3.node(root3, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mpadded><mi>x</mi></mpadded>", out3[0..w3.pos]);
+}
+
+test "vcentcolon nests triple mo, coloneqq is one op char" {
+    // Pinned 0.18.7: `\vcentcolon` = `\mathrel{\mathop\ordinarycolon}`;
+    // `\coloneqq` takes the `\html@mathml` MathML branch
+    // `\mathop{\char"2254}` (U+2254 ≔).
+    var pc = parse.ParseCtx.init("\\vcentcolon");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mo><mo><mo>:</mo></mo></mo>", out[0..w.pos]);
+    var pc2 = parse.ParseCtx.init("\\coloneqq");
+    const root2 = try parse.parse(&pc2, false);
+    var out2: [256]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mo><mi>\xe2\x89\x94</mi></mo>", out2[0..w2.pos]);
+}
+
+test "char scans decimal octal hex and backtick" {
+    // KaTeX `\char` forms: decimal, `'octal`, `"hex, backtick char.
+    var pc = parse.ParseCtx.init("\\char\"2254");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mi>\xe2\x89\x94</mi>", out[0..w.pos]);
+    var pc2 = parse.ParseCtx.init("\\char65\\char'101\\char`a\\@char{66}");
+    const root2 = try parse.parse(&pc2, false);
+    var out2: [256]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mrow><mi>A</mi><mi>A</mi><mi>a</mi><mi>B</mi></mrow>", out2[0..w2.pos]);
+}
+
+test "char rejects bad digits and code points" {
+    var pc = parse.ParseCtx.init("\\char\"ZZ");
+    try std.testing.expectError(error.Invalid, parse.parse(&pc, false));
+    var pc2 = parse.ParseCtx.init("\\char");
+    try std.testing.expectError(error.Invalid, parse.parse(&pc2, false));
+    var pc3 = parse.ParseCtx.init("\\char`");
+    try std.testing.expectError(error.Invalid, parse.parse(&pc3, false));
+    var pc4 = parse.ParseCtx.init("\\@char{abc}");
+    try std.testing.expectError(error.Invalid, parse.parse(&pc4, false));
+    var pc5 = parse.ParseCtx.init("\\@char{99999999}");
+    try std.testing.expectError(error.Invalid, parse.parse(&pc5, false));
+    var pc6 = parse.ParseCtx.init("\\char\"110000");
+    try std.testing.expectError(error.Invalid, parse.parse(&pc6, false));
+}
+
+test "phantoms smash through an mpadded shell, kids spliced" {
+    // `\hphantom` is `\smash{\phantom{…}}` and `\vphantom` zeroes
+    // the width (KaTeX `phantom.ts` pins); bodies splice without
+    // an `mrow`, like `buildExpression`.
+    var pc = parse.ParseCtx.init("a\\hphantom{bc}d");
+    const root = try parse.parse(&pc, false);
+    var out: [512]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mrow><mi>a</mi><mpadded height=\"0px\" depth=\"0px\"><mphantom><mi>b</mi><mi>c</mi></mphantom></mpadded><mi>d</mi></mrow>", out[0..w.pos]);
+    var pc2 = parse.ParseCtx.init("\\vphantom{bc}");
+    const root2 = try parse.parse(&pc2, false);
+    var out2: [512]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mpadded width=\"0px\"><mphantom><mi>b</mi><mi>c</mi></mphantom></mpadded>", out2[0..w2.pos]);
+    var pc3 = parse.ParseCtx.init("\\phantom{bc}");
+    const root3 = try parse.parse(&pc3, false);
+    var out3: [512]u8 = undefined;
+    var w3 = Writer{ .pc = &pc3, .buf = &out3 };
+    try w3.node(root3, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<mphantom><mi>b</mi><mi>c</mi></mphantom>", out3[0..w3.pos]);
+}
+
+test "fbox frames a text hbox under one mstyle" {
+    var pc = parse.ParseCtx.init("\\fbox{Hi}");
+    const root = try parse.parse(&pc, false);
+    var out: [512]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expectEqualStrings("<menclose notation=\"box\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mtext>Hi</mtext></mstyle></menclose>", out[0..w.pos]);
+}
+
+test "copyright and logos emit their KaTeX math-branch text" {
+    // `\copyright` is `\text{\textcopyright}` observably;
+    // the logos are `\textrm` + `\html@mathml{<html>}{<name>}`.
+    for ([_][2][]const u8{
+        .{ "\\copyright", "<mtext>\xc2\xa9</mtext>" },
+        .{ "\\KaTeX", "<mtext>KaTeX</mtext>" },
+        .{ "\\LaTeX", "<mtext>LaTeX</mtext>" },
+        .{ "\\TeX", "<mtext>TeX</mtext>" },
+    }) |c| {
+        var pc = parse.ParseCtx.init(c[0]);
+        const root = try parse.parse(&pc, false);
+        var out: [256]u8 = undefined;
+        var w = Writer{ .pc = &pc, .buf = &out };
+        try w.node(root, .{ .fam = null, .script = false });
+        try std.testing.expectEqualStrings(c[1], out[0..w.pos]);
+    }
 }
 
 test "color wraps body in mathcolor mstyle" {

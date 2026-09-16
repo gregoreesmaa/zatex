@@ -12,6 +12,17 @@ Row set, names, and order mirror KaTeX 0.18.7 `docs/support_table.md`
 exactly, so the two tables compare side by side (upstream lists
 `\underrightarrow` and `\vcenter` twice each; this table keeps one row
 per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
+Known upstream-prose-stale rows (pinned bundle accepts, so this table
+does too — bundle is arbiter): `{subarray}` (upstream row 1018 says
+"Not supported"; sweep subarray-c/subarray-l prove katex_ok) and
+``\hbox to <dimen>`` (upstream Rendered cell is empty, but the bundle
+accepts it — both engines read `\hbox to 10pt{A}` as `\hbox{t}` with
+the rest spilling as math; sweep hbox-to proves katex_ok).
+Extension-gated rows (`\ce`, `\pu`): upstream marks them supported,
+but support requires the mhchem contrib extension — the pinned core
+bundle rejects both (`Undefined control sequence`), so this table
+(and the engine) honestly report `unsup` with reject-row evidence.
+Extension support is future work.
 
 ## Symbols
 
@@ -33,7 +44,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\&` | accept | goldens: sym-escapes |
 
-| `'` | accept | goldens: prime-only, prime-sup, primes |
+| `'` | accept | goldens: prime-only, prime-sup, primes, prime-sup-rq, prime-sup-quote, prime-sub |
 
 | `\'` | accept | goldens: text, textaccent |
 
@@ -69,7 +80,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `>` | accept | goldens: atom-rel |
 
-| `\>` | TODO | owner #14 |
+| `\>` | accept | goldens: gt-space |
 
 | `[` | accept | goldens: sqrt-n, atom-open |
 
@@ -91,7 +102,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\~` | accept | goldens: text, textaccent |
 
-| `\\ ` | accept | goldens: matrix, aligned, alignedat |
+| `\\` | accept | goldens: matrix, aligned, alignedat |
 
 | `^` | accept | goldens: boxed, braces, demo-cauchy, atomgrid, flite-euler, rej-malf-sup |
 
@@ -105,7 +116,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\aa` | accept | goldens: text |
 
-| `\above` | TODO | owner #1 |
+| `\above` | accept | goldens: above |
 
 | `\abovewithdelims` | unsup | goldens: rej-unsup-abovewithdelims |
 
@@ -115,9 +126,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\ae` | accept | goldens: text |
 
-| `\alef` | TODO | owner #1 |
+| `\alef` | accept | goldens: sym-alef |
 
-| `\alefsym` | TODO | owner #1 |
+| `\alefsym` | accept | goldens: sym-alefsym |
 
 | `\aleph` | accept | goldens: sym-gal-1 |
 
@@ -133,7 +144,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `{alignedat}` | accept | goldens: alignedat, aligned, array |
 
-| `\allowbreak` | TODO | owner #1 |
+| `\allowbreak` | accept | goldens: arb-allowbreak |
 
 | `\Alpha` | accept | goldens: sym-gal-0 |
 
@@ -141,15 +152,15 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\amalg` | accept | goldens: sym-gal-1 |
 
-| `\And` | TODO | owner #1 |
+| `\And` | accept | goldens: sym-And |
 
 | `\and` | unsup | goldens: rej-unsup-and |
 
 | `\ang` | unsup | goldens: rej-unsup-ang |
 
-| `\angl` | TODO | owner #1 |
+| `\angl` | accept | goldens: angl |
 
-| `\angln` | TODO | owner #1 |
+| `\angln` | accept | goldens: angln |
 
 | `\angle` | accept | goldens: sym-gal-1 |
 
@@ -157,25 +168,25 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\approxeq` | accept | goldens: sym-gal-1 |
 
-| `\approxcolon` | TODO | owner #1 |
+| `\approxcolon` | accept | goldens: t-approxcolon |
 
-| `\approxcoloncolon` | TODO | owner #1 |
+| `\approxcoloncolon` | accept | goldens: t-approxcoloncolon |
 
 | `\arccos` | accept | goldens: sym-gal-1 |
 
-| `\arcctg` | TODO | owner #1 |
+| `\arcctg` | accept | goldens: arcctg |
 
 | `\arcsin` | accept | goldens: sym-gal-1 |
 
 | `\arctan` | accept | goldens: sym-gal-1 |
 
-| `\arctg` | TODO | owner #1 |
+| `\arctg` | accept | goldens: arctg |
 
 | `\arg` | accept | goldens: sym-gal-1 |
 
-| `\argmax` | TODO | owner #1 |
+| `\argmax` | accept | goldens: argmax |
 
-| `\argmin` | TODO | owner #1 |
+| `\argmin` | accept | goldens: argmin |
 
 | `{array}` | accept | goldens: array, aligned, alignedat |
 
@@ -199,33 +210,33 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\backepsilon` | TODO | owner #1 |
+| `\backepsilon` | accept | goldens: sym-backepsilon |
 
 | `\backprime` | accept | goldens: sym-gal-1 |
 
-| `\backsim` | TODO | owner #1 |
+| `\backsim` | accept | goldens: sym-backsim |
 
-| `\backsimeq` | TODO | owner #1 |
+| `\backsimeq` | accept | goldens: sym-backsimeq |
 
 | `\backslash` | accept | goldens: sym-gal-1 |
 
 | `\bar` | accept | goldens: accents |
 
-| `\barwedge` | TODO | owner #1 |
+| `\barwedge` | accept | goldens: sym-barwedge |
 
-| `\Bbb` | TODO | owner #1 |
+| `\Bbb` | accept | goldens: Bbb |
 
-| `\Bbbk` | TODO | owner #1 |
+| `\Bbbk` | accept | goldens: sym-Bbbk |
 
 | `\bbox` | unsup | goldens: rej-unsup-bbox |
 
-| `\bcancel` | TODO | owner #7 |
+| `\bcancel` | accept | goldens: bcancel |
 
-| `\because` | TODO | owner #1 |
+| `\because` | accept | goldens: sym-because |
 
 | `\begin` | accept | goldens: matrix, aligned, alignedat, flite-aligned, flite-abs, flite-det, rej-malf-unclosed-env |
 
-| `\begingroup` | TODO | owner #1 |
+| `\begingroup` | accept | goldens: begingroup, begingroup-unclosed, begingroup-mismatch |
 
 | `\Beta` | accept | goldens: sym-gal-0 |
 
@@ -233,9 +244,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\beth` | accept | goldens: sym-gal-1 |
 
-| `\between` | TODO | owner #1 |
+| `\between` | accept | goldens: sym-between |
 
-| `\bf` | TODO | owner #1 |
+| `\bf` | accept | goldens: bf |
 
 | `\bfseries` | unsup | goldens: rej-unsup-bfseries |
 
@@ -245,7 +256,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\bigcap` | accept | goldens: sym-gal-1 |
 
-| `\bigcirc` | TODO | owner #1 |
+| `\bigcirc` | accept | goldens: sym-bigcirc |
 
 | `\bigcup` | accept | goldens: sym-gal-1 |
 
@@ -253,19 +264,19 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Bigg` | accept | goldens: big-series |
 
-| `\biggl` | TODO | owner #4 |
+| `\biggl` | accept | goldens: biggl |
 
-| `\Biggl` | TODO | owner #4 |
+| `\Biggl` | accept | goldens: Biggl |
 
 | `\biggm` | accept | goldens: vert |
 
 | `\Biggm` | accept | goldens: vert |
 
-| `\biggr` | TODO | owner #4 |
+| `\biggr` | accept | goldens: biggr |
 
-| `\Biggr` | TODO | owner #4 |
+| `\Biggr` | accept | goldens: Biggr |
 
-| `\bigl` | accept | goldens: bigl, smallmatrix |
+| `\bigl` | accept | goldens: bigl, smallmatrix, prime-bigl |
 
 | `\Bigl` | accept | goldens: demo-cfrac |
 
@@ -289,9 +300,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\bigsqcap` | unsup | goldens: rej-unsup-bigsqcap |
 
-| `\bigsqcup` | TODO | owner #1 |
+| `\bigsqcup` | accept | goldens: sym-bigsqcup |
 
-| `\bigstar` | TODO | owner #1 |
+| `\bigstar` | accept | goldens: sym-bigstar |
 
 | `\bigtriangledown` | accept | goldens: sym-gal-1 |
 
@@ -305,19 +316,19 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\binom` | accept | goldens: binom, flite-binom |
 
-| `\blacklozenge` | TODO | owner #1 |
+| `\blacklozenge` | accept | goldens: sym-blacklozenge |
 
-| `\blacksquare` | TODO | owner #1 |
+| `\blacksquare` | accept | goldens: sym-blacksquare |
 
-| `\blacktriangle` | TODO | owner #1 |
+| `\blacktriangle` | accept | goldens: sym-blacktriangle |
 
-| `\blacktriangledown` | TODO | owner #1 |
+| `\blacktriangledown` | accept | goldens: sym-blacktriangledown |
 
-| `\blacktriangleleft` | TODO | owner #1 |
+| `\blacktriangleleft` | accept | goldens: sym-blacktriangleleft |
 
-| `\blacktriangleright` | TODO | owner #1 |
+| `\blacktriangleright` | accept | goldens: sym-blacktriangleright |
 
-| `\bm` | TODO | owner #1 |
+| `\bm` | accept | goldens: t-bm |
 
 | `{Bmatrix}` | accept | goldens: aligned, alignedat, array |
 
@@ -327,9 +338,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `{bmatrix*}` | accept | goldens: bmatrix, aligned, alignedat |
 
-| `\bmod` | TODO | owner #1 |
+| `\bmod` | accept | goldens: bmod, bmod-bare |
 
-| `\bold` | TODO | owner #1 |
+| `\bold` | accept | goldens: t-bold |
 
 | `\boldsymbol` | accept | goldens: fonts2 |
 
@@ -337,7 +348,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\bowtie` | accept | goldens: sym-gal-2 |
 
-| `\Box` | TODO | owner #1 |
+| `\Box` | accept | goldens: sym-Box |
 
 | `\boxdot` | accept | goldens: sym-gal-2 |
 
@@ -357,23 +368,23 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Braket` | accept | goldens: frac, bigl, demo-cfrac |
 
-| `\brace` | TODO | owner #2 |
+| `\brace` | accept | goldens: brace |
 
 | `\bracevert` | unsup | goldens: rej-unsup-bracevert |
 
-| `\brack` | TODO | owner #2 |
+| `\brack` | accept | goldens: brack |
 
 | `\breve` | accept | goldens: accents |
 
 | `\buildrel` | unsup | goldens: rej-unsup-buildrel |
 
-| `\bull` | TODO | owner #1 |
+| `\bull` | accept | goldens: sym-bull |
 
 | `\bullet` | accept | goldens: sym-gal-2 |
 
-| `\Bumpeq` | TODO | owner #1 |
+| `\Bumpeq` | accept | goldens: sym-Bumpeq |
 
-| `\bumpeq` | TODO | owner #1 |
+| `\bumpeq` | accept | goldens: sym-bumpeq |
 
 ## C
 
@@ -381,13 +392,13 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 | --- | --- | --- |
 | `\C` | unsup | goldens: rej-unsup-c |
 
-| `\cal` | TODO | owner #1 |
+| `\cal` | accept | goldens: cal |
 
 | `\cancel` | accept | goldens: cancel |
 
 | `\cancelto` | unsup | goldens: rej-unsup-cancelto |
 
-| `\Cap` | TODO | owner #1 |
+| `\Cap` | accept | goldens: sym-Cap |
 
 | `\cap` | accept | goldens: sym-gal-2 |
 
@@ -403,7 +414,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\cdots` | accept | goldens: demo-cfrac |
 
-| `\ce` | TODO | owner #1 |
+| `\ce` | unsup | goldens: rej-unsup-ce |
 
 | `\cee` | unsup | goldens: rej-unsup-cee |
 
@@ -413,11 +424,11 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\cfrac` | accept | goldens: cfrac |
 
-| `\char` | TODO | owner #1 |
+| `\char` | accept | goldens: t-char |
 
 | `\check` | accept | goldens: accents |
 
-| `\ch` | TODO | owner #1 |
+| `\ch` | accept | goldens: ch |
 
 | `\checkmark` | accept | goldens: sym-gal-2 |
 
@@ -429,17 +440,17 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\circ` | accept | goldens: sym-gal-2 |
 
-| `\circeq` | TODO | owner #1 |
+| `\circeq` | accept | goldens: sym-circeq |
 
-| `\circlearrowleft` | TODO | owner #1 |
+| `\circlearrowleft` | accept | goldens: sym-circlearrowleft |
 
-| `\circlearrowright` | TODO | owner #1 |
+| `\circlearrowright` | accept | goldens: sym-circlearrowright |
 
-| `\circledast` | TODO | owner #1 |
+| `\circledast` | accept | goldens: sym-circledast |
 
-| `\circledcirc` | TODO | owner #1 |
+| `\circledcirc` | accept | goldens: sym-circledcirc |
 
-| `\circleddash` | TODO | owner #1 |
+| `\circleddash` | accept | goldens: sym-circleddash |
 
 | `\circledR` | accept | goldens: sym-gal-2 |
 
@@ -449,51 +460,51 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\cline` | unsup | goldens: rej-unsup-cline |
 
-| `\clubs` | TODO | owner #1 |
+| `\clubs` | accept | goldens: sym-clubs |
 
 | `\clubsuit` | accept | goldens: sym-gal-2 |
 
-| `\cnums` | TODO | owner #1 |
+| `\cnums` | accept | goldens: sym-cnums |
 
-| `\colon` | TODO | owner #1 |
+| `\colon` | accept | goldens: t-colon |
 
-| `\Colonapprox` | TODO | owner #1 |
+| `\Colonapprox` | accept | goldens: t-Colonapprox |
 
-| `\colonapprox` | TODO | owner #1 |
+| `\colonapprox` | accept | goldens: t-colonapprox |
 
-| `\coloncolon` | TODO | owner #1 |
+| `\coloncolon` | accept | goldens: t-coloncolon |
 
-| `\coloncolonapprox` | TODO | owner #1 |
+| `\coloncolonapprox` | accept | goldens: t-coloncolonapprox |
 
-| `\coloncolonequals` | TODO | owner #1 |
+| `\coloncolonequals` | accept | goldens: t-coloncolonequals |
 
-| `\coloncolonminus` | TODO | owner #1 |
+| `\coloncolonminus` | accept | goldens: t-coloncolonminus |
 
-| `\coloncolonsim` | TODO | owner #1 |
+| `\coloncolonsim` | accept | goldens: t-coloncolonsim |
 
-| `\Coloneq` | TODO | owner #1 |
+| `\Coloneq` | accept | goldens: t-Coloneq |
 
-| `\coloneq` | TODO | owner #1 |
+| `\coloneq` | accept | goldens: t-coloneq |
 
-| `\colonequals` | TODO | owner #1 |
+| `\colonequals` | accept | goldens: t-colonequals |
 
-| `\Coloneqq` | TODO | owner #1 |
+| `\Coloneqq` | accept | goldens: t-Coloneqq |
 
-| `\coloneqq` | TODO | owner #1 |
+| `\coloneqq` | accept | goldens: t-coloneqq |
 
-| `\colonminus` | TODO | owner #1 |
+| `\colonminus` | accept | goldens: t-colonminus |
 
-| `\Colonsim` | TODO | owner #1 |
+| `\Colonsim` | accept | goldens: t-Colonsim |
 
-| `\colonsim` | TODO | owner #1 |
+| `\colonsim` | accept | goldens: t-colonsim |
 
 | `\color` | accept | goldens: color, color-hex, color-macro |
 
 | `\colorbox` | accept | goldens: colorbox |
 
-| `\complement` | TODO | owner #1 |
+| `\complement` | accept | goldens: sym-complement |
 
-| `\Complex` | TODO | owner #1 |
+| `\Complex` | accept | goldens: sym-Complex |
 
 | `\cong` | accept | goldens: sym-gal-2 |
 
@@ -503,17 +514,17 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\coprod` | accept | goldens: sym-gal-2 |
 
-| `\copyright` | TODO | owner #1 |
+| `\copyright` | accept | goldens: t-copyright |
 
 | `\cos` | accept | goldens: sin |
 
-| `\cosec` | TODO | owner #1 |
+| `\cosec` | accept | goldens: cosec |
 
 | `\cosh` | accept | goldens: sym-gal-2 |
 
 | `\cot` | accept | goldens: sym-gal-2 |
 
-| `\cotg` | TODO | owner #1 |
+| `\cotg` | accept | goldens: cotg |
 
 | `\coth` | accept | goldens: sym-gal-3 |
 
@@ -523,25 +534,25 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\cssId` | unsup | goldens: rej-unsup-cssid |
 
-| `\ctg` | TODO | owner #1 |
+| `\ctg` | accept | goldens: ctg |
 
-| `\cth` | TODO | owner #1 |
+| `\cth` | accept | goldens: cth |
 
-| `\Cup` | TODO | owner #1 |
+| `\Cup` | accept | goldens: sym-Cup |
 
 | `\cup` | accept | goldens: sym-gal-3 |
 
-| `\curlyeqprec` | TODO | owner #1 |
+| `\curlyeqprec` | accept | goldens: sym-curlyeqprec |
 
-| `\curlyeqsucc` | TODO | owner #1 |
+| `\curlyeqsucc` | accept | goldens: sym-curlyeqsucc |
 
-| `\curlyvee` | TODO | owner #1 |
+| `\curlyvee` | accept | goldens: sym-curlyvee |
 
-| `\curlywedge` | TODO | owner #1 |
+| `\curlywedge` | accept | goldens: sym-curlywedge |
 
-| `\curvearrowleft` | TODO | owner #1 |
+| `\curvearrowleft` | accept | goldens: sym-curvearrowleft |
 
-| `\curvearrowright` | TODO | owner #1 |
+| `\curvearrowright` | accept | goldens: sym-curvearrowright |
 
 ## D
 
@@ -549,27 +560,27 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 | --- | --- | --- |
 | `\dag` | accept | goldens: sym-gal-3 |
 
-| `\Dagger` | TODO | owner #1 |
+| `\Dagger` | accept | goldens: sym-Dagger |
 
 | `\dagger` | accept | goldens: sym-gal-3 |
 
 | `\daleth` | accept | goldens: sym-gal-3 |
 
-| `\Darr` | TODO | owner #1 |
+| `\Darr` | accept | goldens: sym-Darr |
 
-| `\dArr` | TODO | owner #1 |
+| `\dArr` | accept | goldens: sym-dArr |
 
-| `\darr` | TODO | owner #1 |
+| `\darr` | accept | goldens: sym-darr |
 
-| `\dashleftarrow` | TODO | owner #1 |
+| `\dashleftarrow` | accept | goldens: sym-dashleftarrow |
 
-| `\dashrightarrow` | TODO | owner #1 |
+| `\dashrightarrow` | accept | goldens: sym-dashrightarrow |
 
 | `\dashv` | accept | goldens: sym-gal-3 |
 
 | `\dbinom` | accept | goldens: dbinom |
 
-| `\dblcolon` | TODO | owner #1 |
+| `\dblcolon` | accept | goldens: t-dblcolon |
 
 | `{dcases}` | accept | goldens: text, aligned, alignedat |
 
@@ -585,15 +596,15 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\ddots` | accept | goldens: sym-gal-3 |
 
-| `\DeclareMathOperator` | err-parity | reject rows: rej-declare-op |
+| `\DeclareMathOperator` | err-parity | goldens: rej-declare-op |
 
 | `\def` | accept | goldens: def, def-args, maxexpand-near-limit |
 
-| `\definecolor` | err-parity | reject rows: definecolor |
+| `\definecolor` | err-parity | goldens: definecolor |
 
 | `\deg` | accept | goldens: sym-gal-3 |
 
-| `\degree` | TODO | owner #1 |
+| `\degree` | accept | goldens: sym-degree |
 
 | `\delta` | accept | goldens: sym-greek |
 
@@ -607,15 +618,15 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\dfrac` | accept | goldens: dfrac |
 
-| `\diagdown` | TODO | owner #1 |
+| `\diagdown` | accept | goldens: sym-diagdown |
 
-| `\diagup` | TODO | owner #1 |
+| `\diagup` | accept | goldens: sym-diagup |
 
-| `\Diamond` | TODO | owner #1 |
+| `\Diamond` | accept | goldens: sym-Diamond |
 
 | `\diamond` | accept | goldens: sym-gal-3 |
 
-| `\diamonds` | TODO | owner #1 |
+| `\diamonds` | accept | goldens: sym-diamonds |
 
 | `\diamondsuit` | accept | goldens: sym-gal-3 |
 
@@ -627,45 +638,45 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\div` | accept | goldens: sym-gal-3 |
 
-| `\divideontimes` | TODO | owner #1 |
+| `\divideontimes` | accept | goldens: sym-divideontimes |
 
 | `\dot` | accept | goldens: vec-dot |
 
-| `\Doteq` | TODO | owner #1 |
+| `\Doteq` | accept | goldens: sym-Doteq |
 
 | `\doteq` | accept | goldens: sym-gal-3 |
 
-| `\doteqdot` | TODO | owner #1 |
+| `\doteqdot` | accept | goldens: sym-doteqdot |
 
-| `\dotplus` | TODO | owner #1 |
+| `\dotplus` | accept | goldens: sym-dotplus |
 
 | `\dots` | accept | goldens: sym-gal-3 |
 
-| `\dotsb` | TODO | owner #1 |
+| `\dotsb` | accept | goldens: sym-dotsb |
 
-| `\dotsc` | TODO | owner #1 |
+| `\dotsc` | accept | goldens: sym-dotsc |
 
 | `\dotsi` | accept | goldens: int, demo-fourier, demo-gauss |
 
-| `\dotsm` | TODO | owner #1 |
+| `\dotsm` | accept | goldens: sym-dotsm |
 
-| `\dotso` | TODO | owner #1 |
+| `\dotso` | accept | goldens: sym-dotso |
 
-| `\doublebarwedge` | TODO | owner #1 |
+| `\doublebarwedge` | accept | goldens: sym-doublebarwedge |
 
-| `\doublecap` | TODO | owner #1 |
+| `\doublecap` | accept | goldens: sym-doublecap |
 
-| `\doublecup` | TODO | owner #1 |
+| `\doublecup` | accept | goldens: sym-doublecup |
 
 | `\Downarrow` | accept | goldens: sym-gal-0 |
 
 | `\downarrow` | accept | goldens: sym-gal-3 |
 
-| `\downdownarrows` | TODO | owner #1 |
+| `\downdownarrows` | accept | goldens: sym-downdownarrows |
 
-| `\downharpoonleft` | TODO | owner #1 |
+| `\downharpoonleft` | accept | goldens: sym-downharpoonleft |
 
-| `\downharpoonright` | TODO | owner #1 |
+| `\downharpoonright` | accept | goldens: sym-downharpoonright |
 
 | `{drcases}` | accept | goldens: text, aligned, alignedat |
 
@@ -681,9 +692,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\em` | unsup | goldens: rej-unsup-em |
 
-| `\emph` | TODO | owner #7 |
+| `\emph` | accept | goldens: emph |
 
-| `\empty` | TODO | owner #1 |
+| `\empty` | accept | goldens: sym-empty |
 
 | `\emptyset` | accept | goldens: sym-gal-3 |
 
@@ -691,9 +702,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\end` | accept | goldens: matrix, aligned, alignedat |
 
-| `\endgroup` | TODO | owner #1 |
+| `\endgroup` | accept | goldens: begingroup, endgroup-stray, endgroup-in-brace |
 
-| `\enspace` | TODO | owner #1 |
+| `\enspace` | accept | goldens: enspace |
 
 | `\Epsilon` | accept | goldens: sym-gal-0 |
 
@@ -705,9 +716,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\eqcirc` | accept | goldens: sym-gal-3 |
 
-| `\Eqcolon` | TODO | owner #1 |
+| `\Eqcolon` | accept | goldens: t-Eqcolon |
 
-| `\eqcolon` | TODO | owner #1 |
+| `\eqcolon` | accept | goldens: t-eqcolon |
 
 | `{equation}` | accept | goldens: aligned, alignedat, array |
 
@@ -715,21 +726,21 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `{eqnarray}` | unsup | goldens: rej-unsup-eqnarray |
 
-| `\Eqqcolon` | TODO | owner #1 |
+| `\Eqqcolon` | accept | goldens: t-Eqqcolon |
 
-| `\eqqcolon` | TODO | owner #1 |
+| `\eqqcolon` | accept | goldens: t-eqqcolon |
 
 | `\eqref` | unsup | goldens: rej-unsup-eqref |
 
-| `\eqsim` | TODO | owner #1 |
+| `\eqsim` | accept | goldens: sym-eqsim |
 
-| `\eqslantgtr` | TODO | owner #1 |
+| `\eqslantgtr` | accept | goldens: sym-eqslantgtr |
 
-| `\eqslantless` | TODO | owner #1 |
+| `\eqslantless` | accept | goldens: sym-eqslantless |
 
-| `\equalscolon` | TODO | owner #1 |
+| `\equalscolon` | accept | goldens: t-equalscolon |
 
-| `\equalscoloncolon` | TODO | owner #1 |
+| `\equalscoloncolon` | accept | goldens: t-equalscoloncolon |
 
 | `\equiv` | accept | goldens: sym-gal-3 |
 
@@ -741,21 +752,21 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\euro` | unsup | goldens: rej-unsup-euro |
 
-| `\exist` | TODO | owner #1 |
+| `\exist` | accept | goldens: sym-exist |
 
 | `\exists` | accept | goldens: sym-gal-4 |
 
 | `\exp` | accept | goldens: sym-gal-4 |
 
-| `\expandafter` | TODO | owner #1 |
+| `\expandafter` | accept | goldens: arb-expandafter |
 
 ## F
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\fallingdotseq` | TODO | owner #1 |
+| `\fallingdotseq` | accept | goldens: sym-fallingdotseq |
 
-| `\fbox` | TODO | owner #7 |
+| `\fbox` | accept | goldens: t-fbox |
 
 | `\fcolorbox` | accept | goldens: fcolorbox, fcolorbox-empty |
 
@@ -765,17 +776,17 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\flat` | accept | goldens: sym-gal-4 |
 
-| `\footnotesize` | TODO | owner #1 |
+| `\footnotesize` | accept | goldens: footnotesize |
 
 | `\forall` | accept | goldens: sym-gal-4 |
 
-| `\frac` | accept | goldens: frac, bigl, demo-cfrac, flite-quad, rej-malf-frac1, lenient-frac-empty |
+| `\frac` | accept | goldens: frac, bigl, demo-cfrac, flite-quad, rej-malf-frac1, lenient-frac-empty, prime-frac |
 
-| `\frak` | TODO | owner #1 |
+| `\frak` | accept | goldens: t-frak |
 
 | `\frown` | accept | goldens: sym-gal-4 |
 
-| `\futurelet` | TODO | owner #7 |
+| `\futurelet` | accept | goldens: arb-futurelet, arb-futurelet-undef |
 
 ## G
 
@@ -807,9 +818,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\geq` | accept | goldens: atom-rel, atomgrid |
 
-| `\geqq` | TODO | owner #1 |
+| `\geqq` | accept | goldens: sym-geqq |
 
-| `\geqslant` | TODO | owner #1 |
+| `\geqslant` | accept | goldens: sym-geqslant |
 
 | `\gets` | accept | goldens: sym-gal-4 |
 
@@ -817,37 +828,37 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\ggg` | accept | goldens: sym-gal-4 |
 
-| `\gggtr` | TODO | owner #1 |
+| `\gggtr` | accept | goldens: sym-gggtr |
 
 | `\gimel` | accept | goldens: sym-gal-4 |
 
-| `\global` | accept | goldens: def, def-args, newcommand-arg |
+| `\global` | accept | goldens: def, def-args, newcommand-arg, arb-global-bad |
 
-| `\gnapprox` | TODO | owner #1 |
+| `\gnapprox` | accept | goldens: sym-gnapprox |
 
-| `\gneq` | TODO | owner #1 |
+| `\gneq` | accept | goldens: sym-gneq |
 
-| `\gneqq` | TODO | owner #1 |
+| `\gneqq` | accept | goldens: sym-gneqq |
 
-| `\gnsim` | TODO | owner #1 |
+| `\gnsim` | accept | goldens: sym-gnsim |
 
 | `\grave` | accept | goldens: accents |
 
-| `\gt` | TODO | owner #1 |
+| `\gt` | accept | goldens: sym-gt |
 
-| `\gtrdot` | TODO | owner #1 |
+| `\gtrdot` | accept | goldens: sym-gtrdot |
 
 | `\gtrapprox` | accept | goldens: sym-gal-4 |
 
-| `\gtreqless` | TODO | owner #1 |
+| `\gtreqless` | accept | goldens: sym-gtreqless |
 
-| `\gtreqqless` | TODO | owner #1 |
+| `\gtreqqless` | accept | goldens: sym-gtreqqless |
 
-| `\gtrless` | TODO | owner #1 |
+| `\gtrless` | accept | goldens: sym-gtrless |
 
 | `\gtrsim` | accept | goldens: sym-gal-4 |
 
-| `\gvertneqq` | TODO | owner #1 |
+| `\gvertneqq` | accept | goldens: sym-gvertneqq |
 
 ## H
 
@@ -855,23 +866,23 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 | --- | --- | --- |
 | `\H` | accept | goldens: text |
 
-| `\Harr` | TODO | owner #1 |
+| `\Harr` | accept | goldens: sym-Harr |
 
-| `\hArr` | TODO | owner #1 |
+| `\hArr` | accept | goldens: sym-hArr |
 
-| `\harr` | TODO | owner #1 |
+| `\harr` | accept | goldens: sym-harr |
 
-| `\hat` | accept | goldens: hat, demo-fourier, sym-greek |
+| `\hat` | accept | goldens: hat, demo-fourier, sym-greek, prime-hat |
 
 | `\hbar` | accept | goldens: sym-gal-4 |
 
-| `\hbox` | TODO | owner #7 |
+| `\hbox` | accept | goldens: hbox, hbox-to |
 
-| `\hbox to <dimen>` | TODO | KaTeX accepts (sweep-proven); owner #7 |
+| `\hbox to <dimen>` | accept | goldens: hbox-to |
 
 | `\hdashline` | accept | goldens: matrix, aligned, alignedat |
 
-| `\hearts` | TODO | owner #1 |
+| `\hearts` | accept | goldens: sym-hearts |
 
 | `\heartsuit` | accept | goldens: sym-gal-4 |
 
@@ -887,27 +898,27 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\hookrightarrow` | accept | goldens: sym-gal-4 |
 
-| `\hphantom` | TODO | owner #7 |
+| `\hphantom` | accept | goldens: t-hphantom |
 
 | `\href` | accept | goldens: href |
 
-| `\hskip` | TODO | owner #1 |
+| `\hskip` | accept | goldens: hskip |
 
 | `\hslash` | accept | goldens: sym-gal-4 |
 
 | `\hspace` | accept | goldens: hspace |
 
-| `\htmlClass` | TODO | owner #7 |
+| `\htmlClass` | accept | goldens: htmlClass |
 
-| `\htmlData` | TODO | owner #7 |
+| `\htmlData` | accept | goldens: htmlData |
 
-| `\htmlId` | TODO | owner #7 |
+| `\htmlId` | accept | goldens: htmlId |
 
-| `\htmlStyle` | TODO | owner #7 |
+| `\htmlStyle` | accept | goldens: htmlStyle |
 
-| `\huge` | TODO | owner #1 |
+| `\huge` | accept | goldens: huge |
 
-| `\Huge` | TODO | owner #1 |
+| `\Huge` | accept | goldens: Huge |
 
 ## I
 
@@ -921,7 +932,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\if` | unsup | goldens: rej-unsup-if |
 
-| `\iff` | TODO | owner #1 |
+| `\iff` | accept | goldens: iff |
 
 | `\ifmode` | unsup | goldens: rej-unsup-ifmode |
 
@@ -935,41 +946,41 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Im` | accept | goldens: sym-gal-0 |
 
-| `\image` | TODO | owner #1 |
+| `\image` | accept | goldens: sym-image |
 
-| `\imageof` | TODO | owner #1 |
+| `\imageof` | accept | goldens: sym-imageof |
 
 | `\imath` | accept | goldens: sym-gal-4 |
 
-| `\impliedby` | TODO | owner #1 |
+| `\impliedby` | accept | goldens: impliedby |
 
-| `\implies` | TODO | owner #1 |
+| `\implies` | accept | goldens: implies |
 
 | `\in` | accept | goldens: not, text |
 
-| `\includegraphics` | TODO | owner #7 |
+| `\includegraphics` | accept | goldens: graphics |
 
 | `\inf` | accept | goldens: sym-gal-4 |
 
-| `\infin` | TODO | owner #1 |
+| `\infin` | accept | goldens: sym-infin |
 
 | `\infty` | accept | goldens: demo-fourier, demo-gauss |
 
-| `\injlim` | TODO | owner #1 |
+| `\injlim` | accept | goldens: injlim |
 
 | `\int` | accept | goldens: int, demo-fourier, demo-gauss, flite-gauss-half |
 
-| `\intercal` | TODO | owner #1 |
+| `\intercal` | accept | goldens: sym-intercal |
 
-| `\intop` | TODO | owner #1 |
+| `\intop` | accept | goldens: sym-intop |
 
 | `\Iota` | accept | goldens: sym-gal-0 |
 
 | `\iota` | accept | goldens: sym-greek2 |
 
-| `\isin` | TODO | owner #1 |
+| `\isin` | accept | goldens: sym-isin |
 
-| `\it` | TODO | owner #1 |
+| `\it` | accept | goldens: it |
 
 | `\itshape` | unsup | goldens: rej-unsup-itshape |
 
@@ -987,7 +998,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\kappa` | accept | goldens: sym-greek2 |
 
-| `\KaTeX` | TODO | owner #1 |
+| `\KaTeX` | accept | goldens: t-KaTeX |
 
 | `\ker` | accept | goldens: sym-gal-4 |
 
@@ -1021,25 +1032,25 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\langle` | accept | goldens: big-series, delim-named |
 
-| `\Larr` | TODO | owner #1 |
+| `\Larr` | accept | goldens: sym-Larr |
 
-| `\lArr` | TODO | owner #1 |
+| `\lArr` | accept | goldens: sym-lArr |
 
-| `\larr` | TODO | owner #1 |
+| `\larr` | accept | goldens: sym-larr |
 
-| `\large` | TODO | owner #1 |
+| `\large` | accept | goldens: large |
 
-| `\Large` | TODO | owner #1 |
+| `\Large` | accept | goldens: Large |
 
-| `\LARGE` | TODO | owner #1 |
+| `\LARGE` | accept | goldens: LARGE |
 
-| `\LaTeX` | TODO | owner #1 |
+| `\LaTeX` | accept | goldens: t-LaTeX |
 
-| `\lBrace` | TODO | owner #1 |
+| `\lBrace` | accept | goldens: lbrace, rbrace |
 
-| `\lbrace` | TODO | owner #1 |
+| `\lbrace` | accept | goldens: sym-lbrace |
 
-| `\lbrack` | TODO | owner #1 |
+| `\lbrack` | accept | goldens: sym-lbrack |
 
 | `\lceil` | accept | goldens: delim-named |
 
@@ -1049,7 +1060,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\le` | accept | goldens: sym-gal-5 |
 
-| `\leadsto` | TODO | owner #1 |
+| `\leadsto` | accept | goldens: sym-leadsto |
 
 | `\left` | accept | goldens: dfrac, demo-cauchy, leftright, atomgrid, rej-malf-left |
 
@@ -1059,55 +1070,55 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\LeftArrow` | unsup | goldens: rej-unsup-leftarrow |
 
-| `\leftarrowtail` | TODO | owner #1 |
+| `\leftarrowtail` | accept | goldens: sym-leftarrowtail |
 
 | `\leftharpoondown` | accept | goldens: sym-gal-5 |
 
 | `\leftharpoonup` | accept | goldens: sym-gal-5 |
 
-| `\leftleftarrows` | TODO | owner #1 |
+| `\leftleftarrows` | accept | goldens: sym-leftleftarrows |
 
 | `\Leftrightarrow` | accept | goldens: sym-gal-0 |
 
 | `\leftrightarrow` | accept | goldens: sym-gal-5 |
 
-| `\leftrightarrows` | TODO | owner #1 |
+| `\leftrightarrows` | accept | goldens: sym-leftrightarrows |
 
-| `\leftrightharpoons` | TODO | owner #1 |
+| `\leftrightharpoons` | accept | goldens: sym-leftrightharpoons |
 
-| `\leftrightsquigarrow` | TODO | owner #1 |
+| `\leftrightsquigarrow` | accept | goldens: sym-leftrightsquigarrow |
 
 | `\leftroot` | unsup | goldens: rej-unsup-leftroot |
 
-| `\leftthreetimes` | TODO | owner #1 |
+| `\leftthreetimes` | accept | goldens: sym-leftthreetimes |
 
 | `\leq` | accept | goldens: atom-rel, demo-cauchy, atomgrid |
 
 | `\leqalignno` | unsup | goldens: rej-unsup-leqalignno |
 
-| `\leqq` | TODO | owner #1 |
+| `\leqq` | accept | goldens: sym-leqq |
 
-| `\leqslant` | TODO | owner #1 |
+| `\leqslant` | accept | goldens: sym-leqslant |
 
 | `\lessapprox` | accept | goldens: sym-gal-5 |
 
-| `\lessdot` | TODO | owner #1 |
+| `\lessdot` | accept | goldens: sym-lessdot |
 
-| `\lesseqgtr` | TODO | owner #1 |
+| `\lesseqgtr` | accept | goldens: sym-lesseqgtr |
 
-| `\lesseqqgtr` | TODO | owner #1 |
+| `\lesseqqgtr` | accept | goldens: sym-lesseqqgtr |
 
-| `\lessgtr` | TODO | owner #1 |
+| `\lessgtr` | accept | goldens: sym-lessgtr |
 
 | `\lesssim` | accept | goldens: sym-gal-5 |
 
-| `\let` | accept | goldens: let |
+| `\let` | accept | goldens: let, arb-let-alias-undef, arb-let-alias-shadow |
 
 | `\lfloor` | accept | goldens: delim-named |
 
 | `\lg` | accept | goldens: sym-gal-5 |
 
-| `\lgroup` | TODO | owner #4 |
+| `\lgroup` | accept | goldens: sym-lgroup |
 
 | `\lhd` | accept | goldens: sym-gal-5 |
 
@@ -1123,33 +1134,33 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\llap` | accept | goldens: demo-fourier, int, int-display |
 
-| `\llbracket` | TODO | owner #1 |
+| `\llbracket` | accept | goldens: sym-llbracket |
 
 | `\llcorner` | accept | goldens: sym-gal-5 |
 
-| `\Lleftarrow` | TODO | owner #1 |
+| `\Lleftarrow` | accept | goldens: sym-Lleftarrow |
 
 | `\lll` | accept | goldens: sym-gal-5 |
 
-| `\llless` | TODO | owner #1 |
+| `\llless` | accept | goldens: sym-llless |
 
-| `\lmoustache` | TODO | owner #4 |
+| `\lmoustache` | accept | goldens: sym-lmoustache |
 
 | `\ln` | accept | goldens: sym-gal-5 |
 
-| `\lnapprox` | TODO | owner #1 |
+| `\lnapprox` | accept | goldens: sym-lnapprox |
 
-| `\lneq` | TODO | owner #1 |
+| `\lneq` | accept | goldens: sym-lneq |
 
-| `\lneqq` | TODO | owner #1 |
+| `\lneqq` | accept | goldens: sym-lneqq |
 
 | `\lnot` | accept | goldens: sym-gal-5 |
 
-| `\lnsim` | TODO | owner #1 |
+| `\lnsim` | accept | goldens: sym-lnsim |
 
 | `\log` | accept | goldens: log |
 
-| `\long` | TODO | owner #7 |
+| `\long` | accept | goldens: arb-long, arb-long-bad |
 
 | `\Longleftarrow` | accept | goldens: sym-gal-0 |
 
@@ -1159,45 +1170,45 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\longleftrightarrow` | accept | goldens: sym-gal-5 |
 
-| `\longmapsto` | TODO | owner #1 |
+| `\longmapsto` | accept | goldens: sym-longmapsto |
 
 | `\Longrightarrow` | accept | goldens: sym-gal-0 |
 
 | `\longrightarrow` | accept | goldens: sym-gal-5 |
 
-| `\looparrowleft` | TODO | owner #1 |
+| `\looparrowleft` | accept | goldens: sym-looparrowleft |
 
-| `\looparrowright` | TODO | owner #1 |
+| `\looparrowright` | accept | goldens: sym-looparrowright |
 
 | `\lor` | accept | goldens: sym-gal-5 |
 
 | `\lower` | unsup | goldens: rej-unsup-lower |
 
-| `\lozenge` | TODO | owner #1 |
+| `\lozenge` | accept | goldens: sym-lozenge |
 
-| `\lparen` | TODO | owner #1 |
+| `\lparen` | accept | goldens: sym-lparen |
 
-| `\Lrarr` | TODO | owner #1 |
+| `\Lrarr` | accept | goldens: sym-Lrarr |
 
-| `\lrArr` | TODO | owner #1 |
+| `\lrArr` | accept | goldens: sym-lrArr |
 
-| `\lrarr` | TODO | owner #1 |
+| `\lrarr` | accept | goldens: sym-lrarr |
 
 | `\lrcorner` | accept | goldens: sym-gal-6 |
 
-| `\lq` | TODO | owner #1 |
+| `\lq` | accept | goldens: sym-lq |
 
-| `\Lsh` | TODO | owner #1 |
+| `\Lsh` | accept | goldens: sym-Lsh |
 
-| `\lt` | TODO | owner #1 |
+| `\lt` | accept | goldens: sym-lt |
 
-| `\ltimes` | TODO | owner #1 |
+| `\ltimes` | accept | goldens: sym-ltimes |
 
 | `\lVert` | accept | goldens: sym-gal-5 |
 
 | `\lvert` | accept | goldens: sym-gal-6 |
 
-| `\lvertneqq` | TODO | owner #1 |
+| `\lvertneqq` | accept | goldens: sym-lvertneqq |
 
 ## M
 
@@ -1205,7 +1216,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 | --- | --- | --- |
 | `\maltese` | accept | goldens: sym-gal-6 |
 
-| `\mapsfrom` | TODO | owner #1 |
+| `\mapsfrom` | accept | goldens: sym-mapsfrom |
 
 | `\mapsto` | accept | goldens: sym-gal-6 |
 
@@ -1213,7 +1224,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\mathbf` | accept | goldens: fonts, flite-dot, flite-maxwell |
 
-| `\mathbin` | TODO | owner #1 |
+| `\mathbin` | accept | goldens: t-mathbin |
 
 | `\mathcal` | accept | goldens: fonts |
 
@@ -1221,29 +1232,29 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\mathclap` | accept | goldens: sum, demo-cauchy, demo-sumsq |
 
-| `\mathclose` | TODO | owner #1 |
+| `\mathclose` | accept | goldens: t-mathclose |
 
-| `\mathellipsis` | TODO | owner #1 |
+| `\mathellipsis` | accept | goldens: sym-mathellipsis |
 
 | `\mathfrak` | accept | goldens: fonts2 |
 
-| `\mathinner` | accept | goldens: text |
+| `\mathinner` | accept | goldens: text, t-mathinner, t-mathinner-group |
 
 | `\mathit` | accept | goldens: fonts |
 
 | `\mathllap` | accept | goldens: demo-fourier, int, int-display |
 
-| `\mathnormal` | TODO | owner #1 |
+| `\mathnormal` | accept | goldens: mathnormal |
 
-| `\mathop` | accept | goldens: sym-gal-8 |
+| `\mathop` | accept | goldens: sym-gal-8, t-mathop, t-mathop-group |
 
-| `\mathopen` | TODO | owner #1 |
+| `\mathopen` | accept | goldens: t-mathopen |
 
-| `\mathord` | TODO | owner #1 |
+| `\mathord` | accept | goldens: t-mathord |
 
-| `\mathpunct` | TODO | owner #1 |
+| `\mathpunct` | accept | goldens: t-mathpunct |
 
-| `\mathreflectbox` | TODO | owner #1 |
+| `\mathreflectbox` | accept | goldens: mathreflectbox |
 
 | `\mathrel` | accept | goldens: sym-escapes |
 
@@ -1257,7 +1268,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\mathsf` | accept | goldens: fonts2 |
 
-| `\mathsterling` | TODO | owner #1 |
+| `\mathsterling` | accept | goldens: sym-mathsterling |
 
 | `\mathstrut` | accept | goldens: sqrt, demo-cfrac, demo-gauss |
 
@@ -1265,7 +1276,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\mathtt` | accept | goldens: fonts2 |
 
-| `\matrix` | err-parity | reject rows: rej-env-mismatch |
+| `\matrix` | err-parity | goldens: rej-env-mismatch |
 
 | `{matrix}` | accept | goldens: matrix, aligned, alignedat |
 
@@ -1281,7 +1292,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\measuredangle` | accept | goldens: sym-gal-6 |
 
-| `\medspace` | TODO | owner #1 |
+| `\medspace` | accept | goldens: medspace |
 
 | `\mho` | accept | goldens: sym-gal-6 |
 
@@ -1291,15 +1302,15 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\min` | accept | goldens: sym-gal-6 |
 
-| `\minuscolon` | TODO | owner #1 |
+| `\minuscolon` | accept | goldens: t-minuscolon |
 
-| `\minuscoloncolon` | TODO | owner #1 |
+| `\minuscoloncolon` | accept | goldens: t-minuscoloncolon |
 
-| `\minuso` | TODO | owner #1 |
+| `\minuso` | accept | goldens: minuso, minuso-bare |
 
 | `\mit` | unsup | goldens: rej-unsup-mit |
 
-| `\mkern` | TODO | owner #1 |
+| `\mkern` | accept | goldens: mkern |
 
 | `\mmlToken` | unsup | goldens: rej-unsup-mmltoken |
 
@@ -1313,7 +1324,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\mp` | accept | goldens: sym-gal-6 |
 
-| `\mskip` | TODO | owner #1 |
+| `\mskip` | accept | goldens: mskip |
 
 | `\mspace` | unsup | goldens: rej-unsup-mspace |
 
@@ -1325,23 +1336,23 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `{multiline}` | unsup | goldens: rej-unsup-multiline |
 
-| `\multimap` | TODO | owner #1 |
+| `\multimap` | accept | goldens: sym-multimap |
 
 ## N
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\N` | TODO | owner #1 |
+| `\N` | accept | goldens: sym-N |
 
 | `\nabla` | accept | goldens: sym-gal-6, flite-maxwell |
 
-| `\natnums` | TODO | owner #1 |
+| `\natnums` | accept | goldens: sym-natnums |
 
 | `\natural` | accept | goldens: sym-gal-6 |
 
-| `\negmedspace` | TODO | owner #1 |
+| `\negmedspace` | accept | goldens: negmedspace |
 
-| `\ncong` | TODO | owner #1 |
+| `\ncong` | accept | goldens: sym-ncong |
 
 | `\ne` | accept | goldens: sym-gal-6 |
 
@@ -1349,9 +1360,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\neg` | accept | goldens: sym-gal-6 |
 
-| `\negthickspace` | TODO | owner #1 |
+| `\negthickspace` | accept | goldens: negthickspace |
 
-| `\negthinspace` | TODO | owner #1 |
+| `\negthinspace` | accept | goldens: negthinspace |
 
 | `\neq` | accept | goldens: atom-rel, atomgrid |
 
@@ -1361,43 +1372,43 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Newextarrow` | unsup | goldens: rej-unsup-newextarrow |
 
-| `\newline` | TODO | owner #1 |
+| `\newline` | accept | goldens: newline |
 
 | `\nexists` | accept | goldens: sym-gal-6 |
 
-| `\ngeq` | TODO | owner #1 |
+| `\ngeq` | accept | goldens: sym-ngeq |
 
-| `\ngeqq` | TODO | owner #1 |
+| `\ngeqq` | accept | goldens: sym-ngeqq |
 
-| `\ngeqslant` | TODO | owner #1 |
+| `\ngeqslant` | accept | goldens: sym-ngeqslant |
 
-| `\ngtr` | TODO | owner #1 |
+| `\ngtr` | accept | goldens: sym-ngtr |
 
 | `\ni` | accept | goldens: sym-gal-6 |
 
-| `\nleftarrow` | TODO | owner #1 |
+| `\nleftarrow` | accept | goldens: sym-nleftarrow |
 
-| `\nLeftarrow` | TODO | owner #1 |
+| `\nLeftarrow` | accept | goldens: sym-nLeftarrow |
 
-| `\nLeftrightarrow` | TODO | owner #1 |
+| `\nLeftrightarrow` | accept | goldens: sym-nLeftrightarrow |
 
-| `\nleftrightarrow` | TODO | owner #1 |
+| `\nleftrightarrow` | accept | goldens: sym-nleftrightarrow |
 
-| `\nleq` | TODO | owner #1 |
+| `\nleq` | accept | goldens: sym-nleq |
 
-| `\nleqq` | TODO | owner #1 |
+| `\nleqq` | accept | goldens: sym-nleqq |
 
-| `\nleqslant` | TODO | owner #1 |
+| `\nleqslant` | accept | goldens: sym-nleqslant |
 
-| `\nless` | TODO | owner #1 |
+| `\nless` | accept | goldens: sym-nless |
 
 | `\nmid` | accept | goldens: sym-gal-6 |
 
-| `\nobreak` | TODO | owner #1 |
+| `\nobreak` | accept | goldens: arb-nobreak |
 
-| `\nobreakspace` | TODO | owner #1 |
+| `\nobreakspace` | accept | goldens: sym-nobreakspace |
 
-| `\noexpand` | TODO | owner #1 |
+| `\noexpand` | accept | goldens: arb-noexpand, arb-noexpand-end |
 
 | `\nolimits` | accept | goldens: lim, nolimits, lim-display |
 
@@ -1405,63 +1416,63 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\normalfont` | unsup | goldens: rej-unsup-normalfont |
 
-| `\normalsize` | TODO | owner #1 |
+| `\normalsize` | accept | goldens: normalsize |
 
 | `\not` | accept | goldens: not |
 
 | `\notag` | accept | goldens: aligned, alignedat, array |
 
-| `\notin` | TODO | owner #1 |
+| `\notin` | accept | goldens: sym-notin |
 
-| `\notni` | TODO | owner #1 |
+| `\notni` | accept | goldens: sym-notni |
 
-| `\nparallel` | TODO | owner #1 |
+| `\nparallel` | accept | goldens: sym-nparallel |
 
-| `\nprec` | TODO | owner #1 |
+| `\nprec` | accept | goldens: sym-nprec |
 
-| `\npreceq` | TODO | owner #1 |
+| `\npreceq` | accept | goldens: sym-npreceq |
 
-| `\nRightarrow` | TODO | owner #1 |
+| `\nRightarrow` | accept | goldens: sym-nRightarrow |
 
-| `\nrightarrow` | TODO | owner #1 |
+| `\nrightarrow` | accept | goldens: sym-nrightarrow |
 
-| `\nshortmid` | TODO | owner #1 |
+| `\nshortmid` | accept | goldens: sym-nshortmid |
 
-| `\nshortparallel` | TODO | owner #1 |
+| `\nshortparallel` | accept | goldens: sym-nshortparallel |
 
-| `\nsim` | TODO | owner #1 |
+| `\nsim` | accept | goldens: sym-nsim |
 
-| `\nsubseteq` | TODO | owner #1 |
+| `\nsubseteq` | accept | goldens: sym-nsubseteq |
 
-| `\nsubseteqq` | TODO | owner #1 |
+| `\nsubseteqq` | accept | goldens: sym-nsubseteqq |
 
-| `\nsucc` | TODO | owner #1 |
+| `\nsucc` | accept | goldens: sym-nsucc |
 
-| `\nsucceq` | TODO | owner #1 |
+| `\nsucceq` | accept | goldens: sym-nsucceq |
 
-| `\nsupseteq` | TODO | owner #1 |
+| `\nsupseteq` | accept | goldens: sym-nsupseteq |
 
-| `\nsupseteqq` | TODO | owner #1 |
+| `\nsupseteqq` | accept | goldens: sym-nsupseteqq |
 
-| `\ntriangleleft` | TODO | owner #1 |
+| `\ntriangleleft` | accept | goldens: sym-ntriangleleft |
 
-| `\ntrianglelefteq` | TODO | owner #1 |
+| `\ntrianglelefteq` | accept | goldens: sym-ntrianglelefteq |
 
-| `\ntriangleright` | TODO | owner #1 |
+| `\ntriangleright` | accept | goldens: sym-ntriangleright |
 
-| `\ntrianglerighteq` | TODO | owner #1 |
+| `\ntrianglerighteq` | accept | goldens: sym-ntrianglerighteq |
 
 | `\Nu` | accept | goldens: sym-gal-0 |
 
 | `\nu` | accept | goldens: sym-greek2 |
 
-| `\nVDash` | TODO | owner #1 |
+| `\nVDash` | accept | goldens: sym-nVDash |
 
-| `\nVdash` | TODO | owner #1 |
+| `\nVdash` | accept | goldens: sym-nVdash |
 
-| `\nvDash` | TODO | owner #1 |
+| `\nvDash` | accept | goldens: sym-nvDash |
 
-| `\nvdash` | TODO | owner #1 |
+| `\nvdash` | accept | goldens: sym-nvdash |
 
 | `\nwarrow` | accept | goldens: sym-gal-6 |
 
@@ -1481,9 +1492,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\officialeuro` | unsup | goldens: rej-unsup-officialeuro |
 
-| `\oiiint` | TODO | owner #3 |
+| `\oiiint` | accept | goldens: sym-oiiint |
 
-| `\oiint` | TODO | owner #3 |
+| `\oiint` | accept | goldens: sym-oiint |
 
 | `\oint` | accept | goldens: oint |
 
@@ -1493,9 +1504,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Omega` | accept | goldens: sym-Greek |
 
-| `\Omicron` | TODO | owner #1 |
+| `\Omicron` | accept | goldens: sym-Omicron |
 
-| `\omicron` | TODO | owner #1 |
+| `\omicron` | accept | goldens: sym-omicron |
 
 | `\ominus` | accept | goldens: sym-gal-6 |
 
@@ -1509,7 +1520,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\or` | unsup | goldens: rej-unsup-or |
 
-| `\origof` | TODO | owner #1 |
+| `\origof` | accept | goldens: sym-origof |
 
 | `\oslash` | accept | goldens: sym-gal-6 |
 
@@ -1521,25 +1532,25 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\overbracket` | accept | goldens: text |
 
-| `\overgroup` | TODO | owner #5 |
+| `\overgroup` | accept | goldens: overgroup |
 
 | `\overleftarrow` | accept | goldens: arrows-over |
 
-| `\overleftharpoon` | TODO | owner #1 |
+| `\overleftharpoon` | accept | goldens: overleftharpoon |
 
-| `\overleftrightarrow` | TODO | owner #5 |
+| `\overleftrightarrow` | accept | goldens: overleftrightarrow |
 
-| `\overline` | accept | goldens: overline, text |
+| `\overline` | accept | goldens: overline, text, prime-overline |
 
-| `\overlinesegment` | TODO | owner #5 |
+| `\overlinesegment` | accept | goldens: overlinesegment |
 
 | `\overparen` | unsup | goldens: rej-unsup-overparen |
 
-| `\Overrightarrow` | TODO | owner #1 |
+| `\Overrightarrow` | accept | goldens: Overrightarrow |
 
 | `\overrightarrow` | accept | goldens: arrows-over |
 
-| `\overrightharpoon` | TODO | owner #1 |
+| `\overrightharpoon` | accept | goldens: overrightharpoon |
 
 | `\overset` | accept | goldens: overset |
 
@@ -1577,11 +1588,11 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `{picture}` | unsup | goldens: rej-unsup-picture |
 
-| `\pitchfork` | TODO | owner #1 |
+| `\pitchfork` | accept | goldens: sym-pitchfork |
 
-| `\plim` | TODO | owner #1 |
+| `\plim` | accept | goldens: plim |
 
-| `\plusmn` | TODO | owner #1 |
+| `\plusmn` | accept | goldens: sym-plusmn |
 
 | `\pm` | accept | goldens: sym-gal-7, flite-quad |
 
@@ -1593,9 +1604,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\pmb` | accept | goldens: sym-greek2 |
 
-| `\pmod` | TODO | owner #1 |
+| `\pmod` | accept | goldens: pmod, pmod-nested |
 
-| `\pod` | TODO | owner #1 |
+| `\pod` | accept | goldens: pod, pod-nested, pod-noarg |
 
 | `\pounds` | accept | goldens: sym-gal-7 |
 
@@ -1603,25 +1614,25 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\prec` | accept | goldens: sym-gal-7 |
 
-| `\precapprox` | TODO | owner #1 |
+| `\precapprox` | accept | goldens: sym-precapprox |
 
-| `\preccurlyeq` | TODO | owner #1 |
+| `\preccurlyeq` | accept | goldens: sym-preccurlyeq |
 
 | `\preceq` | accept | goldens: sym-gal-7 |
 
-| `\precnapprox` | TODO | owner #1 |
+| `\precnapprox` | accept | goldens: sym-precnapprox |
 
-| `\precneqq` | TODO | owner #1 |
+| `\precneqq` | accept | goldens: sym-precneqq |
 
-| `\precnsim` | TODO | owner #1 |
+| `\precnsim` | accept | goldens: sym-precnsim |
 
-| `\precsim` | TODO | owner #1 |
+| `\precsim` | accept | goldens: sym-precsim |
 
 | `\prime` | accept | goldens: sym-gal-7 |
 
 | `\prod` | accept | goldens: prod |
 
-| `\projlim` | TODO | owner #1 |
+| `\projlim` | accept | goldens: projlim |
 
 | `\propto` | accept | goldens: sym-gal-7 |
 
@@ -1631,7 +1642,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Psi` | accept | goldens: sym-Greek |
 
-| `\pu` | TODO | owner #1 |
+| `\pu` | unsup | goldens: rej-unsup-pu |
 
 ## QR
 
@@ -1643,7 +1654,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\quad` | accept | goldens: spacing |
 
-| `\R` | TODO | owner #1 |
+| `\R` | accept | goldens: sym-R |
 
 | `\r` | accept | goldens: text |
 
@@ -1655,19 +1666,19 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\rangle` | accept | goldens: big-series, delim-named |
 
-| `\Rarr` | TODO | owner #1 |
+| `\Rarr` | accept | goldens: sym-Rarr |
 
-| `\rArr` | TODO | owner #1 |
+| `\rArr` | accept | goldens: sym-rArr |
 
-| `\rarr` | TODO | owner #1 |
+| `\rarr` | accept | goldens: sym-rarr |
 
-| `\ratio` | TODO | owner #1 |
+| `\ratio` | accept | goldens: t-ratio |
 
-| `\rBrace` | TODO | owner #1 |
+| `\rBrace` | accept | goldens: lbrace, rbrace |
 
-| `\rbrace` | TODO | owner #1 |
+| `\rbrace` | accept | goldens: sym-rbrace |
 
-| `\rbrack` | TODO | owner #1 |
+| `\rbrack` | accept | goldens: sym-rbrack |
 
 | `{rcases}` | accept | goldens: text, aligned, alignedat |
 
@@ -1675,17 +1686,17 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Re` | accept | goldens: sym-gal-0 |
 
-| `\real` | TODO | owner #1 |
+| `\real` | accept | goldens: sym-real |
 
-| `\Reals` | TODO | owner #1 |
+| `\Reals` | accept | goldens: sym-Reals |
 
-| `\reals` | TODO | owner #1 |
+| `\reals` | accept | goldens: sym-reals |
 
 | `\ref` | unsup | goldens: rej-unsup-ref |
 
-| `\reflectbox` | TODO | owner #1 |
+| `\reflectbox` | accept | goldens: reflectbox |
 
-| `\relax` | TODO | owner #1 |
+| `\relax` | accept | goldens: arb-relax |
 
 | `\renewcommand` | accept | goldens: def, renewcommand, def-args |
 
@@ -1693,11 +1704,11 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\require` | unsup | goldens: rej-unsup-require |
 
-| `\restriction` | TODO | owner #1 |
+| `\restriction` | accept | goldens: sym-restriction |
 
 | `\rfloor` | accept | goldens: delim-named |
 
-| `\rgroup` | TODO | owner #4 |
+| `\rgroup` | accept | goldens: sym-rgroup |
 
 | `\rhd` | accept | goldens: sym-gal-7 |
 
@@ -1711,45 +1722,45 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\rightarrow` | accept | goldens: sym-gal-7 |
 
-| `\rightarrowtail` | TODO | owner #1 |
+| `\rightarrowtail` | accept | goldens: sym-rightarrowtail |
 
 | `\rightharpoondown` | accept | goldens: sym-gal-7 |
 
 | `\rightharpoonup` | accept | goldens: sym-gal-7 |
 
-| `\rightleftarrows` | TODO | owner #1 |
+| `\rightleftarrows` | accept | goldens: sym-rightleftarrows |
 
 | `\rightleftharpoons` | accept | goldens: sym-gal-7 |
 
-| `\rightrightarrows` | TODO | owner #1 |
+| `\rightrightarrows` | accept | goldens: sym-rightrightarrows |
 
-| `\rightsquigarrow` | TODO | owner #1 |
+| `\rightsquigarrow` | accept | goldens: sym-rightsquigarrow |
 
-| `\rightthreetimes` | TODO | owner #1 |
+| `\rightthreetimes` | accept | goldens: sym-rightthreetimes |
 
-| `\risingdotseq` | TODO | owner #1 |
+| `\risingdotseq` | accept | goldens: sym-risingdotseq |
 
 | `\rlap` | accept | goldens: demo-fourier, int, int-display |
 
-| `\rm` | TODO | owner #1 |
+| `\rm` | accept | goldens: rm |
 
-| `\rmoustache` | TODO | owner #4 |
+| `\rmoustache` | accept | goldens: sym-rmoustache |
 
 | `\root` | unsup | goldens: rej-unsup-root |
 
 | `\rotatebox` | unsup | goldens: rej-unsup-rotatebox |
 
-| `\rparen` | TODO | owner #1 |
+| `\rparen` | accept | goldens: sym-rparen |
 
-| `\rq` | TODO | owner #1 |
+| `\rq` | accept | goldens: rq-x, rq-bare, lq-rq |
 
-| `\rrbracket` | TODO | owner #1 |
+| `\rrbracket` | accept | goldens: sym-rrbracket |
 
-| `\Rrightarrow` | TODO | owner #1 |
+| `\Rrightarrow` | accept | goldens: sym-Rrightarrow |
 
-| `\Rsh` | TODO | owner #1 |
+| `\Rsh` | accept | goldens: sym-Rsh |
 
-| `\rtimes` | TODO | owner #1 |
+| `\rtimes` | accept | goldens: sym-rtimes |
 
 | `\Rule` | unsup | goldens: rej-unsup-rule |
 
@@ -1777,11 +1788,11 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\scriptscriptstyle` | accept | goldens: frac, bigl, demo-cfrac |
 
-| `\scriptsize` | TODO | owner #1 |
+| `\scriptsize` | accept | goldens: scriptsize |
 
 | `\scriptstyle` | accept | goldens: frac, bigl, demo-cfrac |
 
-| `\sdot` | TODO | owner #1 |
+| `\sdot` | accept | goldens: sym-sdot |
 
 | `\searrow` | accept | goldens: sym-gal-7 |
 
@@ -1789,7 +1800,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\sect` | accept | goldens: text |
 
-| `\set` | TODO | owner #1 |
+| `\set` | accept | goldens: set, set-bar, set-bare-bar |
 
 | `\Set` | accept | goldens: frac, bigl, demo-cfrac |
 
@@ -1797,13 +1808,13 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\setminus` | accept | goldens: sym-gal-7 |
 
-| `\sf` | TODO | owner #1 |
+| `\sf` | accept | goldens: sf |
 
 | `\sharp` | accept | goldens: sym-gal-7 |
 
-| `\shortmid` | TODO | owner #1 |
+| `\shortmid` | accept | goldens: sym-shortmid |
 
-| `\shortparallel` | TODO | owner #1 |
+| `\shortparallel` | accept | goldens: sym-shortparallel |
 
 | `\shoveleft` | unsup | goldens: rej-unsup-shoveleft |
 
@@ -1817,9 +1828,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\sim` | accept | goldens: sym-gal-7 |
 
-| `\simcolon` | TODO | owner #1 |
+| `\simcolon` | accept | goldens: t-simcolon |
 
-| `\simcoloncolon` | TODO | owner #1 |
+| `\simcoloncolon` | accept | goldens: t-simcoloncolon |
 
 | `\simeq` | accept | goldens: sym-gal-7 |
 
@@ -1827,9 +1838,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\sinh` | accept | goldens: sym-gal-7 |
 
-| `\sixptsize` | TODO | owner #1 |
+| `\sixptsize` | accept | goldens: sixptsize |
 
-| `\sh` | TODO | owner #1 |
+| `\sh` | accept | goldens: sh |
 
 | `\skew` | unsup | goldens: rej-unsup-skew |
 
@@ -1837,17 +1848,17 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\sl` | unsup | goldens: rej-unsup-sl |
 
-| `\small` | TODO | owner #1 |
+| `\small` | accept | goldens: small |
 
-| `\smallfrown` | TODO | owner #1 |
+| `\smallfrown` | accept | goldens: sym-smallfrown |
 
-| `\smallint` | TODO | owner #1 |
+| `\smallint` | accept | goldens: sym-smallint |
 
 | `{smallmatrix}` | accept | goldens: smallmatrix, aligned, alignedat |
 
-| `\smallsetminus` | TODO | owner #1 |
+| `\smallsetminus` | accept | goldens: sym-smallsetminus |
 
-| `\smallsmile` | TODO | owner #1 |
+| `\smallsmile` | accept | goldens: sym-smallsmile |
 
 | `\smash` | accept | goldens: smash, demo-cauchy, leftright |
 
@@ -1859,9 +1870,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Space` | unsup | goldens: rej-unsup-space |
 
-| `\space` | TODO | owner #1 |
+| `\space` | accept | goldens: sym-space |
 
-| `\spades` | TODO | owner #1 |
+| `\spades` | accept | goldens: sym-spades |
 
 | `\spadesuit` | accept | goldens: sym-gal-8 |
 
@@ -1873,9 +1884,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\sqcup` | accept | goldens: sym-gal-8 |
 
-| `\square` | TODO | owner #1 |
+| `\square` | accept | goldens: sym-square |
 
-| `\sqrt` | accept | goldens: sqrt, demo-cfrac, demo-gauss, flite-nestrad, flite-normal, rej-malf-sqrtb |
+| `\sqrt` | accept | goldens: sqrt, demo-cfrac, demo-gauss, flite-nestrad, flite-normal, rej-malf-sqrtb, prime-sqrt, prime-sqrt-rq, prime-sqrt-opt |
 
 | `\sqsubset` | accept | goldens: sym-gal-8 |
 
@@ -1887,7 +1898,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\ss` | accept | goldens: text |
 
-| `\stackrel` | TODO | owner #1 |
+| `\stackrel` | accept | goldens: stackrel, stackrel-rel |
 
 | `\star` | accept | goldens: sym-gal-8 |
 
@@ -1899,59 +1910,59 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\style` | unsup | goldens: rej-unsup-style |
 
-| `\sub` | TODO | owner #1 |
+| `\sub` | accept | goldens: sym-sub |
 
-| `{subarray}` | TODO | KaTeX accepts with alignment arg (sweep-proven); owner #14 |
+| `{subarray}` | accept | goldens: subarray-c, subarray-l |
 
-| `\sube` | TODO | owner #1 |
+| `\sube` | accept | goldens: sym-sube |
 
-| `\Subset` | TODO | owner #1 |
+| `\Subset` | accept | goldens: sym-Subset |
 
 | `\subset` | accept | goldens: sym-gal-8 |
 
 | `\subseteq` | accept | goldens: sym-gal-8 |
 
-| `\subseteqq` | TODO | owner #1 |
+| `\subseteqq` | accept | goldens: sym-subseteqq |
 
 | `\subsetneq` | accept | goldens: sym-gal-8 |
 
-| `\subsetneqq` | TODO | owner #1 |
+| `\subsetneqq` | accept | goldens: sym-subsetneqq |
 
 | `\substack` | accept | goldens: substack, sum, demo-cauchy |
 
 | `\succ` | accept | goldens: sym-gal-8 |
 
-| `\succapprox` | TODO | owner #1 |
+| `\succapprox` | accept | goldens: sym-succapprox |
 
-| `\succcurlyeq` | TODO | owner #1 |
+| `\succcurlyeq` | accept | goldens: sym-succcurlyeq |
 
 | `\succeq` | accept | goldens: sym-gal-8 |
 
-| `\succnapprox` | TODO | owner #1 |
+| `\succnapprox` | accept | goldens: sym-succnapprox |
 
-| `\succneqq` | TODO | owner #1 |
+| `\succneqq` | accept | goldens: sym-succneqq |
 
-| `\succnsim` | TODO | owner #1 |
+| `\succnsim` | accept | goldens: sym-succnsim |
 
-| `\succsim` | TODO | owner #1 |
+| `\succsim` | accept | goldens: sym-succsim |
 
 | `\sum` | accept | goldens: sum, demo-cauchy, demo-sumsq, atomgrid, flite-series |
 
 | `\sup` | accept | goldens: sym-gal-8 |
 
-| `\supe` | TODO | owner #1 |
+| `\supe` | accept | goldens: sym-supe |
 
-| `\Supset` | TODO | owner #1 |
+| `\Supset` | accept | goldens: sym-Supset |
 
 | `\supset` | accept | goldens: sym-gal-8 |
 
 | `\supseteq` | accept | goldens: sym-gal-8 |
 
-| `\supseteqq` | TODO | owner #1 |
+| `\supseteqq` | accept | goldens: sym-supseteqq |
 
 | `\supsetneq` | accept | goldens: sym-gal-8 |
 
-| `\supsetneqq` | TODO | owner #1 |
+| `\supsetneqq` | accept | goldens: sym-supsetneqq |
 
 | `\surd` | accept | goldens: sym-gal-8 |
 
@@ -1961,9 +1972,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\tag` | TODO | owner #1 |
+| `\tag` | accept | goldens: tag, tag-display |
 
-| `\tag*` | TODO | owner #1 |
+| `\tag*` | accept | goldens: tag-star, tag-star-display |
 
 | `\tan` | accept | goldens: sym-gal-8 |
 
@@ -1973,9 +1984,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\tau` | accept | goldens: sym-greek3 |
 
-| `\tbinom` | TODO | owner #2 |
+| `\tbinom` | accept | goldens: tbinom |
 
-| `\TeX` | TODO | owner #1 |
+| `\TeX` | accept | goldens: t-TeX |
 
 | `\text` | accept | goldens: text, sym-escapes |
 
@@ -2019,7 +2030,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\textless` | accept | goldens: text |
 
-| `\textmd` | TODO | owner #1 |
+| `\textmd` | accept | goldens: textmd |
 
 | `\textnormal` | accept | goldens: textnormal |
 
@@ -2039,7 +2050,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\textsf` | accept | goldens: textsf |
 
-| `\textsl` | err-parity | reject rows: textsl |
+| `\textsl` | err-parity | goldens: textsl |
 
 | `\textsterling` | accept | goldens: text |
 
@@ -2051,31 +2062,31 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\textunderscore` | accept | goldens: text |
 
-| `\textup` | TODO | owner #1 |
+| `\textup` | accept | goldens: textup |
 
 | `\textvisiblespace` | unsup | goldens: rej-unsup-textvisiblespace |
 
 | `\tfrac` | accept | goldens: tfrac |
 
-| `\tg` | TODO | owner #1 |
+| `\tg` | accept | goldens: tg |
 
-| `\th` | TODO | owner #1 |
+| `\th` | accept | goldens: th |
 
-| `\therefore` | TODO | owner #1 |
+| `\therefore` | accept | goldens: sym-therefore |
 
 | `\Theta` | accept | goldens: sym-Greek |
 
 | `\theta` | accept | goldens: sym-greek |
 
-| `\thetasym` | TODO | owner #1 |
+| `\thetasym` | accept | goldens: sym-thetasym |
 
-| `\thickapprox` | TODO | owner #1 |
+| `\thickapprox` | accept | goldens: sym-thickapprox |
 
-| `\thicksim` | TODO | owner #1 |
+| `\thicksim` | accept | goldens: sym-thicksim |
 
-| `\thickspace` | TODO | owner #1 |
+| `\thickspace` | accept | goldens: thickspace |
 
-| `\thinspace` | TODO | owner #1 |
+| `\thinspace` | accept | goldens: thinspace |
 
 | `\tilde` | accept | goldens: accents |
 
@@ -2083,7 +2094,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\Tiny` | unsup | goldens: rej-unsup-tiny |
 
-| `\tiny` | TODO | owner #1 |
+| `\tiny` | accept | goldens: tiny |
 
 | `\to` | accept | goldens: lim, lim-display |
 
@@ -2091,25 +2102,25 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\top` | accept | goldens: sym-gal-9 |
 
-| `\triangle` | TODO | owner #1 |
+| `\triangle` | accept | goldens: sym-triangle |
 
-| `\triangledown` | TODO | owner #1 |
+| `\triangledown` | accept | goldens: sym-triangledown |
 
 | `\triangleleft` | accept | goldens: sym-gal-9 |
 
-| `\trianglelefteq` | TODO | owner #1 |
+| `\trianglelefteq` | accept | goldens: sym-trianglelefteq |
 
-| `\triangleq` | TODO | owner #1 |
+| `\triangleq` | accept | goldens: sym-triangleq |
 
 | `\triangleright` | accept | goldens: sym-gal-9 |
 
-| `\trianglerighteq` | TODO | owner #1 |
+| `\trianglerighteq` | accept | goldens: sym-trianglerighteq |
 
-| `\tt` | TODO | owner #1 |
+| `\tt` | accept | goldens: tt |
 
-| `\twoheadleftarrow` | TODO | owner #1 |
+| `\twoheadleftarrow` | accept | goldens: sym-twoheadleftarrow |
 
-| `\twoheadrightarrow` | TODO | owner #1 |
+| `\twoheadrightarrow` | accept | goldens: sym-twoheadrightarrow |
 
 ## U
 
@@ -2117,31 +2128,31 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 | --- | --- | --- |
 | `\u` | accept | goldens: text |
 
-| `\Uarr` | TODO | owner #1 |
+| `\Uarr` | accept | goldens: sym-Uarr |
 
-| `\uArr` | TODO | owner #1 |
+| `\uArr` | accept | goldens: sym-uArr |
 
-| `\uarr` | TODO | owner #1 |
+| `\uarr` | accept | goldens: sym-uarr |
 
 | `\ulcorner` | accept | goldens: sym-gal-9 |
 
-| `\underbar` | TODO | owner #1 |
+| `\underbar` | accept | goldens: underbar |
 
 | `\underbrace` | accept | goldens: text, braces |
 
 | `\underbracket` | accept | goldens: text |
 
-| `\undergroup` | TODO | owner #5 |
+| `\undergroup` | accept | goldens: undergroup |
 
-| `\underleftarrow` | TODO | owner #5 |
+| `\underleftarrow` | accept | goldens: underleftarrow |
 
-| `\underleftrightarrow` | TODO | owner #5 |
+| `\underleftrightarrow` | accept | goldens: underleftrightarrow |
 
-| `\underrightarrow` | TODO | owner #5 |
+| `\underrightarrow` | accept | goldens: underrightarrow |
 
 | `\underline` | accept | goldens: text, underline |
 
-| `\underlinesegment` | TODO | owner #5 |
+| `\underlinesegment` | accept | goldens: underlinesegment |
 
 | `\underparen` | unsup | goldens: rej-unsup-underparen |
 
@@ -2163,9 +2174,9 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\updownarrow` | accept | goldens: sym-gal-9 |
 
-| `\upharpoonleft` | TODO | owner #1 |
+| `\upharpoonleft` | accept | goldens: sym-upharpoonleft |
 
-| `\upharpoonright` | TODO | owner #1 |
+| `\upharpoonright` | accept | goldens: sym-upharpoonright |
 
 | `\uplus` | accept | goldens: sym-gal-9 |
 
@@ -2177,13 +2188,13 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\upsilon` | accept | goldens: sym-greek3 |
 
-| `\upuparrows` | TODO | owner #1 |
+| `\upuparrows` | accept | goldens: sym-upuparrows |
 
 | `\urcorner` | accept | goldens: sym-gal-9 |
 
 | `\url` | accept | goldens: url |
 
-| `\utilde` | TODO | owner #5 |
+| `\utilde` | accept | goldens: utilde |
 
 ## V
 
@@ -2193,77 +2204,77 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\varcoppa` | unsup | goldens: rej-unsup-varcoppa |
 
-| `\varDelta` | TODO | owner #1 |
+| `\varDelta` | accept | goldens: sym-varDelta |
 
 | `\varepsilon` | accept | goldens: sym-greek |
 
-| `\varGamma` | TODO | owner #1 |
+| `\varGamma` | accept | goldens: sym-varGamma |
 
-| `\varinjlim` | TODO | owner #1 |
+| `\varinjlim` | accept | goldens: varinjlim |
 
-| `\varkappa` | TODO | owner #1 |
+| `\varkappa` | accept | goldens: sym-varkappa |
 
-| `\varLambda` | TODO | owner #1 |
+| `\varLambda` | accept | goldens: sym-varLambda |
 
-| `\varliminf` | TODO | owner #1 |
+| `\varliminf` | accept | goldens: varliminf |
 
-| `\varlimsup` | TODO | owner #1 |
+| `\varlimsup` | accept | goldens: varlimsup |
 
 | `\varnothing` | accept | goldens: sym-gal-9 |
 
-| `\varOmega` | TODO | owner #1 |
+| `\varOmega` | accept | goldens: sym-varOmega |
 
-| `\varPhi` | TODO | owner #1 |
+| `\varPhi` | accept | goldens: sym-varPhi |
 
 | `\varphi` | accept | goldens: sym-greek3 |
 
-| `\varPi` | TODO | owner #1 |
+| `\varPi` | accept | goldens: sym-varPi |
 
 | `\varpi` | accept | goldens: sym-greek2 |
 
-| `\varprojlim` | TODO | owner #1 |
+| `\varprojlim` | accept | goldens: varprojlim |
 
-| `\varpropto` | TODO | owner #1 |
+| `\varpropto` | accept | goldens: sym-varpropto |
 
-| `\varPsi` | TODO | owner #1 |
+| `\varPsi` | accept | goldens: sym-varPsi |
 
 | `\varrho` | accept | goldens: sym-greek2 |
 
-| `\varSigma` | TODO | owner #1 |
+| `\varSigma` | accept | goldens: sym-varSigma |
 
 | `\varsigma` | accept | goldens: sym-greek3 |
 
 | `\varstigma` | unsup | goldens: rej-unsup-varstigma |
 
-| `\varsubsetneq` | TODO | owner #1 |
+| `\varsubsetneq` | accept | goldens: sym-varsubsetneq |
 
-| `\varsubsetneqq` | TODO | owner #1 |
+| `\varsubsetneqq` | accept | goldens: sym-varsubsetneqq |
 
-| `\varsupsetneq` | TODO | owner #1 |
+| `\varsupsetneq` | accept | goldens: sym-varsupsetneq |
 
-| `\varsupsetneqq` | TODO | owner #1 |
+| `\varsupsetneqq` | accept | goldens: sym-varsupsetneqq |
 
-| `\varTheta` | TODO | owner #1 |
+| `\varTheta` | accept | goldens: sym-varTheta |
 
 | `\vartheta` | accept | goldens: sym-greek |
 
-| `\vartriangle` | TODO | owner #1 |
+| `\vartriangle` | accept | goldens: sym-vartriangle |
 
-| `\vartriangleleft` | TODO | owner #1 |
+| `\vartriangleleft` | accept | goldens: sym-vartriangleleft |
 
-| `\vartriangleright` | TODO | owner #1 |
+| `\vartriangleright` | accept | goldens: sym-vartriangleright |
 
-| `\varUpsilon` | TODO | owner #1 |
+| `\varUpsilon` | accept | goldens: sym-varUpsilon |
 
-| `\varXi` | TODO | owner #1 |
+| `\varXi` | accept | goldens: sym-varXi |
 
-| `\vcentcolon` | TODO | owner #1 |
+| `\vcentcolon` | accept | goldens: t-vcentcolon |
 
 | `\vcenter` | accept | goldens: frac, bigl, demo-cauchy |
 
-| `\Vdash` | TODO | owner #1 |
+| `\Vdash` | accept | goldens: sym-Vdash |
 
-| `\vDash` | TODO | owner #1 |
+| `\vDash` | accept | goldens: sym-vDash |
 
 | `\vdash` | accept | goldens: sym-gal-9 |
 
@@ -2273,7 +2284,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\vee` | accept | goldens: sym-gal-9 |
 
-| `\veebar` | TODO | owner #1 |
+| `\veebar` | accept | goldens: sym-veebar |
 
 | `\verb` | accept | goldens: frac, bigl, demo-cfrac |
 
@@ -2297,7 +2308,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\vphantom` | accept | goldens: overline |
 
-| `\Vvdash` | TODO | owner #1 |
+| `\Vvdash` | accept | goldens: sym-Vvdash |
 
 ## W
 
@@ -2305,7 +2316,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 | --- | --- | --- |
 | `\wedge` | accept | goldens: sym-gal-9 |
 
-| `\weierp` | TODO | owner #1 |
+| `\weierp` | accept | goldens: sym-weierp |
 
 | `\widecheck` | accept | goldens: sym-accent-widecheck |
 
@@ -2323,7 +2334,7 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\xcancel` | TODO | owner #7 |
+| `\xcancel` | accept | goldens: xcancel |
 
 | `\xdef` | accept | goldens: def, def-args |
 
@@ -2331,43 +2342,43 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 
 | `\xi` | accept | goldens: demo-fourier, hat, sym-greek2 |
 
-| `\xhookleftarrow` | TODO | owner #1 |
+| `\xhookleftarrow` | accept | goldens: xhookleftarrow |
 
-| `\xhookrightarrow` | TODO | owner #1 |
+| `\xhookrightarrow` | accept | goldens: xhookrightarrow |
 
-| `\xLeftarrow` | TODO | owner #1 |
+| `\xLeftarrow` | accept | goldens: xLeftarrow |
 
 | `\xleftarrow` | accept | goldens: xarrow |
 
-| `\xleftharpoondown` | TODO | owner #1 |
+| `\xleftharpoondown` | accept | goldens: xleftharpoondown |
 
-| `\xleftharpoonup` | TODO | owner #1 |
+| `\xleftharpoonup` | accept | goldens: xleftharpoonup |
 
-| `\xLeftrightarrow` | TODO | owner #1 |
+| `\xLeftrightarrow` | accept | goldens: xLeftrightarrow |
 
-| `\xleftrightarrow` | TODO | owner #1 |
+| `\xleftrightarrow` | accept | goldens: xleftrightarrow |
 
-| `\xleftrightharpoons` | TODO | owner #1 |
+| `\xleftrightharpoons` | accept | goldens: xleftrightharpoons |
 
-| `\xlongequal` | TODO | owner #1 |
+| `\xlongequal` | accept | goldens: xlongequal |
 
-| `\xmapsto` | TODO | owner #1 |
+| `\xmapsto` | accept | goldens: xmapsto |
 
-| `\xRightarrow` | TODO | owner #1 |
+| `\xRightarrow` | accept | goldens: xRightarrow |
 
 | `\xrightarrow` | accept | goldens: xarrow |
 
-| `\xrightharpoondown` | TODO | owner #1 |
+| `\xrightharpoondown` | accept | goldens: xrightharpoondown |
 
-| `\xrightharpoonup` | TODO | owner #1 |
+| `\xrightharpoonup` | accept | goldens: xrightharpoonup |
 
-| `\xrightleftharpoons` | TODO | owner #1 |
+| `\xrightleftharpoons` | accept | goldens: xrightleftharpoons |
 
-| `\xtofrom` | TODO | owner #1 |
+| `\xtofrom` | accept | goldens: xtofrom |
 
-| `\xtwoheadleftarrow` | TODO | owner #1 |
+| `\xtwoheadleftarrow` | accept | goldens: xtwoheadleftarrow |
 
-| `\xtwoheadrightarrow` | TODO | owner #1 |
+| `\xtwoheadrightarrow` | accept | goldens: xtwoheadrightarrow |
 
 ## YZ
 
@@ -2375,11 +2386,11 @@ per function). Table↔sweep coverage is audited by `tools/katex/audit.mjs`.
 | --- | --- | --- |
 | `\yen` | accept | goldens: sym-gal-9 |
 
-| `\Z` | TODO | owner #1 |
+| `\Z` | accept | goldens: sym-Z |
 
 | `\Zeta` | accept | goldens: sym-gal-1 |
 
 | `\zeta` | accept | goldens: sym-greek |
 
 ---
-Totals: 552 accept, 4 err-parity, 121 unsup, 459 TODO.
+Totals: 1007 accept, 6 err-parity, 123 unsup, 0 TODO.

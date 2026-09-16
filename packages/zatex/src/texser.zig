@@ -65,7 +65,41 @@ const Walker = struct {
     /// bare (`\frac12` round-trips as `\frac12`, never `\frac{1}{2}`).
     /// Copy fidelity beats canonical prettiness: the tree is the truth.
     fn arg(self: *Walker, id: parse.Idx) contract.LayoutError!void {
+        // Bare-prime argument (`\sqrt[3]'`, `\hat'`): the parser
+        // binds a leading `'` inside as an empty-base supsub, so
+        // replay the suffix bare — emitting the `{}` base would
+        // re-bind the prime outside on re-parse. The `prime_sup`
+        // guard pins the invariant the parser guarantees (only the
+        // `'` synthesizer builds empty-base supsubs); without it a
+        // future caller could emit an un-reparseable bare `^`/`_`.
+        const n = parse.nodeAt(self.ctx, id);
+        if (n == .supsub and n.supsub.prime_sup and self.isEmptyGroup(n.supsub.base)) {
+            return self.supSuffix(n.supsub.sup, n.supsub.sub, n.supsub.prime_sup);
+        }
         try self.node(id);
+    }
+
+    /// Sup/subscript suffix without the base (`'` primes, `^`, `_`).
+    fn supSuffix(self: *Walker, sup: parse.Idx, sub: parse.Idx, prime_sup: bool) contract.LayoutError!void {
+        if (prime_sup) {
+            try self.primes(sup);
+        } else if (sup != parse.NONE) {
+            try self.put("^");
+            try self.arg(sup);
+        }
+        if (sub != parse.NONE) {
+            try self.put("_");
+            try self.arg(sub);
+        }
+    }
+
+    /// True for an empty `{}` group: the implicit base the parser
+    /// allocates for a bare `'` (`\sqrt[3]'` binds it inside).
+    fn isEmptyGroup(self: *Walker, id: parse.Idx) bool {
+        if (id == parse.NONE) return false;
+        const n = parse.nodeAt(self.ctx, id);
+        if (n != .group) return false;
+        return parse.kidsOf(self.ctx, n.group).len == 0;
     }
 
     /// Rest-scope body (`\displaystyle`, `\color` take everything to
@@ -96,16 +130,7 @@ const Walker = struct {
                 // Canonical order is sup-first: the tree keeps no
                 // source order, and MathML is order-neutral here.
                 if (s.base != parse.NONE) try self.node(s.base);
-                if (s.prime_sup) {
-                    try self.primes(s.sup);
-                } else if (s.sup != parse.NONE) {
-                    try self.put("^");
-                    try self.arg(s.sup);
-                }
-                if (s.sub != parse.NONE) {
-                    try self.put("_");
-                    try self.arg(s.sub);
-                }
+                try self.supSuffix(s.sup, s.sub, s.prime_sup);
             },
             .frac => |f| {
                 if (f.kind.thick != 0) return error.Unsupported;
@@ -216,6 +241,24 @@ const Walker = struct {
                 try self.put(" ");
                 try self.scope(s.body);
             },
+            .size => |s| {
+                try self.cmd(switch (s.mult) {
+                    500 => "tiny",
+                    600 => "sixptsize",
+                    700 => "scriptsize",
+                    800 => "footnotesize",
+                    900 => "small",
+                    1000 => "normalsize",
+                    1200 => "large",
+                    1440 => "Large",
+                    1728 => "LARGE",
+                    2074 => "huge",
+                    2488 => "Huge",
+                    else => "normalsize",
+                });
+                try self.put(" ");
+                try self.scope(s.body);
+            },
             .pmb => |p| {
                 try self.cmd("pmb");
                 try self.arg(p.body);
@@ -239,6 +282,7 @@ const Walker = struct {
                     .script => "mathscr",
                     .bb => "mathbb",
                     .cal => "mathcal",
+                    .bolditalic => "bm",
                 });
                 try self.arg(f.body);
             },
@@ -260,7 +304,7 @@ const Walker = struct {
                 try self.put("{");
                 try self.put(@tagName(e.kind));
                 try self.put("}");
-                if (e.kind == .array) {
+                if (e.kind == .array or e.kind == .subarray) {
                     try self.put("{");
                     const spec = parse.kidsOf(self.ctx, .{ .start = e.spec_start, .len = e.spec_len });
                     for (spec) |code| try self.putCp(switch (code) {
@@ -315,7 +359,24 @@ const Walker = struct {
                 try self.textToks(parse.toksOf(self.ctx, o.toks));
                 try self.put("}");
             },
+            .varlim => |v| {
+                // The body is always the built under/over; the
+                // command name follows its kind.
+                const varlim_cmd = switch (parse.nodeAt(self.ctx, v.body)) {
+                    .over => |o| switch (o.kind) {
+                        .underright => "varinjlim",
+                        .underleft => "varprojlim",
+                        .underline => "varliminf",
+                        .overline => "varlimsup",
+                        else => return error.Unsupported,
+                    },
+                    else => return error.Unsupported,
+                };
+                try self.cmd(varlim_cmd);
+            },
             .space => |v| try self.space(v),
+            // Interword space round-trips as the control space.
+            .nbsp => try self.cmd(" "),
             .vspace => return error.Unsupported,
             .newline => try self.put("\\\\"),
             .hline => |h| try self.cmd(if (h.dashed) "hdashline" else "hline"),
@@ -350,6 +411,16 @@ const Walker = struct {
                 try self.arg(h.body);
             },
             .htmlwrap => |b| try self.node(b),
+            .tag => |tg| {
+                // Canonical prefix position (reparse hoists it back;
+                // `x\tag{1}` round-trips as `\tag{1}{x}`).
+                try self.cmd(if (tg.starred) "tag*" else "tag");
+                const bt = parse.nodeAt(self.ctx, tg.body).text;
+                try self.put("{");
+                try self.textToks(parse.toksOf(self.ctx, bt.toks));
+                try self.put("}");
+                try self.arg(tg.formula);
+            },
             .classwrap => |c| {
                 // Round-trip the wrapper (issue #51 review): dropping
                 // it silently changes limit placement, so re-emit the
@@ -358,7 +429,11 @@ const Walker = struct {
                     .Op => "mathop",
                     .Rel => "mathrel",
                     .Inner => "mathinner",
-                    else => return error.Unsupported,
+                    .Bin => "mathbin",
+                    .Punct => "mathpunct",
+                    .Ord => "mathord",
+                    .Open => "mathopen",
+                    .Close => "mathclose",
                 });
                 try self.arg(c.body);
                 if (c.limits == .on) try self.cmd("limits");
@@ -383,8 +458,26 @@ const Walker = struct {
                     try self.arg(b);
                 }
             },
+            .fbox => |b| {
+                // The body is always the handler-built `.text` node:
+                // re-brace its tokens (a bare `\text{…}` here would
+                // not re-parse as an hbox argument).
+                const inner = parse.nodeAt(self.ctx, b);
+                if (inner != .text) return error.Unsupported;
+                try self.cmd("fbox");
+                try self.put("{");
+                try self.textToks(parse.toksOf(self.ctx, inner.text.toks));
+                try self.put("}");
+            },
+            // Dual-branch content round-trips through the visual
+            // branch (what layout and speech also read).
+            .htmlmathml => |h| try self.node(h.html),
             .cancel => |b| {
                 try self.cmd("cancel");
+                try self.arg(b);
+            },
+            .xcancel => |b| {
+                try self.cmd("xcancel");
                 try self.arg(b);
             },
             .sout => |b| {
@@ -433,6 +526,56 @@ const Walker = struct {
                 try self.dimen(r.h);
                 try self.put("}");
             },
+            .graphics => |g| {
+                // Round-trip the canonical spelling: only meaningful
+                // options re-emit (KaTeX field semantics — positive
+                // `width`/`totalheight`, off-default `height` — plus
+                // a representable `alt`), sizes as exact decimals.
+                // An `alt` carrying `,=]` cannot survive the option
+                // grammar, so it (and any internal token) marks the
+                // node unrepresentable.
+                const alt = parse.toksOf(self.ctx, g.alt);
+                for (alt) |tk| {
+                    if (tk.kind == .char and
+                        (tk.cp == ',' or tk.cp == '=' or tk.cp == ']')) return error.Unsupported;
+                    switch (tk.kind) {
+                        .char, .ctrl, .lbrace, .rbrace, .sup, .sub, .amp, .newline => {},
+                        else => return error.Unsupported,
+                    }
+                }
+                try self.cmd("includegraphics");
+                if (g.w > 0 or g.h != parse.graphics_default_h or g.th > 0 or alt.len > 0) {
+                    var nb: [16]u8 = undefined;
+                    try self.put("[");
+                    var first = true;
+                    if (g.w > 0) {
+                        try self.put("width=");
+                        try self.put(parse.fmtEm5(g.w, &nb));
+                        first = false;
+                    }
+                    if (g.h != parse.graphics_default_h) {
+                        if (!first) try self.put(",");
+                        try self.put("height=");
+                        try self.put(parse.fmtEm5(g.h, &nb));
+                        first = false;
+                    }
+                    if (g.th > 0) {
+                        if (!first) try self.put(",");
+                        try self.put("totalheight=");
+                        try self.put(parse.fmtEm5(g.th, &nb));
+                        first = false;
+                    }
+                    if (alt.len > 0) {
+                        if (!first) try self.put(",");
+                        try self.put("alt=");
+                        try self.graphicsToks(alt);
+                    }
+                    try self.put("]");
+                }
+                try self.put("{");
+                try self.graphicsToks(parse.toksOf(self.ctx, g.src));
+                try self.put("}");
+            },
             .op => |o| {
                 if (o.text.len > 0) {
                     try self.cmd("operatorname");
@@ -470,6 +613,7 @@ const Walker = struct {
                 .script => "mathscr",
                 .bb => "mathbb",
                 .cal => "mathcal",
+                .bolditalic => "bm",
             });
             try self.put("{");
             try self.putCp(cp);
@@ -575,6 +719,11 @@ const Walker = struct {
                 try self.arg(o.extra);
                 try self.arg(o.nucleus);
             },
+            .stackrel => {
+                try self.cmd("stackrel");
+                try self.arg(o.extra);
+                try self.arg(o.nucleus);
+            },
             .underset => {
                 try self.cmd("underset");
                 try self.arg(o.extra);
@@ -612,6 +761,90 @@ const Walker = struct {
                 try self.cmd("xtwoheadrightarrow");
                 try self.xarrow(o);
             },
+            .xdoubleleft => {
+                try self.cmd("xLeftarrow");
+                try self.xarrow(o);
+            },
+            .xdoubleboth => {
+                try self.cmd("xLeftrightarrow");
+                try self.xarrow(o);
+            },
+            .xdoubleright => {
+                try self.cmd("xRightarrow");
+                try self.xarrow(o);
+            },
+            .xleftharpoondown => {
+                try self.cmd("xleftharpoondown");
+                try self.xarrow(o);
+            },
+            .xleftharpoonup => {
+                try self.cmd("xleftharpoonup");
+                try self.xarrow(o);
+            },
+            .xleftrightharpoons => {
+                try self.cmd("xleftrightharpoons");
+                try self.xarrow(o);
+            },
+            .xlongequal => {
+                try self.cmd("xlongequal");
+                try self.xarrow(o);
+            },
+            .xrightharpoondown => {
+                try self.cmd("xrightharpoondown");
+                try self.xarrow(o);
+            },
+            .xrightharpoonup => {
+                try self.cmd("xrightharpoonup");
+                try self.xarrow(o);
+            },
+            .xrightleftharpoons => {
+                try self.cmd("xrightleftharpoons");
+                try self.xarrow(o);
+            },
+            .xtofrom => {
+                try self.cmd("xtofrom");
+                try self.xarrow(o);
+            },
+            .overgroup => {
+                try self.cmd("overgroup");
+                try self.arg(o.nucleus);
+            },
+            .undergroup => {
+                try self.cmd("undergroup");
+                try self.arg(o.nucleus);
+            },
+            .overlinesegment => {
+                try self.cmd("overlinesegment");
+                try self.arg(o.nucleus);
+            },
+            .underlinesegment => {
+                try self.cmd("underlinesegment");
+                try self.arg(o.nucleus);
+            },
+            .overleftharpoon => {
+                try self.cmd("overleftharpoon");
+                try self.arg(o.nucleus);
+            },
+            .overrightharpoon => {
+                try self.cmd("overrightharpoon");
+                try self.arg(o.nucleus);
+            },
+            .overRightarrow => {
+                try self.cmd("Overrightarrow");
+                try self.arg(o.nucleus);
+            },
+            .underbar => {
+                try self.cmd("underbar");
+                try self.arg(o.nucleus);
+            },
+            .utilde => {
+                try self.cmd("utilde");
+                try self.arg(o.nucleus);
+            },
+            .angl => {
+                try self.cmd("angl");
+                try self.arg(o.nucleus);
+            },
             else => return error.Unsupported,
         }
     }
@@ -646,8 +879,28 @@ const Walker = struct {
     }
 
     fn dimen(self: *Walker, v: i16) contract.LayoutError!void {
-        // Thousandths of an em, integral values only.
-        if (@rem(v, 1000) != 0) return error.Unsupported;
+        // Thousandths of an em; integral values print bare, others
+        // with three decimals. Both re-parse exactly:
+        // `dimenFromBytes` is integer math, so `0.056em` hits 56,
+        // never 55 (mu kerns like `\mskip1mu` round-trip stably).
+        if (@rem(v, 1000) != 0) {
+            // Sign + up-to-2 whole digits + '.' + 3 fraction
+            // digits + "em" (9 bytes worst case, digits by hand —
+            // no format-spec subtleties).
+            var tmp: [9]u8 = undefined;
+            const mag: u32 = @intCast(if (v < 0) -@as(i32, v) else @as(i32, v));
+            var head: [6]u8 = undefined;
+            const hs = std.fmt.bufPrint(&head, "{s}{d}.", .{ if (v < 0) "-" else "", mag / 1000 }) catch return error.NoSpace;
+            @memcpy(tmp[0..hs.len], hs);
+            const f = mag % 1000;
+            tmp[hs.len] = @intCast('0' + f / 100);
+            tmp[hs.len + 1] = @intCast('0' + (f / 10) % 10);
+            tmp[hs.len + 2] = @intCast('0' + f % 10);
+            tmp[hs.len + 3] = 'e';
+            tmp[hs.len + 4] = 'm';
+            try self.put(tmp[0 .. hs.len + 5]);
+            return;
+        }
         var tmp: [8]u8 = undefined;
         const s = std.fmt.bufPrint(&tmp, "{d}em", .{@divTrunc(v, 1000)}) catch return error.NoSpace;
         try self.put(s);
@@ -669,6 +922,43 @@ const Walker = struct {
                 // round-trip.
                 .lbrace => try self.put("{"),
                 .rbrace => try self.put("}"),
+                else => return error.Unsupported,
+            }
+        }
+    }
+
+    /// Raw `\includegraphics` token range back to source spelling
+    /// (re-parseable through `scanBracketArg`/`scanUrlArg`):
+    /// `$` stays bare (KaTeX `parseUrlGroup` keeps it — `\$`
+    /// would not unescape back); other specials re-escape (and
+    /// unescape back); braces and `^_&` go bare; anything
+    /// internal declines.
+    fn graphicsToks(self: *Walker, toks: []const parse.Tok) contract.LayoutError!void {
+        for (toks) |tok| {
+            switch (tok.kind) {
+                .char => {
+                    if (tok.cp == '$') {
+                        try self.putCp(tok.cp);
+                    } else if (needsEscape(tok.cp)) {
+                        try self.put("\\");
+                        try self.putCp(tok.cp);
+                    } else {
+                        try self.putCp(tok.cp);
+                    }
+                },
+                .ctrl => {
+                    try self.put("\\");
+                    try self.put(tok.name);
+                },
+                .lbrace => try self.put("{"),
+                .rbrace => try self.put("}"),
+                .sup => try self.put("^"),
+                .sub => try self.put("_"),
+                .amp => try self.put("&"),
+                .newline => {
+                    try self.put("\\");
+                    try self.put("\n");
+                },
                 else => return error.Unsupported,
             }
         }
@@ -712,6 +1002,7 @@ test "serializer: exact canonical spellings" {
         .{ "a+b=c", "a+b=c" },
         .{ "\\overline{AB}", "\\overline{AB}" },
         .{ "\\sum x", "\\sum x" },
+        .{ "\\fbox{Hi}", "\\fbox{Hi}" },
     };
     for (cases) |c| {
         const got = try serialize(c[0], false, &out);
@@ -743,6 +1034,7 @@ test "serializer: round-trip keeps MathML identical" {
         "\\begin{cases}x&x\\ge 0\\\\-x&x<0\\end{cases}",
         "\\vec{v}",
         "\\boxed{x+1}",
+        "\\fbox{Hi}",
         "\\bigl(\\frac12\\Bigr)",
         "\\sin x",
         "\\displaystyle\\sum_i x",
@@ -753,6 +1045,23 @@ test "serializer: round-trip keeps MathML identical" {
         "\\mathop{x}\\nolimits_{y}",
         "\\mathrel{x}",
         "\\mathinner{x}",
+        "\\varinjlim x",
+        "\\varliminf_{n}",
+        "\\set{x}",
+        "\\set{x|y}",
+        "\\begingroup x\\endgroup",
+        "\\reflectbox{x}",
+        "\\mathreflectbox{x}",
+        "\\tbinom{n}{k}",
+        "\\emph{x}",
+        "\\hbox{x}",
+        "a\\bmod b",
+        "\\pod{x}",
+        "\\pmod{x}",
+        "\\sqrt[3]'",
+        "\\hat'",
+        "\\overline'",
+        "\\frac{{}^2}{b}",
     };
     for (cases) |src| {
         for ([_]bool{ false, true }) |display| {
@@ -771,6 +1080,26 @@ test "serializer: round-trip keeps MathML identical" {
                 return error.TestUnexpectedResult;
             }
         }
+    }
+}
+
+test "serializer: equation tag round-trips in display mode" {
+    // Canonical prefix position (reparse hoists it back).
+    const cases = [_][2][]const u8{
+        .{ "\\tag{1}x", "\\tag{1}{x}" },
+        .{ "x\\tag{1}", "\\tag{1}{x}" },
+        .{ "\\tag*{a}x", "\\tag*{a}{x}" },
+    };
+    for (cases) |c| {
+        var sbuf: [1024]u8 = undefined;
+        const tex = try serialize(c[0], true, &sbuf);
+        try std.testing.expectEqualStrings(c[1], tex);
+        var m1: [8192]u8 = undefined;
+        var m2: [8192]u8 = undefined;
+        const opts: zatex.LayoutOptions = .{ .display_mode = true };
+        const a = try zatex.mathml(c[0], opts, &m1);
+        const b = try zatex.mathml(tex, opts, &m2);
+        try std.testing.expectEqualStrings(a, b);
     }
 }
 
@@ -828,3 +1157,4 @@ fn stubProvider() zatex.MetricsProvider {
         .ruleThickness = S.ruleThickness,
     };
 }
+

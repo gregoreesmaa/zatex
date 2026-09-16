@@ -284,3 +284,51 @@ test "text accents lay out: tilde command, braced args" {
     const b = try zatex.layoutDiag("\\text{\\'{a}}", .{}, stubProvider(), &runs, &rules, &glyphs, &diag);
     try std.testing.expect(b.width > 0);
 }
+
+test "lap family overlaps with zero width (issue #71)" {
+    // Pinned KaTeX 0.18.7 proof: laps take no space; the body hangs
+    // left (llap), right (rlap), or centered (clap) over its neighbors.
+    // Stub advance is a flat 500, so the lapped body is 500 wide.
+    const Case = struct { src: []const u8, body_x: i32 };
+    const cases = [_]Case{
+        .{ .src = "\\llap{x}y", .body_x = -500 },
+        .{ .src = "\\rlap{x}y", .body_x = 0 },
+        .{ .src = "\\clap{x}y", .body_x = -250 },
+    };
+    for (cases) |c| {
+        var runs: [16]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [16]u16 = undefined;
+        var diag = zatex.Diag.empty();
+        const lay = try zatex.layoutDiag(c.src, .{}, stubProvider(), &runs, &rules, &glyphs, &diag);
+        try std.testing.expectEqual(@as(u32, 500), lay.width);
+        try std.testing.expectEqual(@as(usize, 2), lay.runs.len);
+        try std.testing.expectEqual(c.body_x, lay.runs[0].x);
+        try std.testing.expectEqual(@as(i32, 0), lay.runs[1].x);
+    }
+}
+
+test "accent skew follows the KaTeX table (issue #70)" {
+    // Pinned KaTeX 0.18.7 centers a math accent at nucleus-center +
+    // full skew over single-symbol nuclei. The stub has no italic
+    // hook, so the shift is exactly the table value (M: 83, y: 56);
+    // multi-symbol nuclei stay centered (`\tilde{AB}` measures
+    // dead-centered in KaTeX DOM).
+    const Case = struct { src: []const u8, accent_x: i32 };
+    const cases = [_]Case{
+        .{ .src = "\\tilde{M}", .accent_x = 83 },
+        .{ .src = "\\bar{y}", .accent_x = 56 },
+        .{ .src = "\\tilde{AB}", .accent_x = 250 },
+    };
+    for (cases) |c| {
+        var runs: [16]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [16]u16 = undefined;
+        var diag = zatex.Diag.empty();
+        const lay = try zatex.layoutDiag(c.src, .{}, stubProvider(), &runs, &rules, &glyphs, &diag);
+        try std.testing.expectEqual(@as(usize, 2), lay.runs.len);
+        try std.testing.expectEqual(@as(i32, 0), lay.runs[0].x);
+        try std.testing.expectEqual(c.accent_x, lay.runs[1].x);
+    }
+}
+
