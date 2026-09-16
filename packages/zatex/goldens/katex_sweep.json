@@ -1585,6 +1585,15 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle><mtext>c</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{a$b$c}</annotation></semantics></math>"
   },
   {
+   "id": "text-nest",
+   "tex": "\\text{\\text{a}}",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\text{a}}</annotation></semantics></math>"
+  },
+  {
    "id": "definecolor",
    "tex": "\\definecolor{foo}{rgb}{1,0,0}",
    "display": false,
@@ -12883,6 +12892,24 @@
    "katex_only": false,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>a</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag*{a}x</annotation></semantics></math>"
+  },
+  {
+   "id": "tag-in-text",
+   "tex": "\\text{\\tag{1}}",
+   "display": true,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mrow></mrow></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(1)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\text{\\tag{1}}</annotation></semantics></math>"
+  },
+  {
+   "id": "tag-text-body",
+   "tex": "\\tag{\\text{a}}x",
+   "display": true,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(a)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{\\text{a}}x</annotation></semantics></math>"
   },
   {
    "id": "tbinom",

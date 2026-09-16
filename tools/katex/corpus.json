@@ -1042,6 +1042,14 @@
   "katex_only": true
  },
  {
+  "id": "text-nest",
+  "tex": "\\text{\\text{a}}",
+  "display": false,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true
+ },
+ {
   "id": "definecolor",
   "tex": "\\definecolor{foo}{rgb}{1,0,0}",
   "display": false,
@@ -8462,6 +8470,22 @@
   "tex": "\\tag*{a}x",
   "display": true,
   "expect": "accept"
+ },
+ {
+  "id": "tag-in-text",
+  "tex": "\\text{\\tag{1}}",
+  "display": true,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true
+ },
+ {
+  "id": "tag-text-body",
+  "tex": "\\tag{\\text{a}}x",
+  "display": true,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true
  },
  {
   "id": "tbinom",

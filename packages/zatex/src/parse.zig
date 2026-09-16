@@ -1630,11 +1630,6 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     try parseGlobal(ctx, t);
                     return null;
                 }
-                // Equation tags are side effects (no node; hoisted at
-                // `parse()`). Sits with the other null-returning
-                // commands; the subset gate below still strips it
-                // (`full_only_ctrl_names`) so shadowing keeps working.
-                if (full_only and tokNameEq(t.name, "tag")) return parseTag(ctx, t);
                 if (tokNameEq(t.name, "relax")) {
                     // No-op primitive (KaTeX relax.ts, text+math): no node.
                     return null;
@@ -1699,6 +1694,11 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     return parseSingle(ctx, depth);
                 }
             }
+            // Equation tags are side effects (no node; hoisted at
+            // `parse()`). Handled here — after macro expansion, so a
+            // user `\tag` macro shadows the builtin — rather than in
+            // `parseCtrl`, which cannot return null.
+            if (full_only and tokNameEq(t.name, "tag")) return parseTag(ctx, t);
             // Subset profile: the full-only `parseCtrl` branches below
             // vanish at compile time (`full_only`); fail fast here so
             // the `Unsupported` contract (and positions) never change.
@@ -5269,6 +5269,23 @@ test "tag hoists to the equation root in display mode" {
         },
         else => return error.TestUnexpectedResult,
     }
+    // Hoisting reaches `\frac` numerators too, and a lone tag tags
+    // the empty equation (both accept in KaTeX).
+    var ctx3b = ParseCtx.init("\\frac{\\tag{1}a}{b}");
+    const root3b = try parse(&ctx3b, true);
+    switch (ctx3b.nodes[root3b]) {
+        .tag => |tg| switch (ctx3b.nodes[tg.formula]) {
+            .group => |g| try std.testing.expectEqual(@as(u16, 1), g.len),
+            else => return error.TestUnexpectedResult,
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    var ctx3c = ParseCtx.init("\\tag{1}");
+    const root3c = try parse(&ctx3c, true);
+    switch (ctx3c.nodes[root3c]) {
+        .tag => {},
+        else => return error.TestUnexpectedResult,
+    }
     // Braceless single-token bodies are legal (`\tag 1x`).
     var ctx4 = ParseCtx.init("\\tag 1x");
     const root4 = try parse(&ctx4, true);
@@ -5284,6 +5301,15 @@ test "tag hoists to the equation root in display mode" {
     var ctx6 = ParseCtx.init("\\tag{1}\\tag{2}x");
     try std.testing.expectError(error.Invalid, parse(&ctx6, true));
     try std.testing.expectEqualStrings("Multiple \\tag", ctx6.err_msg);
+    // A user `\tag` macro shadows the builtin (expansion precedes
+    // the tag arm, like every other builtin).
+    var ctx7 = ParseCtx.init("\\renewcommand{\\tag}{X}\\tag");
+    const root7 = try parse(&ctx7, true);
+    switch (ctx7.nodes[root7]) {
+        .group => {},
+        else => return error.TestUnexpectedResult,
+    }
+    try std.testing.expect(ctx7.tag_body == NONE);
 }
 
 test "unbalanced brace is invalid" {

@@ -690,8 +690,9 @@ test "qa43 mode never changes the accept set" {
         // `\tag` is KaTeX's only display-gated command (pinned
         // 0.18.7: accepts in display, `\tag works only in display
         // equations` otherwise), so tag rows agree per-mode with the
-        // pin (`parity.zig` checks each row in its own mode) rather
-        // than across modes here.
+        // pin (`parity.zig` checks each row in its own mode, and the
+        // tag unit test pins both error messages) rather than across
+        // modes here.
         if (std.mem.eql(u8, id, "tag") or std.mem.startsWith(u8, id, "tag-")) continue;
         if (ok_d != ok_t) {
             std.debug.print("\n[{s}] mode changes accept set: display={} text={}\n", .{ id, ok_d, ok_t });

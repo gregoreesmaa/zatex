@@ -68,9 +68,12 @@ const Walker = struct {
         // Bare-prime argument (`\sqrt[3]'`, `\hat'`): the parser
         // binds a leading `'` inside as an empty-base supsub, so
         // replay the suffix bare — emitting the `{}` base would
-        // re-bind the prime outside on re-parse.
+        // re-bind the prime outside on re-parse. The `prime_sup`
+        // guard pins the invariant the parser guarantees (only the
+        // `'` synthesizer builds empty-base supsubs); without it a
+        // future caller could emit an un-reparseable bare `^`/`_`.
         const n = parse.nodeAt(self.ctx, id);
-        if (n == .supsub and self.isEmptyGroup(n.supsub.base)) {
+        if (n == .supsub and n.supsub.prime_sup and self.isEmptyGroup(n.supsub.base)) {
             return self.supSuffix(n.supsub.sup, n.supsub.sub, n.supsub.prime_sup);
         }
         try self.node(id);
@@ -1058,6 +1061,7 @@ test "serializer: round-trip keeps MathML identical" {
         "\\sqrt[3]'",
         "\\hat'",
         "\\overline'",
+        "\\frac{{}^2}{b}",
     };
     for (cases) |src| {
         for ([_]bool{ false, true }) |display| {
