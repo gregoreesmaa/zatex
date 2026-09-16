@@ -19,7 +19,9 @@ batch logs `== <id>` progress and continues), and after the batches
 `crop.py` tight-crops every engine's render to its ink bbox in place
 (the LuaTeX oracle arrives as a full page; the webshot oracles
 already clip at capture) — showcased renders are cropped before
-comparing and showcasing.
+comparing and showcasing. `crop.py` and `report.py` both parallelize
+over all CPUs by default (`--jobs N` or `ORACLE_DIFF_JOBS` overrides);
+same functions per file/case, so parallel output is byte-identical.
 
 ## Non-goals (read before citing this tool)
 

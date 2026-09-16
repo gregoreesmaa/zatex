@@ -11,6 +11,7 @@ and writes a markdown report sorted worst-first plus the normalized PNGs.
 
 Usage:
     report.py --raw <rawdir> --out <outdir> [--corpus corpus.json]
+              [--jobs N, default all CPUs]
     report.py --selfcheck   # SSIM math unit checks + synthetic fixture report
 
 Raw layout: <rawdir>/<case-id>.<engine>.png with engines
@@ -135,11 +136,20 @@ def luminance(r, g, b):
 
 
 def ink_bbox(w, h, px):
+    # Fast path: an all-white-opaque row holds no ink (white luminance 255
+    # >= INK_THRESH, alpha 255 >= 128), so memcmp it away in C instead of
+    # scanning every pixel in Python. Identical bbox; full-page renders
+    # are mostly white rows.
+    white = bytes([255, 255, 255, 255]) * w
+    lum = luminance
     x0, y0, x1, y1 = w, h, -1, -1
     for y in range(h):
+        o0 = y * w * 4
+        if px[o0:o0 + w * 4] == white:
+            continue
         for x in range(w):
-            o = (y * w + x) * 4
-            if px[o + 3] < 128 or luminance(px[o], px[o + 1], px[o + 2]) < INK_THRESH:
+            o = o0 + x * 4
+            if px[o + 3] < 128 or lum(px[o], px[o + 1], px[o + 2]) < INK_THRESH:
                 if x < x0:
                     x0 = x
                 if x > x1:
@@ -279,38 +289,66 @@ def load_corpus(path):
     return rows
 
 
-def build_report(rawdir, outdir, corpus):
+def score_one_case(args):
+    """Worker: score a single case. Top-level for pool pickling.
+
+    Writes that case's normalized PNGs (distinct files per case, so
+    workers share nothing) and returns its report row, or None when no
+    engine rendered it.
+    """
+    rawdir, pngdir, case = args
+    cid = case["id"]
+    images = {}
+    for eng in ENGINES:
+        p = os.path.join(rawdir, "%s.%s.png" % (cid, eng))
+        if os.path.exists(p):
+            images[eng] = read_png(p)
+    if not images:
+        return None
+    norm = normalize_case(images)
+    for eng, (W, H, g) in norm.items():
+        write_png(os.path.join(pngdir, "%s.%s.png" % (cid, eng)),
+                  W, H, gray_to_rgba(W, H, g))
+    score, per, spread, missing = score_case(norm)
+    tags = []
+    if spread < AMBIGUOUS_SPREAD:
+        tags.append("spec-ambiguous")
+    # Issue #60 tripwire: ZaTeX-vs-pinned-KaTeX worse than the
+    # oracle-oracle floor by more than the margin. Needs "katex" plus
+    # a spread to compare against (spread defaults to 1.0 when fewer
+    # than two oracle pairs render, which keeps the rule meaningful).
+    katex_outlier = ("katex" in per and
+                     per["katex"] < spread - KATEX_OUTLIER_MARGIN)
+    if katex_outlier:
+        tags.append("katex-outlier")
+    return {"case": case, "score": score, "per": per,
+            "spread": spread, "missing": missing,
+            "tag": " ".join(tags), "katex_outlier": katex_outlier}
+
+
+def default_jobs():
+    try:
+        return os.cpu_count() or 4
+    except NotImplementedError:
+        return 4
+
+
+def build_report(rawdir, outdir, corpus, jobs=1):
     pngdir = os.path.join(outdir, "png")
     os.makedirs(pngdir, exist_ok=True)
-    rows = []
-    for case in corpus:
-        cid = case["id"]
-        images = {}
-        for eng in ENGINES:
-            p = os.path.join(rawdir, "%s.%s.png" % (cid, eng))
-            if os.path.exists(p):
-                images[eng] = read_png(p)
-        if not images:
-            continue
-        norm = normalize_case(images)
-        for eng, (W, H, g) in norm.items():
-            write_png(os.path.join(pngdir, "%s.%s.png" % (cid, eng)),
-                      W, H, gray_to_rgba(W, H, g))
-        score, per, spread, missing = score_case(norm)
-        tags = []
-        if spread < AMBIGUOUS_SPREAD:
-            tags.append("spec-ambiguous")
-        # Issue #60 tripwire: ZaTeX-vs-pinned-KaTeX worse than the
-        # oracle-oracle floor by more than the margin. Needs "katex" plus
-        # a spread to compare against (spread defaults to 1.0 when fewer
-        # than two oracle pairs render, which keeps the rule meaningful).
-        katex_outlier = ("katex" in per and
-                         per["katex"] < spread - KATEX_OUTLIER_MARGIN)
-        if katex_outlier:
-            tags.append("katex-outlier")
-        rows.append({"case": case, "score": score, "per": per,
-                     "spread": spread, "missing": missing,
-                     "tag": " ".join(tags), "katex_outlier": katex_outlier})
+    # Cases are independent: score them in a process pool (same worker
+    # function per case, rows reassembled in corpus order before the
+    # stable worst-first sort, so output is byte-identical).
+    tasks = [(rawdir, pngdir, case) for case in corpus]
+    if jobs < 1:
+        jobs = 1
+    if jobs == 1:
+        rows = [score_one_case(t) for t in tasks]
+    else:
+        from multiprocessing import Pool
+        with Pool(min(jobs, len(tasks))) as pool:
+            rows = list(pool.imap(score_one_case, tasks))
+    rows = [r for r in rows if r is not None]
     rows.sort(key=lambda r: (r["score"] is None, r["score"]
                              if r["score"] is not None else 0.0))
     lines = []
@@ -487,6 +525,7 @@ def main(argv):
     if "--selfcheck" in argv:
         return selfcheck()
     raw = out = corpus = None
+    jobs = int(os.environ.get("ORACLE_DIFF_JOBS", default_jobs()))
     i = 0
     while i < len(argv):
         if argv[i] == "--raw" and i + 1 < len(argv):
@@ -498,12 +537,16 @@ def main(argv):
         elif argv[i] == "--corpus" and i + 1 < len(argv):
             corpus = argv[i + 1]
             i += 2
+        elif argv[i] == "--jobs" and i + 1 < len(argv):
+            jobs = int(argv[i + 1])
+            i += 2
         else:
             i += 1
     if not raw or not out or not corpus:
-        sys.stderr.write("usage: report.py --raw DIR --out DIR --corpus FILE\n")
+        sys.stderr.write("usage: report.py --raw DIR --out DIR "
+                         "--corpus FILE [--jobs N]\n")
         return 2
-    rows = build_report(raw, out, load_corpus(corpus))
+    rows = build_report(raw, out, load_corpus(corpus), jobs)
     print("wrote %s/report.md (%d cases)" % (out, len(rows)))
     return 0
 
