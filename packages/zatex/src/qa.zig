@@ -2441,6 +2441,28 @@ test "qa87 clap subscripts center on the script anchor (issue #78)" {
     try std.testing.expect(try glyphX(l, 0xD465) > anchor); // mathit x
 }
 
+test "qa88 paren math islands re-enter math in text (issue #81)" {
+    // KaTeX parity (pinned 0.18.7): `\(...\)` inside `\text` is a
+    // math island like `$...$` — same `.style{.T}` node, so fractions
+    // lay out as math (frac rule) and nested `\text` merges back.
+    // Sweep text-paren-* rows pin the MathML side.
+    var b1: B = .{};
+    const l = try lay("\\text{a\\(\\frac12\\)b}", false, &b1);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    try std.testing.expectEqual(@as(i32, 0), try glyphX(l, 97)); // text a first
+    var b2: B = .{};
+    const m = try lay("\\text{a\\(b\\)c\\(d\\)e}", false, &b2);
+    try std.testing.expectEqual(@as(u32, 2500), m.width);
+    // Edges reject like KaTeX: unclosed `\(` ("Expected '\\)'"),
+    // stray `\)` ("Mismatched \\)"), `$` inside the island.
+    var b3: B = .{};
+    try std.testing.expectError(error.Invalid, lay("\\text{\\(x}", false, &b3));
+    var b4: B = .{};
+    try std.testing.expectError(error.Invalid, lay("\\text{a\\)b}", false, &b4));
+    var b5: B = .{};
+    try std.testing.expectError(error.Invalid, lay("\\text{\\(a$b\\)}", false, &b5));
+}
+
 
 
 

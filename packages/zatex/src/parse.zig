@@ -4952,6 +4952,46 @@ fn collectTextPieces(
             k = e;
             continue;
         }
+        // `\(`...`\)` math islands (KaTeX parity, pinned 0.18.7,
+        // issue #81): the same shape as the `$` islands below — the
+        // inner range re-enters math at text style, so fractions and
+        // nested `\text` work inside. An unclosed `\(` rejects (KaTeX
+        // "Expected '\\)'"; the EOF-vs-opener position gap rides a
+        // `katex_only` row like unclosed `$`). A stray `\)` never
+        // opens an island, so it falls through to the span and
+        // `checkTextToks` rejects it (KaTeX "Mismatched \\)" carries
+        // no position, so the kind alone agrees).
+        if (tk.kind == .ctrl and tokNameEq(tk.name, "(")) {
+            var e = k + 1;
+            var found = false;
+            while (e < work.len) : (e += 1) {
+                const tk2 = ctx.toks[base + e];
+                if (tk2.kind == .ctrl and e + 1 < work.len and ctx.toks[base + e + 1].kind == .lbrace) {
+                    var d: usize = 1;
+                    e += 2;
+                    while (e < work.len and d > 0) : (e += 1) {
+                        const tk3 = ctx.toks[base + e];
+                        if (tk3.kind == .lbrace) d += 1 else if (tk3.kind == .rbrace) d -= 1;
+                    }
+                    e -= 1;
+                    continue;
+                }
+                if (tk2.kind == .ctrl and tokNameEq(tk2.name, ")")) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return ctx.fail(tk.pos, "expected '\\)'");
+            try flush(ctx, work, start, k, pieces, np);
+            const seg = try stashToks(ctx, ctx.toks[base + k + 1 .. base + e]);
+            const math = try parseTokenRange(ctx, depth, seg);
+            if (np.* >= pieces.len) return error.NoSpace;
+            pieces.*[np.*] = .{ .node = try ctx.allocNode(.{ .style = .{ .style = .T, .body = math } }) };
+            np.* += 1;
+            k = e + 1;
+            start = k;
+            continue;
+        }
         if (tk.kind == .char and tk.cp == '$') {
             var e = k + 1;
             var found = false;

@@ -1877,6 +1877,69 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle><mtext>c</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{a$b$c}</annotation></semantics></math>"
   },
   {
+   "id": "text-paren",
+   "tex": "\\text{a\\(\\frac12\\)b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mfrac><mn>1</mn><mn>2</mn></mfrac></mstyle><mtext>b</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{a\\(\\frac12\\)b}</annotation></semantics></math>"
+  },
+  {
+   "id": "text-paren-multi",
+   "tex": "\\text{a\\(b\\)c\\(d\\)e}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle><mtext>c</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle><mtext>e</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{a\\(b\\)c\\(d\\)e}</annotation></semantics></math>"
+  },
+  {
+   "id": "text-paren-nested-text",
+   "tex": "\\text{a\\(b\\text{c}d\\)e}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi><mtext>c</mtext><mi>d</mi></mstyle><mtext>e</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{a\\(b\\text{c}d\\)e}</annotation></semantics></math>"
+  },
+  {
+   "id": "text-paren-dollar",
+   "tex": "\\text{\\(a$b\\)}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 9,
+   "katex_error": "KaTeX parse error: Can't use function '$' in math mode at position 10: \\text{\\(a$̲b\\)}"
+  },
+  {
+   "id": "text-paren-stray",
+   "tex": "\\text{a\\)b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": null,
+   "katex_error": "KaTeX parse error: Mismatched \\)"
+  },
+  {
+   "id": "text-paren-unclosed",
+   "tex": "\\text{\\(x}",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 9,
+   "katex_error": "KaTeX parse error: Expected '\\)', got 'EOF' at position 10: \\text{\\(x}̲"
+  },
+  {
    "id": "text-nest",
    "tex": "\\text{\\text{a}}",
    "display": false,

@@ -1112,6 +1112,44 @@
   "expect": "accept"
  },
  {
+  "id": "text-paren",
+  "tex": "\\text{a\\(\\frac12\\)b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-paren-multi",
+  "tex": "\\text{a\\(b\\)c\\(d\\)e}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-paren-nested-text",
+  "tex": "\\text{a\\(b\\text{c}d\\)e}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-paren-dollar",
+  "tex": "\\text{\\(a$b\\)}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "text-paren-stray",
+  "tex": "\\text{a\\)b}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "text-paren-unclosed",
+  "tex": "\\text{\\(x}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
   "id": "text-nest",
   "tex": "\\text{\\text{a}}",
   "display": false,

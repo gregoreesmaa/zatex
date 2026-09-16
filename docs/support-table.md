@@ -1998,7 +1998,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\TeX` | accept | goldens: t-TeX |
 
-| `\text` | accept | goldens: text, sym-escapes, text-math, text-nest, text-merge, text-nested-math |
+| `\text` | accept | goldens: text, sym-escapes, text-math, text-nest, text-merge, text-nested-math, text-paren, text-paren-multi, text-paren-nested-text |
 
 | `\textasciitilde` | accept | goldens: text |
 
