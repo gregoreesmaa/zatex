@@ -1811,16 +1811,39 @@ test "qa69 textregistered is text registered" {
     try expectGolden("textregistered", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>®</mtext></mrow></math>", got);
 }
 
-test "qa70 textcircled overlays a circle" {
-    // Issues #51/#70 (KaTeX parity): the circle overlays the base
-    // letter — a true overlay, so the line-box tops align and the
-    // construction grows no taller than the bare letter (pinned
-    // 0.18.7 DOM: circle top within 0.1px of the letter top).
+test "qa70 textcircled is a ring-above accent (issue #80)" {
+    // KaTeX parity (pinned 0.18.7 `accent.ts`): `\textcircled`
+    // lays out as an accent, not an overlay — clearance is the full
+    // span top, the U+25EF baseline lands 0.2em below it, the ring
+    // sits at the span left with no centering, and the span widens
+    // to the ring when narrower. Stub metrics (advance 500,
+    // extents 700/250): the ring baseline rides 500 above the
+    // letter baseline (700 - 200), the construction grows to
+    // 700 - 200 + 700 = 1200 tall, and letter and ring runs both
+    // start at x = 0.
     var b1: B = .{};
     const circ = try lay("\\text{\\textcircled a}", false, &b1);
     var b2: B = .{};
     const bare = try lay("\\text{a}", false, &b2);
-    try std.testing.expectEqual(bare.height_above, circ.height_above);
+    try std.testing.expectEqual(@as(u32, 1200), circ.height_above);
+    try std.testing.expect(circ.height_above > bare.height_above);
+    try std.testing.expectEqual(@as(usize, 2), circ.runs.len);
+    try std.testing.expectEqual(@as(u16, 'a'), circ.runs[0].glyphs[0]);
+    try std.testing.expectEqual(@as(u16, 0x25EF), circ.runs[1].glyphs[0]);
+    try std.testing.expectEqual(@as(i32, 0), circ.runs[0].x);
+    try std.testing.expectEqual(@as(i32, 0), circ.runs[1].x);
+    try std.testing.expect(circ.runs[1].baseline_y < circ.runs[0].baseline_y);
+    try std.testing.expectEqual(circ.runs[0].baseline_y - 500, circ.runs[1].baseline_y);
+    // A wider-than-ring span stays left-aligned (the overlay
+    // centered it): the letter run and the ring run both start
+    // at x = 0.
+    var bw: B = .{};
+    const wide = try lay("\\text{\\textcircled{ab}}", false, &bw);
+    try std.testing.expectEqual(@as(u32, 1000), wide.width);
+    try std.testing.expectEqual(@as(usize, 2), wide.runs.len);
+    try std.testing.expectEqual(@as(i32, 0), wide.runs[0].x);
+    try std.testing.expectEqual(@as(i32, 0), wide.runs[1].x);
+    try std.testing.expectEqual(@as(u16, 0x25EF), wide.runs[1].glyphs[0]);
     // Issue #70: TeX control-word space skipping — the unbraced form
     // `\textcircled a` typesets no phantom space inside the span, so
     // it lays out exactly like the braced form.
@@ -1872,17 +1895,19 @@ test "qa73 overbracket draws a square bracket" {
 }
 
 test "qa79 math-mode textcircled is a mover" {
-    // Issues #51/#70 review (KaTeX parity): math-mode \textcircled is
-    // accepted (strict warning in KaTeX, not a reject) and builds a
-    // mover with the circle operator; the overlay aligns with the
-    // body top (pinned 0.18.7 DOM), growing neither above nor — for
-    // a same-advance circle under the stub — wider.
+    // Issue #80 (KaTeX parity): math-mode \textcircled is accepted
+    // (strict warning in KaTeX, not a reject) and builds a mover
+    // with the circle operator; natively it is the same ring-above
+    // accent as text mode — stub-exact: 1200 tall, ring run 500
+    // above the letter baseline at x = 0.
     var b1: B = .{};
     const c = try lay("\\textcircled{a}", false, &b1);
-    var b2: B = .{};
-    const bare = try lay("a", false, &b2);
-    try std.testing.expectEqual(bare.height_above, c.height_above);
-    try std.testing.expectEqual(bare.width, c.width);
+    try std.testing.expectEqual(@as(u32, 1200), c.height_above);
+    try std.testing.expectEqual(@as(u32, 500), c.width);
+    try std.testing.expectEqual(@as(usize, 2), c.runs.len);
+    try std.testing.expectEqual(@as(u16, 0x25EF), c.runs[1].glyphs[0]);
+    try std.testing.expectEqual(@as(i32, 0), c.runs[1].x);
+    try std.testing.expectEqual(c.runs[0].baseline_y - 500, c.runs[1].baseline_y);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\textcircled{a}", .{}, &buf);
     try expectGolden("circled-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover accent=\"true\"><mi>a</mi><mo>◯</mo></mover></mrow></math>", got);

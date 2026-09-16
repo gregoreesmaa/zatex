@@ -244,13 +244,21 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         // layout is the bare body box, bit-identically.
         .pmb => |p| return layoutNode(lc, style, p.body),
         .circled => |c| {
-            // Math-mode circle overlay (issue #70): KaTeX renders
-            // `\textcircled` as a true overlay — the natural-size
-            // U+25EF defines the box when wider than the body, the
-            // letter centers inside it, and the line-box tops align
-            // (pinned 0.18.7 DOM: 19.38-wide circle box around a
-            // 9.69 `a` at x +4.845, tops within 0.1px) — not an
-            // accent tucked above the body.
+            // Ring-ABOVE accent (issue #80, pinned 0.18.7
+            // `accent.ts`): KaTeX lays `\\textcircled` out as an
+            // accent, not an overlay — clearance is the FULL body
+            // height (accent-full skips the x-height clamp), the
+            // U+25EF baseline lands on the body top shifted down
+            // 0.2em (KaTeX's CSS `top:.2em` visual fudge to match
+            // LaTeX, baked into our geometry since layout IS paint
+            // here), the accent sits at body-left + skew with NO
+            // centering (unlike `\\hat`), and the construction is
+            // as wide as the wider of body and ring. Decoded from
+            // the pinned DOM: the vlist stays 0.8889em tall across
+            // bodies a/A/g (clearance cancels body height), and the
+            // ring metrics are Main-Regular U+25EF [d 0.19444, h
+            // 0.69444, w 1]. Skew mirrors our accents (single-symbol
+            // nuclei only), minus centering and italic correction.
             const body = try layoutNode(lc, style, c.body);
             const bb = lc.boxes[body];
             const size = lc.effSize(style);
@@ -267,17 +275,30 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
                 .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = cg } },
                 .invisible = false,
             });
-            const w = if (bb.w > caw) bb.w else caw;
-            const cdy = bb.ha - caha;
+            const ng = nucleusFirstGlyph(lc, body);
+            const ncp = nucleusFirstCp(lc.pctx, c.body);
+            const single = nucleusIsSingle(lc.pctx, c.body);
+            const askew: i32 = if (single and ng != null and ng.?.font == @intFromEnum(contract.FontId.math_italic))
+                @divTrunc(symbols.mathItalicSkew(ncp) * @as(i32, size), 1000)
+            else
+                0;
+            const shift200 = @divTrunc(@as(i32, 200) * size, 1000);
+            // Accent baseline height above the body baseline.
+            const abase = bb.ha - shift200;
+            const cdy = abase;
+            const w = if (bb.w > askew + caw) bb.w else askew + caw;
             const s = try lc.allocKids(2);
-            lc.bkids[s] = .{ .box = body, .dx = @divTrunc(w - bb.w, 2), .dy = 0 };
-            lc.bkids[s + 1] = .{ .box = cb, .dx = @divTrunc(w - caw, 2), .dy = cdy };
+            lc.bkids[s] = .{ .box = body, .dx = 0, .dy = 0 };
+            lc.bkids[s + 1] = .{ .box = cb, .dx = askew, .dy = cdy };
+            var ha = bb.ha;
+            const catop = abase + caha;
+            if (catop > ha) ha = catop;
             var db = bb.db;
             const cabot = cadb - cdy;
             if (cabot > db) db = cabot;
             return lc.allocBox(.{
                 .w = w,
-                .ha = bb.ha,
+                .ha = ha,
                 .db = db,
                 .kind = .{ .list = .{ .start = s, .len = 2 } },
                 .invisible = false,
@@ -2199,18 +2220,19 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
 // Text, environments, boxes
 // ---------------------------------------------------------------------------
 
-// Emit one pending text span decoration: circled overlay or
-// strike rule (shared by the in-loop check and the end flush).
+// Emit one pending text span decoration: circled accent or strike
+// rule (shared by the in-loop check and the end flush).
 // Returns how much wider the span became (a wider-than-span circle
 // pushes following text right); the caller adds it to the cursor.
 fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circle: bool,
     x: i32, ha: *i32, db: *i32, parts: *[256]BKid, nparts: *usize) Error!i32 {
     if (is_circle) {
-        // True overlay (issue #70): the natural-size U+25EF defines
-        // the span when wider than the letters, the letters center
-        // inside it, and the line-box tops align — the KaTeX
-        // `\textcircled` model (pinned 0.18.7 DOM), not an accent
-        // tucked above the span.
+        // Ring-ABOVE accent (issue #80, pinned 0.18.7 `accent.ts`):
+        // same model as the math-mode `.circled` arm — clearance is
+        // the full span top, the U+25EF baseline lands 0.2em below
+        // it, and the span widens to the ring when wider. Text
+        // glyphs carry no KaTeX skew, so the ring sits exactly at
+        // the span left.
         var stop: i32 = 0;
         for (parts.*[pp0..nparts.*]) |pt| {
             const pbx = lc.boxes[pt.box];
@@ -2232,13 +2254,17 @@ fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circ
         });
         const span_w = x - px0;
         const box_w = if (span_w > caw) span_w else caw;
-        const shift = @divTrunc(box_w - span_w, 2);
-        for (parts.*[pp0..nparts.*]) |*pt| pt.dx += shift;
-        const cadx = px0 + @divTrunc(box_w - caw, 2);
-        const cady = stop - caha;
+        const shift200 = @divTrunc(@as(i32, 200) * size, 1000);
+        // Ring baseline height above the span baseline (accent-full:
+        // no centering — the body stays left-aligned, the ring sits
+        // at the span left like KaTeX's vlist).
+        const abase = stop - shift200;
+        const cady = abase;
         if (nparts.* >= 256) return error.NoSpace;
-        parts.*[nparts.*] = .{ .box = cb, .dx = cadx, .dy = cady };
+        parts.*[nparts.*] = .{ .box = cb, .dx = px0, .dy = cady };
         nparts.* += 1;
+        const catop = abase + caha;
+        if (catop > ha.*) ha.* = catop;
         const cabot = cadb - cady;
         if (cabot > db.*) db.* = cabot;
         return box_w - span_w;
