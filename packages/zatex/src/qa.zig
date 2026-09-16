@@ -658,6 +658,74 @@ test "qa101 substack rows clear by strut floors, no fixed gap" {
     try std.testing.expectEqual(@as(i32, 670), ys[1] - ys[0]);
 }
 
+test "qa104 overarrows stretch to the nucleus span" {
+    // KaTeX windows each shaft+head SVG over the content span
+    // (pinned 0.18.7 `stretchy.ts`, minWidth 0.888em), so the arrow
+    // box is exactly the nucleus width and the single host glyph
+    // raster-stretches to it (same `x_scale` model as braces, issue
+    // #104). Stub advances are uniform 500: AB spans 1000 (scale
+    // 2000). Narrow nuclei keep the fixed glyph bit-identically.
+    const cases = [_]struct { tex: []const u8, cp: u21 }{
+        .{ .tex = "\\overrightarrow{AB}", .cp = 0x2192 },
+        .{ .tex = "\\overleftarrow{AB}", .cp = 0x2190 },
+        .{ .tex = "\\overleftrightarrow{AB}", .cp = 0x2194 },
+        .{ .tex = "\\underrightarrow{AB}", .cp = 0x2192 },
+        .{ .tex = "\\underleftrightarrow{AB}", .cp = 0x2194 },
+        .{ .tex = "\\Overrightarrow{AB}", .cp = 0x21D2 },
+        .{ .tex = "\\overgroup{AB}", .cp = 0x23E0 },
+    };
+    for (cases) |c| {
+        var b: ProvBuf = .{};
+        const l = try layProv(c.tex, stubProvider(), &b);
+        try std.testing.expectEqual(@as(u32, 1000), l.width);
+        var found = false;
+        for (l.runs) |r| {
+            for (r.glyphs) |g| {
+                if (g != c.cp) continue;
+                found = true;
+                try std.testing.expectEqual(@as(u16, 2000), r.x_scale);
+                try std.testing.expectEqual(@as(i32, 0), r.x);
+            }
+        }
+        try std.testing.expect(found);
+    }
+    // Narrow nucleus: no stretch, every run keeps identity scale.
+    var bn: ProvBuf = .{};
+    const n = try layProv("\\overrightarrow{i}", stubProvider(), &bn);
+    try std.testing.expectEqual(@as(u32, 500), n.width);
+    for (n.runs) |r| try std.testing.expectEqual(@as(u16, 1000), r.x_scale);
+    // The tilde keeps its fixed wide-accent behavior (issue #104:
+    // KaTeX sizes it from a fixed set, never to the span).
+    var bt: ProvBuf = .{};
+    const t = try layProv("\\utilde{AB}", stubProvider(), &bt);
+    for (t.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 0x007E) try std.testing.expectEqual(@as(u16, 1000), r.x_scale);
+        }
+    }
+}
+
+test "qa104 x-arrows stretch to the label span" {
+    // KaTeX stretches x-arrow shafts to the label width (pinned
+    // 0.18.7 `stretchy.ts`, minWidth 1.469em): the glyph
+    // raster-stretches to the label span (issue #104). Stub advances
+    // are uniform 500, scaled by the script size: [ab]{cd} spans
+    // 2*350 = 700 (scale 1400).
+    var b: ProvBuf = .{};
+    const l = try layProv("\\xrightarrow[ab]{cd}", stubProvider(), &b);
+    try std.testing.expectEqual(@as(u32, 700), l.width);
+    var found = false;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g != 0x2192) continue;
+            found = true;
+            try std.testing.expectEqual(@as(u16, 1400), r.x_scale);
+            try std.testing.expectEqual(@as(i32, 0), r.x);
+        }
+    }
+    try std.testing.expect(found);
+}
+
 test "qa43 fraction shifts differ per mode" {
     // TeX Rules 15b-e (issue #32): display shifts are num1/denom1
     // (677/686, the reference font's MATH constants) with 3θ

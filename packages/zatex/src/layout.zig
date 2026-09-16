@@ -2242,10 +2242,20 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 var w = gw;
                 if (ab.w > w) w = ab.w;
                 if (below_w > w) w = below_w;
+                // Extensible x-arrows (issue #104): KaTeX windows the
+                // shaft SVG over the label span (pinned 0.18.7
+                // `stretchy.ts`), so the glyph raster-stretches to it
+                // (same `spanScale`/`x_scale` model as braces below).
+                const gsc = spanScale(w, gw);
+                const gdx: i32 = if (gsc > 1000) 0 else @divTrunc(w - gw, 2);
+                if (gsc > 1000) {
+                    lc.boxes[gb].x_scale = gsc;
+                    lc.boxes[gb].w = w;
+                }
                 const s = try lc.allocKids(if (has_below) 3 else 2);
                 const gy: i32 = 0;
                 const ay = gha + gap + ab.db;
-                lc.bkids[s] = .{ .box = gb, .dx = @divTrunc(w - gw, 2), .dy = gy };
+                lc.bkids[s] = .{ .box = gb, .dx = gdx, .dy = gy };
                 lc.bkids[s + 1] = .{ .box = above, .dx = @divTrunc(w - ab.w, 2), .dy = ay };
                 const ha = ay + ab.ha;
                 var db = gdb;
@@ -2267,16 +2277,30 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             // KaTeX stretches the brace to the nucleus span: the box is
             // the nucleus width and the single host glyph raster-stretches
             // to it (stretch-only: a wider fixed glyph keeps the old
-            // centered/clamped behavior). Arrows keep the max — their
-            // stretch rules differ and are out of scope here.
+            // centered/clamped behavior). Over/under arrows, groups, the
+            // double arrow, single harpoons, and the under-bar stretch
+            // the same way (issue #104): KaTeX windows each shaft+head
+            // SVG over the content span (pinned 0.18.7 `stretchy.ts`,
+            // minWidth 0.888em — already covered since the host arrow
+            // advance meets it). The tilde keeps its fixed wide-accent
+            // behavior and the segment kinds have no host glyph.
             const is_brace = o.kind == .overbrace or o.kind == .underbrace;
+            const stretchy = switch (o.kind) {
+                .overleft, .overright, .overboth,
+                .underleft, .underright, .underboth,
+                .overgroup, .undergroup,
+                .overleftharpoon, .overrightharpoon,
+                .overRightarrow, .underbar,
+                => true,
+                else => false,
+            };
             const w = if (is_brace) nb.w else if (nb.w > gw) nb.w else gw;
             // A fixed host glyph wider than the span cannot center
             // without leaving the ink box (negative run x breaks the
             // non-negativity invariant); clamp it at the left edge —
             // it overhangs right, toward the following material.
             var gx = if (is_brace) @max(@divTrunc(w - gw, 2), 0) else @divTrunc(w - gw, 2);
-            if (is_brace) {
+            if (is_brace or stretchy) {
                 const sc = spanScale(w, gw);
                 if (sc > 1000) {
                     lc.boxes[gb].x_scale = sc;
