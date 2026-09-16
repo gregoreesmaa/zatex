@@ -373,6 +373,33 @@ const blank_set = [_]u21{
     0x2ACB, 0x2ACC,
 };
 
+test "issue96 AMS PUA negations resolve through the stack" {
+    // KaTeX's HTML-side negation glyphs live in the PUA of its AMS
+    // face (pinned 0.18.7 `symbols.js`): LM has none of them, the
+    // full stack resolves every one through AMS with real advances.
+    const pua = [_]u21{
+        0xE010, 0xE011, 0xE00C, 0xE006, 0xE01A, 0xE017, 0xE00F, 0xE00E,
+        0xE00D, 0xE007, 0xE018, 0xE01B, 0xE019, 0xE016,
+    };
+    var alm = TestStack{};
+    defer alm.free();
+    try alm.add(.lm, lm_path);
+    for (pua) |cp| {
+        try std.testing.expectEqual(@as(u16, 0), alm.stack.glyphIdFor(0, cp));
+    }
+    var full = TestStack{};
+    defer full.free();
+    try full.add(.lm, lm_path);
+    try full.add(.main, katex_dir ++ "KaTeX_Main-Regular.otf");
+    try full.add(.ams, katex_dir ++ "KaTeX_AMS-Regular.otf");
+    for (pua) |cp| {
+        const g = full.stack.glyphIdFor(0, cp);
+        try std.testing.expect(g != 0);
+        try std.testing.expectEqual(Role.ams, full.stack.roleOf(g));
+        try std.testing.expect(full.stack.advance1000(g) > 0);
+    }
+}
+
 test "issue92 blank set misses LM alone, resolves through the stack" {
     var alm = TestStack{};
     defer alm.free();

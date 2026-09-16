@@ -2934,6 +2934,47 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         try pushExpansion(ctx, t, "\\mathrel{\\approx\\mathrel{\\mkern-1.2mu}\\dblcolon}");
         return (try parseSingle(ctx, depth)).?;
     }
+    if (full_only and (tokNameEq(name, "nleqq") or tokNameEq(name, "nleqslant") or tokNameEq(name, "ngeqq") or tokNameEq(name, "ngeqslant"))) {
+        // KaTeX parity (pinned 0.18.7 `macros.js`): negated relations
+        // render AMS PUA precomposed glyphs in HTML (`\@nleqq` =
+        // U+E011, ...) while MathML carries the single precomposed
+        // codepoint (issue #73 arbiter, #96 shapes). The math branch
+        // reuses the alias static (`\nleq` = U+2270), so MathML is
+        // byte-identical to the old static path.
+        const html_at: []const u8 = if (tokNameEq(name, "nleqq")) "\\@nleqq" else if (tokNameEq(name, "nleqslant")) "\\@nleqslant" else if (tokNameEq(name, "ngeqq")) "\\@ngeqq" else "\\@ngeqslant";
+        const math_alias: []const u8 = if (t.name[1] == 'l') "\\nleq" else "\\ngeq";
+        var tpl: [64]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "lvertneqq") or tokNameEq(name, "gvertneqq"))) {
+        // Same dual-branch shape as above (issue #96).
+        const html_at: []const u8 = if (tokNameEq(name, "lvertneqq")) "\\@lvertneqq" else "\\@gvertneqq";
+        const math_alias: []const u8 = if (tokNameEq(name, "lvertneqq")) "\\lneqq" else "\\gneqq";
+        var tpl: [64]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "nshortmid") or tokNameEq(name, "nshortparallel") or tokNameEq(name, "nsubseteqq") or tokNameEq(name, "nsupseteqq"))) {
+        // Same dual-branch shape as above (issue #96).
+        const html_at: []const u8 = if (tokNameEq(name, "nshortmid")) "\\@nshortmid" else if (tokNameEq(name, "nshortparallel")) "\\@nshortparallel" else if (tokNameEq(name, "nsubseteqq")) "\\@nsubseteqq" else "\\@nsupseteqq";
+        const math_alias: []const u8 = if (tokNameEq(name, "nshortmid")) "\\nmid" else if (tokNameEq(name, "nshortparallel")) "\\nparallel" else if (tokNameEq(name, "nsubseteqq")) "\\nsubseteq" else "\\nsupseteq";
+        var tpl: [64]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "varsubsetneq") or tokNameEq(name, "varsubsetneqq") or tokNameEq(name, "varsupsetneq") or tokNameEq(name, "varsupsetneqq"))) {
+        // Same dual-branch shape as above (issue #96).
+        const html_at: []const u8 = if (tokNameEq(name, "varsubsetneq")) "\\@varsubsetneq" else if (tokNameEq(name, "varsubsetneqq")) "\\@varsubsetneqq" else if (tokNameEq(name, "varsupsetneq")) "\\@varsupsetneq" else "\\@varsupsetneqq";
+        const math_alias: []const u8 = if (tokNameEq(name, "varsubsetneq")) "\\subsetneq" else if (tokNameEq(name, "varsubsetneqq")) "\\subsetneqq" else if (tokNameEq(name, "varsupsetneq")) "\\supsetneq" else "\\supsetneqq";
+        var tpl: [80]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
+        return (try parseSingle(ctx, depth)).?;
+    }
     if (full_only and (tokNameEq(name, "rq"))) {
         // KaTeX macro parity: `\rq` = `'` (a prime: empty-base
         // `^{\prime}` at row start, superscript after a base — the

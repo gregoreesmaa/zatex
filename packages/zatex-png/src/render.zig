@@ -34,7 +34,11 @@ pub fn renderToPng(
     // right/top/bottom keep the advance+pad canvas, whose pads already
     // absorb ordinary overhang there.
     const shift: f64 = @as(f64, @floatFromInt(leftShiftUnits(fontShiftMetrics(font), layout.runs, layout.rules))) * s;
-    const w: usize = @max(1, ceilU(@as(f64, @floatFromInt(layout.width)) * s + 2 * pad + shift));
+    // Right-overflow shift (issue #96): ink past the advance width
+    // (e.g. `\minuso`'s rlap circle) clips the same way the left
+    // edge did before #71 — widen the canvas past advance+pad.
+    const rshift: f64 = @as(f64, @floatFromInt(rightShiftUnits(fontShiftMetrics(font), layout.runs, layout.rules, layout.width))) * s;
+    const w: usize = @max(1, ceilU(@as(f64, @floatFromInt(layout.width)) * s + 2 * pad + shift + rshift));
     const h: usize = @max(1, ceilU((@as(f64, @floatFromInt(layout.height_above)) +
         @as(f64, @floatFromInt(layout.depth_below))) * s + 2 * pad));
 
@@ -178,6 +182,48 @@ fn fontShiftMetrics(font: *const Font) ShiftMetrics {
 /// contribute their rect left edge. Pure viewport fit — box coordinates
 /// are untouched, so a zero shift (the common case) renders bit-identical
 /// output to before.
+/// Right-overflow shift (issue #96): mirror of `leftShiftUnits`
+/// for ink past the advance width (e.g. `\minuso`, whose rlap
+/// circle overhangs the minus box). Returns extra layout units to
+/// append to the canvas width; zero keeps canvases bit-identical.
+fn rightShiftUnits(m: ShiftMetrics, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule, width: u32) u32 {
+    var edge: i64 = width;
+    for (rules) |r| {
+        const right: i64 = @as(i64, r.x) + @as(i64, r.w);
+        if (right > edge) edge = right;
+    }
+    for (runs) |run| {
+        if (run.glyphs.len == 0) continue;
+        var x_units: i64 = run.x;
+        for (run.glyphs) |g| {
+            // Mirror of the twin: mirrored ink spans [-right, -left]
+            // about the origin, so its right edge hangs off the ink
+            // left; plain runs hang off the ink right.
+            const ink_o: i64 = if (run.mirrored) -m.inkLeft1000(m.ptr, g) else m.inkRight1000(m.ptr, g);
+            const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
+            var right = x_units + ink_e;
+            if (run.x_shear != 0 and m.inkTop1000 != null and m.inkBottom1000 != null) {
+                const top_u = @divTrunc(@as(i64, m.inkTop1000.?(m.ptr, g)) * @as(i64, run.size_units), 1000);
+                const bot_u = @divTrunc(@as(i64, m.inkBottom1000.?(m.ptr, g)) * @as(i64, run.size_units), 1000);
+                const sh_top = @divFloor(@as(i64, run.x_shear) * top_u, 1000);
+                const sh_bot = @divFloor(@as(i64, run.x_shear) * bot_u, 1000);
+                if (run.mirrored) {
+                    right -= @min(@as(i64, 0), @min(sh_top, sh_bot));
+                } else {
+                    right += @max(@as(i64, 0), @max(sh_top, sh_bot));
+                }
+            }
+            if (right > edge) edge = right;
+            const step: i64 = @divTrunc(
+                @as(i64, m.advance1000(m.ptr, g)) * @as(i64, run.size_units),
+                1000,
+            );
+            x_units += @divTrunc(step * @as(i64, run.x_scale), 1000);
+        }
+    }
+    return if (edge > @as(i64, width)) @intCast(edge - @as(i64, width)) else 0;
+}
+
 fn leftShiftUnits(m: ShiftMetrics, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule) u32 {
     var left: i64 = 0;
     for (rules) |r| {
@@ -267,6 +313,47 @@ test "left shift covers runs and rules, else zero" {
         .{ .font_id = 0, .size_units = 1000, .x = -500, .baseline_y = 0, .glyphs = &[_]u16{'x'}, .mirrored = true },
     };
     try std.testing.expectEqual(@as(u32, 1050), leftShiftUnits(m, &runs_mir, &.{}));
+}
+
+test "right shift covers runs and rules, else zero (issue #96)" {
+    // `\minuso` shape: the rlap circle's ink runs past the minus
+    // advance, the way `\llap` ink runs left of the origin. Same
+    // stub metrics as the left-shift twin (`x`: advance 500, ink
+    // right 550; `y`: advance 400, ink right 390).
+    const S = struct {
+        fn adv(_: *const anyopaque, g: u16) i32 {
+            return if (g == 'x') 500 else 400;
+        }
+        fn ink(_: *const anyopaque, g: u16) i32 {
+            return if (g == 'x') -50 else 10;
+        }
+        fn inkR(_: *const anyopaque, g: u16) i32 {
+            return if (g == 'x') 550 else 390;
+        }
+        var tag: u8 = 0;
+    };
+    const m: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink, .inkRight1000 = S.inkR };
+    // Ink inside the advance: zero shift (bit-identical canvas).
+    const runs_ok = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'} },
+    };
+    try std.testing.expectEqual(@as(u32, 0), rightShiftUnits(m, &runs_ok, &.{}, 400));
+    // Overhanging glyph: `x` ink reaches 550 past a 500 width.
+    const runs_over = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'x'} },
+    };
+    try std.testing.expectEqual(@as(u32, 50), rightShiftUnits(m, &runs_over, &.{}, 500));
+    // Rules contribute their rect right edge.
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = 450, .y = 0, .w = 100, .h = 10 },
+    };
+    try std.testing.expectEqual(@as(u32, 50), rightShiftUnits(m, &runs_ok, &rules, 500));
+    // Mirrored ink spans [-right, -left]: `x` mirrored at 500
+    // reaches 500+50 off the ink left.
+    const runs_mir = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 500, .baseline_y = 0, .glyphs = &[_]u16{'x'}, .mirrored = true },
+    };
+    try std.testing.expectEqual(@as(u32, 50), rightShiftUnits(m, &runs_mir, &.{}, 500));
 }
 
 test "left shift follows shear at ink extremes (issue #77)" {

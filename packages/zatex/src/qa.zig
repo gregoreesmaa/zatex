@@ -658,6 +658,140 @@ test "qa101 substack rows clear by strut floors, no fixed gap" {
     try std.testing.expectEqual(@as(i32, 670), ys[1] - ys[0]);
 }
 
+test "qa96 htmlmathml branches splice flat for spacing" {
+    // KaTeX splices `\html@mathml` branches flat into the enclosing
+    // row (no ordgroup shell — pinned 0.18.7): the mathtools colon
+    // family (`\dblcolon`, `\approxcoloncolon`, ...) keeps its
+    // Rel composition with no Rel–Ord thick glue (issue #96). Stub
+    // advances are uniform 500, so `\approx` ends at 500 and the
+    // -1.2mu kern lands the first colon at 433.
+    var b: B = .{};
+    const l = try lay("\\approxcoloncolon", false, &b);
+    try std.testing.expectEqual(@as(i32, 433), try glyphX(l, 58));
+    // Full span: 500 (approx) - 67 (kern) + 500 (colon) - 50 (kern)
+    // + 500 (colon) = 1383 — any Rel–Ord thick glue would add 278.
+    try std.testing.expectEqual(@as(u32, 1383), l.width);
+    var bd: B = .{};
+    const d = try lay("\\dblcolon", false, &bd);
+    try std.testing.expectEqual(@as(u32, 950), d.width);
+}
+
+test "qa96 negations render AMS PUA glyphs, MathML keeps the arbiter" {
+    // KaTeX renders precomposed AMS PUA glyphs in HTML (`\@nleqq`
+    // = U+E011, `\@nleqslant` = U+E010, pinned 0.18.7) while
+    // MathML carries the single codepoint (issue #73 arbiter, #96
+    // shapes). The stub maps codepoints 1:1, so layout runs carry
+    // the PUA codepoints distinctly; MathML stays byte-identical
+    // to the old static path (`<mo>≰</mo>`).
+    const cases = [_]struct { tex: []const u8, cp: u16 }{
+        .{ .tex = "\\nleqq", .cp = 0xE011 },
+        .{ .tex = "\\nleqslant", .cp = 0xE010 },
+        .{ .tex = "\\lvertneqq", .cp = 0xE00C },
+        .{ .tex = "\\ngeqq", .cp = 0xE00E },
+    };
+    for (cases) |c| {
+        var b: B = .{};
+        const l = try lay(c.tex, false, &b);
+        var found = false;
+        for (l.runs) |r| {
+            for (r.glyphs) |g| {
+                if (g == c.cp) found = true;
+            }
+        }
+        try std.testing.expect(found);
+    }
+    var out: [512]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo>≰</mo></mrow></math>",
+        try zatex.mathml("\\nleqq", .{}, &out),
+    );
+}
+
+test "qa96 groups stack contiguously by ink" {
+    // KaTeX windows the 342-tall group SVG contiguously over the
+    // nucleus (pinned 0.18.7 vlist: nucleus + 0.342, no clearance —
+    // the SVG's own transparent top provides the daylight), so the
+    // group ink bottom lands exactly on the nucleus top (issue
+    // #96). Ink-stub LM bounds: overgroup ink bottom +657,
+    // undergroup ink top -227; nucleus extents 700/250.
+    var bo: ProvBuf = .{};
+    const o = try layInk("\\overgroup{AB}", &bo);
+    try std.testing.expectEqual(@as(u32, 1000), o.width);
+    try std.testing.expectEqual(@as(u32, 743), o.height_above);
+    var onuc: ?i32 = null;
+    var ogrp: ?i32 = null;
+    for (o.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 54324) onuc = r.baseline_y;
+            if (g == 0x23E0) {
+                ogrp = r.baseline_y;
+                try std.testing.expectEqual(@as(u16, 2000), r.x_scale);
+                try std.testing.expectEqual(@as(i32, 0), r.x);
+            }
+        }
+    }
+    // Group ink bottom (+657) lands exactly on the nucleus top
+    // (+700): baselines sit 43 apart in any y orientation.
+    try std.testing.expectEqual(@as(i32, 43), onuc.? - ogrp.?);
+    var bu: ProvBuf = .{};
+    const u = try layInk("\\undergroup{AB}", &bu);
+    try std.testing.expectEqual(@as(u32, 1000), u.width);
+    try std.testing.expectEqual(@as(u32, 273), u.depth_below);
+    var unuc: ?i32 = null;
+    var ugrp: ?i32 = null;
+    for (u.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 54324) unuc = r.baseline_y;
+            if (g == 0x23E1) {
+                ugrp = r.baseline_y;
+                try std.testing.expectEqual(@as(u16, 2000), r.x_scale);
+                try std.testing.expectEqual(@as(i32, 0), r.x);
+            }
+        }
+    }
+    // Group ink top (-227) lands exactly on the nucleus bottom
+    // (-250): baselines sit 23 apart in any y orientation.
+    try std.testing.expectEqual(@as(i32, 23), ugrp.? - unuc.?);
+}
+
+test "qa96 segments are stroked to the span" {
+    // KaTeX draws over/underlinesegment from SVG (pinned 0.18.7
+    // `stretchy.ts`): a 40mu shaft with 40mu end caps in a
+    // 522-tall image, windowed contiguously over a min 0.888em
+    // span. The old path emitted the missing host glyph and
+    // rendered nothing (issue #96). Stub nucleus AB: 1000 wide,
+    // 700/250 extents.
+    var b: ProvBuf = .{};
+    const l = try layProv("\\overlinesegment{AB}", stubProvider(), &b);
+    try std.testing.expectEqual(@as(u32, 1000), l.width);
+    try std.testing.expectEqual(@as(u32, 1222), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+    var bd: ProvBuf = .{};
+    const d = try layProv("\\underlinesegment{AB}", stubProvider(), &bd);
+    try std.testing.expectEqual(@as(u32, 1000), d.width);
+    try std.testing.expectEqual(@as(u32, 700), d.height_above);
+    try std.testing.expectEqual(@as(u32, 772), d.depth_below);
+}
+
+test "qa96 underbar is the underline rule over a text nucleus" {
+    // KaTeX renders `\underbar` with the exact underline HTML
+    // (pinned 0.18.7: same `katex-underline` span, same 0.04em
+    // rule) but sets the body in text mode (issue #96): roman AB
+    // under a full-width rule — the same rule row `\underline`
+    // produces (1000 wide, depth 460), never the missing glyph.
+    var a: B = .{};
+    const l = try lay("\\underbar{AB}", false, &a);
+    try std.testing.expectEqual(@as(u32, 1000), l.width);
+    try std.testing.expectEqual(@as(u32, 460), l.depth_below);
+    var roman = false;
+    for (l.runs) |r| {
+        if (r.glyphs.len == 2 and r.glyphs[0] == 65 and r.glyphs[1] == 66) roman = true;
+    }
+    try std.testing.expect(roman);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    try std.testing.expectEqual(@as(u32, 1000), l.rules[0].w);
+}
+
 test "qa104 overarrows stretch to the nucleus span" {
     // KaTeX windows each shaft+head SVG over the content span
     // (pinned 0.18.7 `stretchy.ts`, minWidth 0.888em), so the arrow
@@ -689,18 +823,32 @@ test "qa104 overarrows stretch to the nucleus span" {
         }
         try std.testing.expect(found);
     }
-    // Narrow nucleus: no stretch, every run keeps identity scale.
+    // Narrow nucleus: KaTeX minWidth 0.888em binds (pinned 0.18.7
+    // `katexImagesData`), so the 500-wide stub glyph stretches to
+    // 888 (scale 1776, issue #96).
     var bn: ProvBuf = .{};
     const n = try layProv("\\overrightarrow{i}", stubProvider(), &bn);
-    try std.testing.expectEqual(@as(u32, 500), n.width);
-    for (n.runs) |r| try std.testing.expectEqual(@as(u16, 1000), r.x_scale);
-    // The tilde keeps its fixed wide-accent behavior (issue #104:
-    // KaTeX sizes it from a fixed set, never to the span).
+    try std.testing.expectEqual(@as(u32, 888), n.width);
+    for (n.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 0x2192) {
+                try std.testing.expectEqual(@as(u16, 1776), r.x_scale);
+                try std.testing.expectEqual(@as(i32, 0), r.x);
+            }
+        }
+    }
+    // The tilde stretches to the span like the other wide accents
+    // (KaTeX `preserveAspectRatio="none"`, issue #96): AB spans
+    // 1000 over the 500 stub glyph (scale 2000).
     var bt: ProvBuf = .{};
     const t = try layProv("\\utilde{AB}", stubProvider(), &bt);
+    try std.testing.expectEqual(@as(u32, 1000), t.width);
     for (t.runs) |r| {
         for (r.glyphs) |g| {
-            if (g == 0x007E) try std.testing.expectEqual(@as(u16, 1000), r.x_scale);
+            if (g == 0x007E) {
+                try std.testing.expectEqual(@as(u16, 2000), r.x_scale);
+                try std.testing.expectEqual(@as(i32, 0), r.x);
+            }
         }
     }
 }
@@ -1564,6 +1712,10 @@ const InkStub = struct {
             // its baseline (issue #55).
             0x23DE => .{ 0, 539, 492, 783 },
             0x23DF => .{ 0, -353, 492, -109 },
+            // LM group parens (issue #96; measured from the vendored
+            // latinmodern-math.otf via fontTools BoundsPen).
+            0x23E0 => .{ 0, 657, 546, 829 },
+            0x23E1 => .{ 0, -399, 546, -227 },
             // Base radical ink (LM-measured): right edge overhangs
             // the 833 advance by 20mu (issue #56).
             0x221A => .{ 73, -960, 853, 40 },

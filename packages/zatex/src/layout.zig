@@ -727,6 +727,22 @@ fn layoutGroup(lc: *LayCtx, style: parse.Style, g: parse.Range) Error!u16 {
     });
 }
 
+/// Spacing class of a `\html@mathml` branch: KaTeX splices the
+/// branch flat into the enclosing row (no ordgroup shell — pinned
+/// 0.18.7: `\approxcoloncolon` shows no Rel–Ord thick glue), so a
+/// braced single-composition branch exposes its content class for
+/// spacing (issue #96). Multi-kid and logo branches keep today's
+/// behavior (their first kid is Ord, as before).
+fn htmlMathmlClass(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
+    const n = parse.nodeAt(pc, id);
+    if (n == .group) {
+        const kids = parse.kidsOf(pc, n.group);
+        if (kids.len == 0) return .Ord;
+        return classOf(pc, kids[0]);
+    }
+    return classOf(pc, id);
+}
+
 /// Spacing class of a node, or null for transparent glue.
 fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
     const n = parse.nodeAt(pc, id);
@@ -771,7 +787,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .phantom => |p| return classOf(pc, p.body),
         .boxed => return .Ord,
         .fbox => return .Ord,
-        .htmlmathml => |h| return classOf(pc, h.html),
+        .htmlmathml => |h| return htmlMathmlClass(pc, h.html),
         .cancel => |c| return classOf(pc, c.body),
         .xcancel => |b| return classOf(pc, b),
         .phase => |b| return classOf(pc, b),
@@ -2050,7 +2066,10 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
     const th = lc.ruleTh(font, .overline);
     const gap: i32 = @divTrunc((@as(i32, 150) * size), 1000);
     switch (o.kind) {
-        .overline, .underline => {
+        // KaTeX renders `\underbar` with the exact underline
+        // construction (pinned 0.18.7: same `katex-underline` span,
+        // same 0.04em rule), not a font glyph (issue #96).
+        .overline, .underline, .underbar => {
             const nuc = try layoutNode(lc, style, o.nucleus);
             const nb = lc.boxes[nuc];
             const rb = try lc.allocBox(.{
@@ -2124,6 +2143,67 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
         else => {
             // Brace / arrow overs: glyph above or below the nucleus,
             // extensible-arrow labels in script style.
+            if (o.kind == .overlinesegment or o.kind == .underlinesegment) {
+                // KaTeX parity (pinned 0.18.7 `stretchy.ts`, issue
+                // #96): segments are stroked like square brackets —
+                // there is no host glyph (the old path emitted the
+                // missing glyph, rendering nothing). The SVG image is
+                // 522 tall with a 40mu shaft (y 241..281) and 40mu
+                // end caps spanning y 94..428, windowed contiguously
+                // over the nucleus (min span 0.888em).
+                const is_under = o.kind == .underlinesegment;
+                const nuc = try layoutNode(lc, style, o.nucleus);
+                const nb = lc.boxes[nuc];
+                const minw = @divTrunc(@as(i32, 888) * size, 1000);
+                const w = if (nb.w > minw) nb.w else minw;
+                const bar40 = @divTrunc(@as(i32, 40) * size, 1000);
+                const cap_lo = @divTrunc(@as(i32, 94) * size, 1000);
+                const cap_hi = @divTrunc(@as(i32, 334) * size, 1000);
+                const img522 = @divTrunc(@as(i32, 522) * size, 1000);
+                const shaft_lo = @divTrunc(@as(i32, 241) * size, 1000);
+                const shaft = try lc.allocBox(.{
+                    .w = w,
+                    .ha = @divTrunc(bar40 + 1, 2),
+                    .db = bar40 - @divTrunc(bar40 + 1, 2),
+                    .kind = .{ .rule = {} },
+                    .invisible = false,
+                });
+                const cap = try lc.allocBox(.{
+                    .w = bar40,
+                    .ha = cap_hi,
+                    .db = 0,
+                    .kind = .{ .rule = {} },
+                    .invisible = false,
+                });
+                const s = try lc.allocKids(4);
+                const nx = @divTrunc(w - nb.w, 2);
+                lc.bkids[s] = .{ .box = nuc, .dx = nx, .dy = 0 };
+                const sh_db = lc.boxes[shaft].db;
+                const sh_ha = lc.boxes[shaft].ha;
+                if (!is_under) {
+                    lc.bkids[s + 1] = .{ .box = shaft, .dx = 0, .dy = nb.ha + shaft_lo + sh_db };
+                    lc.bkids[s + 2] = .{ .box = cap, .dx = 0, .dy = nb.ha + cap_lo };
+                    lc.bkids[s + 3] = .{ .box = cap, .dx = w - bar40, .dy = nb.ha + cap_lo };
+                    return lc.allocBox(.{
+                        .w = w,
+                        .ha = nb.ha + img522,
+                        .db = nb.db,
+                        .kind = .{ .list = .{ .start = s, .len = 4 } },
+                        .invisible = false,
+                    });
+                } else {
+                    lc.bkids[s + 1] = .{ .box = shaft, .dx = 0, .dy = -(nb.db + shaft_lo + sh_ha) };
+                    lc.bkids[s + 2] = .{ .box = cap, .dx = 0, .dy = -(nb.db + cap_lo + cap_hi) };
+                    lc.bkids[s + 3] = .{ .box = cap, .dx = w - bar40, .dy = -(nb.db + cap_lo + cap_hi) };
+                    return lc.allocBox(.{
+                        .w = w,
+                        .ha = nb.ha,
+                        .db = nb.db + img522,
+                        .kind = .{ .list = .{ .start = s, .len = 4 } },
+                        .invisible = false,
+                    });
+                }
+            }
             if (o.kind == .overbracket or o.kind == .underbracket) {
                 // KaTeX parity (pinned 0.18.7 `stretchy.ts`, issue
                 // #51): square brackets are drawn from strokes, not a
@@ -2285,16 +2365,24 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             // advance meets it). The tilde keeps its fixed wide-accent
             // behavior and the segment kinds have no host glyph.
             const is_brace = o.kind == .overbrace or o.kind == .underbrace;
+            const is_group = o.kind == .overgroup or o.kind == .undergroup;
+            const is_tilde = o.kind == .utilde;
             const stretchy = switch (o.kind) {
                 .overleft, .overright, .overboth,
                 .underleft, .underright, .underboth,
                 .overgroup, .undergroup,
                 .overleftharpoon, .overrightharpoon,
-                .overRightarrow, .underbar,
+                .overRightarrow, .utilde,
                 => true,
                 else => false,
             };
-            const w = if (is_brace) nb.w else if (nb.w > gw) nb.w else gw;
+            // KaTeX minWidth 0.888em for the windowed-SVG overs
+            // (pinned 0.18.7 `katexImagesData`); the tilde sizes at
+            // 100% like the other wide accents, and braces keep
+            // their exact span (issue #96).
+            const minw = @divTrunc(@as(i32, 888) * size, 1000);
+            var w = if (is_brace) nb.w else if (nb.w > gw) nb.w else gw;
+            if (stretchy and !is_tilde and w < minw) w = minw;
             // A fixed host glyph wider than the span cannot center
             // without leaving the ink box (negative run x breaks the
             // non-negativity invariant); clamp it at the left edge —
@@ -2318,13 +2406,18 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             // edge lands exactly 100mu from the nucleus. Arrows and
             // null-hook providers keep the legacy rule bit-identically.
             const bgap: i32 = @divTrunc(@as(i32, 100) * size, 1000);
-            const bink = if (is_brace) lc.ink(font, gg) else null;
+            // Groups stack contiguously (KaTeX vlist = nucleus +
+            // 0.342em: no clearance — the SVG's own transparent top
+            // provides the daylight); braces keep the 0.1em
+            // ink-to-ink kern (issue #96).
+            const eff_bgap: i32 = if (is_group) 0 else bgap;
+            const bink = if (is_brace or is_group) lc.ink(font, gg) else null;
             const bink_ok = if (bink) |bib| bib[3] > bib[1] else false;
             if (!is_under) {
                 var gy = nb.ha + gap + gdb;
                 if (bink_ok) {
                     const iy0 = @divTrunc(bink.?[1] * size, 1000);
-                    gy = nb.ha + bgap - iy0;
+                    gy = nb.ha + eff_bgap - iy0;
                 }
                 lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = gb, .dx = gx, .dy = gy };
@@ -2339,7 +2432,7 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 var gy = -(nb.db + gap + gha);
                 if (bink_ok) {
                     const iy1 = @divTrunc(bink.?[3] * size, 1000);
-                    gy = -(nb.db + bgap + iy1);
+                    gy = -(nb.db + eff_bgap + iy1);
                 }
                 lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = gb, .dx = gx, .dy = gy };

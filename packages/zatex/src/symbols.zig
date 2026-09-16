@@ -592,7 +592,10 @@ const operators_full = if (active_profile == .full) [_]Entry{
     .{ .name = "impliedby", .sym = S(0x27F8, .Rel) },
     // Negated relations (issue #73): KaTeX renders PUA glyphs from
     // its own font in HTML but single precomposed codepoints in
-    // MathML (the parity arbiter), which is what these carry.
+    // MathML (the parity arbiter), which is what these carry. The
+    // user macros below expand to `\html@mathml` dual branches
+    // (issue #96); these entries stay for the subset profile (whose
+    // macro arms are pruned) and as the math-branch atoms.
     .{ .name = "gvertneqq", .sym = S(0x2269, .Rel) },
     .{ .name = "lvertneqq", .sym = S(0x2268, .Rel) },
     .{ .name = "ngeqq", .sym = S(0x2271, .Rel) },
@@ -607,6 +610,25 @@ const operators_full = if (active_profile == .full) [_]Entry{
     .{ .name = "varsubsetneqq", .sym = S(0x2ACB, .Rel) },
     .{ .name = "varsupsetneq", .sym = S(0x228B, .Rel) },
     .{ .name = "varsupsetneqq", .sym = S(0x2ACC, .Rel) },
+    // AMS PUA precomposed negations (issue #96): KaTeX's HTML-side
+    // glyphs for the `\@`-symbols (pinned 0.18.7 `symbols.js`),
+    // resolved through the AMS fallback. The user-level macros
+    // pair each with its MathML codepoint on an `\html@mathml`
+    // math branch, so MathML keeps the #73 arbiter codepoints.
+    .{ .name = "@nleqslant", .sym = S(0xE010, .Rel) },
+    .{ .name = "@nleqq", .sym = S(0xE011, .Rel) },
+    .{ .name = "@lvertneqq", .sym = S(0xE00C, .Rel) },
+    .{ .name = "@nshortmid", .sym = S(0xE006, .Rel) },
+    .{ .name = "@varsubsetneq", .sym = S(0xE01A, .Rel) },
+    .{ .name = "@varsubsetneqq", .sym = S(0xE017, .Rel) },
+    .{ .name = "@ngeqslant", .sym = S(0xE00F, .Rel) },
+    .{ .name = "@ngeqq", .sym = S(0xE00E, .Rel) },
+    .{ .name = "@gvertneqq", .sym = S(0xE00D, .Rel) },
+    .{ .name = "@nshortparallel", .sym = S(0xE007, .Rel) },
+    .{ .name = "@nsupseteqq", .sym = S(0xE018, .Rel) },
+    .{ .name = "@varsupsetneq", .sym = S(0xE01B, .Rel) },
+    .{ .name = "@varsupsetneqq", .sym = S(0xE019, .Rel) },
+    .{ .name = "@nsubseteqq", .sym = S(0xE016, .Rel) },
     // Membership negations and mirror (issue #73): single MathML
     // codepoints (`\\notin` renders `\\not\\ni` in KaTeX HTML, but
     // the parity arbiter is the single `\\u2209`).
