@@ -592,6 +592,102 @@
   "expect": "accept"
  },
  {
+  "id": "graphics-basic",
+  "tex": "\\includegraphics{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-width",
+  "tex": "\\includegraphics[width=1em]{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-sizes",
+  "tex": "\\includegraphics[width=1mu,height=1bp]{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-total",
+  "tex": "\\includegraphics[height=2pt,totalheight=3pt]{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-alt",
+  "tex": "\\includegraphics[alt=x]{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-empty-opts",
+  "tex": "\\includegraphics[]{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-bare-arg",
+  "tex": "\\includegraphics a",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-spaces",
+  "tex": "\\includegraphics [width=1em] {a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-nested-url",
+  "tex": "\\includegraphics{{a}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "graphics-rej-key",
+  "tex": "\\includegraphics[foo=1em]{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "graphics-rej-size",
+  "tex": "\\includegraphics[width=abc]{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "graphics-rej-unit",
+  "tex": "\\includegraphics[width=1xx]{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "graphics-rej-unclosed-opt",
+  "tex": "\\includegraphics[width=1em",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "graphics-rej-no-arg",
+  "tex": "\\includegraphics",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "graphics-rej-stray-brace",
+  "tex": "\\includegraphics[a}b]{c}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "graphics-rej-text-mode",
+  "tex": "\\text{\\includegraphics{a}}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
   "id": "smash",
   "tex": "\\smash[t]{x}^{2}",
   "display": false,
@@ -4259,7 +4355,7 @@
  },
  {
   "id": "rej-unsup-cancelto",
-  "tex": "\\cancelto",
+  "tex": "\\cancelto{0}{x}",
   "display": false,
   "expect": "reject"
  },
@@ -5210,5 +5306,3203 @@
   "tex": "\\sout{abc}",
   "display": false,
   "expect": "accept"
+ },
+ {
+  "id": "sym-And",
+  "tex": "\\And",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-backepsilon",
+  "tex": "\\backepsilon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-backsim",
+  "tex": "\\backsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-backsimeq",
+  "tex": "\\backsimeq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-barwedge",
+  "tex": "\\barwedge",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-because",
+  "tex": "\\because",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-between",
+  "tex": "\\between",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-bigcirc",
+  "tex": "\\bigcirc",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-bigsqcup",
+  "tex": "\\bigsqcup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-bigstar",
+  "tex": "\\bigstar",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-blacklozenge",
+  "tex": "\\blacklozenge",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-blacksquare",
+  "tex": "\\blacksquare",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-blacktriangle",
+  "tex": "\\blacktriangle",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-blacktriangledown",
+  "tex": "\\blacktriangledown",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-blacktriangleleft",
+  "tex": "\\blacktriangleleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-blacktriangleright",
+  "tex": "\\blacktriangleright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Box",
+  "tex": "\\Box",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Bumpeq",
+  "tex": "\\Bumpeq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-bumpeq",
+  "tex": "\\bumpeq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Cap",
+  "tex": "\\Cap",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-circeq",
+  "tex": "\\circeq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-circlearrowleft",
+  "tex": "\\circlearrowleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-circlearrowright",
+  "tex": "\\circlearrowright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-circledast",
+  "tex": "\\circledast",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-circledcirc",
+  "tex": "\\circledcirc",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-circleddash",
+  "tex": "\\circleddash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-complement",
+  "tex": "\\complement",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Cup",
+  "tex": "\\Cup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-curlyeqprec",
+  "tex": "\\curlyeqprec",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-curlyeqsucc",
+  "tex": "\\curlyeqsucc",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-curlyvee",
+  "tex": "\\curlyvee",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-curlywedge",
+  "tex": "\\curlywedge",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-curvearrowleft",
+  "tex": "\\curvearrowleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-curvearrowright",
+  "tex": "\\curvearrowright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dashleftarrow",
+  "tex": "\\dashleftarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dashrightarrow",
+  "tex": "\\dashrightarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-degree",
+  "tex": "\\degree",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-diagdown",
+  "tex": "\\diagdown",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-diagup",
+  "tex": "\\diagup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Diamond",
+  "tex": "\\Diamond",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-divideontimes",
+  "tex": "\\divideontimes",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Doteq",
+  "tex": "\\Doteq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-doteqdot",
+  "tex": "\\doteqdot",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dotplus",
+  "tex": "\\dotplus",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-doublebarwedge",
+  "tex": "\\doublebarwedge",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-doublecap",
+  "tex": "\\doublecap",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-doublecup",
+  "tex": "\\doublecup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-downdownarrows",
+  "tex": "\\downdownarrows",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-downharpoonleft",
+  "tex": "\\downharpoonleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-downharpoonright",
+  "tex": "\\downharpoonright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-eqsim",
+  "tex": "\\eqsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-eqslantgtr",
+  "tex": "\\eqslantgtr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-eqslantless",
+  "tex": "\\eqslantless",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-fallingdotseq",
+  "tex": "\\fallingdotseq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-geqq",
+  "tex": "\\geqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-geqslant",
+  "tex": "\\geqslant",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gggtr",
+  "tex": "\\gggtr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gnapprox",
+  "tex": "\\gnapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gneq",
+  "tex": "\\gneq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gneqq",
+  "tex": "\\gneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gnsim",
+  "tex": "\\gnsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gt",
+  "tex": "a \\gt b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gtrdot",
+  "tex": "\\gtrdot",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gtreqless",
+  "tex": "\\gtreqless",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gtreqqless",
+  "tex": "\\gtreqqless",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gtrless",
+  "tex": "\\gtrless",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-imageof",
+  "tex": "\\imageof",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-intercal",
+  "tex": "\\intercal",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-intop",
+  "tex": "\\intop",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lbrace",
+  "tex": "\\lbrace",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lbrack",
+  "tex": "\\lbrack",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leadsto",
+  "tex": "\\leadsto",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leftarrowtail",
+  "tex": "\\leftarrowtail",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leftleftarrows",
+  "tex": "\\leftleftarrows",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leftrightarrows",
+  "tex": "\\leftrightarrows",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leftrightharpoons",
+  "tex": "\\leftrightharpoons",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leftrightsquigarrow",
+  "tex": "\\leftrightsquigarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leftthreetimes",
+  "tex": "\\leftthreetimes",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leqq",
+  "tex": "\\leqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-leqslant",
+  "tex": "\\leqslant",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lessdot",
+  "tex": "\\lessdot",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lesseqgtr",
+  "tex": "\\lesseqgtr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lesseqqgtr",
+  "tex": "\\lesseqqgtr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lessgtr",
+  "tex": "\\lessgtr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lgroup",
+  "tex": "\\lgroup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Lleftarrow",
+  "tex": "\\Lleftarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-llless",
+  "tex": "\\llless",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lmoustache",
+  "tex": "\\lmoustache",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lnapprox",
+  "tex": "\\lnapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lneq",
+  "tex": "\\lneq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lneqq",
+  "tex": "\\lneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lnsim",
+  "tex": "\\lnsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-longmapsto",
+  "tex": "\\longmapsto",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-looparrowleft",
+  "tex": "\\looparrowleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-looparrowright",
+  "tex": "\\looparrowright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lozenge",
+  "tex": "\\lozenge",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lparen",
+  "tex": "\\lparen",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Lsh",
+  "tex": "\\Lsh",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lt",
+  "tex": "\\lt",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ltimes",
+  "tex": "\\ltimes",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-mathellipsis",
+  "tex": "\\mathellipsis",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-mathsterling",
+  "tex": "\\mathsterling",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-multimap",
+  "tex": "\\multimap",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ncong",
+  "tex": "\\ncong",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ngeq",
+  "tex": "\\ngeq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ngtr",
+  "tex": "\\ngtr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nleftarrow",
+  "tex": "\\nleftarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nLeftarrow",
+  "tex": "\\nLeftarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nLeftrightarrow",
+  "tex": "\\nLeftrightarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nleftrightarrow",
+  "tex": "\\nleftrightarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nleq",
+  "tex": "\\nleq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nless",
+  "tex": "\\nless",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nobreakspace",
+  "tex": "a\\nobreakspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nparallel",
+  "tex": "\\nparallel",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nprec",
+  "tex": "\\nprec",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-npreceq",
+  "tex": "\\npreceq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nRightarrow",
+  "tex": "\\nRightarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nrightarrow",
+  "tex": "\\nrightarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nsim",
+  "tex": "\\nsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nsubseteq",
+  "tex": "\\nsubseteq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nsucc",
+  "tex": "\\nsucc",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nsucceq",
+  "tex": "\\nsucceq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nsupseteq",
+  "tex": "\\nsupseteq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ntriangleleft",
+  "tex": "\\ntriangleleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ntrianglelefteq",
+  "tex": "\\ntrianglelefteq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ntriangleright",
+  "tex": "\\ntriangleright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ntrianglerighteq",
+  "tex": "\\ntrianglerighteq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nVDash",
+  "tex": "\\nVDash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nVdash",
+  "tex": "\\nVdash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nvDash",
+  "tex": "\\nvDash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nvdash",
+  "tex": "\\nvdash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-oiiint",
+  "tex": "\\oiiint",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-oiint",
+  "tex": "\\oiint",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-omicron",
+  "tex": "\\omicron",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-origof",
+  "tex": "\\origof",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-pitchfork",
+  "tex": "\\pitchfork",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-precapprox",
+  "tex": "\\precapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-preccurlyeq",
+  "tex": "\\preccurlyeq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-precnapprox",
+  "tex": "\\precnapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-precneqq",
+  "tex": "\\precneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-precnsim",
+  "tex": "\\precnsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-precsim",
+  "tex": "\\precsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rbrace",
+  "tex": "\\rbrace",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rbrack",
+  "tex": "\\rbrack",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-restriction",
+  "tex": "\\restriction",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rgroup",
+  "tex": "\\rgroup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rightarrowtail",
+  "tex": "\\rightarrowtail",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rightleftarrows",
+  "tex": "\\rightleftarrows",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rightrightarrows",
+  "tex": "\\rightrightarrows",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rightsquigarrow",
+  "tex": "\\rightsquigarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rightthreetimes",
+  "tex": "\\rightthreetimes",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-risingdotseq",
+  "tex": "\\risingdotseq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rmoustache",
+  "tex": "\\rmoustache",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rparen",
+  "tex": "\\rparen",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Rrightarrow",
+  "tex": "\\Rrightarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Rsh",
+  "tex": "\\Rsh",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rtimes",
+  "tex": "\\rtimes",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-shortmid",
+  "tex": "\\shortmid",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-shortparallel",
+  "tex": "\\shortparallel",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-smallfrown",
+  "tex": "\\smallfrown",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-smallint",
+  "tex": "\\smallint",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-smallsetminus",
+  "tex": "\\smallsetminus",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-smallsmile",
+  "tex": "\\smallsmile",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-space",
+  "tex": "a\\space b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-square",
+  "tex": "\\square",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Subset",
+  "tex": "\\Subset",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-subseteqq",
+  "tex": "\\subseteqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-subsetneqq",
+  "tex": "\\subsetneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-succapprox",
+  "tex": "\\succapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-succcurlyeq",
+  "tex": "\\succcurlyeq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-succnapprox",
+  "tex": "\\succnapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-succneqq",
+  "tex": "\\succneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-succnsim",
+  "tex": "\\succnsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-succsim",
+  "tex": "\\succsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Supset",
+  "tex": "\\Supset",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-supseteqq",
+  "tex": "\\supseteqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-supsetneqq",
+  "tex": "\\supsetneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-therefore",
+  "tex": "\\therefore",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-thickapprox",
+  "tex": "\\thickapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-thicksim",
+  "tex": "\\thicksim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-triangle",
+  "tex": "\\triangle",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-triangledown",
+  "tex": "\\triangledown",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-trianglelefteq",
+  "tex": "\\trianglelefteq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-triangleq",
+  "tex": "\\triangleq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-trianglerighteq",
+  "tex": "\\trianglerighteq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-twoheadleftarrow",
+  "tex": "\\twoheadleftarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-twoheadrightarrow",
+  "tex": "\\twoheadrightarrow",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-upharpoonleft",
+  "tex": "\\upharpoonleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-upharpoonright",
+  "tex": "\\upharpoonright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-upuparrows",
+  "tex": "\\upuparrows",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varkappa",
+  "tex": "\\varkappa",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varpropto",
+  "tex": "\\varpropto",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-vartriangle",
+  "tex": "\\vartriangle",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-vartriangleleft",
+  "tex": "\\vartriangleleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-vartriangleright",
+  "tex": "\\vartriangleright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Vdash",
+  "tex": "\\Vdash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-vDash",
+  "tex": "\\vDash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-veebar",
+  "tex": "\\veebar",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Vvdash",
+  "tex": "\\Vvdash",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-allowbreak",
+  "tex": "\\allowbreak x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-nobreak",
+  "tex": "\\nobreak x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-relax",
+  "tex": "\\relax x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-long",
+  "tex": "\\long\\def\\foo{A}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-long-bad",
+  "tex": "\\long x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "arb-global-bad",
+  "tex": "\\global\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "arb-noexpand",
+  "tex": "\\def\\foo{A}\\noexpand\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-noexpand-end",
+  "tex": "x\\noexpand",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-expandafter",
+  "tex": "\\def\\foo{A}\\expandafter\\foo\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-futurelet",
+  "tex": "\\def\\foo{A}\\futurelet\\a\\foo\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arb-let-alias-undef",
+  "tex": "\\let\\a=\\foo\\a",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "arb-futurelet-undef",
+  "tex": "\\futurelet\\a\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "arb-let-alias-shadow",
+  "tex": "\\let\\a=\\foo\\def\\foo{X}\\a",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "hbox-to",
+  "tex": "\\hbox to 10pt{A}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-medspace",
+  "tex": "a\\>\\>{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Bbb",
+  "tex": "\\Bbb{ABC}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-bcancel",
+  "tex": "\\bcancel{5}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-bf",
+  "tex": "\\bf AaBb12",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-biggl",
+  "tex": "\\biggl(",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Biggl",
+  "tex": "\\Biggl(",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-biggr",
+  "tex": "\\biggr)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Biggr",
+  "tex": "\\Biggr)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-brace",
+  "tex": "{n\\brace k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-brack",
+  "tex": "{n\\brack k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-cal",
+  "tex": "\\cal AaBb123",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-colon",
+  "tex": "\\colon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-copyright",
+  "tex": "\\copyright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-fbox",
+  "tex": "\\fbox{Hi there!}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-hphantom",
+  "tex": "a\\hphantom{bc}d",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-hskip",
+  "tex": "w\\hskip1em i\\hskip2em d",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-htmlClass",
+  "tex": "\\htmlClass{foo}{x}\ntrust\nstrict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-htmlData",
+  "tex": "\\htmlData{foo=a, bar=b}{x}\ntrust\nstrict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-htmlId",
+  "tex": "\\htmlId{bar}{x}\ntrust\nstrict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-htmlStyle",
+  "tex": "\\htmlStyle{color: red;}{x}\ntrust\nstrict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-it",
+  "tex": "{\\it AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-KaTeX",
+  "tex": "\\KaTeX",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-LaTeX",
+  "tex": "\\LaTeX",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathnormal",
+  "tex": "\\mathnormal{AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mkern",
+  "tex": "a\\mkern18mu b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mskip",
+  "tex": "a\\mskip{10mu}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-overleftrightarrow",
+  "tex": "\\overleftrightarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-rm",
+  "tex": "\\rm AaBb12",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-sf",
+  "tex": "\\sf AaBb123",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-TeX",
+  "tex": "\\TeX",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-textmd",
+  "tex": "\\textmd{AaBb123}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-textup",
+  "tex": "\\textup{AaBb123}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-tt",
+  "tex": "{\\tt AaBb123}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-underleftarrow",
+  "tex": "\\underleftarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-underleftrightarrow",
+  "tex": "\\underleftrightarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-underrightarrow",
+  "tex": "\\underrightarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-xhookleftarrow",
+  "tex": "\\xhookleftarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-xhookrightarrow",
+  "tex": "\\xhookrightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-xleftrightarrow",
+  "tex": "\\xleftrightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-xmapsto",
+  "tex": "\\xmapsto{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-xtwoheadleftarrow",
+  "tex": "\\xtwoheadleftarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-xtwoheadrightarrow",
+  "tex": "\\xtwoheadrightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathpunct",
+  "tex": "\\mathpunct{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "subarray-c",
+  "tex": "\\begin{subarray}{c}a\\\\bb\\end{subarray}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "subarray-l",
+  "tex": "\\sum_{\\begin{subarray}{l}1\\le i\\le n\\end{subarray}}x_i",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Darr",
+  "tex": "\\Darr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Harr",
+  "tex": "\\Harr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Larr",
+  "tex": "\\Larr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Lrarr",
+  "tex": "\\Lrarr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Rarr",
+  "tex": "\\Rarr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Uarr",
+  "tex": "\\Uarr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dArr",
+  "tex": "\\dArr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-darr",
+  "tex": "\\darr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-hArr",
+  "tex": "\\hArr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-harr",
+  "tex": "\\harr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lArr",
+  "tex": "\\lArr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-larr",
+  "tex": "\\larr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lrArr",
+  "tex": "\\lrArr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lrarr",
+  "tex": "\\lrarr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rArr",
+  "tex": "\\rArr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rarr",
+  "tex": "\\rarr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-uArr",
+  "tex": "\\uArr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-uarr",
+  "tex": "\\uarr",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-clubs",
+  "tex": "\\clubs",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-diamonds",
+  "tex": "\\diamonds",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-hearts",
+  "tex": "\\hearts",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-spades",
+  "tex": "\\spades",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dotsb",
+  "tex": "\\dotsb",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dotsc",
+  "tex": "\\dotsc",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dotsm",
+  "tex": "\\dotsm",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-dotso",
+  "tex": "\\dotso",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varDelta",
+  "tex": "\\varDelta",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varGamma",
+  "tex": "\\varGamma",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varLambda",
+  "tex": "\\varLambda",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varOmega",
+  "tex": "\\varOmega",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varPhi",
+  "tex": "\\varPhi",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varPi",
+  "tex": "\\varPi",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varPsi",
+  "tex": "\\varPsi",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varSigma",
+  "tex": "\\varSigma",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varTheta",
+  "tex": "\\varTheta",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varUpsilon",
+  "tex": "\\varUpsilon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varXi",
+  "tex": "\\varXi",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Omicron",
+  "tex": "\\Omicron",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-thetasym",
+  "tex": "\\thetasym",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-alef",
+  "tex": "\\alef",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-alefsym",
+  "tex": "\\alefsym",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-empty",
+  "tex": "\\empty",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-exist",
+  "tex": "\\exist",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-infin",
+  "tex": "\\infin",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-bull",
+  "tex": "\\bull",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-sdot",
+  "tex": "\\sdot",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-plusmn",
+  "tex": "\\plusmn",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Dagger",
+  "tex": "\\Dagger",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lq",
+  "tex": "\\lq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-image",
+  "tex": "\\image",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-real",
+  "tex": "\\real",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-weierp",
+  "tex": "\\weierp",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Bbbk",
+  "tex": "\\Bbbk",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Complex",
+  "tex": "\\Complex",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-cnums",
+  "tex": "\\cnums",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-N",
+  "tex": "\\N",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-natnums",
+  "tex": "\\natnums",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-R",
+  "tex": "\\R",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Reals",
+  "tex": "\\Reals",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-reals",
+  "tex": "\\reals",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Z",
+  "tex": "\\Z",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-gvertneqq",
+  "tex": "\\gvertneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-lvertneqq",
+  "tex": "\\lvertneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ngeqq",
+  "tex": "\\ngeqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-ngeqslant",
+  "tex": "\\ngeqslant",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nleqq",
+  "tex": "\\nleqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nleqslant",
+  "tex": "\\nleqslant",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nshortmid",
+  "tex": "\\nshortmid",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nshortparallel",
+  "tex": "\\nshortparallel",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nsubseteqq",
+  "tex": "\\nsubseteqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-nsupseteqq",
+  "tex": "\\nsupseteqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varsubsetneq",
+  "tex": "\\varsubsetneq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varsubsetneqq",
+  "tex": "\\varsubsetneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varsupsetneq",
+  "tex": "\\varsupsetneq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-varsupsetneqq",
+  "tex": "\\varsupsetneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-notin",
+  "tex": "\\notin",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-notni",
+  "tex": "\\notni",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-mapsfrom",
+  "tex": "\\mapsfrom",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-isin",
+  "tex": "\\isin",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-sub",
+  "tex": "\\sub",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-sube",
+  "tex": "\\sube",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-supe",
+  "tex": "\\supe",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-llbracket",
+  "tex": "\\llbracket",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-rrbracket",
+  "tex": "\\rrbracket",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arcctg",
+  "tex": "\\arcctg x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arctg",
+  "tex": "\\arctg x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cosec",
+  "tex": "\\cosec x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cotg",
+  "tex": "\\cotg x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "ctg",
+  "tex": "\\ctg x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cth",
+  "tex": "\\cth x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "tg",
+  "tex": "\\tg x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "th",
+  "tex": "\\th x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sh",
+  "tex": "\\sh x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "ch",
+  "tex": "\\ch x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "argmax",
+  "tex": "\\argmax x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "argmax-limits",
+  "tex": "\\argmax_x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "argmin",
+  "tex": "\\argmin x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "argmin-limits",
+  "tex": "\\argmin_x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "injlim",
+  "tex": "\\injlim x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "injlim-limits",
+  "tex": "\\injlim_x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "projlim",
+  "tex": "\\projlim x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "projlim-limits",
+  "tex": "\\projlim_x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "iff",
+  "tex": "x\\iff y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "implies",
+  "tex": "x\\implies y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "impliedby",
+  "tex": "x\\impliedby y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "thinspace",
+  "tex": "a\\thinspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "medspace",
+  "tex": "a\\medspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "thickspace",
+  "tex": "a\\thickspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "negthinspace",
+  "tex": "a\\negthinspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "negmedspace",
+  "tex": "a\\negmedspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "negthickspace",
+  "tex": "a\\negthickspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "enspace",
+  "tex": "a\\enspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "newline",
+  "tex": "a\\newline b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "gt-space",
+  "tex": "a\\>b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Bbb",
+  "tex": "\\Bbb{ABC}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Biggl",
+  "tex": "\\Biggl(",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Biggr",
+  "tex": "\\Biggr)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bcancel",
+  "tex": "\\bcancel{5}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bf",
+  "tex": "\\bf AaBb12",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "biggl",
+  "tex": "\\biggl(",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "biggr",
+  "tex": "\\biggr)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "brace",
+  "tex": "{n\\brace k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "brack",
+  "tex": "{n\\brack k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cal",
+  "tex": "\\cal AaBb123",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "hskip",
+  "tex": "w\\hskip1em i\\hskip2em d",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "htmlClass",
+  "tex": "\\htmlClass{foo}{x}` Must enable `trust` and disable `strict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "htmlData",
+  "tex": "\\htmlData{foo=a, bar=b}{x}` Must enable `trust` and disable `strict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "htmlId",
+  "tex": "\\htmlId{bar}{x}` Must enable `trust` and disable `strict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "htmlStyle",
+  "tex": "\\htmlStyle{color: red;}{x}` Must enable `trust` and disable `strict",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "it",
+  "tex": "{\\it AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathnormal",
+  "tex": "\\mathnormal{AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mkern",
+  "tex": "a\\mkern18mu b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mskip",
+  "tex": "a\\mskip{10mu}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overleftrightarrow",
+  "tex": "\\overleftrightarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rm",
+  "tex": "\\rm AaBb12",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sf",
+  "tex": "\\sf AaBb123",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textmd",
+  "tex": "\\textmd{AaBb123}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textup",
+  "tex": "\\textup{AaBb123}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "tt",
+  "tex": "{\\tt AaBb123}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "underleftarrow",
+  "tex": "\\underleftarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "underleftrightarrow",
+  "tex": "\\underleftrightarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "underrightarrow",
+  "tex": "\\underrightarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xhookleftarrow",
+  "tex": "\\xhookleftarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xhookrightarrow",
+  "tex": "\\xhookrightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xleftrightarrow",
+  "tex": "\\xleftrightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xmapsto",
+  "tex": "\\xmapsto{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xtwoheadleftarrow",
+  "tex": "\\xtwoheadleftarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xtwoheadrightarrow",
+  "tex": "\\xtwoheadrightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathbin",
+  "tex": "\\mathbin{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathclose",
+  "tex": "\\mathclose{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathopen",
+  "tex": "\\mathopen{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathord",
+  "tex": "\\mathord{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "plim",
+  "tex": "\\plim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "tiny",
+  "tex": "{\\tiny x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sixptsize",
+  "tex": "{\\sixptsize x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "scriptsize",
+  "tex": "{\\scriptsize x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "footnotesize",
+  "tex": "{\\footnotesize x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "small",
+  "tex": "{\\small x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "normalsize",
+  "tex": "{\\normalsize x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "large",
+  "tex": "{\\large x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Large",
+  "tex": "{\\Large x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "LARGE",
+  "tex": "{\\LARGE x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "huge",
+  "tex": "{\\huge x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Huge",
+  "tex": "{\\Huge x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-bold",
+  "tex": "\\bold{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-frak",
+  "tex": "\\frak{A}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-bm",
+  "tex": "\\bm{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-vcentcolon",
+  "tex": "\\vcentcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-dblcolon",
+  "tex": "\\dblcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-coloneqq",
+  "tex": "\\coloneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Coloneqq",
+  "tex": "\\Coloneqq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-coloneq",
+  "tex": "\\coloneq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Coloneq",
+  "tex": "\\Coloneq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-eqqcolon",
+  "tex": "\\eqqcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Eqqcolon",
+  "tex": "\\Eqqcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-eqcolon",
+  "tex": "\\eqcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Eqcolon",
+  "tex": "\\Eqcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-colonapprox",
+  "tex": "\\colonapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Colonapprox",
+  "tex": "\\Colonapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-colonsim",
+  "tex": "\\colonsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-Colonsim",
+  "tex": "\\Colonsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-simcolon",
+  "tex": "\\simcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-simcoloncolon",
+  "tex": "\\simcoloncolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-approxcolon",
+  "tex": "\\approxcolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-approxcoloncolon",
+  "tex": "\\approxcoloncolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-coloncolon",
+  "tex": "\\coloncolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-colonequals",
+  "tex": "\\colonequals",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-coloncolonequals",
+  "tex": "\\coloncolonequals",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-equalscolon",
+  "tex": "\\equalscolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-equalscoloncolon",
+  "tex": "\\equalscoloncolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-colonminus",
+  "tex": "\\colonminus",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-coloncolonminus",
+  "tex": "\\coloncolonminus",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-minuscolon",
+  "tex": "\\minuscolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-minuscoloncolon",
+  "tex": "\\minuscoloncolon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-coloncolonapprox",
+  "tex": "\\coloncolonapprox",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-coloncolonsim",
+  "tex": "\\coloncolonsim",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-ratio",
+  "tex": "\\ratio",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-char",
+  "tex": "\\char\"2254",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathop",
+  "tex": "\\mathop{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathop-group",
+  "tex": "\\mathop{ab}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathinner",
+  "tex": "\\mathinner{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "t-mathinner-group",
+  "tex": "\\mathinner{ab}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rq-x",
+  "tex": "x\\rq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rq-bare",
+  "tex": "\\rq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lbrace",
+  "tex": "\\lBrace x\\rBrace",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rbrace",
+  "tex": "x\\rBrace",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "angl",
+  "tex": "\\angl x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "angln",
+  "tex": "\\angln",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lq-rq",
+  "tex": "\\lq x\\rq",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "minuso",
+  "tex": "a\\minuso b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "minuso-bare",
+  "tex": "\\minuso",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bmod",
+  "tex": "a\\bmod b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bmod-bare",
+  "tex": "\\bmod",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "pod",
+  "tex": "\\pod{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "pod-nested",
+  "tex": "x\\pod{y}z",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "pmod",
+  "tex": "\\pmod{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "pmod-nested",
+  "tex": "a\\pmod{b}c",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "pod-noarg",
+  "tex": "\\pod",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "xcancel",
+  "tex": "\\xcancel{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "stackrel",
+  "tex": "\\stackrel{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "stackrel-rel",
+  "tex": "\\stackrel{=}{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xLeftarrow",
+  "tex": "\\xLeftarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xRightarrow",
+  "tex": "\\xRightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xLeftrightarrow",
+  "tex": "\\xLeftrightarrow{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xleftharpoondown",
+  "tex": "\\xleftharpoondown{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xleftharpoonup",
+  "tex": "\\xleftharpoonup{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xleftrightharpoons",
+  "tex": "\\xleftrightharpoons{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xlongequal",
+  "tex": "\\xlongequal{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xrightharpoondown",
+  "tex": "\\xrightharpoondown{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xrightharpoonup",
+  "tex": "\\xrightharpoonup{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xrightleftharpoons",
+  "tex": "\\xrightleftharpoons{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xtofrom",
+  "tex": "\\xtofrom{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "prime-sup-rq",
+  "tex": "x^\\rq",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "prime-sup-quote",
+  "tex": "x^'",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "prime-frac",
+  "tex": "\\frac{\\rq}{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "prime-sqrt",
+  "tex": "\\sqrt'",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "prime-sqrt-rq",
+  "tex": "\\sqrt\\rq",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "prime-sqrt-opt",
+  "tex": "\\sqrt[3]'",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "prime-bigl",
+  "tex": "\\bigl'",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "prime-sub",
+  "tex": "x_'",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "prime-hat",
+  "tex": "\\hat'",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "prime-overline",
+  "tex": "\\overline'",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "above",
+  "tex": "a\\above1pt b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "begingroup",
+  "tex": "\\begingroup x\\endgroup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "begingroup-unclosed",
+  "tex": "\\begingroup x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "begingroup-mismatch",
+  "tex": "\\begingroup x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "endgroup-stray",
+  "tex": "\\endgroup",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "endgroup-in-brace",
+  "tex": "{\\endgroup}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "emph",
+  "tex": "\\emph{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "hbox",
+  "tex": "\\hbox{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathreflectbox",
+  "tex": "\\mathreflectbox{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "reflectbox",
+  "tex": "\\reflectbox{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overgroup",
+  "tex": "\\overgroup{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overleftharpoon",
+  "tex": "\\overleftharpoon{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overlinesegment",
+  "tex": "\\overlinesegment{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Overrightarrow",
+  "tex": "\\Overrightarrow{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overrightharpoon",
+  "tex": "\\overrightharpoon{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "underbar",
+  "tex": "\\underbar{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "undergroup",
+  "tex": "\\undergroup{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "underlinesegment",
+  "tex": "\\underlinesegment{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "utilde",
+  "tex": "\\utilde{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "set",
+  "tex": "\\set{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "set-bar",
+  "tex": "\\set{x|y}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "set-bare-bar",
+  "tex": "\\set|",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "tag",
+  "tex": "\\tag{1}x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "tag-display",
+  "tex": "\\tag{1}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-star",
+  "tex": "\\tag*{a}x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "tag-star-display",
+  "tex": "\\tag*{a}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tbinom",
+  "tex": "\\tbinom{n}{k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "varinjlim",
+  "tex": "\\varinjlim x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "varliminf",
+  "tex": "\\varliminf x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "varlimsup",
+  "tex": "\\varlimsup x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "varprojlim",
+  "tex": "\\varprojlim x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-unsup-ce",
+  "tex": "\\ce{H2O}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-unsup-pu",
+  "tex": "\\pu{1 m}",
+  "display": false,
+  "expect": "reject"
  }
 ]

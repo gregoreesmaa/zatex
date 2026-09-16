@@ -47,8 +47,13 @@ accept/reject or position difference.
 ## Declared divergences
 
 Rows with `katex_only: true` document behavior where we intentionally
-differ (currently 5: `\text`-mode `$` handling and friends). Each such
-row records our error in `ours`, and the test asserts exactly that
-error. A divergence that stops diverging (KaTeX changes, or we close
-the gap) fails loudly: unexpected acceptance of a `katex_only` row is
-an error, forcing the row back to full agreement.
+differ. Each such row records our error in `ours`, and the test asserts
+exactly that error. A divergence that stops diverging (KaTeX changes,
+or we close the gap) fails loudly: unexpected acceptance of a
+`katex_only` row is an error, forcing the row back to full agreement.
+
+- `rej-hbox-to` (issue #73): KaTeX accepts `\hbox to <dimen>` only by
+  misparsing it — the `to` form is unsupported, so `to 10pt{A}` falls
+  through as math (`t` becomes `<mtext>t</mtext>`). We reject instead;
+  implementing spread-box layout with no KaTeX target to agree against
+  would invent behavior, so the rejection is declared.
