@@ -87,6 +87,18 @@ pub const LayCtx = struct {
     cur_color: ?u32 = null,
     color_stack: [32]?u32 = undefined,
     ncolors: u8 = 0,
+    /// Ambient font-size multiplier in per-mille (1000 = identity),
+    /// set by `.size` nodes (`\tiny`…`\Huge`, issue #73). Absolute
+    /// like KaTeX `havingSize` (nested sizes reset, never compound).
+    cur_mult: u16 = 1000,
+
+    /// Effective size units: TeX style size scaled by the ambient
+    /// size multiplier. Identity (1000) reproduces `sizeUnits`
+    /// bit-exactly (`u*1000/1000 == u`), so unsized layout is
+    /// untouched by construction.
+    fn effSize(self: *LayCtx, style: parse.Style) u16 {
+        return @intCast(@divTrunc(@as(i32, style.sizeUnits()) * self.cur_mult, 1000));
+    }
 
     pub fn init(pctx: *const parse.ParseCtx, provider: contract.MetricsProvider) LayCtx {
         return .{ .pctx = pctx, .provider = provider };
@@ -195,6 +207,9 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .atom => |a| return layoutAtom(lc, style, a.class, effFont(lc, a.font), a.cp),
         .op => |o| return layoutOp(lc, style, o),
         .opname => |o| return layoutOpName(lc, style, o),
+        // Built-limit operators lay out like the inner under/over
+        // (Op spacing comes from `classOf` below).
+        .varlim => |v| return layoutNode(lc, style, v.body),
         .group => |g| return layoutGroup(lc, style, g),
         .frac => |f| return layoutFrac(lc, style, f),
         .sqrt => |s| return layoutSqrt(lc, style, s),
@@ -205,6 +220,13 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .accent => |a| return layoutAccent(lc, style, a),
         .over => |o| return layoutOver(lc, style, o),
         .style => |s| return layoutNode(lc, s.style, s.body),
+        .size => |s| {
+            const prev = lc.cur_mult;
+            lc.cur_mult = s.mult;
+            const b = try layoutNode(lc, style, s.body);
+            lc.cur_mult = prev;
+            return b;
+        },
         .classwrap => |c| return layoutNode(lc, style, c.body),
         .font => |f| {
             const prev = lc.fam_subst;
@@ -217,14 +239,16 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         // layout is the bare body box, bit-identically.
         .pmb => |p| return layoutNode(lc, style, p.body),
         .circled => |c| {
-            // Math-mode circle overlay (issue #51 review): the same
-            // natural-size U+25EF, centered over the body and tucked
-            // 194mu above its top, as the text-span overlay — an
-            // overlay, so the width never grows (a wider-than-body
-            // circle clamps at the left edge, brace precedent).
+            // Math-mode circle overlay (issue #70): KaTeX renders
+            // `\textcircled` as a true overlay — the natural-size
+            // U+25EF defines the box when wider than the body, the
+            // letter centers inside it, and the line-box tops align
+            // (pinned 0.18.7 DOM: 19.38-wide circle box around a
+            // 9.69 `a` at x +4.845, tops within 0.1px) — not an
+            // accent tucked above the body.
             const body = try layoutNode(lc, style, c.body);
             const bb = lc.boxes[body];
-            const size = style.sizeUnits();
+            const size = lc.effSize(style);
             const font: u16 = @intFromEnum(contract.FontId.rm);
             const cg = lc.glyphId(font, 0x25EF);
             const caw = @divTrunc(lc.advance(font, cg) * size, 1000);
@@ -238,17 +262,17 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
                 .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = cg } },
                 .invisible = false,
             });
-            const lift = @divTrunc(@as(i32, 194) * size, 1000);
+            const w = if (bb.w > caw) bb.w else caw;
+            const cdy = bb.ha - caha;
             const s = try lc.allocKids(2);
-            lc.bkids[s] = .{ .box = body, .dx = 0, .dy = 0 };
-            lc.bkids[s + 1] = .{ .box = cb, .dx = @max(@divTrunc(bb.w - caw, 2), 0), .dy = bb.ha + lift - caha };
-            const ha = bb.ha + lift;
+            lc.bkids[s] = .{ .box = body, .dx = @divTrunc(w - bb.w, 2), .dy = 0 };
+            lc.bkids[s + 1] = .{ .box = cb, .dx = @divTrunc(w - caw, 2), .dy = cdy };
             var db = bb.db;
-            const cabot = cadb - (bb.ha + lift - caha);
+            const cabot = cadb - cdy;
             if (cabot > db) db = cabot;
             return lc.allocBox(.{
-                .w = bb.w,
-                .ha = ha,
+                .w = w,
+                .ha = bb.ha,
                 .db = db,
                 .kind = .{ .list = .{ .start = s, .len = 2 } },
                 .invisible = false,
@@ -261,7 +285,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             // (a shallow body really does end above the baseline).
             const body = try layoutNode(lc, style, v.body);
             const bb = lc.boxes[body];
-            const axis = @divTrunc(@as(i32, 250) * style.sizeUnits(), 1000);
+            const axis = @divTrunc(@as(i32, 250) * lc.effSize(style), 1000);
             const half = @divTrunc(bb.ha + bb.db + 1, 2);
             const s = try lc.allocKids(1);
             lc.bkids[s] = .{ .box = body, .dx = 0, .dy = axis + half - bb.ha };
@@ -286,14 +310,23 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             return layoutNode(lc, style, c[k]);
         },
         .space => |u| return lc.allocBox(.{
-            .w = scale(u, style),
+            .w = scale(lc, u, style),
+            .ha = 0,
+            .db = 0,
+            .kind = .{ .kern = {} },
+            .invisible = false,
+        }),
+        // Interword NBSP measures exactly like its glue width
+        // (`parse.space_interword`); only serialization differs.
+        .nbsp => return lc.allocBox(.{
+            .w = scale(lc, parse.space_interword, style),
             .ha = 0,
             .db = 0,
             .kind = .{ .kern = {} },
             .invisible = false,
         }),
         .vspace => |u| {
-            const v = scale(u, style);
+            const v = scale(lc, u, style);
             return lc.allocBox(.{
                 .w = 0,
                 .ha = if (v > 0) v else 0,
@@ -329,6 +362,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .colorbox => |c| return layoutColorBox(lc, style, c),
         .href => |h| return layoutNode(lc, style, h.body),
         .htmlwrap => |b| return layoutNode(lc, style, b),
+        .tag => |tg| return layoutTag(lc, style, tg),
         .phantom => |p| {
             const b = try layoutNode(lc, style, p.body);
             const bb = lc.boxes[b];
@@ -341,7 +375,12 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             });
         },
         .boxed => |b| return layoutBoxed(lc, style, b),
+        // Framed text measures like a box around its text body.
+        .fbox => |b| return layoutBoxed(lc, style, b),
+        // Dual-branch content lays out the visual (`html`) branch.
+        .htmlmathml => |h| return layoutNode(lc, style, h.html),
         .cancel => |b| return layoutCancel(lc, style, b),
+        .xcancel => |b| return layoutCancel(lc, style, b),
         .phase => |b| return layoutPhase(lc, style, b),
         .sout => |b| return layoutSout(lc, style, b),
         .lap => |l| return layoutLap(lc, style, l),
@@ -360,7 +399,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .raisebox => |r| {
             const b = try layoutNode(lc, style, r.body);
             const bb = lc.boxes[b];
-            const dh = scale(r.dh, style);
+            const dh = scale(lc, r.dh, style);
             const s = try lc.allocKids(1);
             lc.bkids[s] = .{ .box = b, .dx = 0, .dy = dh };
             return lc.allocBox(.{
@@ -374,22 +413,53 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .rule => |r| {
             // The bracket raises the bar (KaTeX `bottom:<raise>`): ink
             // spans [raise, raise + h] above the baseline (issue #37).
-            const h = scale(r.h, style);
-            const up = scale(r.raise, style);
+            const h = scale(lc, r.h, style);
+            const up = scale(lc, r.raise, style);
             return lc.allocBox(.{
-                .w = scale(r.w, style),
+                .w = scale(lc, r.w, style),
                 .ha = h + up,
                 .db = -up,
                 .kind = .{ .rule = {} },
                 .invisible = false,
             });
         },
+        .graphics => |g| {
+            // Included image: no vector ink (the host paints the
+            // source), so an empty box carrying the image metrics.
+            // Depth comes from `totalheight` when positive (KaTeX
+            // `htmlBuilder`: height above, total-minus-height
+            // below). Non-positive widths/heights floor at zero
+            // (KaTeX drops a non-positive `width`; negative
+            // geometry has no box meaning).
+            const w = @max(scale5(lc, g.w, style), 0);
+            const h = @max(scale5(lc, g.h, style), 0);
+            const dep = if (g.th > 0) scale5(lc, @as(i64, g.th) - @as(i64, g.h), style) else 0;
+            return lc.allocBox(.{
+                .w = w,
+                .ha = h,
+                .db = dep,
+                .kind = .{ .empty = {} },
+                .invisible = false,
+            });
+        },
     }
 }
 
-/// Scale thousandths-of-em by the style size.
-fn scale(u: i16, style: parse.Style) i32 {
-    return @divTrunc(@as(i32, u) * style.sizeUnits(), 1000);
+/// Scale thousandths-of-em by the effective size (style size times
+/// the ambient `\tiny`…`\Huge` multiplier).
+fn scale(lc: *LayCtx, u: i16, style: parse.Style) i32 {
+    return @divTrunc(@as(i32, u) * lc.effSize(style), 1000);
+}
+
+/// Scale hundred-thousandths-of-em by the effective size (the
+/// `scale` twin for `\includegraphics` sizes, which keep four
+/// decimals where `.rule` thousandths cannot). i64 in, saturated
+/// i32 out.
+fn scale5(lc: *LayCtx, v: i64, style: parse.Style) i32 {
+    const q = @divTrunc(v * @as(i64, lc.effSize(style)), 100000);
+    if (q > std.math.maxInt(i32)) return std.math.maxInt(i32);
+    if (q < std.math.minInt(i32)) return std.math.minInt(i32);
+    return @intCast(q);
 }
 
 fn effFont(lc: *LayCtx, f: parse.FontFam) parse.FontFam {
@@ -444,6 +514,11 @@ fn alphaBase(fam: parse.FontFam, col: u2) ?u21 {
         .tt => .{ 0x1D670, 0x1D68A, 0x1D7F6 },
         .frak => .{ 0x1D504, 0x1D51E, 0 },
         .bb => .{ 0x1D538, 0x1D552, 0x1D7D8 },
+        // Bold-italic capitals/logographic live at U+1D468/U+1D482.
+        // No Unicode digit block exists, so digits keep the host
+        // bold-italic font (KaTeX falls back to bold there —
+        // accepted edge, same class as the mathit-digit note above).
+        .bolditalic => .{ 0x1D468, 0x1D482, 0 },
         // .cal shares the script alphabet: MathML already unifies it
         // to the "script" variant (`variantFor`), and one host font
         // holds one script alphabet (KaTeX keeps two physical fonts —
@@ -502,7 +577,7 @@ fn alphaExc(fam: parse.FontFam, cp: u21) ?u21 {
 
 fn layoutAtom(lc: *LayCtx, style: parse.Style, class: symbols.AtomClass, fam: parse.FontFam, cp: u21) Error!u16 {
     _ = class;
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const font = fam.id();
     const rcp = mathAlpha(fam, cp) orelse cp;
     var g = lc.glyphId(font, rcp);
@@ -540,7 +615,7 @@ fn layoutGroup(lc: *LayCtx, style: parse.Style, g: parse.Range) Error!u16 {
             var eff = c;
             if (eff == .Bin and symbols.degradeBin(prev)) eff = .Ord;
             if (prev) |p| {
-                const gl = @divTrunc(@as(i32, symbols.glueBetween(p, eff)) * style.sizeUnits(), 1000);
+                const gl = @divTrunc(@as(i32, symbols.glueBetween(p, eff)) * lc.effSize(style), 1000);
                 if (gl != 0) {
                     const kb = try lc.allocBox(.{
                         .w = gl,
@@ -594,6 +669,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .atom => |a| return a.class,
         .op => return .Op,
         .opname => return .Op,
+        .varlim => return .Op,
         // Braced groups act as Ord (TeX Book p.170).
         .group => return .Ord,
         .frac => return .Inner,
@@ -603,8 +679,11 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .middle => return .Rel,
         .big => |b| return b.class,
         .accent => |a| return classOf(pc, a.nucleus) orelse .Ord,
-        .over => return .Ord,
+        // KaTeX parity: `\stackrel` forces Rel; every other
+        // over/under preserves Ord here (pinned 0.18.7).
+        .over => |o| return if (o.kind == .stackrel) .Rel else .Ord,
         .style => |s| return classOf(pc, s.body),
+        .size => |s| return classOf(pc, s.body),
         .classwrap => |c| return c.class,
         .font => |f| return classOf(pc, f.body),
         .pmb => |p| return classOf(pc, p.body),
@@ -614,15 +693,21 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .env => return .Ord,
         .substack => return .Ord,
         .mathchoice => return .Ord,
-        .space, .vspace, .newline => return null,
+        .space, .vspace, .newline, .nbsp => return null,
         .hline => return null,
         .color => |c| return classOf(pc, c.body),
         .colorbox => return .Ord,
         .href => |h| return classOf(pc, h.body),
+        // Spacing-transparent to the formula (a root-level tag never
+        // takes inter-atom glue).
+        .tag => |tg| return classOf(pc, tg.formula),
         .htmlwrap => |b| return classOf(pc, b),
         .phantom => |p| return classOf(pc, p.body),
         .boxed => return .Ord,
+        .fbox => return .Ord,
+        .htmlmathml => |h| return classOf(pc, h.html),
         .cancel => |b| return classOf(pc, b),
+        .xcancel => |b| return classOf(pc, b),
         .phase => |b| return classOf(pc, b),
         .sout => |b| return classOf(pc, b),
         .lap => |l| return classOf(pc, l.body),
@@ -631,6 +716,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .smash => |s| return classOf(pc, s.body),
         .raisebox => |r| return classOf(pc, r.body),
         .rule => return .Ord,
+        .graphics => return .Ord,
     }
 }
 
@@ -640,7 +726,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
 /// background. Unresolvable specs keep geometry but emit no paint
 /// (the host renders ambient).
 fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const tb = try layoutText(lc, style, .{ .toks = c.body, .fam = parse.FontFam.rm });
     const t = lc.boxes[tb];
     const pad = @divTrunc(@as(i32, 300) * size, 1000);
@@ -734,15 +820,15 @@ fn layoutOp(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
         // limit inf/sup family as two words with a thin space
         // (`\liminf` = `\operatorname*{lim\,inf}`, issue #36).
         if (symbols.splitLimitOp(o.text)) |halves| {
-            return layoutSplitWord(lc, style.sizeUnits(), .rm, halves[0], halves[1]);
+            return layoutSplitWord(lc, lc.effSize(style), .rm, halves[0], halves[1]);
         }
-        return layoutWord(lc, style.sizeUnits(), .rm, o.text);
+        return layoutWord(lc, lc.effSize(style), .rm, o.text);
     }
     // Single-glyph operator, possibly large.
     const size: u16 = if (o.large and style.isDisplay())
-        @intCast(@divTrunc(@as(i32, style.sizeUnits()) * 14, 10))
+        @intCast(@divTrunc(@as(i32, lc.effSize(style)) * 14, 10))
     else
-        style.sizeUnits();
+        lc.effSize(style);
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const g = lc.glyphId(font, o.cp);
     const adv = lc.advance(font, g);
@@ -827,7 +913,7 @@ fn layoutSplitWord(lc: *LayCtx, size: u16, fam: parse.FontFam, a: []const u8, b:
 }
 
 fn layoutOpName(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     var buf: [64]u8 = undefined;
     var n: usize = 0;
     const toks = parse.toksOf(lc.pctx, o.toks);
@@ -854,7 +940,7 @@ fn layoutOpName(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
 // ---------------------------------------------------------------------------
 
 fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const base = try layoutNode(lc, style, s.base);
     const bb = lc.boxes[base];
     const sc = style.script();
@@ -921,11 +1007,11 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     if (parse.opBase(lc.pctx, s.base)) |o| {
         if (parse.useLimits(style, o)) return layoutLimits(lc, style, s);
     }
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const base = try layoutNode(lc, style, s.base);
     const bb = lc.boxes[base];
     const sc_style = style.script();
-    const sc_size = sc_style.sizeUnits();
+    const sc_size = lc.effSize(sc_style);
     var sup: u16 = 0;
     var sub: u16 = 0;
     var sup_w: i32 = 0;
@@ -979,13 +1065,13 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
                 // — except the overbracket's 30mu transparent crown:
                 // the label kerns off the bar top.
                 if (is_bracket) {
-                    if (stack_sup) sup_top = bb.ha - @divTrunc(@as(i32, if (o.kind == .overbracket) 30 else 0) * style.sizeUnits(), 1000);
+                    if (stack_sup) sup_top = bb.ha - @divTrunc(@as(i32, if (o.kind == .overbracket) 30 else 0) * lc.effSize(style), 1000);
                     if (stack_sub) sub_bot = bb.db;
                 }
                 if (!is_bracket and lc.ink(rfont, bgly) != null) {
                     const bib = lc.ink(rfont, bgly).?;
                     if (bib[3] > bib[1]) {
-                        const bsize = style.sizeUnits();
+                        const bsize = lc.effSize(style);
                         const be = lc.extents(rfont, bgly);
                         const bha = @divTrunc(be[0] * bsize, 1000);
                         const bdb = @divTrunc(be[1] * bsize, 1000);
@@ -1090,7 +1176,7 @@ fn layoutBraceLabel(
     has_sub: bool,
     sub_bot: ?i32,
 ) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     // KaTeX outer kern is 0.2em off the brace ink (issue #55); the
     // legacy 150mu off the extents box applies only when the caller
     // has no ink edge (null hook), bit-identically.
@@ -1126,7 +1212,7 @@ fn layoutBraceLabel(
 }
 
 fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     // Display fractions arrive pre-wrapped in a style node, so the
     // ambient style already carries the fraction's sizing.
     const num = try layoutNode(lc, style.numerator(), f.num);
@@ -1252,7 +1338,7 @@ fn wrapParens(lc: *LayCtx, style: parse.Style, inner: u16) Error!u16 {
 }
 
 fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     // TeX sets the radicand in cramped style (D' in display): sups
     // inside rise 30mu less. Also makes Dc reachable for the atom grid.
     const rad = try layoutNode(lc, style.cramped(), s.radicand);
@@ -1397,7 +1483,7 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 /// variant hook can supply it; otherwise the natural glyph centered
 /// on the math axis.
 fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const g0 = lc.glyphId(font, cp);
     const g = if (need > 0) lc.variant(font, g0, @divTrunc(need * 1000, size)) else g0;
@@ -1485,7 +1571,7 @@ fn emptyBox(lc: *LayCtx) Error!u16 {
 }
 
 fn layoutBig(lc: *LayCtx, style: parse.Style, b: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const mult = symbols.bigStep(b.level);
     const gsize: u16 = @intCast(@divTrunc(@as(i32, size) * mult, 1000));
     const font: u16 = @intFromEnum(contract.FontId.rm);
@@ -1511,7 +1597,7 @@ fn spanScale(span: i32, nat: i32) u16 {
 }
 
 fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const nuc = try layoutNode(lc, style, a.nucleus);
     const nb = lc.boxes[nuc];
     const font: u16 = @intFromEnum(contract.FontId.rm);
@@ -1527,8 +1613,30 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     // carry the accent near their cap, not 120 units above it.
     const xh = @divTrunc(x_height_1000 * size, 1000);
     const clearance = if (nb.ha < xh) nb.ha else xh;
-    const skew1000 = lc.italicCorr(font, lc.glyphId(font, nucleusFirstCp(lc.pctx, a.nucleus)));
-    const skew = @divTrunc(skew1000 * @as(i32, size), 1000);
+    // KaTeX accent placement (pinned 0.18.7 `accent` builder, issue
+    // #70): the accent centers at nucleus-center + skew, where skew is
+    // the base glyph's full metrics skew — not half. Two lookups feed
+    // it: the italic correction of the LAID-OUT nucleus glyph (the
+    // parse codepoint still names the ASCII base, whose correction
+    // differs: LM text `M` has none, math-italic U+1D440 has 102), plus
+    // KaTeX's Math-Italic skew table for slanted nuclei (LM Math and
+    // KaTeX advances agree to the unit, so the CM-derived shifts
+    // transfer). Upright and unlisted nuclei keep shift 0, exactly as
+    // KaTeX's zero-skew metrics do.
+    const ng = nucleusFirstGlyph(lc, nuc);
+    const ic1000: i32 = if (ng) |found| lc.italicCorr(found.font, found.glyph) else 0;
+    const ic = @divTrunc(ic1000 * @as(i32, size), 1000);
+    // KaTeX gates the shift on shifty accents over single-symbol
+    // nuclei only: wide (`\widetilde` etc.) and multi-symbol
+    // (`\tilde{AB}`) nuclei stay centered.
+    const shifty = !a.wide and nucleusIsSingle(lc.pctx, a.nucleus);
+    const ncp = nucleusFirstCp(lc.pctx, a.nucleus);
+    const kskew1000: i32 = if (shifty and ng != null and ng.?.font == @intFromEnum(contract.FontId.math_italic))
+        symbols.mathItalicSkew(ncp)
+    else
+        0;
+    const kskew = @divTrunc(kskew1000 * @as(i32, size), 1000);
+    const shift: i32 = if (shifty) @divTrunc(ic, 2) + kskew else 0;
     // v4 ink refinement (null hook = exact v3 behavior): the clipped
     // extents above lose where ink really starts, so low-sitting
     // accents (`~`, ink bottom +193mu) would nestle into the nucleus
@@ -1548,7 +1656,7 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
         const ix1 = @divTrunc(ib[2] * size, 1000);
         if (ix1 > ix0) {
             const inkw = ix1 - ix0;
-            if (adv == 0) ink_ax = @divTrunc(nb.w - inkw, 2) - ix0 + @divTrunc(skew, 2);
+            if (adv == 0) ink_ax = @divTrunc(nb.w - inkw, 2) - ix0 + shift;
             ink_lift = nb.ha + min_gap - iy0;
         }
     }
@@ -1592,7 +1700,7 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     // stretches the ink). Either way the construction is exactly as
     // wide as the nucleus.
     const w = nb.w;
-    var ax = ink_ax orelse @divTrunc(nb.w - aw, 2) + @divTrunc(skew, 2);
+    var ax = ink_ax orelse @divTrunc(nb.w - aw, 2) + shift;
     if (a.wide and n_dots == 0) {
         // KaTeX parity (pinned 0.18.7): wide accents are SVGs stretched
         // to 100% of the nucleus span (`preserveAspectRatio="none"`),
@@ -1610,7 +1718,7 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
                 const jsc = spanScale(nb.w, jx1 - jx0);
                 if (jsc > 1000) {
                     ink_sc = jsc;
-                    ax = @divTrunc(nb.w, 2) + @divTrunc(skew, 2) -
+                    ax = @divTrunc(nb.w, 2) + shift -
                         @divTrunc((jx0 + jx1) * @as(i32, jsc), 2000);
                 }
             }
@@ -1623,7 +1731,7 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
             if (sc > 1000) {
                 lc.boxes[ab].x_scale = sc;
                 lc.boxes[ab].w = nb.w;
-                ax = @divTrunc(skew, 2);
+                ax = shift;
             }
         }
     }
@@ -1641,7 +1749,7 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
         // sits on its baseline, so the row takes the same minimum-gap
         // lift as low accents when the hook reports ink.
         const dw = if (nb.w > dot_aw) nb.w else dot_aw;
-        const dax = @divTrunc(dw - dot_aw, 2) + @divTrunc(skew, 2);
+        const dax = @divTrunc(dw - dot_aw, 2) + shift;
         var day = nb.ha - clearance + dot_adb;
         if (lc.ink(font, lc.glyphId(font, '.'))) |pib| {
             const piy0 = @divTrunc(pib[1] * size, 1000);
@@ -1681,6 +1789,43 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     });
 }
 
+/// First laid-out glyph of a nucleus box, for metric lookups that must
+/// see the substituted glyph (issue #70): parse codepoints still name
+/// the ASCII base (`M`), but the box carries the math-italic glyph
+/// (U+1D440) whose italic correction differs (102 vs 0 for LM `M`).
+fn nucleusFirstGlyph(lc: *LayCtx, id: u16) ?struct { font: u16, glyph: u16 } {
+    const b = lc.boxes[id];
+    switch (b.kind) {
+        .glyph => |g| return .{ .font = g.font, .glyph = g.glyph },
+        .list => |r| {
+            const kids = lc.bkids[r.start .. r.start + r.len];
+            for (kids) |k| {
+                if (nucleusFirstGlyph(lc, k.box)) |found| return found;
+            }
+            return null;
+        },
+        .kern, .empty, .rule => return null,
+    }
+}
+
+/// Whether a nucleus is one bare symbol (issue #70): KaTeX applies
+/// accent skew only then, leaving everything else centered. Pinned
+/// 0.18.7 DOM proof: `\tilde M` shifts +1.62px (full skew) while
+/// `\tilde{AB}`, `\tilde{x^2}`, and `\tilde{\mathit{M}}` all measure
+/// dead-centered (≤0.02px) — only brace-group singletons unwrap, and
+/// font/style/supsub/wrapper nuclei block the shift.
+fn nucleusIsSingle(pc: *const parse.ParseCtx, id: Idx) bool {
+    const n = parse.nodeAt(pc, id);
+    switch (n) {
+        .atom => return true,
+        .group => |g| {
+            const kids = parse.kidsOf(pc, g);
+            return kids.len == 1 and nucleusIsSingle(pc, kids[0]);
+        },
+        else => return false,
+    }
+}
+
 /// First codepoint of a nucleus, for italic-correction lookup.
 fn nucleusFirstCp(pc: *const parse.ParseCtx, id: Idx) u21 {
     const n = parse.nodeAt(pc, id);
@@ -1694,6 +1839,7 @@ fn nucleusFirstCp(pc: *const parse.ParseCtx, id: Idx) u21 {
         .supsub => |s| return nucleusFirstCp(pc, s.base),
         .font => |f| return nucleusFirstCp(pc, f.body),
         .style => |s| return nucleusFirstCp(pc, s.body),
+        .size => |s| return nucleusFirstCp(pc, s.body),
         .classwrap => |c| return nucleusFirstCp(pc, c.body),
         .pmb => |p| return nucleusFirstCp(pc, p.body),
         .vcenter => |v| return nucleusFirstCp(pc, v.body),
@@ -1721,12 +1867,31 @@ fn overGlyph(kind: parse.OverKind) u21 {
         .xmapsto => 0x21A6,
         .xtwoheadleft => 0x219E,
         .xtwoheadright => 0x21A0,
+        .overgroup => 0x23E0,
+        .undergroup => 0x23E1,
+        // No host glyph: KaTeX's MathML has no mapping either and
+        // emits the literal text `undefined` (pinned 0.18.7 quirk,
+        // mirrored by the emitter); layout uses the missing glyph.
+        .overlinesegment, .underlinesegment => 0,
+        .overleftharpoon, .xleftharpoonup => 0x21BC,
+        .overrightharpoon, .xrightharpoonup => 0x21C0,
+        .overRightarrow, .xdoubleright => 0x21D2,
+        .underbar => 0x203E,
+        .utilde => 0x007E,
+        .xdoubleleft => 0x21D0,
+        .xdoubleboth => 0x21D4,
+        .xleftharpoondown => 0x21BD,
+        .xleftrightharpoons => 0x21CB,
+        .xlongequal => 0x003D,
+        .xrightharpoondown => 0x21C1,
+        .xrightleftharpoons => 0x21CC,
+        .xtofrom => 0x21C4,
         else => 0,
     };
 }
 
 fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const th = lc.ruleTh(font, .overline);
     const gap: i32 = @divTrunc((@as(i32, 150) * size), 1000);
@@ -1766,7 +1931,7 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 });
             }
         },
-        .overset, .underset => {
+        .overset, .underset, .stackrel => {
             const nuc = try layoutNode(lc, style, o.nucleus);
             const nb = lc.boxes[nuc];
             const sup = try layoutNode(lc, style.script(), o.extra);
@@ -1775,7 +1940,7 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             const nx = @divTrunc(w - nb.w, 2);
             const sx = @divTrunc(w - sb.w, 2);
             const s = try lc.allocKids(2);
-            if (o.kind == .overset) {
+            if (o.kind == .overset or o.kind == .stackrel) {
                 const sy = nb.ha + gap + sb.db;
                 lc.bkids[s] = .{ .box = nuc, .dx = nx, .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = sup, .dx = sx, .dy = sy };
@@ -1798,6 +1963,11 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                     .invisible = false,
                 });
             }
+        },
+        .angl => {
+            // Actuarial angle is HTML-side (menclose); layout keeps
+            // the nucleus box alone, like the strike encloses.
+            return layoutNode(lc, style, o.nucleus);
         },
         else => {
             // Brace / arrow overs: glyph above or below the nucleus,
@@ -1864,10 +2034,15 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 }
             }
             const is_under = o.kind == .underbrace or o.kind == .underleft or
-                o.kind == .underright or o.kind == .underboth;
+                o.kind == .underright or o.kind == .underboth or o.kind == .undergroup or
+                o.kind == .underlinesegment or o.kind == .underbar or o.kind == .utilde;
             const is_x = o.kind == .xleft or o.kind == .xright or o.kind == .xboth or
                 o.kind == .xhookleft or o.kind == .xhookright or o.kind == .xmapsto or
-                o.kind == .xtwoheadleft or o.kind == .xtwoheadright;
+                o.kind == .xtwoheadleft or o.kind == .xtwoheadright or o.kind == .xdoubleleft or
+                o.kind == .xdoubleboth or o.kind == .xdoubleright or o.kind == .xleftharpoondown or
+                o.kind == .xleftharpoonup or o.kind == .xleftrightharpoons or o.kind == .xlongequal or
+                o.kind == .xrightharpoondown or o.kind == .xrightharpoonup or
+                o.kind == .xrightleftharpoons or o.kind == .xtofrom;
             const gc = overGlyph(o.kind);
             const gg = lc.glyphId(font, gc);
             const gadv = lc.advance(font, gg);
@@ -1996,12 +2171,16 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
 
 // Emit one pending text span decoration: circled overlay or
 // strike rule (shared by the in-loop check and the end flush).
+// Returns how much wider the span became (a wider-than-span circle
+// pushes following text right); the caller adds it to the cursor.
 fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circle: bool,
-    x: i32, ha: *i32, db: *i32, parts: *[256]BKid, nparts: *usize) Error!void {
+    x: i32, ha: *i32, db: *i32, parts: *[256]BKid, nparts: *usize) Error!i32 {
     if (is_circle) {
-        // Circle overlay centered over the span (pinned-output
-        // measured: centered, not left-aligned). Top tucks
-        // 194mu above the span top.
+        // True overlay (issue #70): the natural-size U+25EF defines
+        // the span when wider than the letters, the letters center
+        // inside it, and the line-box tops align — the KaTeX
+        // `\textcircled` model (pinned 0.18.7 DOM), not an accent
+        // tucked above the span.
         var stop: i32 = 0;
         for (parts.*[pp0..nparts.*]) |pt| {
             const pbx = lc.boxes[pt.box];
@@ -2021,16 +2200,18 @@ fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circ
             .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = cg } },
             .invisible = false,
         });
-        const cadx = px0 + @divTrunc((x - px0) - caw, 2);
-        const lift = @divTrunc(@as(i32, 194) * size, 1000);
-        const cady = stop + lift - caha;
+        const span_w = x - px0;
+        const box_w = if (span_w > caw) span_w else caw;
+        const shift = @divTrunc(box_w - span_w, 2);
+        for (parts.*[pp0..nparts.*]) |*pt| pt.dx += shift;
+        const cadx = px0 + @divTrunc(box_w - caw, 2);
+        const cady = stop - caha;
         if (nparts.* >= 256) return error.NoSpace;
         parts.*[nparts.*] = .{ .box = cb, .dx = cadx, .dy = cady };
         nparts.* += 1;
-        const catop = cady + caha;
-        if (catop > ha.*) ha.* = catop;
         const cabot = cadb - cady;
         if (cabot > db.*) db.* = cabot;
+        return box_w - span_w;
     } else {
         // Strike rule across the span at half x-height (same
         // geometry as the math sout node).
@@ -2048,11 +2229,12 @@ fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circ
         nparts.* += 1;
         const rtop = strike + @divTrunc(th + 1, 2);
         if (rtop > ha.*) ha.* = rtop;
+        return 0;
     }
 }
 
 fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const fam = lc.fam_subst orelse t.fam;
     const font = fam.id();
     var parts: [256]BKid = undefined;
@@ -2073,7 +2255,7 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     while (i < toks.len) : (i += 1) {
         while (npend > 0 and pend_end[npend - 1] <= i) {
             npend -= 1;
-            try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
+            x += try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
                 x, &ha, &db, &parts, &nparts);
         }
         const tk = toks[i];
@@ -2114,11 +2296,21 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
                         } else {
                             // Skip interword space (TeX control-word
                             // space skipping): the argument is the next
-                            // real token.
+                            // real token. The skipped spaces vanish —
+                            // resume iteration at the argument so no
+                            // phantom space is typeset inside the span
+                            // (issue #70: it offset `\textcircled b`).
                             while (j < toks.len and (toks[j].kind == .newline or
                                 (toks[j].kind == .char and toks[j].cp == ' '))) j += 1;
                             if (j >= toks.len) return error.Invalid;
-                            j += 1;
+                            if (npend >= pend_x0.len) return error.NoSpace;
+                            pend_x0[npend] = x;
+                            pend_p0[npend] = nparts;
+                            pend_end[npend] = j + 1;
+                            pend_circle[npend] = ta == .circled;
+                            npend += 1;
+                            i = j - 1;
+                            continue;
                         }
                         if (npend >= pend_x0.len) return error.NoSpace;
                         pend_x0[npend] = x;
@@ -2283,10 +2475,60 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     // check only runs for live indices).
     while (npend > 0) {
         npend -= 1;
-        try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
+        x += try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
             x, &ha, &db, &parts, &nparts);
     }
 
+    const s = try lc.allocKids(nparts);
+    @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
+    return lc.allocBox(.{
+        .w = x,
+        .ha = ha,
+        .db = db,
+        .kind = .{ .list = .{ .start = s, .len = @intCast(nparts) } },
+        .invisible = false,
+    });
+}
+
+/// Display equation tag (`\tag`, issue #73): the formula box with
+/// the tag text after a `\qquad` gap. The core has no page width, so
+/// KaTeX's right-margin alignment degrades to a fixed 2em separation;
+/// both share the baseline. The non-star parentheses are paren glyph
+/// boxes here (the MathML emitter writes them as `mtext`; same shared
+/// `starred` decision, medium-appropriate rendering).
+fn layoutTag(lc: *LayCtx, style: parse.Style, tg: anytype) Error!u16 {
+    const fb = try layoutNode(lc, style, tg.formula);
+    const tb = try layoutNode(lc, style, tg.body);
+    const fam: parse.FontFam = lc.fam_subst orelse .rm;
+    // Formula, `\qquad` gap, then the parenthesized tag (`\tag*`
+    // skips the parens). Order: `(`, body, `)`.
+    var ids: [4]u16 = undefined;
+    ids[0] = fb;
+    var nids: usize = 1;
+    if (!tg.starred) {
+        ids[nids] = try layoutAtom(lc, style, .Ord, fam, '(');
+        nids += 1;
+    }
+    ids[nids] = tb;
+    nids += 1;
+    if (!tg.starred) {
+        ids[nids] = try layoutAtom(lc, style, .Ord, fam, ')');
+        nids += 1;
+    }
+    var parts: [4]BKid = undefined;
+    var nparts: usize = 0;
+    var x: i32 = 0;
+    var ha: i32 = 0;
+    var db: i32 = 0;
+    for (ids[0..nids], 0..) |id, k| {
+        if (k == 1) x += scale(lc, 2000, style); // gap after the formula
+        const b = lc.boxes[id];
+        parts[nparts] = .{ .box = id, .dx = x, .dy = 0 };
+        nparts += 1;
+        x += b.w;
+        if (b.ha > ha) ha = b.ha;
+        if (b.db > db) db = b.db;
+    }
     const s = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
     return lc.allocBox(.{
@@ -2308,7 +2550,7 @@ const CellBox = struct {
 };
 
 fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const rows = parse.rowsOf(lc.pctx, e.rows_start, e.rows_len);
     // First pass: lay out cells, find column count.
     var cells: [64][8]CellBox = undefined;
@@ -2326,7 +2568,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             } else {
                 // Display-cases cells are displaystyle (KaTeX parity);
                 // smallmatrix is scriptstyle; everything else textstyle.
-                const cell_style = if (e.kind == .smallmatrix)
+                const cell_style = if (e.kind == .smallmatrix or e.kind == .subarray)
                     parse.Style.S
                 else if (e.kind == .dcases or e.kind == .drcases)
                     parse.Style.D
@@ -2386,6 +2628,15 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             var col: usize = 1;
             while (col < 8) : (col += 1) col_align[col] = 0;
         },
+        .subarray => {
+            // One required [c|l] code (parse stores a single spec);
+            // KaTeX parity: more than one column rejects.
+            const spec1 = parse.kidsOf(lc.pctx, parse.Range{ .start = e.spec_start, .len = e.spec_len });
+            const fill: u8 = if (spec1.len == 1) @intCast(spec1[0]) else 1;
+            var col: usize = 0;
+            while (col < 8) : (col += 1) col_align[col] = fill;
+            if (ncols > 1) return error.Invalid;
+        },
         else => {
             // Starred matrix envs store one [l|c|r] code for every
             // column (parse default: centered); unstarred forms carry
@@ -2405,7 +2656,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             if (!cells[r][c].is_rule and cells[r][c].w > colw[c]) colw[c] = cells[r][c].w;
         }
     }
-    const row_gap: i32 = if (e.kind == .smallmatrix) @divTrunc((@as(i32, 140) * size), 1000) else @divTrunc((@as(i32, 280) * size), 1000);
+    const row_gap: i32 = if (e.kind == .smallmatrix or e.kind == .subarray) @divTrunc((@as(i32, 140) * size), 1000) else @divTrunc((@as(i32, 280) * size), 1000);
     const vline_w: i32 = @divTrunc((@as(i32, 40) * size), 1000);
     // KaTeX column separation (pinned 0.18.7 `array.ts`, issue #33):
     // each column carries a pre/post gap; `array` additionally pads
@@ -2428,7 +2679,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             }
             outer = dsep;
         },
-        .smallmatrix => {
+        .smallmatrix, .subarray => {
             var i: usize = 0;
             while (i < 8) : (i += 1) {
                 pre[i] = ssep;
@@ -2698,7 +2949,7 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
 }
 
 fn layoutBoxed(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const b = try layoutNode(lc, style, id);
     const bb = lc.boxes[b];
     const pad: i32 = @divTrunc((@as(i32, 300) * size), 1000);
@@ -2846,7 +3097,7 @@ fn layoutPhase(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
 fn layoutSout(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     const b = try layoutNode(lc, style, id);
     const bb = lc.boxes[b];
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const th = @divTrunc(@as(i32, 80) * size, 1000);
     const strike = @divTrunc(x_height_1000 * size, 2000);
     const rb = try lc.allocBox(.{
@@ -2870,7 +3121,7 @@ fn layoutSout(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
 }
 
 fn layoutNot(lc: *LayCtx, style: parse.Style, n: anytype) Error!u16 {
-    const size = style.sizeUnits();
+    const size = lc.effSize(style);
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const base = try layoutNode(lc, style, n.base);
     const bb = lc.boxes[base];

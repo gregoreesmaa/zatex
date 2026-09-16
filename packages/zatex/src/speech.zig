@@ -116,6 +116,7 @@ const Walker = struct {
             },
             .over => |o| try self.over(o),
             .style => |s| try self.node(s.body),
+            .size => |s| try self.node(s.body),
             .font => |f| try self.node(f.body),
             .pmb => |p| try self.node(p.body),
             .vcenter => |v| try self.node(v.body),
@@ -151,6 +152,7 @@ const Walker = struct {
                 try self.word("end substack");
             },
             .mathchoice => |c| try self.node(c[0]),
+            .varlim => |v| try self.node(v.body),
             .opname => |o| {
                 const toks = parse.toksOf(self.ctx, o.toks);
                 for (toks) |tok| {
@@ -162,6 +164,7 @@ const Walker = struct {
                 }
             },
             .space => {},
+            .nbsp => {},
             .vspace => {},
             .newline => try self.word("line break"),
             .hline => {},
@@ -178,10 +181,18 @@ const Walker = struct {
             },
             .href => |h| try self.node(h.body),
             .htmlwrap => |b| try self.node(b),
+            .tag => |tg| {
+                try self.node(tg.formula);
+                try self.word("tagged");
+                try self.node(tg.body);
+            },
             .classwrap => |c| try self.node(c.body),
             .phantom => |p| try self.node(p.body),
             .boxed => |b| try self.node(b),
+            .fbox => |b| try self.node(b),
+            .htmlmathml => |h| try self.node(h.html),
             .cancel => |b| try self.node(b),
+            .xcancel => |b| try self.node(b),
             .sout => |b| try self.node(b),
             .phase => |b| try self.node(b),
             .lap => |l| try self.node(l.body),
@@ -193,6 +204,16 @@ const Walker = struct {
             .smash => |s| try self.node(s.body),
             .raisebox => |r| try self.node(r.body),
             .rule => try self.word("rule"),
+            .graphics => |g| {
+                // The author-supplied alt text speaks (chars as
+                // words, like `.text`); an empty alt announces the
+                // image itself.
+                const before = self.pos;
+                for (parse.toksOf(self.ctx, g.alt)) |tok| {
+                    if (tok.kind == .char) try self.wordCp(tok.cp);
+                }
+                if (self.pos == before) try self.word("image");
+            },
             .op => |o| try self.op(o),
         }
     }
@@ -244,6 +265,7 @@ const Walker = struct {
             .overbracket => try self.word("overbracket"),
             .underbracket => try self.word("underbracket"),
             .overset => try self.word("overset"),
+            .stackrel => try self.word("stackrel"),
             .underset => try self.word("underset"),
             .xleft => try self.word("left arrow"),
             .xright => try self.word("right arrow"),
@@ -259,6 +281,27 @@ const Walker = struct {
             .xmapsto => try self.word("maps to"),
             .xtwoheadleft => try self.word("left two-headed arrow"),
             .xtwoheadright => try self.word("right two-headed arrow"),
+            .xdoubleleft => try self.word("left double arrow"),
+            .xdoubleboth => try self.word("left right double arrow"),
+            .xdoubleright => try self.word("right double arrow"),
+            .xleftharpoondown => try self.word("left harpoon down"),
+            .xleftharpoonup => try self.word("left harpoon up"),
+            .xleftrightharpoons => try self.word("left right harpoons"),
+            .xlongequal => try self.word("long equals"),
+            .xrightharpoondown => try self.word("right harpoon down"),
+            .xrightharpoonup => try self.word("right harpoon up"),
+            .xrightleftharpoons => try self.word("right left harpoons"),
+            .xtofrom => try self.word("to from"),
+            .overgroup => try self.word("overgroup"),
+            .undergroup => try self.word("undergroup"),
+            .overlinesegment => try self.word("over line segment"),
+            .underlinesegment => try self.word("under line segment"),
+            .overleftharpoon => try self.word("over left harpoon"),
+            .overrightharpoon => try self.word("over right harpoon"),
+            .overRightarrow => try self.word("over double right arrow"),
+            .underbar => try self.word("underbar"),
+            .utilde => try self.word("under tilde"),
+            .angl => try self.word("actuarial angle"),
         }
         if (o.extra != parse.NONE) {
             try self.word("with");
@@ -382,6 +425,14 @@ test "speech: fraction speaks numerator and denominator" {
     try std.testing.expectEqualStrings(
         "fraction, numerator, 1, denominator, 2, end fraction",
         try speak("\\frac12", false, &out),
+    );
+}
+
+test "speech: equation tag speaks formula then tag" {
+    var out: [256]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "x, tagged, 1",
+        try speak("\\tag{1}x", true, &out),
     );
 }
 

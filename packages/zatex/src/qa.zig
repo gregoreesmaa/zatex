@@ -687,6 +687,12 @@ test "qa43 mode never changes the accept set" {
         const rt = zatex.layoutDiag(tex, .{ .display_mode = false }, stubProvider(), &b_t.runs, &b_t.rules, &b_t.glyphs, &dt);
         const ok_d = if (rd) |_| true else |_| false;
         const ok_t = if (rt) |_| true else |_| false;
+        // `\tag` is KaTeX's only display-gated command (pinned
+        // 0.18.7: accepts in display, `\tag works only in display
+        // equations` otherwise), so tag rows agree per-mode with the
+        // pin (`parity.zig` checks each row in its own mode) rather
+        // than across modes here.
+        if (std.mem.eql(u8, id, "tag") or std.mem.startsWith(u8, id, "tag-")) continue;
         if (ok_d != ok_t) {
             std.debug.print("\n[{s}] mode changes accept set: display={} text={}\n", .{ id, ok_d, ok_t });
             return error.TestUnexpectedResult;
@@ -962,6 +968,10 @@ const golden47 = [_][]const u8{
     "\\binom{n}{k}",
     "\\frac{x^2}{1}",
     "A_{B_C}",
+    "\\includegraphics{a}",
+    "\\includegraphics[width=1mu,height=1bp]{a}",
+    "\\includegraphics[height=2pt,totalheight=3pt]{a}",
+    "\\includegraphics[alt=x]{a}",
 };
 
 fn expectGolden(id: []const u8, golden: []const u8, actual: []const u8) !void {
@@ -985,7 +995,7 @@ const golden_mathml = [_][]const u8{
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mfrac><mn>1</mn><mi>x</mi></mfrac></mrow></mfrac></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mtable><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd></mtr></mtable></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">(</mo><mi>x</mi><mo fence=\"true\">)</mo></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>A</mi><mi>B</mi></mrow><mo>&#xAF;</mo></mover></mrow></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>A</mi><mi>B</mi></mrow><mo>&#x203E;</mo></mover></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mi>x</mi><mo>^</mo></mover><mo>+</mo><mover><mi>y</mi><mo>⃗</mo></mover></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold\"><mi>A</mi></mstyle><mo>+</mo><mstyle mathvariant=\"italic\"><mi>B</mi></mstyle></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathcolor=\"red\"><mi>x</mi><mo>+</mo><mi>y</mi></mstyle></mrow></math>",
@@ -993,6 +1003,10 @@ const golden_mathml = [_][]const u8{
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo>(</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo>)</mo></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><msup><mi>x</mi><mn>2</mn></msup><mn>1</mn></mfrac></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mi>A</mi><msub><mi>B</mi><mi>C</mi></msub></msub></mrow></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"\" height=\"0.9em\" src=\"a\"></mglyph></mrow></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"\" height=\"0.1004em\" width=\"0.0556em\" src=\"a\"></mglyph></mrow></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"\" valign=\"-0.1em\" height=\"0.3em\" src=\"a\"></mglyph></mrow></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"x\" height=\"0.9em\" src=\"a\"></mglyph></mrow></math>",
 };
 const golden_speech = [_][]const u8{
     "x, plus, y, equals, z",
@@ -1015,6 +1029,10 @@ const golden_speech = [_][]const u8{
     "n, choose, k",
     "fraction, numerator, x, superscript, 2, end superscript, denominator, 1, end fraction",
     "A, subscript, B, subscript, C, end subscript, end subscript",
+    "image",
+    "image",
+    "image",
+    "x",
 };
 const golden_texser = [_][]const u8{
     "x+y=z",
@@ -1037,6 +1055,10 @@ const golden_texser = [_][]const u8{
     "\\binom{n}{k}",
     "\\frac{x^2}{1}",
     "A_{B_C}",
+    "\\includegraphics{a}",
+    "\\includegraphics[width=0.05556em,height=0.10038em]{a}",
+    "\\includegraphics[height=0.2em,totalheight=0.3em]{a}",
+    "\\includegraphics[alt=x]{a}",
 };
 
 test "qa47 mathml exact-string goldens" {
@@ -1432,7 +1454,9 @@ test "qa48 ink lift raises low accents clear" {
     try std.testing.expectEqual(@as(u32, 1337), l.height_above);
     try std.testing.expectEqual(@as(u32, 250), l.depth_below);
     const ax = try glyphX(l, '~');
-    try std.testing.expectEqual(@as(i32, 0), ax);
+    // Issue #70: the tilde centers at nucleus-center + KaTeX skew
+    // (28mu for math-italic `x`), so the run starts at 28, not 0.
+    try std.testing.expectEqual(@as(i32, 28), ax);
 }
 
 test "qa48 ink centers combining marks by ink" {
@@ -1442,7 +1466,9 @@ test "qa48 ink centers combining marks by ink" {
     var b: ProvBuf = .{};
     const l = try layInk("\\vec{F}", &b);
     const ax = try glyphX(l, 0x20D7);
-    try std.testing.expectEqual(@as(i32, 514), ax);
+    // Issue #70: (500-416)/2+472 centers the ink; the KaTeX table
+    // skew for math-italic `F` (83mu) rides on top.
+    try std.testing.expectEqual(@as(i32, 597), ax);
 }
 
 test "qa48 ink dots stack with daylight" {
@@ -1454,7 +1480,9 @@ test "qa48 ink dots stack with daylight" {
     try std.testing.expectEqual(@as(u32, 1530), l.height_above);
     var found = false;
     for (l.runs) |r| {
-        if (r.glyphs.len == 3 and r.glyphs[0] == '.' and r.x == 0) found = true;
+        // Issue #70: the row centers at nucleus-center + KaTeX skew
+        // (28mu for math-italic `x`), so it starts at 28, not 0.
+        if (r.glyphs.len == 3 and r.glyphs[0] == '.' and r.x == 28) found = true;
     }
     try std.testing.expect(found);
 }
@@ -1710,13 +1738,17 @@ test "qa60 mathstrut is a zero-width paren strut" {
 
 test "qa62 bra ket are fixed inner fences" {
     // Issue #51 (KaTeX bra-ket parity): `\bra`/`\ket` use fixed-size
-    // fences in an Inner atom (no sizing, bar is an Ord).
+    // fences in an Inner atom (no sizing, bar is an Ord). Pinned
+    // 0.18.7 proof: Inner renders a bare `mpadded` (never `mrow`) —
+    // `\bra{\psi}` →
+    // `<mrow><mpadded><mo stretchy="false">⟨</mo><mi>ψ</mi><mi mathvariant="normal">∣</mi></mpadded></mrow>`
+    // (attributes out of scope: this golden pins tags and text).
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\bra{\\psi}", .{}, &buf);
-    try expectGolden("\\bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><mrow><mo>⟨</mo><mi>ψ</mi><mi>∣</mi></mrow></mrow></mrow></math>", got);
+    try expectGolden("\\bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mpadded><mo>⟨</mo><mi>ψ</mi><mi>∣</mi></mpadded></mrow></math>", got);
     var buf2: [4096]u8 = undefined;
     const got2 = try zatex.mathml("\\ket{\\psi}", .{}, &buf2);
-    try expectGolden("\\ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><mrow><mi>∣</mi><mi>ψ</mi><mo>⟩</mo></mrow></mrow></mrow></math>", got2);
+    try expectGolden("\\ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mpadded><mi>∣</mi><mi>ψ</mi><mo>⟩</mo></mpadded></mrow></math>", got2);
 }
 
 test "qa64 display cases use displaystyle cells" {
@@ -1774,13 +1806,26 @@ test "qa69 textregistered is text registered" {
 }
 
 test "qa70 textcircled overlays a circle" {
-    // Issue #51 (KaTeX parity): the circle overlays the base letter,
-    // growing the construction above the bare letter.
+    // Issues #51/#70 (KaTeX parity): the circle overlays the base
+    // letter — a true overlay, so the line-box tops align and the
+    // construction grows no taller than the bare letter (pinned
+    // 0.18.7 DOM: circle top within 0.1px of the letter top).
     var b1: B = .{};
     const circ = try lay("\\text{\\textcircled a}", false, &b1);
     var b2: B = .{};
     const bare = try lay("\\text{a}", false, &b2);
-    try std.testing.expect(circ.height_above > bare.height_above);
+    try std.testing.expectEqual(bare.height_above, circ.height_above);
+    // Issue #70: TeX control-word space skipping — the unbraced form
+    // `\textcircled a` typesets no phantom space inside the span, so
+    // it lays out exactly like the braced form.
+    var b3: B = .{};
+    const braced = try lay("\\text{\\textcircled{a}}", false, &b3);
+    try std.testing.expectEqual(braced.width, circ.width);
+    try std.testing.expectEqual(braced.runs.len, circ.runs.len);
+    for (braced.runs, circ.runs) |r1, r2| {
+        try std.testing.expectEqual(r1.x, r2.x);
+        try std.testing.expectEqualSlices(u16, r1.glyphs, r2.glyphs);
+    }
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\text{\\textcircled a}", .{}, &buf);
     try expectGolden("textcircled", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><mover accent=\"true\"><mrow><mtext>a</mtext></mrow><mo>◯</mo></mover></mrow></mrow></math>", got);
@@ -1821,15 +1866,16 @@ test "qa73 overbracket draws a square bracket" {
 }
 
 test "qa79 math-mode textcircled is a mover" {
-    // Issue #51 review (KaTeX parity): math-mode \textcircled is
+    // Issues #51/#70 review (KaTeX parity): math-mode \textcircled is
     // accepted (strict warning in KaTeX, not a reject) and builds a
-    // mover with the circle operator; the overlay tucks exactly
-    // 194mu above the body top, font-independently.
+    // mover with the circle operator; the overlay aligns with the
+    // body top (pinned 0.18.7 DOM), growing neither above nor — for
+    // a same-advance circle under the stub — wider.
     var b1: B = .{};
     const c = try lay("\\textcircled{a}", false, &b1);
     var b2: B = .{};
     const bare = try lay("a", false, &b2);
-    try std.testing.expectEqual(bare.height_above + 194, c.height_above);
+    try std.testing.expectEqual(bare.height_above, c.height_above);
     try std.testing.expectEqual(bare.width, c.width);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\textcircled{a}", .{}, &buf);
@@ -1944,6 +1990,58 @@ test "qa74 underbracket mirrors below" {
     try expectGolden("underbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mi>x</mi><mo>&#x23B5;</mo></munder></mrow></math>", got);
 }
 
+test "qa73 subarray takes c-l alignment" {
+    // Issue #73 (pinned KaTeX 0.18.7 is truth: `{c}`/`{l}` align the
+    // single column, `{r}` and mixed groups reject, `&` rejects with
+    // "only one column"): script cells like smallmatrix, one spec
+    // code, column-count clamp in layoutEnv. Cells lay out at script
+    // size (stub advance scales 500 -> 350), so the `a` row sits at
+    // the column origin when left and centered in the `bb` row
+    // otherwise: 194 vs 194 + (700 - 350) / 2 = 369.
+    var b1: B = .{};
+    const l = try lay("\\begin{subarray}{l}a\\\\bb\\end{subarray}", false, &b1);
+    try std.testing.expectEqual(@as(i32, 194), l.runs[0].x);
+    var b2: B = .{};
+    const c = try lay("\\begin{subarray}{c}a\\\\bb\\end{subarray}", false, &b2);
+    try std.testing.expectEqual(@as(i32, 369), c.runs[0].x);
+    try std.testing.expectEqual(l.width, c.width);
+    var b3: B = .{};
+    var diag = zatex.Diag.empty();
+    try std.testing.expectError(error.Invalid, zatex.layoutDiag("\\begin{subarray}{r}a\\end{subarray}", .{}, stubProvider(), &b3.runs, &b3.rules, &b3.glyphs, &diag));
+    var b4: B = .{};
+    var diag2 = zatex.Diag.empty();
+    try std.testing.expectError(error.Invalid, zatex.layoutDiag("\\begin{subarray}{c}a&b\\end{subarray}", .{}, stubProvider(), &b4.runs, &b4.rules, &b4.glyphs, &diag2));
+}
+
+test "qa73 tag tables the equation with parens" {
+    // Issue #73 (pinned KaTeX 0.18.7 `tag` MathML): the display-only
+    // equation number rides in a full-width table; `\tag`
+    // parenthesizes, `\tag*` does not. The `mrow` shell around `(1)`
+    // is grouping-transparent (the parity normalizer drops
+    // single-child rows). Layout puts real paren ink after a
+    // `\qquad` gap: stub advance is a flat 500, so `(` sits at
+    // 500 (formula) + 2000 (gap) = 2500 and the row is 4000 wide.
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\tag{1}x", .{ .display_mode = true }, &buf);
+    try expectGolden("tag-display", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mrow><mtext>(1)</mtext></mrow></mtd></mtr></mtable></math>", got);
+    var buf2: [4096]u8 = undefined;
+    const got2 = try zatex.mathml("\\tag*{a}x", .{ .display_mode = true }, &buf2);
+    try expectGolden("tag-star-display", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>a</mtext></mtd></mtr></mtable></math>", got2);
+    var b1: B = .{};
+    const l1 = try lay("\\tag{1}x", true, &b1);
+    try std.testing.expectEqual(@as(i32, 2500), try glyphX(l1, '('));
+    try std.testing.expectEqual(@as(u32, 4000), l1.width);
+    var b2: B = .{};
+    const l2 = try lay("\\tag*{a}x", true, &b2);
+    var found_paren = false;
+    for (l2.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == '(' or g == ')') found_paren = true;
+        }
+    }
+    try std.testing.expect(!found_paren);
+}
+
 test "qa72 sout strikes math" {
     // Issue #51 (KaTeX parity): math-mode `\sout` is a horizontal
     // strike (menclose horizontalstrike, like `\cancel` diagonal).
@@ -1997,4 +2095,38 @@ test "qa61 lbrace works after left" {
     const fenced = try lay("\\left\\lbrace x \\right.", false, &b3);
     try std.testing.expect(fenced.width >= bare.width);
 }
+
+
+test "qa80 lap family overlaps with zero width" {
+    // Issue #71 (pinned KaTeX 0.18.7 is truth: `\llap` is
+    // `mpadded lspace="-1width" width="0px"`, `\mathclap` is
+    // `lspace="-0.5width"`): the core was already KaTeX-exact here —
+    // the visible `lap.png`/`mathclap.png` divergence was the raster
+    // backend clipping left-overflow ink (fixed in render.zig, which
+    // shifts the canvas so the leftmost ink lands on pad). Pin the
+    // geometry: stub advance is 500, so representatives are exact.
+    var b1: B = .{};
+    const ll = try lay("\\llap{x}y", false, &b1);
+    try std.testing.expectEqual(@as(u32, 500), ll.width);
+    try std.testing.expectEqual(@as(usize, 2), ll.runs.len);
+    try std.testing.expectEqual(@as(i32, -500), ll.runs[0].x);
+    try std.testing.expectEqual(@as(i32, 0), ll.runs[1].x);
+    // Run order follows box order: the lapped text-mode `x` first.
+    try std.testing.expectEqual(@as(usize, 1), ll.runs[0].glyphs.len);
+    try std.testing.expectEqual(@as(u16, 'x'), ll.runs[0].glyphs[0]);
+    var b2: B = .{};
+    const rl = try lay("\\rlap{ab}y", false, &b2);
+    try std.testing.expectEqual(@as(u32, 500), rl.width);
+    try std.testing.expectEqual(@as(i32, 0), rl.runs[0].x);
+    try std.testing.expectEqual(@as(i32, 0), rl.runs[1].x);
+    var b3: B = .{};
+    const mc = try lay("\\mathclap{ab}", false, &b3);
+    try std.testing.expectEqual(@as(u32, 0), mc.width);
+    try std.testing.expectEqual(@as(usize, 1), mc.runs.len);
+    // Centered: content [-1000, 0], middle at the zero-width origin.
+    try std.testing.expectEqual(@as(i32, -500), mc.runs[0].x);
+}
+
+
+
 
