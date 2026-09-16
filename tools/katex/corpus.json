@@ -9433,5 +9433,65 @@
   "katex_only": true,
   "ours": "Invalid",
   "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "112-fenced-atop",
+  "tex": "\\left({a\\atop b}\\right)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-fenced-atop-display",
+  "tex": "\\left({a\\atop b}\\right)",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "112-fenced-choose",
+  "tex": "\\left[{n\\choose k}\\right]",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-fenced-brace-stack",
+  "tex": "\\left\\{{a\\atop b}\\right\\}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-brack",
+  "tex": "\\genfrac[]{0pt}{1}{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-brace",
+  "tex": "\\genfrac\\lbrace\\rbrace{0pt}{1}{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-zerobar",
+  "tex": "\\genfrac(){0pt}{0}{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-tall-binom",
+  "tex": "\\binom{a^2+b^2}{c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-tall-dbinom-display",
+  "tex": "\\dbinom{a^2+b^2}{c}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-tall",
+  "tex": "\\genfrac(){0pt}{1}{a^2+b^2}{c}",
+  "display": false,
+  "expect": "accept"
  }
 ]

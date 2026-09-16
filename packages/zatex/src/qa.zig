@@ -2263,14 +2263,15 @@ test "qa84 genfrac zero bar omits the rule (issue #105)" {
     var b1: B = .{};
     const g = try lay("\\genfrac(){0pt}{1}{a}{b}", false, &b1);
     try std.testing.expectEqual(@as(usize, 0), g.rules.len);
-    // Same construction without the style shell (stretchy parens
-    // around a barless stack) lays out bit-identically: the T style
-    // wrapper is geometry-transparent in ambient text style.
+    // Same construction as `\binom` (Rule 15e fixed fences, issue
+    // #112) lays out bit-identically: the T style wrapper is
+    // geometry-transparent in ambient text style. `\left` grows
+    // instead and now differs (taller box).
     var b2: B = .{};
-    const ref = try lay("\\left({a\\atop b}\\right)", false, &b2);
-    try std.testing.expectEqual(ref.width, g.width);
-    try std.testing.expectEqual(ref.height_above, g.height_above);
-    try std.testing.expectEqual(ref.depth_below, g.depth_below);
+    const bi = try lay("\\binom{a}{b}", false, &b2);
+    try std.testing.expectEqual(bi.width, g.width);
+    try std.testing.expectEqual(bi.height_above, g.height_above);
+    try std.testing.expectEqual(bi.depth_below, g.depth_below);
     var b3: B = .{};
     const ab = try lay("a\\above0pt b", false, &b3);
     try std.testing.expectEqual(@as(usize, 0), ab.rules.len);
@@ -2595,5 +2596,50 @@ test "qa108 angl border box" {
         // The mark grows the nucleus: 4t above, side pads 38/77.
         try std.testing.expect(l.height_above >= 160);
         try std.testing.expect(l.width >= 115);
+    }
+}
+
+test "qa112 binom fences use Rule 15e sizing" {
+    // Issue #112 (pinned 0.18.7 genfrac Rule 15e + delimsizing): the
+    // whole barless family targets a FIXED height — delim1 (2.39em) in
+    // display, delim2 (1.01em text, 1.157em script) elsewhere — picked
+    // through the variant hook and axis-centered, abutting the
+    // content. `\binom{a}{b}` and `\genfrac(){0pt}{1}{a}{b}` lay out
+    // byte-identical boxes now (were 1588 vs 1656 CLI px); tall
+    // content takes the max on both paths. Stub text metrics pin the
+    // integers (no variants: the 1010 target always wins).
+    var b: B = .{};
+    var out: [2048]u8 = undefined;
+    const T = struct {
+        fn dump(src: []const u8, bufs: *B, obuf: []u8) ![]u8 {
+            const l = try lay(src, false, bufs);
+            return dumpAny(l, obuf);
+        }
+        fn dumpD(src: []const u8, bufs: *B, obuf: []u8) ![]u8 {
+            const l = try lay(src, true, bufs);
+            return dumpAny(l, obuf);
+        }
+    };
+    // Text style: content (934+520) exceeds the 1010 target, so the
+    // stack rules; fences abut it with no paren gap (was +100/side).
+    try std.testing.expectEqualStrings("1590/934/520|0,1000,0,934:40.;1,700,620,490:54350.;1,700,620,1279:54351.;0,1000,1090,934:41.;|", try T.dump("\\binom{a}{b}", &b, &out));
+    try std.testing.expectEqualStrings("1590/934/520|0,1000,0,934:40.;1,700,620,490:54350.;1,700,620,1279:54351.;0,1000,1090,934:41.;|", try T.dump("\\genfrac(){0pt}{1}{a}{b}", &b, &out));
+    try std.testing.expectEqualStrings("1590/934/520|0,1000,0,934:40.;1,700,620,490:54350.;1,700,620,1279:54351.;0,1000,1090,934:41.;|", try T.dump("a\\choose b", &b, &out));
+    try std.testing.expectEqualStrings("1590/934/520|0,1000,0,934:123.;1,700,620,490:54350.;1,700,620,1279:54351.;0,1000,1090,934:125.;|", try T.dump("a\\brace b", &b, &out));
+    try std.testing.expectEqualStrings("1590/934/520|0,1000,0,934:91.;1,700,620,490:54350.;1,700,620,1279:54351.;0,1000,1090,934:93.;|", try T.dump("a\\brack b", &b, &out));
+    // Tall content takes the max, identically on both paths.
+    try std.testing.expectEqualStrings("3184/1039/520|0,1000,0,1039:40.;1,700,620,595:54350.;0,500,1012,350:50.;0,700,1417,595:43.;1,700,1922,595:54351.;0,500,2314,350:50.;1,700,1417,1384:54352.;0,1000,2684,1039:41.;|", try T.dump("\\binom{a^2+b^2}{c}", &b, &out));
+    try std.testing.expectEqualStrings("3184/1039/520|0,1000,0,1039:40.;1,700,620,595:54350.;0,500,1012,350:50.;0,700,1417,595:43.;1,700,1922,595:54351.;0,500,2314,350:50.;1,700,1417,1384:54352.;0,1000,2684,1039:41.;|", try T.dump("\\genfrac(){0pt}{1}{a^2+b^2}{c}", &b, &out));
+    // Display style: the 2390 target rules (1445+945), identically.
+    try std.testing.expectEqualStrings("1740/1445/945|0,1000,0,1445:40.;1,1000,620,768:54350.;1,1000,620,2131:54351.;0,1000,1240,1445:41.;|", try T.dump("\\dbinom{a}{b}", &b, &out));
+    try std.testing.expectEqualStrings("1740/1445/945|0,1000,0,1445:40.;1,1000,620,768:54350.;1,1000,620,2131:54351.;0,1000,1240,1445:41.;|", try T.dumpD("\\genfrac(){0pt}{0}{a}{b}", &b, &out));
+    // Fences abut the content: left paren at x=0, stack at the paren
+    // advance (500 stub units), right paren past the stack.
+    {
+        const l = try lay("\\binom{a}{b}", false, &b);
+        try std.testing.expectEqual(@as(i32, 0), try glyphX(l, 40));
+        try std.testing.expectEqual(@as(i32, 620), try glyphX(l, 54350));
+        try std.testing.expectEqual(@as(i32, 1090), try glyphX(l, 41));
+        try std.testing.expectEqual(@as(i32, 1590), l.width);
     }
 }

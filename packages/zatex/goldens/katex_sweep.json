@@ -15888,6 +15888,106 @@
    "katex_ok": false,
    "katex_pos": 0,
    "katex_error": "KaTeX parse error: Got function '\\gdef' with no arguments as subscript at position 1: \\̲g̲d̲e̲f̲\\@eqnsw{0}"
+  },
+  {
+   "id": "112-fenced-atop",
+   "tex": "\\left({a\\atop b}\\right)",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\left({a\\atop b}\\right)</annotation></semantics></math>"
+  },
+  {
+   "id": "112-fenced-atop-display",
+   "tex": "\\left({a\\atop b}\\right)",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\left({a\\atop b}\\right)</annotation></semantics></math>"
+  },
+  {
+   "id": "112-fenced-choose",
+   "tex": "\\left[{n\\choose k}\\right]",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">[</mo><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">)</mo></mrow><mo fence=\"true\">]</mo></mrow><annotation encoding=\"application/x-tex\">\\left[{n\\choose k}\\right]</annotation></semantics></math>"
+  },
+  {
+   "id": "112-fenced-brace-stack",
+   "tex": "\\left\\{{a\\atop b}\\right\\}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">{</mo><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">}</mo></mrow><annotation encoding=\"application/x-tex\">\\left\\{{a\\atop b}\\right\\}</annotation></semantics></math>"
+  },
+  {
+   "id": "112-genfrac-brack",
+   "tex": "\\genfrac[]{0pt}{1}{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow><mo fence=\"true\">[</mo><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">]</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\genfrac[]{0pt}{1}{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "112-genfrac-brace",
+   "tex": "\\genfrac\\lbrace\\rbrace{0pt}{1}{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow><mo fence=\"true\">lbrace</mo><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">rbrace</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\genfrac\\lbrace\\rbrace{0pt}{1}{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "112-genfrac-zerobar",
+   "tex": "\\genfrac(){0pt}{0}{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\genfrac(){0pt}{0}{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "112-tall-binom",
+   "tex": "\\binom{a^2+b^2}{c}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup></mrow><mi>c</mi></mfrac><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\binom{a^2+b^2}{c}</annotation></semantics></math>"
+  },
+  {
+   "id": "112-tall-dbinom-display",
+   "tex": "\\dbinom{a^2+b^2}{c}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup></mrow><mi>c</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\dbinom{a^2+b^2}{c}</annotation></semantics></math>"
+  },
+  {
+   "id": "112-genfrac-tall",
+   "tex": "\\genfrac(){0pt}{1}{a^2+b^2}{c}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0px\"><mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup></mrow><mi>c</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\genfrac(){0pt}{1}{a^2+b^2}{c}</annotation></semantics></math>"
   }
  ]
 }

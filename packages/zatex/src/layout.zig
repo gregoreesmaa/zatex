@@ -232,7 +232,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .sqrt => |s| return layoutSqrt(lc, style, s),
         .supsub => |s| return layoutSupSub(lc, style, s),
         .delim => |d| return layoutDelim(lc, style, d),
-        .middle => |m| return layoutFence(lc, style, m.cp, lc.fence_need),
+        .middle => |m| return layoutFence(lc, style, m.cp, lc.fence_need, false),
         .big => |b| return layoutBig(lc, style, b),
         .accent => |a| return layoutAccent(lc, style, a),
         .over => |o| return layoutOver(lc, style, o),
@@ -1383,20 +1383,34 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
     });
 }
 
+/// TeX Rule 15e (KaTeX `genfrac.ts`, cmex sigma20/21 in thousandths
+/// of an em): barless-stack fences target a FIXED height — delim1 in
+/// display, delim2 elsewhere — never grown to content.
+fn rule15eNeed(style: parse.Style) i32 {
+    return switch (style) {
+        .D, .Dc => 2390,
+        .T, .Tc => 1010,
+        .S, .Sc, .SS, .SSc => 1157,
+    };
+}
+
 /// Fence pair around a barless stack (`\\choose`/`\\brace`/`\\brack`,
-/// issue #93): natural-size delimiters with the paren gap on both
-/// sides, shared by all three KaTeX fence pairs.
+/// the `\\binom` family): Rule 15e fixed-size delimiters, axis
+/// centered, abutting the content (issue #112 — KaTeX runs identical
+/// machinery for the whole family and for `\\genfrac` delimiters, so
+/// `\\binom{a}{b}` and `\\genfrac(){0pt}{1}{a}{b}` agree).
 fn wrapFence(lc: *LayCtx, style: parse.Style, inner: u16, left: u21, right: u21) Error!u16 {
     const ib = lc.boxes[inner];
-    const lp = try layoutFence(lc, style, left, 0);
-    const rp = try layoutFence(lc, style, right, 0);
+    const size = lc.effSize(style);
+    const need = @divTrunc(rule15eNeed(style) * size, 1000);
+    const lp = try layoutFence(lc, style, left, need, true);
+    const rp = try layoutFence(lc, style, right, need, true);
     const lb = lc.boxes[lp];
     const rb = lc.boxes[rp];
-    const gap: i32 = 100;
     const s = try lc.allocKids(3);
     lc.bkids[s] = .{ .box = lp, .dx = 0, .dy = 0 };
-    lc.bkids[s + 1] = .{ .box = inner, .dx = lb.w + gap, .dy = 0 };
-    lc.bkids[s + 2] = .{ .box = rp, .dx = lb.w + gap + ib.w + gap, .dy = 0 };
+    lc.bkids[s + 1] = .{ .box = inner, .dx = lb.w, .dy = 0 };
+    lc.bkids[s + 2] = .{ .box = rp, .dx = lb.w + ib.w, .dy = 0 };
     var ha = ib.ha;
     var db = ib.db;
     if (lb.ha > ha) ha = lb.ha;
@@ -1404,7 +1418,7 @@ fn wrapFence(lc: *LayCtx, style: parse.Style, inner: u16, left: u21, right: u21)
     if (rb.ha > ha) ha = rb.ha;
     if (rb.db > db) db = rb.db;
     return lc.allocBox(.{
-        .w = lb.w + gap + ib.w + gap + rb.w,
+        .w = lb.w + ib.w + rb.w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
@@ -1557,7 +1571,7 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 /// One fence glyph sized to at least `need` (total height) when the
 /// variant hook can supply it; otherwise the natural glyph centered
 /// on the math axis.
-fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32) Error!u16 {
+fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32, variant_box: bool) Error!u16 {
     const size = lc.effSize(style);
     const font: u16 = @intFromEnum(contract.FontId.rm);
     const g0 = lc.glyphId(font, cp);
@@ -1568,9 +1582,19 @@ fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32) Error!u16 {
     var ha = @divTrunc(e[0] * size, 1000);
     var db = @divTrunc(e[1] * size, 1000);
     if (need > 0) {
-        // Center the grown fence on the math axis.
+        // Center the grown fence on the math axis. Rule 15e fences
+        // (issue #112) box the picked variant instead of the target —
+        // KaTeX's span follows its `delimsizing sizeN` glyph, so with
+        // a real font the box is the ~1.2em size-1 paren, not the
+        // 1.01em target; without variants the target always wins, so
+        // stub integers never move.
+        var total = need;
+        if (variant_box) {
+            const vt = ha + db;
+            if (vt > total) total = vt;
+        }
         const axis = @divTrunc((@as(i32, 250) * size), 1000);
-        const half = @divTrunc(need + 1, 2);
+        const half = @divTrunc(total + 1, 2);
         ha = axis + half;
         db = half - axis;
         if (db < 0) db = 0;
@@ -1587,14 +1611,22 @@ fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32) Error!u16 {
 fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
     const prev_need = lc.fence_need;
     // Measure pass (middles at natural size), then the real pass with
-    // `\middle` separators grown to the full fence height.
-    lc.fence_need = 0;
-    const probe = try layoutNode(lc, style, d.body);
-    const pb = lc.boxes[probe];
-    const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
-    const clear = if (2 * th > 120) 2 * th else 120;
-    const need = pb.ha + pb.db + clear;
-    lc.fence_need = need;
+    // `\middle` separators grown to the full fence height. Rule 15e
+    // fixed delimiters (`\genfrac`, issue #112) skip the probe —
+    // `\middle` requires `\left`, so none can occur — and target the
+    // fixed height instead of growing to content.
+    var need: i32 = undefined;
+    if (d.fixed) {
+        need = @divTrunc(rule15eNeed(style) * lc.effSize(style), 1000);
+    } else {
+        lc.fence_need = 0;
+        const probe = try layoutNode(lc, style, d.body);
+        const pb = lc.boxes[probe];
+        const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
+        const clear = if (2 * th > 120) 2 * th else 120;
+        need = pb.ha + pb.db + clear;
+        lc.fence_need = need;
+    }
     const body = try layoutNode(lc, style, d.body);
     const bb = lc.boxes[body];
     lc.fence_need = prev_need;
@@ -1603,7 +1635,7 @@ fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
     var ha = bb.ha;
     var db = bb.db;
     if (d.left != 0) {
-        const f = try layoutFence(lc, style, d.left, need);
+        const f = try layoutFence(lc, style, d.left, need, d.fixed);
         const fb = lc.boxes[f];
         // layoutFence centers grown fences on the math axis, so dy=0
         // aligns the fence center with the body axis.
@@ -1617,7 +1649,7 @@ fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
     lc.bkids[s + 1] = .{ .box = body, .dx = x, .dy = 0 };
     x += bb.w;
     if (d.right != 0) {
-        const f = try layoutFence(lc, style, d.right, need);
+        const f = try layoutFence(lc, style, d.right, need, d.fixed);
         const fb = lc.boxes[f];
         lc.bkids[s + 2] = .{ .box = f, .dx = x, .dy = 0 };
         x += fb.w;

@@ -440,6 +440,10 @@ pub const Node = union(enum) {
         left: u21,
         right: u21,
         body: Idx,
+        /// Rule 15e fixed sizing (issue #112): `\genfrac` delimiters
+        /// target delim1/delim2, never grown to content. `\left` and
+        /// friends keep grown (`false`).
+        fixed: bool = false,
     },
     middle: struct {
         cp: u21,
@@ -5324,7 +5328,7 @@ fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         .kind = .{ .bar = bar, .thick = thick },
     } });
     if (left != 0 or right != 0) {
-        body = try ctx.allocNode(.{ .delim = .{ .left = left, .right = right, .body = body } });
+        body = try ctx.allocNode(.{ .delim = .{ .left = left, .right = right, .body = body, .fixed = true } });
     }
     // The style `mstyle` sits outside delimiters (KaTeX parity).
     if (fstyle) |st| {
