@@ -118,6 +118,7 @@ pub const Stack = struct {
             7 => &.{ .ams, .lm, .stix },
             8 => &.{ .cal, .lm, .stix },
             9 => &.{ .main_bi, .lm, .stix },
+            10 => &.{ .main, .lm, .ams, .stix },
             else => &.{ .lm, .main, .ams, .stix },
         };
     }
@@ -426,6 +427,23 @@ test "smp math families stay on LM" {
         try std.testing.expect(g != 0);
         try std.testing.expectEqual(Role.lm, ts.stack.roleOf(g));
     }
+}
+
+test "issue103 narrow accents resolve through Main" {
+    // KaTeX sets every accent from its Main face; the reference
+    // font's designs differ (Main ^ ink is half the LM width), so
+    // layout routes narrow accents via FontId 10 (main-first).
+    var ts = TestStack{};
+    defer ts.free();
+    try ts.add(.lm, lm_path);
+    try ts.add(.main, katex_dir ++ "KaTeX_Main-Regular.otf");
+    const rm_hat = ts.stack.glyphIdFor(0, 0x5E);
+    try std.testing.expect(rm_hat != 0);
+    try std.testing.expectEqual(Role.lm, ts.stack.roleOf(rm_hat));
+    const ac_hat = ts.stack.glyphIdFor(10, 0x5E);
+    try std.testing.expect(ac_hat != 0);
+    try std.testing.expectEqual(Role.main, ts.stack.roleOf(ac_hat));
+    try std.testing.expect(ts.stack.advance1000(ac_hat) < ts.stack.advance1000(rm_hat));
 }
 
 test "issue92 underbar hook resolves from the vendored subset" {

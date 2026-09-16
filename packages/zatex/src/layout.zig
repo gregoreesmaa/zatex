@@ -1707,7 +1707,14 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const size = lc.effSize(style);
     const nuc = try layoutNode(lc, style, a.nucleus);
     const nb = lc.boxes[nuc];
-    const font: u16 = @intFromEnum(contract.FontId.rm);
+    // Narrow accents resolve through the Main face (issue #103):
+    // KaTeX sets every accent from Main, whose designs our reference
+    // font does not match (Main ^ ink is half the LM width). Wide
+    // accents keep rm: their assembly is pinned separately (#31).
+    const font: u16 = if (a.wide)
+        @intFromEnum(contract.FontId.rm)
+    else
+        @intFromEnum(contract.FontId.main);
     const g = lc.glyphId(font, a.cp);
     const adv = lc.advance(font, g);
     const e = lc.extents(font, g);

@@ -106,4 +106,8 @@ pub const FontId = enum(u16) {
     cal = 8,
     /// `\bm` bold-italic (issue #73): appended, never renumbered.
     bold_italic = 9,
+    /// Narrow accents (issue #103): KaTeX renders every accent from
+    /// its Main face, whose designs (hat ink half the LM width) the
+    /// reference font does not match. Appended, never renumbered.
+    main = 10,
 };
