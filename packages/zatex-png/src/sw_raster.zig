@@ -36,18 +36,23 @@ pub const white = Color{ .r = 1, .g = 1, .b = 1, .a = 1 };
 /// (px per font unit) offset by (`ox`, `oy`), returning the used
 /// prefix of `out`. The split scales exist for run raster-stretch
 /// (wide accents, brace spans — issues #31/#37); uniform text passes
-/// `sx == sy`. Curves subdivide to 0.25px flatness, depth-capped.
-pub fn flatten(segs: []const Seg, sx: f64, sy: f64, ox: f64, oy: f64, out: []Line) []Line {
+/// `sx == sy`. `sh` shears ink right by `sh` device px per device px
+/// above the baseline at `oy` (faux math-italic for dotless i/j,
+/// issue #77); 0 disables. Device space is y-up, so height above the
+/// baseline is just `y*sy`. Shear applies at the segment level, before
+/// curve subdivision, which already runs in device space. Curves
+/// subdivide to 0.25px flatness, depth-capped.
+pub fn flatten(segs: []const Seg, sx: f64, sy: f64, ox: f64, oy: f64, sh: f64, out: []Line) []Line {
     var n: usize = 0;
     for (segs) |s| {
-        const ax = ox + s.x[0] * sx;
+        const ax = ox + s.x[0] * sx + sh * (s.y[0] * sy);
         const ay = oy + s.y[0] * sy;
         if (!s.is_curve) {
             if (n < out.len) {
                 out[n] = .{
                     .x0 = @floatCast(ax),
                     .y0 = @floatCast(ay),
-                    .x1 = @floatCast(ox + s.x[3] * sx),
+                    .x1 = @floatCast(ox + s.x[3] * sx + sh * (s.y[3] * sy)),
                     .y1 = @floatCast(oy + s.y[3] * sy),
                 };
                 n += 1;
@@ -56,11 +61,11 @@ pub fn flatten(segs: []const Seg, sx: f64, sy: f64, ox: f64, oy: f64, out: []Lin
             n = flattenCubic(
                 ax,
                 ay,
-                ox + s.x[1] * sx,
+                ox + s.x[1] * sx + sh * (s.y[1] * sy),
                 oy + s.y[1] * sy,
-                ox + s.x[2] * sx,
+                ox + s.x[2] * sx + sh * (s.y[2] * sy),
                 oy + s.y[2] * sy,
-                ox + s.x[3] * sx,
+                ox + s.x[3] * sx + sh * (s.y[3] * sy),
                 oy + s.y[3] * sy,
                 out,
                 n,
@@ -275,3 +280,4 @@ test "fillLines fills a triangle with nonzero winding" {
     try std.testing.expect(px[(ch - 1 - 3) * cw * 4 + 4 * 4] < 32);
     try std.testing.expectEqual([4]u8{ 255, 255, 255, 255 }, px[(ch - 1 - 7) * cw * 4 + 0 * 4 ..][0..4].*);
 }
+

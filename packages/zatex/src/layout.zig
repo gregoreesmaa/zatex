@@ -66,6 +66,11 @@ pub const Box = struct {
     /// the layout box keeps the construction width, the backend
     /// stretches the ink. Runs split on scale change like on color.
     x_scale: u16 = 1000,
+    /// Faux-italic slant in per-mille (0 = upright), stamped by
+    /// `layoutAtom` for dotless i/j under the default math face
+    /// (issue #77): the backend shears the ink about the baseline.
+    /// Runs split on shear change like on scale.
+    x_shear: i16 = 0,
 };
 
 pub const max_boxes: usize = 640;
@@ -592,12 +597,18 @@ fn layoutAtom(lc: *LayCtx, style: parse.Style, class: symbols.AtomClass, fam: pa
     const adv = lc.advance(font, g);
     const w = @divTrunc(adv * size, 1000);
     const e = lc.extents(font, g);
+    // Dotless i/j under the default math face stand in for KaTeX's
+    // math-italic ȷ/ı (issue #77): the host glyph is upright, so the
+    // run shears it at the Computer Modern math-italic slant (1:4).
+    // An explicit face wins (its wrapper supplies the variant).
+    const shear: i16 = if ((cp == 0x131 or cp == 0x237) and fam == .rm) 250 else 0;
     return lc.allocBox(.{
         .w = w,
         .ha = @divTrunc(e[0] * size, 1000),
         .db = @divTrunc(e[1] * size, 1000),
         .kind = .{ .glyph = .{ .font = font, .size = size, .glyph = g } },
         .invisible = false,
+        .x_shear = shear,
     });
 }
 
@@ -3223,6 +3234,7 @@ const EmitCtx = struct {
     open_size: u16 = 0,
     open_color: ?u32 = null,
     open_scale: u16 = 1000,
+    open_shear: i16 = 0,
     open_y: i32 = 0,
     /// Expected pen x for run continuation.
     open_x: i32 = 0,
@@ -3241,6 +3253,7 @@ const EmitCtx = struct {
                 .glyphs = self.glyphs[self.open_start..self.ng],
                 .color = self.open_color,
                 .x_scale = self.open_scale,
+                .x_shear = self.open_shear,
             };
             self.nr += 1;
         }
@@ -3254,9 +3267,9 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
         .glyph => |g| {
             if (!b.invisible) {
                 // Break runs on position gaps: expected pen must equal x.
-                // Color and raster-scale boundaries split runs too
-                // (issues #35, #31).
-                if (ec.has_open and (ec.open_font != g.font or ec.open_size != g.size or ec.open_color != b.color or ec.open_scale != b.x_scale or ec.open_y != base or ec.open_x != x)) {
+                // Color, raster-scale, and shear boundaries split runs
+                // too (issues #35, #31, #77).
+                if (ec.has_open and (ec.open_font != g.font or ec.open_size != g.size or ec.open_color != b.color or ec.open_scale != b.x_scale or ec.open_shear != b.x_shear or ec.open_y != base or ec.open_x != x)) {
                     ec.closeRun();
                 }
                 if (!ec.has_open) {
@@ -3265,6 +3278,7 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     ec.open_size = g.size;
                     ec.open_color = b.color;
                     ec.open_scale = b.x_scale;
+                    ec.open_shear = b.x_shear;
                     ec.open_y = base;
                     ec.open_start = ec.ng;
                     ec.open_run_x = x;

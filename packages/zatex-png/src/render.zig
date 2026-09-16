@@ -73,8 +73,10 @@ pub fn renderToPng(
         // construction width and stamps the stretch factor; ink and
         // pen advances scale together so stepped origins stay exact.
         const sx: f64 = @as(f64, @floatFromInt(run.x_scale)) / 1000.0;
+        // Faux-italic slant as a dimensionless ratio (issue #77).
+        const sh: f64 = @as(f64, @floatFromInt(run.x_shear)) / 1000.0;
         setPaint(&canvas, run.color);
-        var rf = try canvas.beginRun(&font.handle, px_size, sx);
+        var rf = try canvas.beginRun(&font.handle, px_size, sx, sh);
         defer rf.end();
         var x_units: i64 = run.x;
         const base_y: f64 = glyphBaseY(run.baseline_y, s, pad, H);
@@ -95,10 +97,14 @@ pub fn renderToPng(
 
 /// Glyph metrics for the left-shift walk: integer thousandths like the
 /// core measures, so the walk stays exact with stub providers in tests.
+/// Ink top/bottom (y-up thousandths from the baseline) are optional:
+/// stubs omit them and sheared runs then keep the unsheared bound.
 const ShiftMetrics = struct {
     ptr: *const anyopaque,
     advance1000: *const fn (ptr: *const anyopaque, glyph: u16) i32,
     inkLeft1000: *const fn (ptr: *const anyopaque, glyph: u16) i32,
+    inkTop1000: ?*const fn (ptr: *const anyopaque, glyph: u16) i32 = null,
+    inkBottom1000: ?*const fn (ptr: *const anyopaque, glyph: u16) i32 = null,
 };
 
 fn fontShiftMetrics(font: *const Font) ShiftMetrics {
@@ -111,8 +117,16 @@ fn fontShiftMetrics(font: *const Font) ShiftMetrics {
             const f: *const Font = @ptrCast(@alignCast(ptr));
             return f.handle.inkBounds1000(glyph)[0];
         }
+        fn top(ptr: *const anyopaque, glyph: u16) i32 {
+            const f: *const Font = @ptrCast(@alignCast(ptr));
+            return f.handle.inkBounds1000(glyph)[3];
+        }
+        fn bot(ptr: *const anyopaque, glyph: u16) i32 {
+            const f: *const Font = @ptrCast(@alignCast(ptr));
+            return f.handle.inkBounds1000(glyph)[1];
+        }
     };
-    return .{ .ptr = font, .advance1000 = W.adv, .inkLeft1000 = W.ink };
+    return .{ .ptr = font, .advance1000 = W.adv, .inkLeft1000 = W.ink, .inkTop1000 = W.top, .inkBottom1000 = W.bot };
 }
 
 /// Canvas shift (layout units, >= 0) so left-overflow ink lands on pad.
@@ -132,7 +146,21 @@ fn leftShiftUnits(m: ShiftMetrics, runs: []const zatex.ir.Run, rules: []const za
         var x_units: i64 = run.x;
         for (run.glyphs) |g| {
             const ink_left = @divTrunc(@as(i64, m.inkLeft1000(m.ptr, g)) * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
-            if (x_units + ink_left < left) left = x_units + ink_left;
+            // Faux-italic shear (issue #77) slides ink horizontally
+            // with height: the shift is linear, so the extremes sit
+            // at the ink top/bottom. Backends round each row to
+            // nearest, so floor here stays conservative (never
+            // under-shifts). Runs at shear 0, or stubs without
+            // top/bottom metrics, keep the old bound exactly.
+            var edge = x_units + ink_left;
+            if (run.x_shear != 0 and m.inkTop1000 != null and m.inkBottom1000 != null) {
+                const top_u = @divTrunc(@as(i64, m.inkTop1000.?(m.ptr, g)) * @as(i64, run.size_units), 1000);
+                const bot_u = @divTrunc(@as(i64, m.inkBottom1000.?(m.ptr, g)) * @as(i64, run.size_units), 1000);
+                const sh_top = @divFloor(@as(i64, run.x_shear) * top_u, 1000);
+                const sh_bot = @divFloor(@as(i64, run.x_shear) * bot_u, 1000);
+                edge += @min(@as(i64, 0), @min(sh_top, sh_bot));
+            }
+            if (edge < left) left = edge;
             const step: i64 = @divTrunc(
                 @as(i64, m.advance1000(m.ptr, g)) * @as(i64, run.size_units),
                 1000,
@@ -177,6 +205,36 @@ test "left shift covers runs and rules, else zero" {
         .{ .x = -40, .y = 0, .w = 100, .h = 10 },
     };
     try std.testing.expectEqual(@as(u32, 40), leftShiftUnits(m, &runs_ok, &rules));
+}
+
+test "left shift follows shear at ink extremes (issue #77)" {
+    // Sheared dotless-j shape: ink left -40, top 442, bottom -205
+    // (LM ȷ proportions). Shear 250 drags the descender tail left by
+    // floor(250*205/1000) = 52, so the edge is 0-40-52 = -92. The
+    // top leans right (+110) and never widens the left shift. A
+    // stub without top/bottom metrics keeps the unsheared bound.
+    const S = struct {
+        fn adv(_: *const anyopaque, g: u16) i32 {
+            return if (g == 's') 306 else 400;
+        }
+        fn ink(_: *const anyopaque, g: u16) i32 {
+            return if (g == 's') -40 else 10;
+        }
+        fn top(_: *const anyopaque, g: u16) i32 {
+            return if (g == 's') 442 else 0;
+        }
+        fn bot(_: *const anyopaque, g: u16) i32 {
+            return if (g == 's') -205 else 0;
+        }
+        var tag: u8 = 0;
+    };
+    const m: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink };
+    const m2: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink, .inkTop1000 = S.top, .inkBottom1000 = S.bot };
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'s'}, .x_shear = 250 },
+    };
+    try std.testing.expectEqual(@as(u32, 92), leftShiftUnits(m2, &runs, &.{}));
+    try std.testing.expectEqual(@as(u32, 40), leftShiftUnits(m, &runs, &.{}));
 }
 
 /// Select the paint for one IR run/rule: ambient (null) is black ink;

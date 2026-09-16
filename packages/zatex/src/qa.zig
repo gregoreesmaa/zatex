@@ -2133,6 +2133,34 @@ test "qa80 lap family overlaps with zero width" {
     try std.testing.expectEqual(@as(i32, -500), mc.runs[0].x);
 }
 
+test "qa81 dotless i/j shear for faux math-italic (issue #77)" {
+    // Pinned KaTeX 0.18.7 renders `\\jmath`/`\\imath` in the
+    // math-italic face; host fonts carry upright dotless glyphs, so
+    // the core stamps a 1:4 faux-italic shear (the Computer Modern
+    // math-italic slant) on the run and backends slant the ink about
+    // the baseline. Plain letters and explicit faces stay upright,
+    // and shear boundaries split runs like color and scale.
+    var b1: B = .{};
+    const jm = try lay("\\jmath", false, &b1);
+    try std.testing.expectEqual(@as(usize, 1), jm.runs.len);
+    try std.testing.expectEqual(@as(u16, 0x237), jm.runs[0].glyphs[0]);
+    try std.testing.expectEqual(@as(i16, 250), jm.runs[0].x_shear);
+    var b2: B = .{};
+    const im = try lay("\\imath", false, &b2);
+    try std.testing.expectEqual(@as(i16, 250), im.runs[0].x_shear);
+    var b3: B = .{};
+    const j = try lay("j", false, &b3);
+    try std.testing.expectEqual(@as(i16, 0), j.runs[0].x_shear);
+    var b4: B = .{};
+    const bf = try lay("\\mathbf{\\jmath}", false, &b4);
+    try std.testing.expectEqual(@as(i16, 0), bf.runs[0].x_shear);
+    var b5: B = .{};
+    const mix = try lay("j\\jmath", false, &b5);
+    try std.testing.expectEqual(@as(usize, 2), mix.runs.len);
+    try std.testing.expectEqual(@as(i16, 0), mix.runs[0].x_shear);
+    try std.testing.expectEqual(@as(i16, 250), mix.runs[1].x_shear);
+}
+
 
 
 

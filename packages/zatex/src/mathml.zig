@@ -1451,7 +1451,6 @@ const Writer = struct {
     }
 
     fn atom(self: *Writer, class: @import("symbols.zig").AtomClass, fam: parse.FontFam, c: u21) void {
-        _ = fam;
         switch (class) {
             // KaTeX `atom` ParseNodes (every symbol group except
             // mathord/textord) render as mo — inner symbols included.
@@ -1498,6 +1497,16 @@ const Writer = struct {
                     self.str("<mo>");
                     self.escCp(c);
                     self.str("</mo>");
+                } else if ((c == 0x0131 or c == 0x0237) and fam == .rm) {
+                    // Dotless i/j with no explicit face carry an
+                    // explicit normal variant (pinned 0.18.7: `<mi
+                    // mathvariant="normal">ȷ</mi>`, while plain `j`
+                    // stays bare). An explicit face wins (its wrapper
+                    // supplies the variant), matching KaTeX's bold
+                    // but bare-mathit shapes (issue #77).
+                    self.str("<mi mathvariant=\"normal\">");
+                    self.escCp(c);
+                    self.str("</mi>");
                 } else {
                     // KaTeX mathord/textord render as mi unconditionally.
                     self.str("<mi>");
@@ -1918,6 +1927,24 @@ test "row-local tag keeps number cells despite nonumber (issue #75)" {
     var w2 = Writer{ .pc = &pc2, .buf = &out2 };
     try w2.node(root2, .{ .fam = null, .script = false });
     try std.testing.expect(std.mem.indexOf(u8, out2[0..w2.pos], "mtr-glue") == null);
+}
+
+test "jmath and imath carry mathvariant normal like KaTeX (issue #77)" {
+    // Pinned 0.18.7: `\jmath` → `<mi mathvariant="normal">ȷ</mi>`
+    // (plain `j` stays bare `<mi>j</mi>`); an explicit face wins
+    // (`\mathbf{\jmath}` → bold, `\mathit{\jmath}` → bare).
+    var pc = parse.ParseCtx.init("\\jmath");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "<mi mathvariant=\"normal\">") != null);
+    var pci = parse.ParseCtx.init("\\imath");
+    const rooti = try parse.parse(&pci, false);
+    var outi: [256]u8 = undefined;
+    var wi = Writer{ .pc = &pci, .buf = &outi };
+    try wi.node(rooti, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, outi[0..wi.pos], "<mi mathvariant=\"normal\">") != null);
 }
 
 test "sum renders msubsup structurally" {

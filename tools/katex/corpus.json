@@ -8462,6 +8462,33 @@
   "expect": "reject"
  },
  {
+  "id": "jmath",
+  "tex": "\\jmath",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "imath",
+  "tex": "\\imath",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathbf-jmath",
+  "tex": "\\mathbf{\\jmath}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-jmath-rej",
+  "tex": "\\text{\\jmath}",
+  "display": false,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true,
+  "note": "KaTeX rewrites text-mode jmath to undefined @jmath and reports end-of-input; ours reports the token (cf. rej-cmd-in-text convention)"
+ },
+ {
   "id": "newline-array",
   "tex": "\\begin{array}{c}a\\newline b\\end{array}",
   "display": false,

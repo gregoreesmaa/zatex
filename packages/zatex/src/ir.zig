@@ -21,6 +21,12 @@ pub const Run = struct {
     /// width (issues #31/#37). Additive: existing constructions omit
     /// it and render unstretched.
     x_scale: u16 = 1000,
+    /// Faux-italic slant in per-mille (0 = upright): the backend
+    /// shifts ink right by `x_shear` thousandths of the height above
+    /// the baseline. Set by the core for dotless i/j under the
+    /// default math face, whose upright host glyph stands in for
+    /// KaTeX's math-italic ȷ/ı (issue #77). Additive like `x_scale`.
+    x_shear: i16 = 0,
 };
 
 /// One filled rect in font units (fraction bars, radical vincula, rules).

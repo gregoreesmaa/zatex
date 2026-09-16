@@ -125,8 +125,8 @@ pub const Canvas = struct {
         sw_raster.fillRect(self.pixels, self.w, self.h, x, y, w, h, self.fill);
     }
 
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64) error{RenderInit}!Run {
-        return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale };
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64) error{RenderInit}!Run {
+        return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale, .x_shear = x_shear };
     }
 
     /// Write the canvas as 8-bit RGBA PNG to `out_path`.
@@ -142,6 +142,8 @@ pub const Run = struct {
     /// Horizontal raster stretch (1 = identity): wide accents and
     /// brace spans (issues #31/#37).
     x_scale: f64,
+    /// Faux-italic slant (0 = upright): dotless i/j lean (issue #77).
+    x_shear: f64,
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
         const c = self.canvas;
@@ -149,7 +151,9 @@ pub const Run = struct {
         if (scale <= 0) return;
         const segs = sw_font.outline(&self.font.cff, glyph, c.segs) catch return;
         if (segs.len == 0) return;
-        const lines = sw_raster.flatten(segs, scale * self.x_scale, scale, x, y, c.lines);
+        // Shear is a dimensionless ratio (device px shift per device
+        // px above the baseline), so it passes through unscaled.
+        const lines = sw_raster.flatten(segs, scale * self.x_scale, scale, x, y, self.x_shear, c.lines);
         sw_raster.fillLines(c.pixels, c.w, c.h, lines, c.fill, c.row_cov);
     }
 
@@ -166,6 +170,29 @@ pub fn fixtureBytes(alloc: std.mem.Allocator) ![]u8 {
     var threaded = std.Io.Threaded.init(alloc, .{});
     defer threaded.deinit();
     return std.Io.Dir.cwd().readFileAlloc(threaded.io(), path, alloc, .limited(32 * 1024 * 1024));
+}
+
+// Lives here (not in sw_raster.zig) because only this file's tests
+// execute under `zig build test` (issue #106: sw_raster/sw_png test
+// blocks are compiled but never run).
+test "flatten shears ink right with height above baseline (issue #77)" {
+    // Vertical stroke x=10 from the baseline (y=0) to y=100, drawn
+    // with the baseline at oy=50: shear 0.25 leaves the base at
+    // x=10 and moves the top to 10+0.25*100=35. Shear 0 is the
+    // old path exactly.
+    const seg = [_]sw_font.Seg{
+        .{ .x = .{ 10, 0, 0, 10 }, .y = .{ 0, 0, 0, 100 }, .is_curve = false },
+    };
+    var out: [4]sw_raster.Line = undefined;
+    const sheared = sw_raster.flatten(&seg, 1, 1, 0, 50, 0.25, &out);
+    try std.testing.expectEqual(@as(usize, 1), sheared.len);
+    try std.testing.expectEqual(@as(f32, 10), sheared[0].x0);
+    try std.testing.expectEqual(@as(f32, 50), sheared[0].y0);
+    try std.testing.expectEqual(@as(f32, 35), sheared[0].x1);
+    try std.testing.expectEqual(@as(f32, 150), sheared[0].y1);
+    const plain = sw_raster.flatten(&seg, 1, 1, 0, 50, 0, &out);
+    try std.testing.expectEqual(@as(f32, 10), plain[0].x1);
+    try std.testing.expectEqual(@as(f32, 150), plain[0].y1);
 }
 
 // extents1000 uses a 512-segment stack scratch: assert every fixture

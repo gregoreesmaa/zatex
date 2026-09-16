@@ -281,12 +281,12 @@ pub const GdiCanvas = struct {
         self.swc.fillRect(x, y, w, h);
     }
 
-    pub fn beginRun(self: *GdiCanvas, font: *const GdiFont, size_px: f64, x_scale: f64) error{RenderInit}!GdiRun {
+    pub fn beginRun(self: *GdiCanvas, font: *const GdiFont, size_px: f64, x_scale: f64, x_shear: f64) error{RenderInit}!GdiRun {
         if (comptime !on_windows) return error.RenderInit;
         const px: i32 = @intFromFloat(@max(1, @round(size_px)));
         const hf = CreateFontIndirectW(&LOGFONTW{ .lfHeight = -px, .lfFaceName = font.family }) orelse return error.RenderInit;
         const prev = SelectObject(font.hdc, hf);
-        return .{ .canvas = self, .font = font, .hfont = hf, .prev = prev, .x_scale = x_scale };
+        return .{ .canvas = self, .font = font, .hfont = hf, .prev = prev, .x_scale = x_scale, .x_shear = x_shear };
     }
 
     pub fn writePng(self: *GdiCanvas, out_path: []const u8) error{PngWrite}!void {
@@ -300,6 +300,9 @@ pub const GdiRun = struct {
     hfont: HFONT,
     prev: HGDIOBJ,
     x_scale: f64,
+    /// Faux-italic slant, device px right per device px above the
+    /// baseline (dotless i/j, issue #77); 0 draws unchanged.
+    x_shear: f64,
 
     pub fn drawGlyph(self: *GdiRun, glyph: u16, x: f64, y: f64) void {
         if (comptime !on_windows) return;
@@ -319,8 +322,9 @@ pub const GdiRun = struct {
         // Pen maps to canvas: ink left/top in device px at the run
         // size (the run font was selected for size_px, so GDI units
         // are already output pixels — no rescaling, unlike metrics).
+        const y_base: i64 = @as(i64, @intFromFloat(@round(y)));
         const ox: i64 = @as(i64, @intFromFloat(@round(x))) + gm.ptGlyphOrigin.x;
-        const oy_top: i64 = @as(i64, @intFromFloat(@round(y))) - gm.ptGlyphOrigin.y;
+        const oy_top: i64 = y_base - gm.ptGlyphOrigin.y;
         const W: i64 = @intCast(c.w);
         const H: i64 = @intCast(c.h);
         const fill = c.fill;
@@ -332,10 +336,17 @@ pub const GdiRun = struct {
             const row_up: i64 = oy_top - @as(i64, @intCast(dy));
             const row: i64 = H - 1 - row_up;
             if (row < 0 or row >= H) continue;
+            // Faux-italic shear (issue #77): this row sits
+            // `row_up - y_base` device px above the baseline, so its
+            // ink shifts right by shear times that height — the same
+            // frame as the FreeType backend, inheriting this
+            // backend's own origin mapping.
+            const hab: i64 = row_up - y_base;
+            const shx: i64 = @as(i64, @intFromFloat(@round(self.x_shear * @as(f64, @floatFromInt(hab)))));
             var dx: usize = 0;
             const dw: usize = @as(usize, @intFromFloat(@round(@as(f64, @floatFromInt(gw)) * sx)));
             while (dx < dw) : (dx += 1) {
-                const col: i64 = ox + @as(i64, @intCast(dx));
+                const col: i64 = ox + @as(i64, @intCast(dx)) + shx;
                 if (col < 0 or col >= W) continue;
                 const srcx: usize = @min(gw - 1, @as(usize, @intFromFloat(@floor(@as(f64, @floatFromInt(dx)) / sx))));
                 const v = self.canvas.scratch[dy * stride + srcx];

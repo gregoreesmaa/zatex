@@ -26,6 +26,24 @@
       "ir": "1500/700/250|1,1000,0,700:54373.54374.54375.;|"
     },
     {
+      "id": "jmath",
+      "tex": "\\jmath",
+      "display": false,
+      "ir": "500/700/250|0,1000,0,700:567.;|"
+    },
+    {
+      "id": "imath",
+      "tex": "\\imath",
+      "display": false,
+      "ir": "500/700/250|0,1000,0,700:305.;|"
+    },
+    {
+      "id": "mathbf-jmath",
+      "tex": "\\mathbf{\\jmath}",
+      "display": false,
+      "ir": "500/700/250|2,1000,0,700:567.;|"
+    },
+    {
       "id": "sym-digits",
       "tex": "0123456789",
       "display": false,

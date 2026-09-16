@@ -96,11 +96,13 @@ pub const Canvas = struct {
     /// One CTFont per run at `size_px`, released by `Run.end` — the
     /// same object lifetime the renderer always had. `x_scale`
     /// stretches ink horizontally (wide accents, brace spans —
-    /// issues #31/#37); 1 draws unchanged.
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64) error{RenderInit}!Run {
+    /// issues #31/#37); 1 draws unchanged. `x_shear` slants ink
+    /// right per unit above the baseline (dotless i/j, issue #77);
+    /// 0 draws unchanged.
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64) error{RenderInit}!Run {
         const ct = cg.CTFontCreateWithGraphicsFont(font.cgfont, size_px, null, null);
         if (ct == null) return error.RenderInit;
-        return .{ .ctx = self.ctx, .ct = ct, .x_scale = x_scale };
+        return .{ .ctx = self.ctx, .ct = ct, .x_scale = x_scale, .x_shear = x_shear };
     }
 
     /// Snapshot the canvas and write an 8-bit RGBA PNG to `out_path`.
@@ -133,19 +135,28 @@ pub const Run = struct {
     ctx: cg.CGContextRef,
     ct: cg.CTFontRef,
     x_scale: f64,
+    /// Faux-italic slant, device px right per device px above the
+    /// glyph origin (dotless i/j, issue #77); 0 draws unchanged.
+    x_shear: f64,
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
         const gl: cg.CGGlyph = glyph;
-        if (self.x_scale == 1) {
+        if (self.x_scale == 1 and self.x_shear == 0) {
             const pos = cg.CGPoint{ .x = x, .y = y };
             cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&pos), 1, self.ctx);
             return;
         }
         // Stretched ink: draw in a translated + x-scaled CTM so the
         // glyph origin stays at (x, y) while ink widens rightward.
+        // Shear concatenates after the scale: heights stay unscaled
+        // (runs never scale y) while x gains sh per unit of height,
+        // slanting ink right above the origin like the SW backend.
         cg.CGContextSaveGState(self.ctx);
         cg.CGContextTranslateCTM(self.ctx, x, y);
         cg.CGContextScaleCTM(self.ctx, self.x_scale, 1);
+        if (self.x_shear != 0) {
+            cg.CGContextConcatCTM(self.ctx, .{ .a = 1, .b = 0, .c = self.x_shear, .d = 1, .tx = 0, .ty = 0 });
+        }
         const origin = cg.CGPoint{ .x = 0, .y = 0 };
         cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&origin), 1, self.ctx);
         cg.CGContextRestoreGState(self.ctx);
