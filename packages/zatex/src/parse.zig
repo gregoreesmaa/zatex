@@ -1705,7 +1705,82 @@ fn parseSingleNoSuffix(ctx: *ParseCtx, depth: u8) Error!?Idx {
 }
 
 /// A braced group (full formula) or a single suffix-free atom.
+/// Argument-position flavor (issue #111, pinned KaTeX 0.18.7). KaTeX
+/// parses an isolated single token with `parseGroup("atom")`: a bare
+/// declaration takes an empty body there (the `\frac\bf{a}b` quirk —
+/// numerator `font` with an empty ordgroup, `{a}` the denominator, `b`
+/// trailing). Script arguments and the `\sqrt` radicand parse on the
+/// live stream with `parseGroup(name)`: a bare function without
+/// `allowedInArgument` throws at its token, and `\relax` (an
+/// `internal` node) is skipped.
+const ArgMode = enum { atom, sup, sub, sqrt };
+
+/// KaTeX functions WITHOUT `allowedInArgument` (pinned 0.18.7): bare
+/// in a `^`/`_`/`\sqrt` argument they throw `with no arguments as …`
+/// at their token. Direct functions fail at the token (corpus `rej-`
+/// rows pin the position); `macro` entries reject via their expansion,
+/// whose positions point inside KaTeX's expanded buffer and are
+/// ungateable (corpus `katex_only` rows pin accept/reject only).
+/// Everything absent here parses exactly as today — that fallthrough
+/// IS the allow-path (KaTeX's `allowedInArgument` owners: new-style
+/// fonts, the genfrac family, integrals, `\relax`, `\verb`, text-mode
+/// families, plus the symbol-only macro arms).
+fn bareFnInArg(name: []const u8) bool {
+    // Over/under/extensible constructs take the shared dispatch
+    // predicate (every spelling but the KaTeX-unknown `\angl`
+    // extension is a reject-class function there).
+    if (parseOverName(name)) |kind| return kind != .angl;
+    const bad = [_][]const u8{
+        // Old-style declarations (rest-of-group in formula position
+        // only — issue #94).
+        "rm", "sf", "tt", "bf", "it", "cal",
+        "boldsymbol", "bm", "pmb",
+        "sqrt",
+        "color", "textcolor", "href", "url", "rule", "hbox",
+        "kern", "mkern", "mskip", "hskip",
+        "vcenter", "mathchoice", "smash", "raisebox", "fbox",
+        "phantom", "vphantom", "mathllap", "mathrlap", "mathclap",
+        "cancel", "bcancel", "sout", "textcircled",
+        "htmlClass", "htmlId", "htmlStyle", "htmlData",
+        "operatornamewithlimits",
+        "mathinner", "mathop", "mathrel", "mathpunct",
+        "mathbin", "mathclose", "mathopen", "mathord",
+        // Definition/prefix primitives: KaTeX's entry check fires
+        // before any handler, so no side effect leaks.
+        "newcommand", "renewcommand", "providecommand",
+        "def", "gdef", "edef", "xdef",
+        "global", "long", "noexpand", "expandafter", "futurelet", "let",
+        "nonumber", "notag", "tag",
+        // Macro-class: KaTeX rejects via the expansion.
+        "boxed", "dotsi", "substack", "hphantom",
+        "llap", "rlap", "clap", "hspace", "bmod", "operatorname",
+        "minuso", "underbar",
+        // Spacing-emulation arms (KaTeX macros expanding to
+        // `\mskip`/`\hskip`).
+        "quad", "qquad", "enskip",
+        "thinspace", "medspace", "thickspace",
+        "negthinspace", "negmedspace", "negthickspace", "enspace",
+    };
+    for (bad) |b| if (tokNameEq(b, name)) return true;
+    return false;
+}
+
+/// The six integrals are KaTeX's only operator-class names with
+/// `allowedInArgument` (pinned 0.18.7 `op.ts`): `x_\int` accepts.
+fn isScriptIntegral(name: []const u8) bool {
+    const ints = [_][]const u8{ "int", "iint", "iiint", "oint", "oiint", "oiiint" };
+    for (ints) |o| if (tokNameEq(o, name)) return true;
+    return false;
+}
+
 fn parseGroupOrAtom(ctx: *ParseCtx, depth: u8) Error!Idx {
+    return parseGroupOrAtomMode(ctx, depth, .atom, 0);
+}
+
+/// `op_pos` is the `^`/`_` operator (script modes fail there when no
+/// group follows); unused by `.atom` and `.sqrt`, which fail at the
+/// offending token instead.
+fn parseGroupOrAtomMode(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!Idx {
     const t = try ctx.peek();
     if (t.kind == .lbrace) {
         _ = try ctx.next();
@@ -1715,8 +1790,145 @@ fn parseGroupOrAtom(ctx: *ParseCtx, depth: u8) Error!Idx {
     if (depth >= contract.max_nesting_depth) {
         return tooDeep(ctx, t.pos);
     }
-    const maybe = try parseSingle(ctx, depth + 1);
-    return maybe orelse ctx.fail(t.pos, "expected argument");
+    if (mode == .atom) {
+        // The `\frac\bf{a}b` quirk (issue #111): in an isolated
+        // argument a bare declaration takes an empty body and consumes
+        // nothing further (KaTeX `scanArgument` isolation + the
+        // zero-argument font handler). User macros still shadow.
+        if (t.kind == .ctrl) {
+            if (oldStyleDeclFam(t.name)) |fam| {
+                if (t.name.len > 0 and !t.noexpand and ctx.findDef(t.name) == null) {
+                    _ = try ctx.next();
+                    const empty = try ctx.allocNode(.{ .group = .{ .start = 0, .len = 0 } });
+                    return ctx.allocNode(.{ .font = .{ .fam = fam, .body = empty } });
+                }
+            }
+        }
+        const maybe = try parseSingle(ctx, depth + 1);
+        return maybe orelse ctx.fail(t.pos, "expected argument");
+    }
+    return parseScriptAtom(ctx, depth, mode, op_pos);
+}
+
+/// Parse one script/`\sqrt`-radicand argument on the live stream
+/// (KaTeX `parseGroup(name)` + the `internal`-skip loop, pinned
+/// 0.18.7, issue #111). `op_pos` is the `^`/`_` operator (script
+/// modes fail there when no group follows); `\sqrt` mode fails at the
+/// offending token instead.
+fn parseScriptAtom(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!Idx {
+    while (true) {
+        const t = try ctx.peek();
+        switch (t.kind) {
+            .lbrace => {
+                _ = try ctx.next();
+                return parseFormula(ctx, depth + 1, .group, null);
+            },
+            .ctrl => {
+                const name = t.name;
+                // User macros shadow everything (KaTeX gullet expands
+                // first); the expansion re-enters this loop, so a
+                // macro expanding to a bare function still throws.
+                if (name.len > 0 and !t.noexpand) {
+                    if (ctx.findDef(name)) |def| {
+                        _ = try ctx.next();
+                        try ctx.expandUse(def, t.pos);
+                        continue;
+                    }
+                }
+                // `\limits`/`\nolimits` are implicit (KaTeX
+                // `implicitCommands`): no group follows them.
+                if (tokNameEq(name, "limits") or tokNameEq(name, "nolimits")) {
+                    if (mode == .sqrt)
+                        return ctx.fail(t.pos, "expected group as argument to '\\sqrt'");
+                    if (mode == .sup)
+                        return ctx.fail(op_pos, "expected group after '^'");
+                    return ctx.fail(op_pos, "expected group after '_'");
+                }
+                if (isScriptIntegral(name)) {
+                    // The six integrals carry KaTeX
+                    // `allowedInArgument` — the only names the
+                    // fallthrough would misroute (operator class).
+                    const r = try parseSingle(ctx, depth + 1);
+                    if (r == null) continue;
+                    return r.?;
+                }
+                if (bareFnInArg(name)) return scriptFnFail(ctx, t.pos, mode);
+                // Accent names live in the symbol table too, but KaTeX
+                // parses the accent functions first — so does this.
+                if (symbols.lookupAccent(name) != null) return scriptFnFail(ctx, t.pos, mode);
+                if (symbols.lookup(name)) |sym| {
+                    // Every operator-class symbol is a KaTeX function
+                    // (integrals were allowed above); plain symbols
+                    // parse as atoms.
+                    if (sym.class == .Op) return scriptFnFail(ctx, t.pos, mode);
+                    const r = try parseSingle(ctx, depth + 1);
+                    if (r == null) continue;
+                    return r.?;
+                }
+                if (symbols.lookupDelim(name) != null) {
+                    const r = try parseSingle(ctx, depth + 1);
+                    if (r == null) continue;
+                    return r.?;
+                }
+                if (name.len == 1) {
+                    const c = name[0];
+                    switch (c) {
+                        '{', '}', '$', '%', '&', '#', '_', '|', ' ' => {
+                            const r = try parseSingle(ctx, depth + 1);
+                            if (r == null) continue;
+                            return r.?;
+                        },
+                        // Spacing/newline escapes are KaTeX macros or
+                        // the `\\` function — all reject in scripts.
+                        ',', ':', '>', ';', '!', '\\' => return scriptFnFail(ctx, t.pos, mode),
+                        else => {
+                            // Text accents are KaTeX functions;
+                            // single-letter symbols (`\S`) and unknown
+                            // names keep the existing path (symbol or
+                            // `undefined control sequence`).
+                            if (textAccentCp(c) != null) return scriptFnFail(ctx, t.pos, mode);
+                            const r = try parseSingle(ctx, depth + 1);
+                            if (r == null) continue;
+                            return r.?;
+                        },
+                    }
+                }
+                // Anything else parses exactly as today (unknown names
+                // keep `undefined control sequence` at the token).
+                const r = try parseSingle(ctx, depth + 1);
+                if (r == null) continue;
+                return r.?;
+            },
+            // Lone `^`/`_`/`&`/`}`, or end of input, start no group
+            // (KaTeX `parseGroup` returns null there): a script
+            // operator points at itself; `\sqrt` points at the token.
+            .sup, .sub, .amp, .rbrace, .end => {
+                if (mode == .sqrt)
+                    return ctx.fail(t.pos, "expected group as argument to '\\sqrt'");
+                if (mode == .sup)
+                    return ctx.fail(op_pos, "expected group after '^'");
+                return ctx.fail(op_pos, "expected group after '_'");
+            },
+            else => {
+                // Non-control tokens parse exactly as today.
+                const r = try parseSingle(ctx, depth + 1);
+                if (r == null) continue;
+                return r.?;
+            },
+        }
+    }
+}
+
+/// KaTeX `with no arguments as …` (issue #111): the message shape is
+/// KaTeX's minus the function name (house style keeps messages
+/// static, as with `undefined control sequence`); positions are exact.
+fn scriptFnFail(ctx: *ParseCtx, pos: u32, mode: ArgMode) Error {
+    return switch (mode) {
+        .sup => ctx.fail(pos, "function with no arguments as superscript"),
+        .sub => ctx.fail(pos, "function with no arguments as subscript"),
+        .sqrt => ctx.fail(pos, "function with no arguments as argument to '\\sqrt'"),
+        .atom => unreachable,
+    };
 }
 
 fn tooDeep(ctx: *ParseCtx, pos: u32) Error {
@@ -1946,7 +2158,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
             const q = try ctx.peek();
             if ((q.kind == .char and q.cp == '\'') or (q.kind == .ctrl and tokNameEq(q.name, "rq")))
                 return ctx.fail(p.pos, "expected group after '^'");
-            const s = try parseGroupOrAtom(ctx, depth);
+            const s = try parseGroupOrAtomMode(ctx, depth, .sup, p.pos);
             if (prime_made) {
                 if (nsup >= 9) return ctx.fail(p.pos, "superscript too complex");
                 sup_parts[nsup] = s;
@@ -1966,7 +2178,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
             const q2 = try ctx.peek();
             if ((q2.kind == .char and q2.cp == '\'') or (q2.kind == .ctrl and tokNameEq(q2.name, "rq")))
                 return ctx.fail(p.pos, "expected group after '_'");
-            sub = try parseGroupOrAtom(ctx, depth);
+            sub = try parseGroupOrAtomMode(ctx, depth, .sub, p.pos);
         } else if ((p.kind == .char and p.cp == '\'') or (p.kind == .ctrl and tokNameEq(p.name, "rq"))) {
             // KaTeX parity: `\rq` is the `'` macro — after a base it
             // runs this same suffix-prime path (pinned 0.18.7).
@@ -3623,7 +3835,13 @@ fn parseSqrt(ctx: *ParseCtx, depth: u8) Error!Idx {
             return ctx.fail(pos, "expected group");
         }
     }
-    const rad = try parseGroupOrAtom(ctx, depth);
+    // KaTeX parity: with an index the radicand is an isolated
+    // argument (the `\sqrt[3]\bf` quirk accepts); without one it is a
+    // `primitive` — bare functions throw `as argument to '\sqrt'`.
+    const rad = if (index == NONE)
+        try parseGroupOrAtomMode(ctx, depth, .sqrt, 0)
+    else
+        try parseGroupOrAtom(ctx, depth);
     return ctx.allocNode(.{ .sqrt = .{ .radicand = rad, .index = index } });
 }
 

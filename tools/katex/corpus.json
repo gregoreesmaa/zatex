@@ -9067,5 +9067,371 @@
   "expect": "reject",
   "katex_only": true,
   "ours": "Invalid"
+ },
+ {
+  "id": "rej-111-bf-sup",
+  "tex": "x^\\bf y",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-bf-sqrt",
+  "tex": "\\sqrt\\bf x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-bf-sumsup",
+  "tex": "\\sum^\\bf_2",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-sqrt",
+  "tex": "x_\\sqrt{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-sum",
+  "tex": "x_\\sum",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-smallint",
+  "tex": "x_\\smallint",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-bm",
+  "tex": "x_\\bm{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-boldsymbol",
+  "tex": "x_\\boldsymbol{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-color",
+  "tex": "x_\\color{red}x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-href",
+  "tex": "x_\\href{http://x}{y}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-url",
+  "tex": "x_\\url{http://x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-rule",
+  "tex": "x_\\rule{1ex}{1ex}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-hbox",
+  "tex": "x_\\hbox{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-kern",
+  "tex": "x_\\kern1ex",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-vcenter",
+  "tex": "x_\\vcenter{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-mathchoice",
+  "tex": "x_\\mathchoice{a}{b}{c}{d}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-smash",
+  "tex": "x_\\smash{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-raisebox",
+  "tex": "x_\\raisebox{1ex}{y}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-fbox",
+  "tex": "x_\\fbox{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-phantom",
+  "tex": "x_\\phantom{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-mathllap",
+  "tex": "x_\\mathllap{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-cancel",
+  "tex": "x_\\cancel{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-sout",
+  "tex": "x_\\sout{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-textcircled",
+  "tex": "x_\\textcircled{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-html",
+  "tex": "x_\\htmlClass{a}{b}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-opnamewl",
+  "tex": "x_\\operatornamewithlimits{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-pmb",
+  "tex": "x_\\pmb{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-overline",
+  "tex": "x_\\overline{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-xrightarrow",
+  "tex": "x_\\xrightarrow{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-hat",
+  "tex": "x_\\hat{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-accentchar",
+  "tex": "x_\\'e",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-newline",
+  "tex": "x_\\\\",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-limits",
+  "tex": "x_\\limits",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-limits-sum",
+  "tex": "\\sum_\\limits",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-limits-sqrt",
+  "tex": "\\sqrt\\limits",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-def",
+  "tex": "x_\\def\\a{b}y",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "quirk-111-frac-bf-num",
+  "tex": "\\frac\\bf{a}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "quirk-111-frac-bf-den",
+  "tex": "\\frac1\\bf",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "quirk-111-mathbf-bf",
+  "tex": "\\mathbf\\bf",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "quirk-111-relax-script",
+  "tex": "x_\\relax y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "ko-111-thin",
+  "tex": "x_\\,",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-thick",
+  "tex": "x_\\;",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-med",
+  "tex": "x_\\>",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-boxed",
+  "tex": "x_\\boxed{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-dotsi",
+  "tex": "x_\\dotsi",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-substack",
+  "tex": "x_\\substack{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-hphantom",
+  "tex": "x_\\hphantom{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-llap",
+  "tex": "x_\\llap{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-hspace",
+  "tex": "x_\\hspace{1ex}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-bmod",
+  "tex": "x_\\bmod{n}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-operatorname",
+  "tex": "x_\\operatorname{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-minuso",
+  "tex": "x_\\minuso",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-tag",
+  "tex": "x_\\tag{1}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-nonumber",
+  "tex": "x_\\nonumber y",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
  }
 ]

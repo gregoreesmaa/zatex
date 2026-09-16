@@ -1065,23 +1065,35 @@ const Writer = struct {
                 // it rows like a brace group. Lone bodies render bare
                 // exactly like `.group` above, so single-atom fonts
                 // never change shape.
-                self.str("<mstyle mathvariant=\"");
-                self.str(variantFor(f.fam));
-                self.str("\">");
-                switch (parse.nodeAt(self.pc, f.body)) {
-                    .group => |g| {
-                        const kids = parse.kidsOf(self.pc, g);
-                        if (kids.len == 1) {
-                            try self.nodeSole(kids[0], .{ .fam = f.fam, .script = face.script }, sole);
-                        } else {
-                            if (!sole) self.str("<mrow>");
-                            for (kids) |k| try self.node(k, .{ .fam = f.fam, .script = face.script });
-                            if (!sole) self.str("</mrow>");
-                        }
-                    },
-                    else => try self.node(f.body, .{ .fam = f.fam, .script = face.script }),
+                // Empty bodies (issue #111: the isolated-argument
+                // quirk, `{\bf}`) render a bare empty row — KaTeX's
+                // font builder emits `<mrow></mrow>` for an empty
+                // ordgroup, with no variant shell around nothing.
+                const fempty = switch (parse.nodeAt(self.pc, f.body)) {
+                    .group => |g| parse.kidsOf(self.pc, g).len == 0,
+                    else => false,
+                };
+                if (fempty) {
+                    self.str("<mrow></mrow>");
+                } else {
+                    self.str("<mstyle mathvariant=\"");
+                    self.str(variantFor(f.fam));
+                    self.str("\">");
+                    switch (parse.nodeAt(self.pc, f.body)) {
+                        .group => |g| {
+                            const kids = parse.kidsOf(self.pc, g);
+                            if (kids.len == 1) {
+                                try self.nodeSole(kids[0], .{ .fam = f.fam, .script = face.script }, sole);
+                            } else {
+                                if (!sole) self.str("<mrow>");
+                                for (kids) |k| try self.node(k, .{ .fam = f.fam, .script = face.script });
+                                if (!sole) self.str("</mrow>");
+                            }
+                        },
+                        else => try self.node(f.body, .{ .fam = f.fam, .script = face.script }),
+                    }
+                    self.str("</mstyle>");
                 }
-                self.str("</mstyle>");
             },
             // KaTeX parity (pinned 0.18.7, issue #51): poor-man's
             // bold is a text-shadow paint style on the same glyphs.
