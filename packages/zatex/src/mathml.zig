@@ -1390,9 +1390,11 @@ const Writer = struct {
             // Dual-branch content (KaTeX `\html@mathml`): the MathML
             // emitter renders the semantic (`math`) branch.
             .htmlmathml => |h| try self.node(h.math, face),
-            .cancel => |b| {
-                self.str("<menclose notation=\"updiagonalstrike\">");
-                try self.node(b, face);
+            .cancel => |c| {
+                // Issue #107: `\bcancel` strikes the other diagonal
+                // (pinned 0.18.7 `downdiagonalstrike`).
+                if (c.down) self.str("<menclose notation=\"downdiagonalstrike\">") else self.str("<menclose notation=\"updiagonalstrike\">");
+                try self.node(c.body, face);
                 self.str("</menclose>");
             },
             .xcancel => |b| {
@@ -2335,6 +2337,23 @@ test "display sums stack, integrals do not" {
     var out4: [512]u8 = undefined;
     const f = try render("\\int\\limits_a^b", .{ .display_mode = true }, &out4);
     try std.testing.expect(std.mem.indexOf(u8, f, "<munderover>") != null);
+}
+
+test "cancel directions match KaTeX menclose notations" {
+    // Issue #107 (pinned 0.18.7): `\cancel` strikes up, `\bcancel`
+    // down (it used to alias `\cancel` and serialize up), `\xcancel`
+    // both.
+    var out: [512]u8 = undefined;
+    const c = try render("\\cancel{x}", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, c, "<menclose notation=\"updiagonalstrike\">") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c, "downdiagonalstrike") == null);
+    var out2: [512]u8 = undefined;
+    const b = try render("\\bcancel{x}", .{}, &out2);
+    try std.testing.expect(std.mem.indexOf(u8, b, "<menclose notation=\"downdiagonalstrike\">") != null);
+    try std.testing.expect(std.mem.indexOf(u8, b, "updiagonalstrike") == null);
+    var out3: [512]u8 = undefined;
+    const x = try render("\\xcancel{x}", .{}, &out3);
+    try std.testing.expect(std.mem.indexOf(u8, x, "<menclose notation=\"updiagonalstrike downdiagonalstrike\">") != null);
 }
 
 test "not overlays onto the following symbol" {

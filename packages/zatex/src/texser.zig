@@ -512,9 +512,11 @@ const Walker = struct {
             // Dual-branch content round-trips through the visual
             // branch (what layout and speech also read).
             .htmlmathml => |h| try self.node(h.html),
-            .cancel => |b| {
-                try self.cmd("cancel");
-                try self.arg(b);
+            .cancel => |c| {
+                // Issue #107: `\bcancel` round-trips through its own
+                // command (it used to serialize as `\cancel`).
+                try self.cmd(if (c.down) "bcancel" else "cancel");
+                try self.arg(c.body);
             },
             .xcancel => |b| {
                 try self.cmd("xcancel");
@@ -1046,6 +1048,9 @@ test "serializer: exact canonical spellings" {
         .{ "\\binom{n}{k}", "\\binom{n}{k}" },
         .{ "a+b=c", "a+b=c" },
         .{ "\\overline{AB}", "\\overline{AB}" },
+        .{ "\\cancel{x}", "\\cancel{x}" },
+        .{ "\\bcancel{x}", "\\bcancel{x}" },
+        .{ "\\xcancel{AB}", "\\xcancel{AB}" },
         .{ "\\sum x", "\\sum x" },
         .{ "\\fbox{Hi}", "\\fbox{Hi}" },
     };

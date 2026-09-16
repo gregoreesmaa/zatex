@@ -15,7 +15,10 @@ no untracked float in the contract.
   is always correct for the font actually drawn).
 * **Hosts** (`read`, other apps) draw `Run`s through their own glyph
   cache/atlas and fill `Rule`s as rects. This is the fastest path: zero
-  parsing and zero rasterization at showtime.
+  parsing and zero rasterization at showtime. A `Rule` with a non-`none`
+  `diag` strokes a `thick`-wide butt-cap diagonal across its rect
+  instead (`\cancel` family, issue #107) — hosts without line stroking
+  skip those rules rather than filling the rect.
 * **Emitters** walk the same tree: MathML ships in the core,
   `packages/zatex-png` renders PNG (macOS-only backend), SVG is future.
   Emitters contain no layout math.

@@ -608,7 +608,13 @@ pub const Node = union(enum) {
         html: Idx,
         math: Idx,
     },
-    cancel: Idx,
+    /// Single-diagonal strike: `down` is false for `\cancel`
+    /// (bottom-left to top-right) and true for `\bcancel`
+    /// (top-left to bottom-right, issue #107).
+    cancel: struct {
+        body: Idx,
+        down: bool = false,
+    },
     /// Both-diagonal strike (`\xcancel`), unlike `.cancel`.
     xcancel: Idx,
     sout: Idx,
@@ -3127,7 +3133,10 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     }
     if (full_only and (tokNameEq(name, "cancel") or tokNameEq(name, "bcancel"))) {
         const body = try parseGroupOrAtom(ctx, depth);
-        return ctx.allocNode(.{ .cancel = body });
+        // Issue #107: `\bcancel` strikes the other diagonal — it needs
+        // its own direction (it used to alias `.cancel`, so MathML and
+        // texser both said `\cancel` for it).
+        return ctx.allocNode(.{ .cancel = .{ .body = body, .down = tokNameEq(name, "bcancel") } });
     }
     if (full_only and (tokNameEq(name, "iff") or tokNameEq(name, "implies") or tokNameEq(name, "impliedby"))) {
         // KaTeX macro parity (macros.ts): `\\iff` expands to

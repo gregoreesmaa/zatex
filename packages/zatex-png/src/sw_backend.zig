@@ -121,8 +121,19 @@ pub const Canvas = struct {
         self.fill = .{ .r = r, .g = g, .b = b, .a = a };
     }
 
+    /// The software canvas keeps one paint state: strokes use the
+    /// fill color (backends with split state, like Quartz, override
+    /// this with a real stroke paint — see `cg_backend`).
+    pub fn setStroke(self: *Canvas, r: f64, g: f64, b: f64, a: f64) void {
+        self.setFill(r, g, b, a);
+    }
+
     pub fn fillRect(self: *Canvas, x: f64, y: f64, w: f64, h: f64) void {
         sw_raster.fillRect(self.pixels, self.w, self.h, x, y, w, h, self.fill);
+    }
+
+    pub fn strokeLine(self: *Canvas, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) void {
+        sw_raster.strokeLine(self.pixels, self.w, self.h, x0, y0, x1, y1, t, self.fill);
     }
 
     pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!Run {

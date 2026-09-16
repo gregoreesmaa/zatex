@@ -20,6 +20,13 @@ pub fn expectNonNegative(l: ir.Layout) !void {
         try std.testing.expect(r.glyphs.len > 0);
     }
     for (l.rules) |r| {
+        // Diagonal strikes (issue #107) overhang the strike box by
+        // KaTeX design (lapping side pad, single-char vertical pad),
+        // so only plain rects assert non-negative origin and extent.
+        if (r.diag != .none) {
+            try std.testing.expect(r.w > 0);
+            continue;
+        }
         try std.testing.expect(r.x >= 0);
         try std.testing.expect(r.y >= 0);
         try std.testing.expect(r.w > 0);
@@ -35,6 +42,9 @@ pub fn expectContained(l: ir.Layout) !void {
         try std.testing.expect(r.baseline_y >= 0 and r.baseline_y <= total);
     }
     for (l.rules) |r| {
+        // Diagonal strikes overhang (issue #107, see above); plain
+        // rects stay inside the ink box.
+        if (r.diag != .none) continue;
         try std.testing.expect(r.y >= 0 and @as(i64, r.y) + @as(i64, r.h) <= total);
     }
 }
@@ -101,6 +111,14 @@ pub fn layoutText(l: ir.Layout, out: []u8) []u8 {
         f.int(@as(i64, r.w));
         f.ch(',');
         f.int(@as(i64, r.h));
+        // Diagonal strikes (issue #107) self-describe; plain rects
+        // keep the old four-field shape so existing goldens stand.
+        if (r.diag != .none) {
+            f.ch(',');
+            f.ch(if (r.diag == .up) 'u' else 'd');
+            f.ch(',');
+            f.int(@as(i64, r.thick));
+        }
         f.ch(';');
     }
     if (f.trunc and f.pos >= 3) @memcpy(out[f.pos - 3 ..][0..3], "...");

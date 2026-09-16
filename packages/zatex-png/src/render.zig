@@ -51,14 +51,24 @@ pub fn renderToPng(
     // it renders glyphs upside down.)
     const H: f64 = @floatFromInt(h);
     // Rules (fraction bars, vincula, colorbox backgrounds) are plain
-    // filled rects, each in its own paint (issue #35).
+    // filled rects, each in its own paint (issue #35). Diagonal
+    // strikes (issue #107) stroke corner-to-corner across the same
+    // rect instead: `up` from bottom-left, `down` from top-left.
     for (layout.rules) |r| {
         const rx = @as(f64, @floatFromInt(r.x)) * s + pad + shift;
         const rw = @as(f64, @floatFromInt(r.w)) * s;
         const rh = @as(f64, @floatFromInt(r.h)) * s;
         const ry = ruleOriginY(r.y, r.h, s, pad, H);
         setPaint(&canvas, r.color);
-        canvas.fillRect(rx, ry, rw, rh);
+        if (r.diag == .none) {
+            canvas.fillRect(rx, ry, rw, rh);
+            continue;
+        }
+        // Canvas y of the rect's top and bottom edges (Quartz y-up).
+        const y_top = H - (@as(f64, @floatFromInt(r.y)) * s + pad);
+        const y_bot = y_top - rh;
+        const t = @as(f64, @floatFromInt(r.thick)) * s;
+        if (r.diag == .up) canvas.strokeLine(rx, y_bot, rx + rw, y_top, t) else canvas.strokeLine(rx, y_top, rx + rw, y_bot, t);
     }
 
     // Runs: one backend run per run size, glyph origins stepped with
@@ -279,8 +289,12 @@ test "left shift follows shear at ink extremes (issue #77)" {
 /// Select the paint for one IR run/rule: ambient (null) is black ink;
 /// otherwise the 0xRRGGBBAA word the core stamped (issue #35).
 fn setPaint(canvas: *backend.impl.Canvas, color: ?u32) void {
+    // Strokes carry the same paint (diagonal strikes, issue #107):
+    // single-state canvases alias the two, split-state ones (Quartz)
+    // need both calls.
     const c = color orelse {
         canvas.setFill(0, 0, 0, 1);
+        canvas.setStroke(0, 0, 0, 1);
         return;
     };
     const f = struct {
@@ -288,7 +302,12 @@ fn setPaint(canvas: *backend.impl.Canvas, color: ?u32) void {
             return @as(f64, @floatFromInt(v)) / 255.0;
         }
     }.b;
-    canvas.setFill(f((c >> 24) & 0xFF), f((c >> 16) & 0xFF), f((c >> 8) & 0xFF), f(c & 0xFF));
+    const r = f((c >> 24) & 0xFF);
+    const g = f((c >> 16) & 0xFF);
+    const b = f((c >> 8) & 0xFF);
+    const a = f(c & 0xFF);
+    canvas.setFill(r, g, b, a);
+    canvas.setStroke(r, g, b, a);
 }
 
 fn ceilU(v: f64) usize {

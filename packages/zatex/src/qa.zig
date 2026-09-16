@@ -145,6 +145,13 @@ fn dumpAny(l: anytype, out: []u8) []u8 {
         put.int(out, &pos, &trunc, @as(i64, r.w));
         put.ch(out, &pos, &trunc, ',');
         put.int(out, &pos, &trunc, @as(i64, r.h));
+        // Mirrors `invariants.layoutText` (issue #107 diagonal suffix).
+        if (r.diag != .none) {
+            put.ch(out, &pos, &trunc, ',');
+            put.ch(out, &pos, &trunc, if (r.diag == .up) 'u' else 'd');
+            put.ch(out, &pos, &trunc, ',');
+            put.int(out, &pos, &trunc, @as(i64, r.thick));
+        }
         put.ch(out, &pos, &trunc, ';');
     }
     if (trunc and pos >= 3) @memcpy(out[pos - 3 ..][0..3], "...");
@@ -2468,3 +2475,77 @@ test "qa88 paren math islands re-enter math in text (issue #81)" {
 
 
 
+
+test "qa107 cancel strikes corner-to-corner" {
+    // Issue #107 (pinned 0.18.7 `stretchyEnclose`): `\cancel` strikes
+    // up (bottom-left to top-right), `\bcancel` down, `\xcancel` both —
+    // corner-to-corner 0.046em butt-cap diagonals over the padded box,
+    // with zero metric change (the vlist keeps the inner box; the side
+    // pad laps with zero net advance). Single-character bodies (KaTeX
+    // `isCharacterBox`) grow 0.2em top and bottom; every other body
+    // grows 0.2em on each side instead. Stub metrics pin the integer
+    // geometry bit-for-bit (text style: pad 200, stroke 46).
+    const T = struct {
+        fn dump(src: []const u8, b: *B, out: []u8) ![]u8 {
+            const l = try lay(src, false, b);
+            return dumpAny(l, out);
+        }
+    };
+    var b: B = .{};
+    var out: [1024]u8 = undefined;
+    // Exact goldens: single-char up/down, multi-char both, styled
+    // multi, tall multi, mirror flip, neighbor composition.
+    try std.testing.expectEqualStrings("500/700/250|1,1000,0,700:54373.;|0,-200,500,1350,u,46;", try T.dump("\\cancel{x}", &b, &out));
+    try std.testing.expectEqualStrings("500/700/250|1,1000,0,700:54373.;|0,-200,500,1350,d,46;", try T.dump("\\bcancel{x}", &b, &out));
+    try std.testing.expectEqualStrings("1000/700/250|1,1000,0,700:54324.54325.;|-200,0,1400,950,u,46;-200,0,1400,950,d,46;", try T.dump("\\xcancel{AB}", &b, &out));
+    try std.testing.expectEqualStrings("500/700/250|9,1000,0,700:54425.;|-200,0,900,950,u,46;", try T.dump("\\cancel{\\boldsymbol{x}}", &b, &out));
+    try std.testing.expectEqualStrings("590/975/520|0,700,120,490:49.;0,700,120,1320:50.;|0,705,590,40;-200,0,990,1495,u,46;", try T.dump("\\cancel{\\frac12}", &b, &out));
+    try std.testing.expectEqualStrings("500/700/250|1,1000,500,700:54373.;|0,-200,500,1350,d,46;", try T.dump("\\mathreflectbox{\\cancel{x}}", &b, &out));
+    try std.testing.expectEqualStrings("1944/700/250|1,1000,0,700:54373.;0,1000,722,700:43.;1,1000,1444,700:54374.;|0,-200,500,1350,u,46;", try T.dump("\\cancel{x}+y", &b, &out));
+    // Zero metric change: the strike never moves the footprint.
+    for ([_][2][]const u8{ .{ "\\cancel{x}", "x" }, .{ "\\bcancel{x}", "x" }, .{ "\\xcancel{AB}", "AB" }, .{ "\\cancel{\\frac12}", "\\frac12" } }) |pair| {
+        const struck = try lay(pair[0], false, &b);
+        // NOTE: `B` buffers are reused; copy the footprint before the
+        // second lay overwrites the borrowed slices (scalars only).
+        const sw = struck.width;
+        const sh = struck.height_above;
+        const sd = struck.depth_below;
+        const bare = try lay(pair[1], false, &b);
+        try std.testing.expectEqual(bare.width, sw);
+        try std.testing.expectEqual(bare.height_above, sh);
+        try std.testing.expectEqual(bare.depth_below, sd);
+    }
+    // Single/multi classification (KaTeX `cancel-pad` probe battery,
+    // pinned 0.18.7): singles grow vertically only, multis widen only.
+    const singles = [_][]const u8{ "x", "+", "=", "\\alpha", "\\infty", "{x}", "\\mathrm{x}", "\\mathbf{x}", "\\vert", "\\langle", "\\prime", "\\color{red}{x}" };
+    for (singles) |body| {
+        var src: [64]u8 = undefined;
+        const tex = try std.fmt.bufPrint(&src, "\\cancel{{{s}}}", .{body});
+        const l = try lay(tex, false, &b);
+        try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+        const r = l.rules[0];
+        try std.testing.expectEqual(zatex.ir.Diag.up, r.diag);
+        try std.testing.expectEqual(@as(u32, 46), r.thick);
+        try std.testing.expectEqual(l.width, r.w);
+        try std.testing.expectEqual(l.height_above + l.depth_below + 400, r.h);
+    }
+    const multis = [_][]const u8{ "\\mathord{+}", "\\mathbin{x}", "\\hat{x}", "\\boldsymbol{x}", "\\sqrt{x}", "\\,", "\\text{x}", "\\sin", "x^2", "\\frac12", "AB", "\\;", "\\;x", "++" };
+    for (multis) |body| {
+        var src: [64]u8 = undefined;
+        const tex = try std.fmt.bufPrint(&src, "\\cancel{{{s}}}", .{body});
+        const l = try lay(tex, false, &b);
+        // Tall bodies bring their own bar rules (`\frac`, `\sqrt`);
+        // the strike is the one diagonal rule.
+        var strike: ?zatex.ir.Rule = null;
+        for (l.rules) |rr| {
+            if (rr.diag == .none) continue;
+            try std.testing.expectEqual(@as(?zatex.ir.Rule, null), strike);
+            strike = rr;
+        }
+        const r = strike orelse return error.TestUnexpectedResult;
+        try std.testing.expectEqual(zatex.ir.Diag.up, r.diag);
+        try std.testing.expectEqual(@as(u32, 46), r.thick);
+        try std.testing.expectEqual(l.width + 400, r.w);
+        try std.testing.expectEqual(l.height_above + l.depth_below, r.h);
+    }
+}

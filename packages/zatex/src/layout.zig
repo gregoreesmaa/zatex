@@ -46,6 +46,13 @@ pub const BoxKind = union(enum) {
     },
     kern: void,
     rule: void,
+    /// Diagonal strike box (`\cancel` family, issue #107): same
+    /// metrics as the strike rect; emit draws the `ir.Rule.diag`
+    /// corner-to-corner line instead of filling the rect.
+    diag: struct {
+        dir: ir.Diag,
+        thick: u32,
+    },
     list: parse.Range,
     empty: void,
 };
@@ -427,8 +434,8 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .fbox => |b| return layoutBoxed(lc, style, b),
         // Dual-branch content lays out the visual (`html`) branch.
         .htmlmathml => |h| return layoutNode(lc, style, h.html),
-        .cancel => |b| return layoutCancel(lc, style, b),
-        .xcancel => |b| return layoutCancel(lc, style, b),
+        .cancel => |c| return layoutCancel(lc, style, c.body, c.down, false),
+        .xcancel => |b| return layoutCancel(lc, style, b, false, true),
         .phase => |b| return layoutPhase(lc, style, b),
         .sout => |b| return layoutSout(lc, style, b),
         .lap => |l| return layoutLap(lc, style, l),
@@ -765,7 +772,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .boxed => return .Ord,
         .fbox => return .Ord,
         .htmlmathml => |h| return classOf(pc, h.html),
-        .cancel => |b| return classOf(pc, b),
+        .cancel => |c| return classOf(pc, c.body),
         .xcancel => |b| return classOf(pc, b),
         .phase => |b| return classOf(pc, b),
         .sout => |b| return classOf(pc, b),
@@ -1872,7 +1879,7 @@ fn nucleusFirstGlyph(lc: *LayCtx, id: u16) ?struct { font: u16, glyph: u16 } {
             }
             return null;
         },
-        .kern, .empty, .rule => return null,
+        .kern, .empty, .rule, .diag => return null,
     }
 }
 
@@ -3095,28 +3102,92 @@ fn layoutBoxed(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     });
 }
 
-fn layoutCancel(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
-    // v1: horizontal rule through the vertical middle (the IR has no
-    // diagonal strokes; MathML uses menclose notation="updiagonalstrike").
+/// KaTeX `isCharacterBox` (pinned 0.18.7 `buildCommon`: unwrap
+/// single-child ordgroups and single-body colors, then true for
+/// mathord/textord/atom): single-character strike bodies grow the
+/// strike box 0.2em top and bottom, every other body 0.2em on each
+/// side instead. Our `.atom` (any class: `+`, `=`, `\vert` count —
+/// probed SINGLE) is the character node; math font wrappers unwrap
+/// like KaTeX's font-at-symbol application, except `\boldsymbol` /
+/// `\bm` (probed MULTI — the bold-italic `.font` stays opaque).
+/// Sizing, text, scripts, boxes, and spacing wrappers never unwrap.
+fn isSingleChar(pctx: *const parse.ParseCtx, id: Idx) bool {
+    var cur = id;
+    while (true) {
+        switch (parse.nodeAt(pctx, cur)) {
+            .atom => return true,
+            .group => |g| {
+                const kids = parse.kidsOf(pctx, g);
+                if (kids.len != 1) return false;
+                cur = kids[0];
+            },
+            .color => |c| cur = c.body,
+            .font => |f| {
+                if (f.fam == .bolditalic) return false;
+                cur = f.body;
+            },
+            else => return false,
+        }
+    }
+}
+
+fn layoutCancel(lc: *LayCtx, style: parse.Style, id: Idx, down: bool, both: bool) Error!u16 {
+    // Corner-to-corner diagonals (issue #107, pinned 0.18.7
+    // `stretchyEnclose`): one `Rule.diag` per strike over the padded
+    // box, zero metric change (the vlist keeps the inner box; the
+    // side pad laps with zero net advance). `down` selects the
+    // `\bcancel` diagonal, `both` adds the second for `\xcancel`.
     const b = try layoutNode(lc, style, id);
     const bb = lc.boxes[b];
-    const th = lc.ruleTh(@intFromEnum(contract.FontId.rm), .fraction_bar);
-    const mid = @divTrunc(bb.ha - bb.db, 2);
-    const rb = try lc.allocBox(.{
-        .w = bb.w,
-        .ha = @divTrunc(th + 1, 2),
-        .db = th - @divTrunc(th + 1, 2),
-        .kind = .{ .rule = {} },
-        .invisible = false,
-    });
-    const s = try lc.allocKids(2);
+    const single = isSingleChar(lc.pctx, id);
+    const pad = scale(lc, 200, style);
+    const vpad = if (single) pad else 0;
+    const hpad = if (single) 0 else pad;
+    const thick: u32 = @intCast(@max(1, scale(lc, 46, style)));
+    const rw = bb.w + 2 * hpad;
+    const rha = bb.ha + vpad;
+    const rdb = bb.db + vpad;
+    const nDiag: usize = if (both) 2 else 1;
+    const s = try lc.allocKids(1 + nDiag);
+    // The body stays at the advance origin (KaTeX keeps the inner box
+    // put); the strike laps `hpad` past it on each side with zero net
+    // advance, like `cancel-lap` undoing `cancel-pad`.
     lc.bkids[s] = .{ .box = b, .dx = 0, .dy = 0 };
-    lc.bkids[s + 1] = .{ .box = rb, .dx = 0, .dy = mid };
+    // Strike rule, then (for `\xcancel`) its mirror diagonal.
+    const first: ir.Diag = if (down) .down else .up;
+    lc.bkids[s + 1] = .{
+        .box = try lc.allocBox(.{
+            .w = rw,
+            .ha = rha,
+            .db = rdb,
+            .kind = .{ .diag = .{ .dir = first, .thick = thick } },
+            .invisible = false,
+        }),
+        .dx = -hpad,
+        // The pad lives in the rule box's own ha/db (rha/rdb), so
+        // the kid rides at dy=0: top lands vpad above the body top,
+        // bottom vpad below the body bottom.
+        .dy = 0,
+    };
+    if (both) {
+        const second: ir.Diag = if (down) .up else .down;
+        lc.bkids[s + 2] = .{
+            .box = try lc.allocBox(.{
+                .w = rw,
+                .ha = rha,
+                .db = rdb,
+                .kind = .{ .diag = .{ .dir = second, .thick = thick } },
+                .invisible = false,
+            }),
+            .dx = -hpad,
+            .dy = 0,
+        };
+    }
     return lc.allocBox(.{
         .w = bb.w,
         .ha = bb.ha,
         .db = bb.db,
-        .kind = .{ .list = .{ .start = s, .len = 2 } },
+        .kind = .{ .list = .{ .start = s, .len = @intCast(1 + nDiag) } },
         .invisible = false,
     });
 }
@@ -3376,6 +3447,35 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     .w = w,
                     .h = if (b.ha + b.db < 0) 0 else @intCast(b.ha + b.db),
                     .color = b.color,
+                };
+                ec.nl += 1;
+            }
+        },
+        .diag => |d| {
+            // Diagonal strike (issue #107): same rect mapping as a
+            // plain rule; the mirror map flips the strike (issue #97 —
+            // a vertical-axis flip swaps the diagonal).
+            if (!b.invisible) {
+                ec.closeRun();
+                if (ec.nl >= ec.rules.len) return error.NoSpace;
+                const w: u32 = if (b.w < 0) 0 else @intCast(b.w);
+                const ex = if (ec.m_neg) ec.m_off - x - @as(i32, @intCast(w)) else x + ec.m_off;
+                const dir: ir.Diag = if (ec.m_neg)
+                    switch (d.dir) {
+                        .up => .down,
+                        .down => .up,
+                        .none => .none,
+                    }
+                else
+                    d.dir;
+                ec.rules[ec.nl] = .{
+                    .x = ex,
+                    .y = base - b.ha,
+                    .w = w,
+                    .h = if (b.ha + b.db < 0) 0 else @intCast(b.ha + b.db),
+                    .color = b.color,
+                    .diag = dir,
+                    .thick = d.thick,
                 };
                 ec.nl += 1;
             }

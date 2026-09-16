@@ -37,15 +37,27 @@ pub const Run = struct {
     mirrored: bool = false,
 };
 
+/// Corner-to-corner diagonal strike direction (`\cancel` family,
+/// issue #107): `up` runs bottom-left to top-right (`\cancel`),
+/// `down` runs top-left to bottom-right (`\bcancel`); `\xcancel`
+/// emits one rule of each. `none` fills the rect as before.
+pub const Diag = enum { none, up, down };
+
 /// One filled rect in font units (fraction bars, radical vincula, rules).
 /// `color` paints `\colorbox` backgrounds and `\fcolorbox` frames
-/// (issue #35); null means the ambient paint.
+/// (issue #35); null means the ambient paint. A non-`none` `diag` draws
+/// a `thick`-wide butt-cap diagonal across the rect instead of filling
+/// it (the `\cancel` SVG line, pinned KaTeX 0.18.7 `stretchyEnclose`).
+/// Additive like `Run.x_shear`: existing constructions omit both fields
+/// and render filled rects.
 pub const Rule = struct {
     x: i32,
     y: i32,
     w: u32,
     h: u32,
     color: ?u32 = null,
+    diag: Diag = .none,
+    thick: u32 = 0,
 };
 
 /// A fully laid-out formula: its ink box plus all marks.

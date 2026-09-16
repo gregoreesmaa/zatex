@@ -74,6 +74,18 @@ pub extern fn CGContextSetRGBFillColor(
     alpha: f64,
 ) void;
 pub extern fn CGContextFillRect(c: CGContextRef, rect: CGRect) void;
+pub extern fn CGContextSetRGBStrokeColor(
+    c: CGContextRef,
+    red: f64,
+    green: f64,
+    blue: f64,
+    alpha: f64,
+) void;
+pub extern fn CGContextSetLineWidth(c: CGContextRef, width: f64) void;
+pub extern fn CGContextSetLineCap(c: CGContextRef, cap: i32) void;
+pub extern fn CGContextMoveToPoint(c: CGContextRef, x: f64, y: f64) void;
+pub extern fn CGContextAddLineToPoint(c: CGContextRef, x: f64, y: f64) void;
+pub extern fn CGContextStrokePath(c: CGContextRef) void;
 pub extern fn CGContextTranslateCTM(c: CGContextRef, tx: f64, ty: f64) void;
 pub extern fn CGContextScaleCTM(c: CGContextRef, sx: f64, sy: f64) void;
 pub const CGAffineTransform = extern struct {

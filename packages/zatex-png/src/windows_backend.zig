@@ -281,6 +281,14 @@ pub const GdiCanvas = struct {
         self.swc.fillRect(x, y, w, h);
     }
 
+    pub fn setStroke(self: *GdiCanvas, r: f64, g: f64, b: f64, a: f64) void {
+        self.swc.setStroke(r, g, b, a);
+    }
+
+    pub fn strokeLine(self: *GdiCanvas, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) void {
+        self.swc.strokeLine(x0, y0, x1, y1, t);
+    }
+
     pub fn beginRun(self: *GdiCanvas, font: *const GdiFont, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!GdiRun {
         if (comptime !on_windows) return error.RenderInit;
         const px: i32 = @intFromFloat(@max(1, @round(size_px)));

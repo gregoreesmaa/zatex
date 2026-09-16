@@ -93,6 +93,25 @@ pub const Canvas = struct {
         });
     }
 
+    /// Butt-cap thick segment in bottom-left float coords (diagonal
+    /// strikes, issue #107): mirrors the SVG `line` KaTeX emits
+    /// (`stroke-linecap: butt` there, `kCGLineCapButt` = 0 here).
+    /// The stroke paint must be set separately (`setFill` leaves the
+    /// stroke color untouched, so call `setStroke` first).
+    pub fn setStroke(self: *Canvas, r: f64, g: f64, b: f64, a: f64) void {
+        cg.CGContextSetRGBStrokeColor(self.ctx, r, g, b, a);
+    }
+
+    pub fn strokeLine(self: *Canvas, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) void {
+        if (!(t > 0)) return;
+        if (x0 == x1 and y0 == y1) return;
+        cg.CGContextSetLineWidth(self.ctx, t);
+        cg.CGContextSetLineCap(self.ctx, 0);
+        cg.CGContextMoveToPoint(self.ctx, x0, y0);
+        cg.CGContextAddLineToPoint(self.ctx, x1, y1);
+        cg.CGContextStrokePath(self.ctx);
+    }
+
     /// One CTFont per run at `size_px`, released by `Run.end` — the
     /// same object lifetime the renderer always had. `x_scale`
     /// stretches ink horizontally (wide accents, brace spans —

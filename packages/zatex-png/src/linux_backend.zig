@@ -319,6 +319,14 @@ pub const FtCanvas = struct {
         self.swc.fillRect(x, y, w, h);
     }
 
+    pub fn setStroke(self: *FtCanvas, r: f64, g: f64, b: f64, a: f64) void {
+        self.swc.setStroke(r, g, b, a);
+    }
+
+    pub fn strokeLine(self: *FtCanvas, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) void {
+        self.swc.strokeLine(x0, y0, x1, y1, t);
+    }
+
     pub fn beginRun(self: *FtCanvas, font: *const FtFont, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!FtRun {
         const px: u32 = @intFromFloat(@max(1, @round(size_px)));
         if (font.fns.Set_Pixel_Sizes(font.face, 0, px) != 0) return error.RenderInit;
