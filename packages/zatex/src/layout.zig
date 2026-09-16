@@ -2041,9 +2041,7 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             }
         },
         .angl => {
-            // Actuarial angle is HTML-side (menclose); layout keeps
-            // the nucleus box alone, like the strike encloses.
-            return layoutNode(lc, style, o.nucleus);
+            return layoutAngl(lc, style, o.nucleus);
         },
         else => {
             // Brace / arrow overs: glyph above or below the nucleus,
@@ -3129,6 +3127,57 @@ fn isSingleChar(pctx: *const parse.ParseCtx, id: Idx) bool {
             else => return false,
         }
     }
+}
+
+/// Actuarial angle mark (`\angl`, issue #108, pinned 0.18.7 enclose
+/// angl branch + `stretchyEnclose`): top + right borders around the
+/// padded nucleus (the `.angl` CSS box, not an SVG). The border box
+/// spans the nucleus grown by 4 rule-thicknesses on top and
+/// max(0, 0.25em − depth) below; horizontally the nucleus keeps the
+/// `.anglpad` 0.03889em each side, plus the `.angl` margin-right
+/// 0.03889em breathing room off the right border. Unlike the cancel
+/// strikes the mark ADDS metrics (the vlist keeps the border box).
+/// Border thickness scales linearly with the effective size (script
+/// styles keep 0.04em; KaTeX's 0.049 size-class bump for real fonts
+/// is below a pixel at doc scale and not modeled).
+fn layoutAngl(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
+    const b = try layoutNode(lc, style, id);
+    const bb = lc.boxes[b];
+    const size = lc.effSize(style);
+    const font: u16 = @intFromEnum(contract.FontId.rm);
+    const t: i32 = @max(1, @divTrunc(lc.ruleTh(font, .fraction_bar) * @as(i32, size), 1000));
+    const topPad = 4 * t;
+    const botPad = @max(@as(i32, 0), scale(lc, 250, style) - bb.db);
+    const padL = scale5(lc, 3889, style);
+    const padR = scale5(lc, 7778, style);
+    const markTop = bb.ha + topPad;
+    const markBot = bb.db + botPad;
+    const totalW = bb.w + padL + padR;
+    const top = try lc.allocBox(.{
+        .w = totalW,
+        .ha = t,
+        .db = 0,
+        .kind = .{ .rule = {} },
+        .invisible = false,
+    });
+    const right = try lc.allocBox(.{
+        .w = t,
+        .ha = markTop,
+        .db = markBot,
+        .kind = .{ .rule = {} },
+        .invisible = false,
+    });
+    const s = try lc.allocKids(3);
+    lc.bkids[s] = .{ .box = b, .dx = padL, .dy = 0 };
+    lc.bkids[s + 1] = .{ .box = top, .dx = 0, .dy = markTop - t };
+    lc.bkids[s + 2] = .{ .box = right, .dx = totalW - t, .dy = 0 };
+    return lc.allocBox(.{
+        .w = totalW,
+        .ha = markTop,
+        .db = markBot,
+        .kind = .{ .list = .{ .start = s, .len = 3 } },
+        .invisible = false,
+    });
 }
 
 fn layoutCancel(lc: *LayCtx, style: parse.Style, id: Idx, down: bool, both: bool) Error!u16 {

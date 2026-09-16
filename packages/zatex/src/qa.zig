@@ -2549,3 +2549,51 @@ test "qa107 cancel strikes corner-to-corner" {
         try std.testing.expectEqual(l.height_above + l.depth_below, r.h);
     }
 }
+
+test "qa108 angl border box" {
+    // Issue #108 (pinned 0.18.7 enclose angl branch + stretchyEnclose):
+    // the actuarial mark is a top + right border around the padded
+    // nucleus: top pad 4 rule-thicknesses, bottom pad max(0, 0.25em -
+    // depth), side pads 0.03889em plus the margin-right 0.03889em off
+    // the right border. Unlike cancel the mark ADDS metrics (the vlist
+    // keeps the border box). Stub text metrics pin the integers
+    // (text style: t=40, pads 38/77; the dumps below).
+    var b: B = .{};
+    var out: [1024]u8 = undefined;
+    const T = struct {
+        fn dump(src: []const u8, bufs: *B, obuf: []u8) ![]u8 {
+            const l = try lay(src, false, bufs);
+            return dumpAny(l, obuf);
+        }
+    };
+    try std.testing.expectEqualStrings("615/860/250|0,1000,38,860:110.;|0,0,615,40;575,0,40,1110;", try T.dump("\\angl{n}", &b, &out));
+    try std.testing.expectEqualStrings("1115/860/250|0,1000,38,860:65.66.;|0,0,1115,40;1075,0,40,1110;", try T.dump("\\angl{AB}", &b, &out));
+    try std.testing.expectEqualStrings("115/160/250||0,0,115,40;75,0,40,410;", try T.dump("\\angl{}", &b, &out));
+    try std.testing.expectEqualStrings("615/860/250|0,1000,38,860:110.;|0,0,615,40;575,0,40,1110;", try T.dump("\\angln", &b, &out));
+    // Structural shape over several nuclei: exactly two plain rules —
+    // a full-width top bar and a full-height right bar — and the
+    // border-box footprint.
+    for ([_][]const u8{ "n", "AB", "x+y", "gj", "{}" }) |body| {
+        var src: [64]u8 = undefined;
+        const tex = try std.fmt.bufPrint(&src, "\\angl{{{s}}}", .{body});
+        const l = try lay(tex, false, &b);
+        try std.testing.expectEqual(@as(usize, 2), l.rules.len);
+        const top = l.rules[0];
+        const right = l.rules[1];
+        try std.testing.expectEqual(zatex.ir.Diag.none, top.diag);
+        try std.testing.expectEqual(zatex.ir.Diag.none, right.diag);
+        // Top bar: full padded width, t thick, top edge on the border top.
+        try std.testing.expectEqual(@as(i32, 0), top.x);
+        try std.testing.expectEqual(l.width, top.w);
+        try std.testing.expectEqual(@as(u32, 40), top.h);
+        try std.testing.expectEqual(@as(i32, 0), top.y);
+        // Right bar: t wide at the right edge, full border-box height.
+        try std.testing.expectEqual(@as(i32, @intCast(l.width)) - 40, right.x);
+        try std.testing.expectEqual(@as(u32, 40), right.w);
+        try std.testing.expectEqual(@as(i32, 0), right.y);
+        try std.testing.expectEqual(l.height_above + l.depth_below, right.h);
+        // The mark grows the nucleus: 4t above, side pads 38/77.
+        try std.testing.expect(l.height_above >= 160);
+        try std.testing.expect(l.width >= 115);
+    }
+}
