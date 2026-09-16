@@ -1579,8 +1579,8 @@
    "id": "text-math",
    "tex": "\\text{a$b$c}",
    "display": false,
-   "ours": "Invalid",
-   "katex_only": true,
+   "ours": null,
+   "katex_only": false,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle><mtext>c</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{a$b$c}</annotation></semantics></math>"
   },
@@ -1588,8 +1588,8 @@
    "id": "text-nest",
    "tex": "\\text{\\text{a}}",
    "display": false,
-   "ours": "Invalid",
-   "katex_only": true,
+   "ours": null,
+   "katex_only": false,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\text{a}}</annotation></semantics></math>"
   },
@@ -12875,6 +12875,34 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(1)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{1}x</annotation></semantics></math>"
   },
   {
+   "id": "tag-nested",
+   "tex": "\\tag{a\\tag{b}}x",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": false,
+   "katex_pos": null,
+   "katex_error": "KaTeX parse error: Multiple \\tag"
+  },
+  {
+   "id": "newline-array",
+   "tex": "\\begin{array}{c}a\\newline b\\end{array}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.16em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{array}{c}a\\newline b\\end{array}</annotation></semantics></math>"
+  },
+  {
+   "id": "newline-matrix",
+   "tex": "\\begin{matrix}a\\newline b\\end{matrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.16em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{matrix}a\\newline b\\end{matrix}</annotation></semantics></math>"
+  },
+  {
    "id": "tag-star",
    "tex": "\\tag*{a}x",
    "display": false,
@@ -12897,8 +12925,8 @@
    "id": "tag-in-text",
    "tex": "\\text{\\tag{1}}",
    "display": true,
-   "ours": "Invalid",
-   "katex_only": true,
+   "ours": null,
+   "katex_only": false,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mrow></mrow></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(1)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\text{\\tag{1}}</annotation></semantics></math>"
   },
@@ -12906,8 +12934,8 @@
    "id": "tag-text-body",
    "tex": "\\tag{\\text{a}}x",
    "display": true,
-   "ours": "Invalid",
-   "katex_only": true,
+   "ours": null,
+   "katex_only": false,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(a)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{\\text{a}}x</annotation></semantics></math>"
   },
@@ -13209,6 +13237,105 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{align}x&amp;=1\\notag\\end{align}</annotation></semantics></math>"
   },
   {
+   "id": "tag-nonumber-same-row",
+   "tex": "\\begin{align}x&=1\\tag{a}\\nonumber\\end{align}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{align}x&amp;=1\\tag{a}\\nonumber\\end{align}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-align-nonumber-tag",
+   "tex": "\\begin{align}x&=1\\nonumber\\tag{a}\\end{align}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{align}x&amp;=1\\nonumber\\tag{a}\\end{align}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-equation-tag",
+   "tex": "\\begin{equation}x=1\\tag{a}\\end{equation}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.16em\" columnspacing=\"1em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mi>x</mi><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{equation}x=1\\tag{a}\\end{equation}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-align-star-tag-row0",
+   "tex": "\\begin{align*}x&=1\\tag{a}\\\\y&=2\\end{align*}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>y</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>2</mn></mrow></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{align*}x&amp;=1\\tag{a}\\\\y&amp;=2\\end{align*}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-tag-leading-align-star",
+   "tex": "\\tag{a}\\begin{align*}x&=1\\\\y&=2\\end{align*}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>y</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>2</mn></mrow></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{a}\\begin{align*}x&amp;=1\\\\y&amp;=2\\end{align*}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-tag-trailing-align-star",
+   "tex": "\\begin{align*}x&=1\\\\y&=2\\end{align*}\\tag{a}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>y</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>2</mn></mrow></mstyle></mtd></mtr></mtable></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(a)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{align*}x&amp;=1\\\\y&amp;=2\\end{align*}\\tag{a}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-tag-leading-align",
+   "tex": "\\tag{a}\\begin{align}x&=1\\\\y&=2\\end{align}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>y</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>2</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{a}\\begin{align}x&amp;=1\\\\y&amp;=2\\end{align}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-matrix-tag",
+   "tex": "\\tag{a}\\begin{matrix}x\\end{matrix}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mtable rowspacing=\"0.16em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>x</mi></mstyle></mtd></mtr></mtable></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(a)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{a}\\begin{matrix}x\\end{matrix}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-split-tag",
+   "tex": "\\begin{split}x=1\\tag{a}\\end{split}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mtable rowspacing=\"0.25em\" columnalign=\"right\" columnspacing=\"\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mi>x</mi><mo>=</mo><mn>1</mn></mrow></mstyle></mtd></mtr></mtable></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(a)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{split}x=1\\tag{a}\\end{split}</annotation></semantics></math>"
+  },
+  {
+   "id": "disp-align-star-matrix-tag",
+   "tex": "\\begin{align*}\\begin{matrix}\\tag{a}x\\end{matrix}&=1\\\\y&=2\\end{align*}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mtable rowspacing=\"0.16em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>x</mi></mstyle></mtd></mtr></mtable></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>y</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>2</mn></mrow></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{align*}\\begin{matrix}\\tag{a}x\\end{matrix}&amp;=1\\\\y&amp;=2\\end{align*}</annotation></semantics></math>"
+  },
+  {
+   "id": "tag-row0-nonumber-row1",
+   "tex": "\\begin{align}x&=1\\tag{a}\\\\y&=2\\nonumber\\end{align}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable rowspacing=\"0.25em\" columnalign=\"right left\" columnspacing=\"0em\"><mtr><mtd class =\"mtr-glue\"></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>x</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>1</mn></mrow></mstyle></mtd><mtd class =\"mtr-glue\"></mtd><mtd class =\"mml-eqn-num\"></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mi>y</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"true\"><mrow><mrow></mrow><mo>=</mo><mn>2</mn></mrow></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{align}x&amp;=1\\tag{a}\\\\y&amp;=2\\nonumber\\end{align}</annotation></semantics></math>"
+  },
+  {
    "id": "nonumber-out",
    "tex": "x\\nonumber",
    "display": true,
@@ -13306,6 +13433,80 @@
    "katex_only": false,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">x\\notag</annotation></semantics></math>"
+  },
+  {
+   "id": "tag-text-body-d",
+   "tex": "\\tag{\\text{a}}x",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(a)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{\\text{a}}x</annotation></semantics></math>"
+  },
+  {
+   "id": "tag-text-mid",
+   "tex": "\\text{a\\tag{1}}x",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mrow><mtext>a</mtext><mi>x</mi></mrow></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(1)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\text{a\\tag{1}}x</annotation></semantics></math>"
+  },
+  {
+   "id": "tag-text-bare",
+   "tex": "\\text{a\\tag 1x}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mtext>ax</mtext></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(1)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\text{a\\tag 1x}</annotation></semantics></math>"
+  },
+  {
+   "id": "tag-text-nested",
+   "tex": "\\text{a{\\tag{1}}b}x",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mrow><mrow><mtext>a</mtext><mrow></mrow><mtext>b</mtext></mrow><mi>x</mi></mrow></mtd><mtd width=\"50%\"></mtd><mtd><mtext>(1)</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\text{a{\\tag{1}}b}x</annotation></semantics></math>"
+  },
+  {
+   "id": "text-nested-math",
+   "tex": "\\text{x\\text{a$b$}c}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>x</mtext><mrow><mtext>a</mtext><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mrow><mtext>c</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{x\\text{a$b$}c}</annotation></semantics></math>"
+  },
+  {
+   "id": "text-merge",
+   "tex": "\\text{x\\text{ab}c}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>xabc</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{x\\text{ab}c}</annotation></semantics></math>"
+  },
+  {
+   "id": "textb-dollar",
+   "tex": "\\textbf{a$b}",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": false,
+   "katex_pos": 11,
+   "katex_error": "KaTeX parse error: Expected '$', got 'EOF' at position 12: \\textbf{a$b}̲"
+  },
+  {
+   "id": "hbox-dollar",
+   "tex": "\\hbox{a$b}",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "katex_ok": false,
+   "katex_pos": 9,
+   "katex_error": "KaTeX parse error: Expected '$', got 'EOF' at position 10: \\hbox{a$b}̲"
   }
  ]
 }

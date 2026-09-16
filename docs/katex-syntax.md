@@ -21,14 +21,14 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\(…\)` | `\text{\(\frac a b\)}` | *no render (overclaim)* | inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math |
 | `\ ` | `a\ b` | ![](renders/ctrlspace.png) |  |
 | `\"` | `\text{\"{a}}` | ![](renders/quot.png) |  |
-| `\$` | `\$` | ![](renders/dollar.png) |  |
+| `\$` | `\$` | ![](renders/dollar.png) | KaTeX shows `\text{\textdollar}`; this form exercises `\$` |
 | `\,` | `a\,\,{b}` | ![](renders/comma.png) |  |
 | `\.` | `\text{\.{a}}` | ![](renders/dot.png) |  |
 | `\:` | `a\:\:{b}` | ![](renders/colon.png) |  |
 | `\;` | `a\n\;\;{b}` | ![](renders/semi.png) |  |
 | `_` | `x_i` | ![](renders/us.png) |  |
 | `\_` | `\_` | ![](renders/us-2.png) |  |
-| `\`` | `\text{\`{a}}` | ![](renders/fn.png) |  |
+| `` \` `` | ``\text{\`{a}}`` | ![](renders/fn.png) |  |
 | `<` | `<` | ![](renders/lt.png) |  |
 | `\=` | `\text{\={a}}` | ![](renders/eq.png) |  |
 | `>` | `>` | ![](renders/gt.png) |  |
@@ -39,11 +39,11 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `}` | `{a}` | ![](renders/fn-5.png) |  |
 | `\{` | `\{` | ![](renders/fn-6.png) |  |
 | `\}` | `\}` | ![](renders/fn-7.png) |  |
-| `|` | `\vert` | ![](renders/pipe.png) |  |
-| `\|` | `\\|x\\|` | ![](renders/pipe-2.png) |  |
+| `&#124;` | `\vert` | ![](renders/pipe.png) |  |
+| `\&#124;` | `\&#124;x\&#124;` | ![](renders/pipe-2.png) | KaTeX shows `\Vert`; this form exercises `\&#124;` |
 | `~` | `\text{no~no~no~breaks}` | ![](renders/tilde.png) |  |
 | `\~` | `\text{\~{a}}` | ![](renders/tilde-2.png) |  |
-| `\\` | `\begin{matrix}a\\b\end{matrix}` | ![](renders/fn-8.png) |  |
+| `\\ ` | `\begin{matrix}a\\b\end{matrix}` | ![](renders/dblbackslash.png) |  |
 | `^` | `x^i` | ![](renders/pow.png) |  |
 | `\^` | `\text{\^{a}}` | ![](renders/pow-2.png) |  |
 
@@ -180,8 +180,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\boxtimes` | `\boxtimes` | ![](renders/boxtimes.png) |  |
 | `\Bra` | `\Bra{\psi}` | ![](renders/bra.png) |  |
 | `\bra` | `\bra{\psi}` | ![](renders/bra-2.png) |  |
-| `\braket` | `\braket{\phi\|\psi}` | ![](renders/braket.png) |  |
-| `\Braket` | `\Braket{\phi\|\frac12\|\psi}` | ![](renders/braket-2.png) |  |
+| `\braket` | `\braket{\phi&#124;\psi}` | ![](renders/braket.png) |  |
+| `\Braket` | `\Braket{\phi&#124;\frac12&#124;\psi}` | ![](renders/braket-2.png) |  |
 | `\brace` | `{n\brace k}` | ![](renders/brace.png) |  |
 | `\bracevert` | — | — | goldens: rej-unsup-bracevert |
 | `\brack` | `{n\brack k}` | ![](renders/brack.png) |  |
@@ -454,7 +454,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\harr` | `\harr` | ![](renders/harr-3.png) |  |
 | `\hat` | `\hat{\theta}` | ![](renders/hat.png) |  |
 | `\hbar` | `\hbar` | ![](renders/hbar.png) |  |
-| `\hbox` | `\hbox{x}` | ![](renders/hbox.png) |  |
+| `\hbox` | `\hbox{$x^2$}` | ![](renders/hbox.png) |  |
 | `\hbox to <dimen>` | `\hbox to 10pt{A}` | ![](renders/hboxdashtodashltdimengt.png) |  |
 | `\hdashline` | `\begin{matrix}\na & b \\\n\hdashline\nc & d\n\end{matrix}` | ![](renders/hdashline.png) |  |
 | `\hearts` | `\hearts` | ![](renders/hearts.png) |  |
@@ -466,7 +466,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\hookleftarrow` | `\hookleftarrow` | ![](renders/hookleftarrow.png) |  |
 | `\hookrightarrow` | `\hookrightarrow` | ![](renders/hookrightarrow.png) |  |
 | `\hphantom` | `a\hphantom{bc}d` | ![](renders/hphantom.png) |  |
-| `\href` | `\href{https://github.com/gregoreesmaa/zatex}{\text{ZaTeX}}` | ![](renders/href.png) |  |
+| `\href` | `\href{https://github.com/gregoreesmaa/zatex}{\mathrm{Z\!^aT\!_EX}}` | ![](renders/href.png) |  |
 | `\hskip` | `w\hskip1em i\hskip2em d` | ![](renders/hskip.png) |  |
 | `\hslash` | `\hslash` | ![](renders/hslash.png) |  |
 | `\hspace` | `s\hspace7ex k` | ![](renders/hspace.png) |  |
@@ -717,7 +717,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\newcommand` | `\newcommand\chk{\checkmark} \chk` | ![](renders/newcommand.png) |  |
 | `\newenvironment` | — | — | goldens: rej-unsup-newenvironment |
 | `\Newextarrow` | — | — | goldens: rej-unsup-newextarrow |
-| `\newline` | `a\newline b` | ![](renders/newline.png) |  |
+| `\newline` | `a\newline b` | ![](renders/newline.png) | Breaks env rows like `\\`; inert mspace in running math |
 | `\nexists` | `\nexists` | ![](renders/nexists.png) |  |
 | `\ngeq` | `\ngeq` | ![](renders/ngeq.png) |  |
 | `\ngeqq` | `\ngeqq` | ![](renders/ngeqq.png) |  |
@@ -943,8 +943,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\searrow` | `\searrow` | ![](renders/searrow.png) |  |
 | `\sec` | `\sec` | ![](renders/sec.png) |  |
 | `\sect` | `\text{\sect}` | ![](renders/sect.png) |  |
-| `\set` | `\set{x}` | ![](renders/set.png) |  |
-| `\Set` | `\Set{ x \| x<\frac 1 2}` | ![](renders/set-2.png) |  |
+| `\set` | `\set{x&#124;x<5}` | ![](renders/set.png) |  |
+| `\Set` | `\Set{ x &#124; x<\frac 1 2}` | ![](renders/set-2.png) |  |
 | `\setlength` | — | — | goldens: rej-unsup-setlength |
 | `\setminus` | `\setminus` | ![](renders/setminus.png) |  |
 | `\sf` | `\sf AaBb123` | ![](renders/sf.png) |  |
@@ -1032,7 +1032,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\tag` | `\tag{3.1c} a^2+b^2=c^2` | ![](renders/tag.png) |  |
+| `\tag` | `\tag{3.1c} a^2+b^2=c^2` | ![](renders/tag.png) | Hoists to the equation; a row-local tag keeps its number columns despite `\nonumber` |
 | `\tag*` | `\tag*{3.1c} a^2+b^2=c^2` | ![](renders/tagstar.png) |  |
 | `\tan` | `\tan` | ![](renders/tan.png) |  |
 | `\tanh` | `\tanh` | ![](renders/tanh.png) |  |

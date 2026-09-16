@@ -102,7 +102,7 @@ Extension support is future work.
 
 | `\~` | accept | goldens: text, textaccent |
 
-| `\\` | accept | goldens: matrix, aligned, alignedat |
+| `\\ ` | accept | goldens: matrix, aligned, alignedat |
 
 | `^` | accept | goldens: boxed, braces, demo-cauchy, atomgrid, flite-euler, rej-malf-sup |
 
@@ -1972,7 +1972,7 @@ Extension support is future work.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\tag` | accept | goldens: tag, tag-display |
+| `\tag` | accept | goldens: tag, tag-display, tag-in-text, tag-text-body, tag-text-mid, tag-text-bare, tag-text-nested, tag-nonumber-same-row, tag-row0-nonumber-row1, disp-tag-leading-align, disp-tag-trailing-align-star, disp-matrix-tag, disp-split-tag |
 
 | `\tag*` | accept | goldens: tag-star, tag-star-display |
 
@@ -1988,7 +1988,7 @@ Extension support is future work.
 
 | `\TeX` | accept | goldens: t-TeX |
 
-| `\text` | accept | goldens: text, sym-escapes |
+| `\text` | accept | goldens: text, sym-escapes, text-math, text-nest, text-merge, text-nested-math |
 
 | `\textasciitilde` | accept | goldens: text |
 

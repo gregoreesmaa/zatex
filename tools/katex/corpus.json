@@ -1037,17 +1037,13 @@
   "id": "text-math",
   "tex": "\\text{a$b$c}",
   "display": false,
-  "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "expect": "accept"
  },
  {
   "id": "text-nest",
   "tex": "\\text{\\text{a}}",
   "display": false,
-  "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "expect": "accept"
  },
  {
   "id": "definecolor",
@@ -8460,6 +8456,24 @@
   "expect": "accept"
  },
  {
+  "id": "tag-nested",
+  "tex": "\\tag{a\\tag{b}}x",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "newline-array",
+  "tex": "\\begin{array}{c}a\\newline b\\end{array}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "newline-matrix",
+  "tex": "\\begin{matrix}a\\newline b\\end{matrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "tag-star",
   "tex": "\\tag*{a}x",
   "display": false,
@@ -8475,17 +8489,13 @@
   "id": "tag-in-text",
   "tex": "\\text{\\tag{1}}",
   "display": true,
-  "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "expect": "accept"
  },
  {
   "id": "tag-text-body",
   "tex": "\\tag{\\text{a}}x",
   "display": true,
-  "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "expect": "accept"
  },
  {
   "id": "tbinom",
@@ -8684,6 +8694,72 @@
   "expect": "accept"
  },
  {
+  "id": "tag-nonumber-same-row",
+  "tex": "\\begin{align}x&=1\\tag{a}\\nonumber\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-nonumber-tag",
+  "tex": "\\begin{align}x&=1\\nonumber\\tag{a}\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation-tag",
+  "tex": "\\begin{equation}x=1\\tag{a}\\end{equation}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-star-tag-row0",
+  "tex": "\\begin{align*}x&=1\\tag{a}\\\\y&=2\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-tag-leading-align-star",
+  "tex": "\\tag{a}\\begin{align*}x&=1\\\\y&=2\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-tag-trailing-align-star",
+  "tex": "\\begin{align*}x&=1\\\\y&=2\\end{align*}\\tag{a}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-tag-leading-align",
+  "tex": "\\tag{a}\\begin{align}x&=1\\\\y&=2\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-matrix-tag",
+  "tex": "\\tag{a}\\begin{matrix}x\\end{matrix}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-split-tag",
+  "tex": "\\begin{split}x=1\\tag{a}\\end{split}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-star-matrix-tag",
+  "tex": "\\begin{align*}\\begin{matrix}\\tag{a}x\\end{matrix}&=1\\\\y&=2\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-row0-nonumber-row1",
+  "tex": "\\begin{align}x&=1\\tag{a}\\\\y&=2\\nonumber\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
   "id": "nonumber-out",
   "tex": "x\\nonumber",
   "display": true,
@@ -8748,5 +8824,57 @@
   "tex": "x\\notag",
   "display": true,
   "expect": "accept"
+ },
+ {
+  "id": "tag-text-body-d",
+  "tex": "\\tag{\\text{a}}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-text-mid",
+  "tex": "\\text{a\\tag{1}}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-text-bare",
+  "tex": "\\text{a\\tag 1x}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-text-nested",
+  "tex": "\\text{a{\\tag{1}}b}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "text-nested-math",
+  "tex": "\\text{x\\text{a$b$}c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-merge",
+  "tex": "\\text{x\\text{ab}c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textb-dollar",
+  "tex": "\\textbf{a$b}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "hbox-dollar",
+  "tex": "\\hbox{a$b}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
  }
 ]

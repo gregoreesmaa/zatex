@@ -330,7 +330,7 @@ def example_for(fn):
 
 # Fixed slugs for renders whose derived name would mislead: `\ ` and
 # `\\ ` both derive from bare whitespace (`dash`), hiding what they show.
-SLUG_PIN = {"\\ ": "ctrlspace", "\\\\ ": "newline"}
+SLUG_PIN = {"\\ ": "ctrlspace", "\\\\ ": "dblbackslash"}
 
 
 def slug_for(fn, used):
@@ -471,8 +471,39 @@ def katex_examples(path):
 
 
 def md_escape(tex):
-    # Backticks need no backslash escaping; pipes and newlines do.
-    return tex.replace("|", "\\|").replace("\n", "\\n")
+    # Backticks need no backslash escaping; newlines do. Pipes use an
+    # entity: a backslash escape does NOT protect a pipe inside a
+    # code span from table splitters (issue #82).
+    return tex.replace("|", "&#124;").replace("\n", "\\n")
+
+
+def fn_cell(fn):
+    # Same pipe rule as md_escape for the Function cell (issue #82).
+    return fn.replace("|", "&#124;")
+
+
+def code_span(s):
+    # Content holding a backtick (the grave-accent rows) needs a
+    # double-backtick span, else the inner backtick ends the span
+    # early and leaks stray backtick cells (issue #82).
+    if "`" in s:
+        pad = " " if s.startswith("`") or s.endswith("`") else ""
+        return "``%s%s%s``" % (pad, s, pad)
+    return "`%s`" % s
+
+
+def check_row(line):
+    # Invariant (issue #82): no literal pipe may sit inside a code
+    # span of an emitted table row — any splitter would cut the row
+    # into stray backtick cells. Double-backtick spans are stripped
+    # first so an inner grave never misaligns the pairing.
+    for span in re.findall(r"``(.*?)``", line):
+        if "|" in span:
+            raise SystemExit("bare pipe in code span: %s" % line.rstrip("\n"))
+    single = re.sub(r"``.*?``", "", line)
+    for span in re.findall(r"`([^`]*)`", single):
+        if "|" in span:
+            raise SystemExit("bare pipe in code span: %s" % line.rstrip("\n"))
 
 
 def kx_covers(fn, tex):
@@ -503,11 +534,17 @@ def kx_covers(fn, tex):
 # Local overrides that beat KaTeX's own examples (issue #72): the mirror
 # documents ZaTeX, so brand examples must read ZaTeX, not KaTeX.
 OVERRIDES = {
-    "\\href": ("\\href{https://github.com/gregoreesmaa/zatex}{\\text{ZaTeX}}", False),
+    # Fancy ZaTeX wordmark, logo-style (raised `a`, lowered `E`, tight
+    # `\!` kerns in the spirit of `\LaTeX`/`\KaTeX`): subset-safe
+    # construction — scripts and kerns only, no `\raisebox`, no new
+    # command (issue #76).
+    "\\href": ("\\href{https://github.com/gregoreesmaa/zatex}{\\mathrm{Z\\!^aT\\!_EX}}", False),
     # No KaTeX-table cell yields an example for these accept rows, so
-    # pin local ones (both render; the `\\\\` one mirrors EXACT's
+    # pin local ones (both render; the `\\ ` one mirrors EXACT's
     # matrix linebreak, the subarray one mirrors sweep `subarray-l`).
-    "\\\\": ("\\begin{matrix}a\\\\b\\end{matrix}", False),
+    # (The key carries KaTeX's trailing cell space after `\\`,
+    # matching `katex_name` and SLUG_PIN; issue #91.)
+    "\\\\ ": ("\\begin{matrix}a\\\\b\\end{matrix}", False),
     "{subarray}": ("\\sum_{\\begin{subarray}{l}1\\le i\\le n\\end{subarray}}x_i", True),
     # KaTeX's own example wraps in `$…$` delimiters (rejected in
     # math input here); same equation without them.
@@ -519,11 +556,23 @@ OVERRIDES = {
     # coverage (an unclosed group, `$` delimiters, nested
     # text-fonts); the sweep goldens render in both.
     "\\begingroup": ("\\begingroup x\\endgroup", False),
+    # KaTeX's `\emph{nested \emph{emphasis}}` needs nested text-font
+    # commands (rejected here); the flat form renders (issue #91).
     "\\emph": ("\\emph{x}", False),
     "\\endgroup": ("\\begingroup x\\endgroup", False),
-    "\\hbox": ("\\hbox{x}", False),
+    # KaTeX's own `\hbox{$x^2$}` (restored verbatim, issue #91): the
+    # Source-tier derivation strips the inner `$` pair (`\hbox{x^2}`,
+    # whose bare `^` text capture rejects), but the true equation
+    # re-enters math mode and renders.
+    "\\hbox": ("\\hbox{$x^2$}", False),
+    # KaTeX's `\reflectbox{$x^2$}` needs math (scripts) inside the
+    # box arg (rejected here — even `\reflectbox{x^2}` fails; the
+    # flat form renders; issue #91, box-math is issue #97).
     "\\reflectbox": ("\\reflectbox{x}", False),
-    "\\set": ("\\set{x}", False),
+    # KaTeX's Rendered column (`\set{x|x<5}`); its Source column uses
+    # `\VERT`, undefined in BOTH engines (issue #84: Vert, not VERT).
+    # The pipe form exercises the split path (issue #91).
+    "\\set": ("\\set{x|x<5}", False),
     # KaTeX's own Source examples use `\\VERT`, which is undefined in
     # BOTH engines (issue #84: use Vert, never VERT), and wrap in `$`
     # delimiters this engine rejects in math input — so the mirror
@@ -532,6 +581,25 @@ OVERRIDES = {
     "\\braket": ("\\braket{\\phi|\\psi}", False),
     "\\Braket": ("\\Braket{\\phi|\\frac12|\\psi}", False),
     "\\Set": ("\\Set{ x | x<\\frac 1 2}", False),
+}
+
+
+# Accept-row notes for the mirror's Note column (issues #75/#79/#91):
+# behavior contracts a render alone cannot show. Keys are
+# support-table fn cells; values must avoid literal pipes in code
+# spans (`check_row` enforces it on the emitted line).
+ROW_NOTES = {
+    # The tag hoists to the whole equation from any position —
+    # even `\text` bodies — and a row-local tag keeps its number
+    # columns despite `\nonumber` (ordering pinned 0.18.7).
+    "\\tag": "Hoists to the equation; a row-local tag keeps its number columns despite `\\nonumber`",
+    # No visible break in running math (zero-size mspace, KaTeX
+    # parity); the break only shows across env rows.
+    "\\newline": "Breaks env rows like `\\\\`; inert mspace in running math",
+    # KaTeX's own example lacks the function, so the local tier
+    # rightly wins — recorded so nobody "fixes" these back (#91).
+    "\\$": "KaTeX shows `\\text{\\textdollar}`; this form exercises `\\$`",
+    "\\|": "KaTeX shows `\\Vert`; this form exercises `\\&#124;`",
 }
 
 
@@ -679,18 +747,24 @@ def main():
             out.write("| --- | --- | --- | --- |\n")
             for row in sec["rows"]:
                 fn, st = row["fn"], row["status"]
+                fnc = code_span(fn_cell(fn))
                 if st != "accept":
-                    out.write("| `%s` | — | — | %s |\n" % (fn, row["note"]))
+                    line = "| %s | — | — | %s |\n" % (fnc, row["note"])
+                    check_row(line)
+                    out.write(line)
                     continue
                 slug = next(s for _, r, s, _, _ in jobs if r is row)
                 tex = next(t for _, r, _, t, _ in jobs if r is row)
+                exc = code_span(md_escape(tex))
                 if fn in gap_info:
                     g = gap_info[fn]
-                    out.write("| `%s` | `%s` | *no render (%s)* | %s |\n" % (
-                        fn, md_escape(tex), g["kind"], g["note"]))
+                    line = "| %s | %s | *no render (%s)* | %s |\n" % (
+                        fnc, exc, g["kind"], g["note"])
                 else:
-                    out.write("| `%s` | `%s` | ![](renders/%s.png) |  |\n" % (
-                        fn, md_escape(tex), slug))
+                    line = "| %s | %s | ![](renders/%s.png) | %s |\n" % (
+                        fnc, exc, slug, ROW_NOTES.get(fn, ""))
+                check_row(line)
+                out.write(line)
             out.write("\n")
     print("mirror written: %d renders, %d gaps" % (len(want), len(failed)))
     return 0

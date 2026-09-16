@@ -37,6 +37,26 @@ jobs:
           npm run sweep
           git diff --exit-code ../../packages/zatex/goldens/katex_sweep.json
 
+  # Doc-mirror freshness (issue #91): the syntax mirror is generated
+  # from docs/support-table.md — re-resolve examples and fail on drift
+  # so uncovered rows, tier changes, and pipe-table regressions are
+  # caught at generation time. Scoped to the mirror markdown (never
+  # render bytes: those stay rasterizer-sensitive per AGENTS.md §4).
+  mirror-freshness:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Build zatex-png
+        working-directory: packages/zatex-png
+        run: zig build
+      - name: Regenerate mirror and fail on drift
+        run: |
+          python3 tools/gen_doc_renders.py
+          git diff --exit-code docs/katex-syntax.md
+
   # Informational eyeball aid, NEVER a required gate (AGENTS.md §4,
   # issue #13): renders the fixed corpus at PR head and base, uploads
   # both galleries as artifacts, and posts the changed-row summary as a

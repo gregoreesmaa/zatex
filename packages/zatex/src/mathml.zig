@@ -1213,14 +1213,28 @@ const Writer = struct {
             .htmlwrap => |b| try self.node(b, face),
             .tag => |tg| {
                 // Display equation number (KaTeX `tag` MathML,
-                // pinned 0.18.7): the whole equation in a full-width
-                // table, the tag text right. Empty side cells stay
-                // open+close (the sweep normalizer counts both).
-                self.str("<mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd>");
-                try self.node(tg.formula, face);
-                self.str("</mtd><mtd width=\"50%\"></mtd><mtd>");
-                try self.tagCell(tg);
-                self.str("</mtd></mtr></mtable>");
+                // pinned 0.18.7): a tag ADOPTED by a numbering env
+                // belongs to the env's own number column, so the
+                // env renders alone with EMPTY number cells (the
+                // tag text is dropped). A tag that stayed pending
+                // (trailing the env, or claimed by no numbering
+                // row) keeps the whole equation in a full-width
+                // table with the tag text right. Empty side cells
+                // stay open+close (the sweep normalizer counts both).
+                const adopted_env: ?Idx =
+                    if (self.pc.tag_adopted) tagNumEnv(self.pc, tg.formula) else null;
+                if (adopted_env) |eid| {
+                    try self.env(switch (parse.nodeAt(self.pc, eid)) {
+                        .env => |e| e,
+                        else => unreachable,
+                    }, face);
+                } else {
+                    self.str("<mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd>");
+                    try self.node(tg.formula, face);
+                    self.str("</mtd><mtd width=\"50%\"></mtd><mtd>");
+                    try self.tagCell(tg);
+                    self.str("</mtd></mtr></mtable>");
+                }
             },
             // KaTeX parity (pinned 0.18.7 `mclass`/`op` builders):
             // `\mathrel{x}` retypes the lone inner node to `mo`
@@ -1744,11 +1758,16 @@ const Writer = struct {
             // (KaTeX parity).
             if (kids.len == 1 and isHlineNode(self.pc, kids[0])) continue;
             self.str("<mtr>");
-            // Unstarred top-level display envs keep KaTeX's number
-            // columns: a leading glue cell plus trailing glue and
-            // equation-number cells per row (issues #83/#86/#87) —
-            // unless the row carries `\nonumber`/`\notag` (#88).
-            const numbered = e.numbered and !row.nonumber;
+            // Numbering envs keep KaTeX's number columns: a leading
+            // glue cell plus trailing glue and equation-number cells
+            // per row (issues #83/#86/#87) — unless the row carries
+            // `nonumber`/`notag` (#88). A tagged row keeps its
+            // columns regardless: a row-local tag wins over the
+            // row's own nonumber, and a leading outside-tag lands
+            // on row 0 (even starred); the cells stay EMPTY either
+            // way (tag text is dropped, #75).
+            const numbered = parse.numEnvKind(e.kind) and
+                ((e.numbered and !row.nonumber) or row.tagged);
             if (numbered) self.str("<mtd class=\"mtr-glue\"></mtd>");
             for (kids) |k| {
                 self.str("<mtd><mstyle scriptlevel=\"");
@@ -1766,6 +1785,26 @@ const Writer = struct {
         if (script_cell) self.str("</mstyle>");
     }
 };
+
+/// The numbering env a hoisted tag wraps: when the tag formula is a
+/// lone numbering env, KaTeX keeps the env's own table with EMPTY
+/// number cells (issue #75). Returns the env node id, or null for
+/// the full-width tag-table path.
+fn tagNumEnv(pc: *const parse.ParseCtx, formula: Idx) ?Idx {
+    const kid = switch (parse.nodeAt(pc, formula)) {
+        .group => |g| blk: {
+            const kids = parse.kidsOf(pc, g);
+            if (kids.len != 1) return null;
+            break :blk kids[0];
+        },
+        .env => formula,
+        else => return null,
+    };
+    return switch (parse.nodeAt(pc, kid)) {
+        .env => |e| if (parse.numEnvKind(e.kind)) kid else null,
+        else => null,
+    };
+}
 
 /// Row-rule detection (mirrors the layout core): bare rule node or a
 /// group wrapping exactly one. Returns dashedness (issue #33).
@@ -1858,6 +1897,27 @@ test "frac renders mfrac" {
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
     try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "<mfrac>") != null);
+}
+
+test "row-local tag keeps number cells despite nonumber (issue #75)" {
+    // End-to-end shape (pinned 0.18.7): same-row tag + nonumber
+    // keeps KaTeX's glue/eqn-num cells but the number cell stays
+    // EMPTY (tag text is dropped over numbering envs); nonumber
+    // alone drops the columns entirely.
+    var pc = parse.ParseCtx.init("\\begin{align}x&=1\\tag{a}\\nonumber\\end{align}");
+    const root = try parse.parse(&pc, true);
+    var out: [1024]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "mtr-glue") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "mml-eqn-num") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "<mtext>") == null);
+    var pc2 = parse.ParseCtx.init("\\begin{align}x&=1\\nonumber\\end{align}");
+    const root2 = try parse.parse(&pc2, true);
+    var out2: [1024]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out2[0..w2.pos], "mtr-glue") == null);
 }
 
 test "sum renders msubsup structurally" {

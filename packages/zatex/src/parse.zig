@@ -273,6 +273,12 @@ pub const Row = struct {
     /// envs drop the row's number columns (KaTeX `\@eqnsw`
     /// parity, issue #88). Defaults off; only `parseEnv` sets it.
     nonumber: bool = false,
+    /// `\tag` seen in this row: a row-local tag wins over the row's
+    /// own `\nonumber` (KaTeX hoists the tag before `\@eqnsw` drops
+    /// the number columns — probed 0.18.7, issue #75). A tag in a
+    /// *different* row does not rescue this row. Defaults off; only
+    /// `parseEnv` sets it.
+    tagged: bool = false,
 };
 
 pub const FracKind = struct {
@@ -670,6 +676,17 @@ pub const ParseCtx = struct {
     /// `\nonumber`/`\notag` seen since the current row started
     /// (row-scoped like KaTeX's per-row `\@eqnsw` reset).
     row_nonumber: bool = false,
+    /// `\tag` seen since the current row started (row-scoped like
+    /// `row_nonumber`; a row-local tag keeps the row's number
+    /// columns despite `\nonumber`, issue #75).
+    row_tagged: bool = false,
+    /// A numbering env adopted the hoisted tag into one of its rows
+    /// (row-local tag, or a leading outside-tag defaulted to row 0).
+    /// Only then does the MathML emitter drop the tag text and keep
+    /// the env's own table; a tag that stayed pending (trailing the
+    /// env, or adopted by no numbering row) renders under the
+    /// full-width tag table instead (pinned 0.18.7, issue #75).
+    tag_adopted: bool = false,
     in_fence: u8 = 0,
     expansions: u32 = 0,
     err_pos: u32 = 0,
@@ -1262,9 +1279,23 @@ fn parseTag(ctx: *ParseCtx, t: Tok) Error!?Idx {
     if (!ctx.display) return ctx.fail(t.pos, "\\tag works only in display equations");
     if (ctx.tag_body != NONE) return ctx.fail(t.pos, "Multiple \\tag");
     const toks = try parseBracedToks(ctx, t, false);
-    try checkTextToks(ctx, toks);
-    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+    // A nested `\tag` is still "Multiple \tag" (it would parse as
+    // the builtin), not a text-mode error — unless the user shadowed
+    // `\tag` with a macro, which would expand first (issue #75).
+    if (ctx.findDef("tag") == null) {
+        var ni: u16 = 0;
+        while (ni < toks.len) : (ni += 1) {
+            const ntk = ctx.toks[toks.start + ni];
+            if (ntk.kind == .ctrl and tokNameEq(ntk.name, "tag"))
+                return ctx.fail(ntk.pos, "Multiple \\tag");
+        }
+    }
+    // Nested `\text{...}` renders flat inside tags (issue #75).
+    const flat = try spliceNestedText(ctx, toks);
+    try checkTextToks(ctx, flat);
+    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = flat, .fam = .rm } });
     ctx.tag_starred = starred;
+    ctx.row_tagged = true;
     return null;
 }
 
@@ -1864,11 +1895,13 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                 return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .term_pos = t.pos };
             },
             .ctrl => {
-                if (isName(t, "end") or isName(t, "right") or isName(t, "cr")) {
-                    // `\cr` is a row separator like `\\`: consume it
-                    // (issue #51 robustness — the token must not reach
-                    // the next cell). `\end`/`\right` stay for the caller.
-                    if (isName(t, "cr")) _ = try ctx.next();
+                if (isName(t, "end") or isName(t, "right") or isName(t, "cr") or isName(t, "newline")) {
+                    // `\cr` and `\newline` are row separators like `\\`:
+                    // consume them (issue #51 robustness — the token
+                    // must not reach the next cell; `\newline` breaks
+                    // env rows per pinned KaTeX, issue #79).
+                    // `\end`/`\right` stay for the caller.
+                    if (isName(t, "cr") or isName(t, "newline")) _ = try ctx.next();
                     return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "amp")) .amp else if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline, .term_pos = t.pos };
                 }
                 // `\\` is the row separator inside environments (the
@@ -1965,9 +1998,10 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
                 return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline };
             },
             .ctrl => {
-                if (isName(t, "end") or isName(t, "right") or isName(t, "cr")) {
-                    // Same `\cr` consume as the cell path (issue #51).
-                    if (isName(t, "cr")) _ = try ctx.next();
+                if (isName(t, "end") or isName(t, "right") or isName(t, "cr") or isName(t, "newline")) {
+                    // Same `\cr`/`\newline` consume as the cell path
+                    // (issues #51/#79).
+                    if (isName(t, "cr") or isName(t, "newline")) _ = try ctx.next();
                     return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline };
                 }
                 if (tokNameEq(t.name, "\\")) {
@@ -2363,8 +2397,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (tokNameEq(name, "cr")) return ctx.fail(t.pos, "unexpected '\\cr'");
     if (tokNameEq(name, "text")) {
         const toks = try parseBracedToks(ctx, t, true);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        return parseTextBody(ctx, depth, toks, .rm);
     }
     if (tokNameEq(name, "hbox")) {
         // KaTeX parity: `\hbox` takes an hbox argument like `\text`
@@ -2372,13 +2405,11 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // undefined in the bundle (math and text mode alike), so it
         // stays out (table `unsup`, `rej-unsup-mbox`).
         const toks = try parseBracedToks(ctx, t, false);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        return parseTextBody(ctx, depth, toks, .rm);
     }
     if (textFontFamFor(name)) |fam| {
         const toks = try parseBracedToks(ctx, t, true);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = fam } });
+        return parseTextBody(ctx, depth, toks, fam);
     }
     if (fontFamFor(name)) |fam| {
         const body = try parseGroupOrAtom(ctx, depth);
@@ -4540,6 +4571,303 @@ fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
     }
 }
 
+/// Copy a token slice into the toks arena.
+fn stashToks(ctx: *ParseCtx, toks: []const Tok) Error!Range {
+    if (toks.len > 0xFFFF) return error.NoSpace;
+    const s = try ctx.allocToks(toks.len);
+    const base: usize = s;
+    @memcpy(ctx.toks[base .. base + toks.len], toks);
+    return .{ .start = s, .len = @intCast(toks.len) };
+}
+
+/// Flatten complete nested `\text{...}` groups in a captured token
+/// range to their inner tokens (KaTeX renders nested text flat —
+/// pinned 0.18.7 probes, issue #75). Repeats until no complete
+/// group remains (each pass removes a wrapper, so passes are
+/// bounded by the range length). A bare `\text` without a braced
+/// group, or an unbalanced group, is left for the caller to reject.
+fn spliceNestedText(ctx: *ParseCtx, r: Range) Error!Range {
+    var work = r;
+    while (true) {
+        const base: usize = @as(usize, work.start);
+        var found: ?struct { at: usize, end: usize } = null;
+        var k: usize = 0;
+        while (k < work.len) : (k += 1) {
+            const tk = ctx.toks[base + k];
+            if (tk.kind == .ctrl and tokNameEq(tk.name, "text") and k + 1 < work.len and
+                ctx.toks[base + k + 1].kind == .lbrace)
+            {
+                var d: usize = 1;
+                var e = k + 2;
+                while (e < work.len and d > 0) : (e += 1) {
+                    const tk2 = ctx.toks[base + e];
+                    if (tk2.kind == .lbrace) d += 1 else if (tk2.kind == .rbrace) d -= 1;
+                }
+                if (d == 0) {
+                    found = .{ .at = k, .end = e };
+                    break;
+                }
+            }
+        }
+        const f = found orelse return work;
+        // The splice drops exactly the wrapper (`\text`, `{`, `}`)
+        // and keeps the inner tokens.
+        const inner_len = f.end - (f.at + 2) - 1;
+        const rest = work.len - 3;
+        const out = try ctx.allocToks(rest);
+        const ob: usize = out;
+        @memcpy(ctx.toks[ob .. ob + f.at], ctx.toks[base .. base + f.at]);
+        @memcpy(ctx.toks[ob + f.at .. ob + f.at + inner_len], ctx.toks[base + f.at + 2 .. base + f.end - 1]);
+        @memcpy(ctx.toks[ob + f.at + inner_len .. ob + rest], ctx.toks[base + f.end .. base + work.len]);
+        work = .{ .start = out, .len = @intCast(rest) };
+    }
+}
+
+/// Index of the first `\tag` control token in a captured text
+/// range, at any depth (KaTeX hoists `\tag` from text bodies even
+/// nested in braces — pinned 0.18.7 probes, issue #75).
+fn findTextTag(ctx: *ParseCtx, r: Range) ?usize {
+    var k: usize = 0;
+    while (k < r.len) : (k += 1) {
+        const tk = ctx.toks[@as(usize, r.start) + k];
+        if (tk.kind == .ctrl and tokNameEq(tk.name, "tag")) return k;
+    }
+    return null;
+}
+
+/// Hoist one `\tag` out of a captured text range: push its tokens
+/// back and run the real `parseTag` (identical star/bare/braced
+/// semantics, including "Multiple \tag"), returning the range with
+/// the construct excised. `ti` indexes the `\tag` token.
+fn hoistTextTag(ctx: *ParseCtx, r: Range, ti: usize) Error!Range {
+    const base: usize = @as(usize, r.start);
+    var j = ti + 1;
+    // Optional star immediately after (parseTag peeks, no skipping).
+    if (j < r.len and ctx.toks[base + j].kind == .char and ctx.toks[base + j].cp == '*') j += 1;
+    // Argument end by parseBracedToks(false) rules: a braced group
+    // or exactly one token (captureArg takes a single token, never
+    // skipping spaces).
+    var end: usize = undefined;
+    if (j < r.len and ctx.toks[base + j].kind == .lbrace) {
+        var depth: usize = 1;
+        end = j + 1;
+        while (end < r.len and depth > 0) : (end += 1) {
+            const tk = ctx.toks[base + end];
+            if (tk.kind == .lbrace) depth += 1 else if (tk.kind == .rbrace) depth -= 1;
+        }
+        // Captured ranges are brace-balanced by construction.
+        if (depth > 0) return ctx.fail(ctx.toks[base + j].pos, "expected '}'");
+    } else {
+        if (j >= r.len) return ctx.fail(ctx.toks[base + ti].pos, "expected argument");
+        end = j + 1;
+    }
+    // Push the construct back minus `\tag` itself (parseTag takes
+    // the consumed control token and reads star/argument live).
+    var k = end;
+    while (k > ti + 1) {
+        k -= 1;
+        try ctx.push(ctx.toks[base + k]);
+    }
+    _ = try parseTag(ctx, ctx.toks[base + ti]);
+    const rest = r.len - (end - ti);
+    const out = try ctx.allocToks(rest);
+    const obase: usize = out;
+    @memcpy(ctx.toks[obase .. obase + ti], ctx.toks[base .. base + ti]);
+    @memcpy(ctx.toks[obase + ti .. obase + rest], ctx.toks[base + end .. base + r.len]);
+    return .{ .start = out, .len = @intCast(rest) };
+}
+
+/// One collected text-body piece: a literal token span (merged
+/// with adjacent spans) or a parsed node (math segment, nested
+/// group — both break merging, matching KaTeX's flat `mtext`
+/// runs).
+const TextPiece = union(enum) { span: Range, node: Idx };
+
+/// Build a text node from captured body tokens (issues #75/#81):
+/// `\tag` hoists from anywhere in the range (display) or rejects
+/// (inline), nested `\text{...}` groups recurse with their own `$`
+/// pairing, and `$` toggles math segments (KaTeX text-parser
+/// parity, pinned 0.18.7). Adjacent literal spans merge into one
+/// `.text` node (KaTeX renders nested text flat); math pieces parse
+/// as textstyle formulas. Empty bodies become an empty group (the
+/// bundle's `<mrow></mrow>`), and a single piece returns directly.
+fn parseTextBody(ctx: *ParseCtx, depth: u8, toks: Range, fam: FontFam) Error!Idx {
+    var work = toks;
+    while (findTextTag(ctx, work)) |ti| {
+        // Subset profile: `\tag` is a full-only name (the math-mode
+        // call site gates it); fail bare `Unsupported` like the
+        // subset gate, at the same contract.
+        if (comptime active_profile == .subset) return error.Unsupported;
+        work = try hoistTextTag(ctx, work, ti);
+    }
+    var pieces: [64]TextPiece = undefined;
+    var np: usize = 0;
+    try collectTextPieces(ctx, depth, work, fam, &pieces, &np);
+    // Materialize: validate literal spans, keep nodes as-is.
+    var out: [64]u16 = undefined;
+    var no: usize = 0;
+    for (pieces[0..np]) |p| {
+        switch (p) {
+            .span => |r| {
+                try checkTextToks(ctx, r);
+                if (no >= out.len) return error.NoSpace;
+                out[no] = try ctx.allocNode(.{ .text = .{ .toks = r, .fam = fam } });
+                no += 1;
+            },
+            .node => |id| {
+                if (no >= out.len) return error.NoSpace;
+                out[no] = id;
+                no += 1;
+            },
+        }
+    }
+    if (no == 0) return finishGroup(ctx, &.{});
+    if (no == 1) return out[0];
+    const row = try ctx.allocKids(no);
+    @memcpy(ctx.kids[row .. row + no], out[0..no]);
+    return ctx.allocNode(.{ .group = .{ .start = row, .len = @intCast(no) } });
+}
+
+/// Append a literal span, merging into a trailing span piece
+/// (KaTeX's flat `mtext` runs, pinned 0.18.7).
+fn pushTextSpan(ctx: *ParseCtx, pieces: *[64]TextPiece, np: *usize, span: Range) Error!void {
+    if (span.len == 0) return;
+    if (np.* > 0) {
+        switch (pieces.*[np.* - 1]) {
+            .span => |prev| {
+                const base: usize = @as(usize, prev.start);
+                const add: usize = @as(usize, span.start);
+                const total = prev.len + span.len;
+                const out = try ctx.allocToks(total);
+                const ob: usize = out;
+                @memcpy(ctx.toks[ob .. ob + prev.len], ctx.toks[base .. base + prev.len]);
+                @memcpy(ctx.toks[ob + prev.len .. ob + total], ctx.toks[add .. add + span.len]);
+                pieces.*[np.* - 1] = .{ .span = .{ .start = out, .len = @intCast(total) } };
+                return;
+            },
+            .node => {},
+        }
+    }
+    if (np.* >= pieces.len) return error.NoSpace;
+    pieces.*[np.*] = .{ .span = span };
+    np.* += 1;
+}
+
+/// Collect the pieces of a tag-free text range: `$` pairs outside
+/// control-led groups become math nodes; nested `\text{...}` groups
+/// recurse into the same list (their inner `$` stays scoped —
+/// pinned probes — while pure-text innards merge across); plain
+/// groups pair `$` across. Ranges reference the arena; callers copy
+/// when filtering.
+fn collectTextPieces(
+    ctx: *ParseCtx,
+    depth: u8,
+    work: Range,
+    fam: FontFam,
+    pieces: *[64]TextPiece,
+    np: *usize,
+) Error!void {
+    const base: usize = @as(usize, work.start);
+    var k: usize = 0;
+    var start: usize = 0;
+    // Flush the pending literal span [start, k) as one piece.
+    const flush = struct {
+        fn f(c: *ParseCtx, w: Range, from: usize, to: usize, ps: *[64]TextPiece, n: *usize) Error!void {
+            if (from == to) return;
+            const span = try stashToks(c, c.toks[@as(usize, w.start) + from .. @as(usize, w.start) + to]);
+            try pushTextSpan(c, ps, n, span);
+        }
+    }.f;
+    while (k < work.len) {
+        const tk = ctx.toks[base + k];
+        // An empty group unbound to a control token is an empty row
+        // (KaTeX `<mrow></mrow>` parity, issue #75 — e.g. the residue
+        // of a hoisted `\tag`); it breaks text merging, while
+        // non-empty groups stay transparent.
+        if (tk.kind == .lbrace and k + 1 < work.len and
+            ctx.toks[base + k + 1].kind == .rbrace and
+            (k == 0 or ctx.toks[base + k - 1].kind != .ctrl))
+        {
+            try flush(ctx, work, start, k, pieces, np);
+            if (np.* >= pieces.len) return error.NoSpace;
+            pieces.*[np.*] = .{ .node = try finishGroup(ctx, &.{}) };
+            np.* += 1;
+            k += 2;
+            start = k;
+            continue;
+        }
+        // A braced group bound to a control token is atomic: nested
+        // `\text{...}` recurses (same list, so merging still
+        // applies); any other stays literal for `checkTextToks`.
+        if (tk.kind == .ctrl and k + 1 < work.len and ctx.toks[base + k + 1].kind == .lbrace) {
+            var d: usize = 1;
+            var e = k + 2;
+            while (e < work.len and d > 0) : (e += 1) {
+                const tk2 = ctx.toks[base + e];
+                if (tk2.kind == .lbrace) d += 1 else if (tk2.kind == .rbrace) d -= 1;
+            }
+            if (d > 0) return ctx.fail(tk.pos, "expected '}'");
+            if (tokNameEq(tk.name, "text")) {
+                // A nested `\text{...}` is its own unit: pure-text
+                // innards splice their tokens for cross-boundary
+                // merging (the bundle's flat `mtext`); anything with
+                // math stays an opaque node (pinned 0.18.7 probes).
+                try flush(ctx, work, start, k, pieces, np);
+                const inner = try stashToks(ctx, ctx.toks[base + k + 2 .. base + e - 1]);
+                const sub = try parseTextBody(ctx, depth, inner, fam);
+                switch (ctx.nodes[sub]) {
+                    .text => |st| try pushTextSpan(ctx, pieces, np, st.toks),
+                    else => {
+                        if (np.* >= pieces.len) return error.NoSpace;
+                        pieces.*[np.*] = .{ .node = sub };
+                        np.* += 1;
+                    },
+                }
+                k = e;
+                start = e;
+                continue;
+            }
+            k = e;
+            continue;
+        }
+        if (tk.kind == .char and tk.cp == '$') {
+            var e = k + 1;
+            var found = false;
+            while (e < work.len) : (e += 1) {
+                const tk2 = ctx.toks[base + e];
+                if (tk2.kind == .ctrl and e + 1 < work.len and ctx.toks[base + e + 1].kind == .lbrace) {
+                    var d: usize = 1;
+                    e += 2;
+                    while (e < work.len and d > 0) : (e += 1) {
+                        const tk3 = ctx.toks[base + e];
+                        if (tk3.kind == .lbrace) d += 1 else if (tk3.kind == .rbrace) d -= 1;
+                    }
+                    e -= 1;
+                    continue;
+                }
+                if (tk2.kind == .char and tk2.cp == '$') {
+                    found = true;
+                    break;
+                }
+            }
+            // An unclosed `$` rejects (KaTeX "Expected '$'"; the
+            // position gap rides a `katex_only` row, issue #81).
+            if (!found) return ctx.fail(tk.pos, "expected '$'");
+            try flush(ctx, work, start, k, pieces, np);
+            const seg = try stashToks(ctx, ctx.toks[base + k + 1 .. base + e]);
+            const math = try parseTokenRange(ctx, depth, seg);
+            if (np.* >= pieces.len) return error.NoSpace;
+            pieces.*[np.*] = .{ .node = try ctx.allocNode(.{ .style = .{ .style = .T, .body = math } }) };
+            np.* += 1;
+            k = e + 1;
+            start = k;
+            continue;
+        }
+        k += 1;
+    }
+    try flush(ctx, work, start, work.len, pieces, np);
+}
+
 fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     const l = try ctx.captureArg();
     const r = try ctx.captureArg();
@@ -5060,6 +5388,17 @@ fn isBuiltin(name: []const u8) bool {
 // Environments
 // ---------------------------------------------------------------------------
 
+/// Envs whose MathML table owns equation-number columns (shared
+/// with `mathml.zig` and the `.numbered` computation below): only
+/// these adopt a pending tag into a row. `split`, `CD`, and the
+/// matrix family leave it pending (pinned 0.18.7, issue #75).
+pub fn numEnvKind(kind: EnvKind) bool {
+    return switch (kind) {
+        .alignenv, .alignat, .equation, .gather => true,
+        else => false,
+    };
+}
+
 fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     // Environment name: `{matrix}` — letter chars.
     const lb = try ctx.next();
@@ -5251,6 +5590,8 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     // a nested env neither inherits nor leaks the outer row's flag.
     const saved_nonumber = ctx.row_nonumber;
     ctx.row_nonumber = false;
+    const saved_tagged = ctx.row_tagged;
+    ctx.row_tagged = false;
     // Row spans are stashed locally and materialized densely at the
     // end: nested environments allocate pool rows while cells parse,
     // so the pool is not contiguous mid-parse.
@@ -5323,7 +5664,12 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
                 if (nspans >= 64) return error.NoSpace;
                 spans[nspans] = try stashRow(ctx, rowbuf[0..nrowbuf]);
                 spans[nspans].nonumber = ctx.row_nonumber;
+                spans[nspans].tagged = ctx.row_tagged;
+                if (ctx.row_tagged and numEnvKind(kind)) ctx.tag_adopted = true;
                 ctx.row_nonumber = false;
+                // Numbering rows consume a pending tag; other envs
+                // let it leak to the enclosing row (issue #75).
+                if (numEnvKind(kind)) ctx.row_tagged = false;
                 nspans += 1;
                 nrowbuf = 0;
             },
@@ -5350,7 +5696,11 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
                     if (nspans >= 64) return error.NoSpace;
                     spans[nspans] = try stashRow(ctx, rowbuf[0..nrowbuf]);
                     spans[nspans].nonumber = ctx.row_nonumber;
+                    spans[nspans].tagged = ctx.row_tagged;
+                    if (ctx.row_tagged and numEnvKind(kind)) ctx.tag_adopted = true;
                     ctx.row_nonumber = false;
+                    // Numbering rows consume a pending tag (see above).
+                    if (numEnvKind(kind)) ctx.row_tagged = false;
                     nspans += 1;
                     nrowbuf = 0;
                 }
@@ -5358,8 +5708,24 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
             },
         }
     }
+    // A tag seen before begin (a leading outside-tag) belongs to
+    // row 0 when no row inside claimed one; a trailing outside-tag
+    // arrives after this point and marks nothing (pinned 0.18.7,
+    // issue #75).
+    if (saved_tagged) {
+        var any_tagged = false;
+        for (spans[0..nspans]) |s| any_tagged = any_tagged or s.tagged;
+        if (!any_tagged and nspans > 0) {
+            spans[0].tagged = true;
+            if (numEnvKind(kind)) ctx.tag_adopted = true;
+        }
+    }
     ctx.in_env -= 1;
     ctx.row_nonumber = saved_nonumber;
+    // A tag seen inside a non-numbering env stays pending for the
+    // enclosing row (textual containment, issue #75); numbering rows
+    // consume it when they close, so OR (never clear) here.
+    ctx.row_tagged = saved_tagged or ctx.row_tagged;
     if (kind == .cd) {
         // amscd assembly (KaTeX `parseCD` parity, issue #85):
         // `&` never separates CD columns (the generic loop above
@@ -5388,10 +5754,7 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         .spec_len = @intCast(nspec),
         // Unstarred top-level display envs keep KaTeX's leading
         // number/glue column (issues #83/#86/#87).
-        .numbered = switch (kind) {
-            .alignenv, .alignat, .equation, .gather => !display_star,
-            else => false,
-        },
+        .numbered = numEnvKind(kind) and !display_star,
     } });
     // Delimiter pairing for matrix variants. `cases` is a leftright
     // with a null right delimiter (KaTeX parity: no trailing mo).
@@ -5602,6 +5965,7 @@ fn assembleCDRow(ctx: *ParseCtx, span: Row, odd: bool, pos: u32) Error!Row {
     }
     var row = try stashRow(ctx, out[0..nout]);
     row.nonumber = span.nonumber;
+    row.tagged = span.tagged;
     return row;
 }
 
@@ -5729,6 +6093,11 @@ test "tag hoists to the equation root in display mode" {
     var ctx6 = ParseCtx.init("\\tag{1}\\tag{2}x");
     try std.testing.expectError(error.Invalid, parse(&ctx6, true));
     try std.testing.expectEqualStrings("Multiple \\tag", ctx6.err_msg);
+    // A nested tag reports "Multiple \tag" too (never a text-mode
+    // error), at the inner tag (issue #75).
+    var ctx6b = ParseCtx.init("\\tag{a\\tag{b}}x");
+    try std.testing.expectError(error.Invalid, parse(&ctx6b, true));
+    try std.testing.expectEqualStrings("Multiple \\tag", ctx6b.err_msg);
     // A user `\tag` macro shadows the builtin (expansion precedes
     // the tag arm, like every other builtin).
     var ctx7 = ParseCtx.init("\\renewcommand{\\tag}{X}\\tag");
@@ -5870,6 +6239,32 @@ test "matrix ampersands and newlines split cells" {
         },
         else => return error.TestUnexpectedResult,
     }
+}
+
+test "newline breaks env rows, stays mspace in running math (issue #79)" {
+    // Pinned KaTeX 0.18.7: `\newline` is a row separator inside env
+    // cells (like `\\`), but a content node (mspace) in running math.
+    var ctx = ParseCtx.init("\\begin{matrix}a\\newline b\\end{matrix}");
+    const root = try parse(&ctx, false);
+    const env_id = switch (ctx.nodes[root]) {
+        .group => |g| ctx.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx.nodes[env_id]) {
+        .env => |e| try std.testing.expectEqual(@as(u16, 2), e.rows_len),
+        else => return error.TestUnexpectedResult,
+    }
+    var ctx2 = ParseCtx.init("a\\newline b");
+    const root2 = try parse(&ctx2, false);
+    const g2 = switch (ctx2.nodes[root2]) {
+        .group => |g| g,
+        else => return error.TestUnexpectedResult,
+    };
+    var saw_newline = false;
+    for (ctx2.kids[g2.start .. g2.start + g2.len]) |k| {
+        if (ctx2.nodes[k] == .newline) saw_newline = true;
+    }
+    try std.testing.expect(saw_newline);
 }
 
 test "verb scans to delimiter as monospace text" {
@@ -6256,6 +6651,116 @@ test "nonumber and notag are inert no-ops (issue #88)" {
     }
 }
 
+test "row-local tag wins over nonumber, cross-row tag does not (issue #75)" {
+    // Same row `\tag` + `\nonumber` (either order): KaTeX keeps the
+    // row's number columns — the tag hoists before `\@eqnsw` drops
+    // them (probed 0.18.7). A tag in a *different* row is no rescue.
+    for ([_][]const u8{
+        "\\begin{align}x&=1\\tag{a}\\nonumber\\end{align}",
+        "\\begin{align}x&=1\\nonumber\\tag{a}\\end{align}",
+    }) |src| {
+        var ctx = ParseCtx.init(src);
+        const root = try parse(&ctx, true);
+        // `\tag` wraps the root: unwrap `.tag` → group → env.
+        const inner = switch (ctx.nodes[root]) {
+            .tag => |t| t.formula,
+            else => return error.TestUnexpectedResult,
+        };
+        const re = switch (ctx.nodes[inner]) {
+            .group => |g| ctx.kids[g.start],
+            else => return error.TestUnexpectedResult,
+        };
+        switch (ctx.nodes[re]) {
+            .env => |e| {
+                const rows = rowsOf(&ctx, e.rows_start, e.rows_len);
+                try std.testing.expectEqual(@as(u16, 1), e.rows_len);
+                try std.testing.expect(rows[0].nonumber);
+                try std.testing.expect(rows[0].tagged);
+            },
+            else => return error.TestUnexpectedResult,
+        }
+    }
+    // Leading outside-tag lands on row 0 (even starred), a
+    // trailing outside-tag marks nothing (pinned 0.18.7).
+    const lead_cases = [_]struct { src: []const u8, r0: bool, r1: bool }{
+        .{ .src = "\\tag{a}\\begin{align*}x&=1\\\\y&=2\\end{align*}", .r0 = true, .r1 = false },
+        .{ .src = "\\begin{align*}x&=1\\\\y&=2\\end{align*}\\tag{a}", .r0 = false, .r1 = false },
+        .{ .src = "\\tag{a}\\begin{align*}x&=1\\nonumber\\\\y&=2\\end{align*}", .r0 = true, .r1 = false },
+        .{ .src = "\\begin{align*}x&=1\\tag{a}\\\\y&=2\\end{align*}", .r0 = true, .r1 = false },
+        .{ .src = "\\begin{align*}x&=1\\\\y&=2\\tag{a}\\end{align*}", .r0 = false, .r1 = true },
+    };
+    for (lead_cases) |lc| {
+        var ctx = ParseCtx.init(lc.src);
+        const root = try parse(&ctx, true);
+        const inner = switch (ctx.nodes[root]) {
+            .tag => |t| t.formula,
+            else => return error.TestUnexpectedResult,
+        };
+        const re = switch (ctx.nodes[inner]) {
+            .group => |g| ctx.kids[g.start],
+            else => return error.TestUnexpectedResult,
+        };
+        switch (ctx.nodes[re]) {
+            .env => |e| {
+                const rows = rowsOf(&ctx, e.rows_start, e.rows_len);
+                try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+                try std.testing.expectEqual(lc.r0, rows[0].tagged);
+                try std.testing.expectEqual(lc.r1, rows[1].tagged);
+            },
+            else => return error.TestUnexpectedResult,
+        }
+    }
+    // A tag nested in a matrix cell still belongs to the enclosing
+    // numbering row (textual containment, pinned 0.18.7), and the
+    // env adopts it (tag text dropped, number columns kept).
+    var ctxn = ParseCtx.init("\\begin{align*}\\begin{matrix}\\tag{a}x\\end{matrix}&=1\\\\y&=2\\end{align*}");
+    const rn = try parse(&ctxn, true);
+    try std.testing.expect(ctxn.tag_adopted);
+    const innern = switch (ctxn.nodes[rn]) {
+        .tag => |t| t.formula,
+        else => return error.TestUnexpectedResult,
+    };
+    const en = switch (ctxn.nodes[innern]) {
+        .group => |g| ctxn.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctxn.nodes[en]) {
+        .env => |e| {
+            const rows = rowsOf(&ctxn, e.rows_start, e.rows_len);
+            try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+            try std.testing.expect(rows[0].tagged);
+            try std.testing.expect(!rows[1].tagged);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // A trailing outside-tag is never adopted.
+    var ctxt = ParseCtx.init("\\begin{align*}x&=1\\\\y&=2\\end{align*}\\tag{a}");
+    _ = try parse(&ctxt, true);
+    try std.testing.expect(!ctxt.tag_adopted);
+    // Tag in row 0, `\nonumber` in row 1: row 1 stays bare.
+    var ctx2 = ParseCtx.init("\\begin{align}x&=1\\tag{a}\\\\y&=2\\nonumber\\end{align}");
+    const r2 = try parse(&ctx2, true);
+    const inner2 = switch (ctx2.nodes[r2]) {
+        .tag => |t| t.formula,
+        else => return error.TestUnexpectedResult,
+    };
+    const e2 = switch (ctx2.nodes[inner2]) {
+        .group => |g| ctx2.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx2.nodes[e2]) {
+        .env => |e| {
+            const rows = rowsOf(&ctx2, e.rows_start, e.rows_len);
+            try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+            try std.testing.expect(rows[0].tagged);
+            try std.testing.expect(!rows[0].nonumber);
+            try std.testing.expect(rows[1].nonumber);
+            try std.testing.expect(!rows[1].tagged);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+}
+
 test "Set Braket braket expand per KaTeX (issues #84/#89)" {
     const ok_cases = [_][]const u8{
         "\\braket{\\phi|\\psi}",
@@ -6288,3 +6793,38 @@ test "Set Braket braket expand per KaTeX (issues #84/#89)" {
         else => return error.TestUnexpectedResult,
     }
 }
+
+test "text bodies hoist tag, nest, and shift math (issues #75/#81)" {
+    // Pinned KaTeX 0.18.7: `\tag` hoists from text bodies (even
+    // nested in braces), nested `\text` merges flat, and `$`
+    // toggles math segments.
+    const ok_cases = [_][]const u8{
+        "\\text{\\tag{1}}x",
+        "\\tag{\\text{a}}x",
+        "\\text{a\\tag{1}}x",
+        "\\text{a\\tag 1x}",
+        "\\text{a{\\tag{1}}b}x",
+        "\\text{a$b$c}",
+        "\\text{\\text{a}}",
+        "\\text{x\\text{ab}c}",
+        "\\text{x\\text{a$b$}c}",
+        "\\textbf{a\\tag{1}}x",
+    };
+    for (ok_cases) |src| {
+        var ctx = ParseCtx.init(src);
+        _ = try parse(&ctx, true);
+    }
+    // `\tag` hoisted means set (and the text keeps the rest).
+    var ctx = ParseCtx.init("\\text{a\\tag{1}}x");
+    _ = try parse(&ctx, true);
+    try std.testing.expect(ctx.tag_body != NONE);
+    // Inline `\tag`-in-text still rejects like the bundle.
+    var ctxi = ParseCtx.init("\\text{a\\tag{1}}x");
+    try std.testing.expectError(error.Invalid, parse(&ctxi, false));
+    try std.testing.expectEqualStrings("\\tag works only in display equations", ctxi.err_msg);
+    // Unclosed `$` rejects (position gap rides `katex_only`).
+    var ctxu = ParseCtx.init("\\text{a$b}");
+    try std.testing.expectError(error.Invalid, parse(&ctxu, false));
+}
+
+
