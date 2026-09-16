@@ -324,6 +324,48 @@
   "expect": "accept"
  },
  {
+  "id": "operatorname-star-limits",
+  "tex": "\\operatorname*{lim}\\limits_{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star-limits-both",
+  "tex": "\\operatorname*{lim}\\limits_{x}^{n}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star-limits-sup",
+  "tex": "\\operatorname*{lim}\\limits^{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star-limits-display",
+  "tex": "\\operatorname*{lim}\\limits_{x}^{n}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-withlimits-limits",
+  "tex": "\\operatornamewithlimits{lim}\\limits_{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-plain-limits",
+  "tex": "\\operatorname{lim}\\limits_{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sum-limits-both-text",
+  "tex": "\\sum\\limits_{i}^{n}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "leftright",
   "tex": "\\left(\\frac12\\right)",
   "display": false,

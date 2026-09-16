@@ -33,6 +33,10 @@ pub const OpDesc = struct {
     func: bool,
     limits: LimitsMode,
     lim_def: bool,
+    /// Explicit `\limits` on a star-armed `\operatorname` forces
+    /// stacking in every style — even text style with both scripts,
+    /// where forced symbols stay side-set (KaTeX 0.18.7, issue #98).
+    force_stack: bool = false,
 };
 
 /// See through transparent wrappers to the operator beneath.
@@ -62,16 +66,29 @@ pub fn opBase(ctx: *const ParseCtx, id: Idx) ?OpDesc {
                 cur = c.body;
             },
             // A word operator stacks display scripts only for the
-            // star form (`\operatorname*`, `\operatornamewithlimits`):
-            // explicit `\limits` after `\operatorname` parses but is
-            // inert (KaTeX 0.18.7 placement matrix), so only the
-            // star-set flag feeds the default.
-            .opname => |o| return .{
-                .cp = 0,
-                .large = false,
-                .func = true,
-                .limits = .auto,
-                .lim_def = o.limits == .on,
+            // star form (`\operatorname*`, `\operatornamewithlimits`),
+            // and an explicit `\limits` on an armed name forces
+            // stacking in every style (KaTeX 0.18.7 placement matrix,
+            // issue #98). Explicit `\limits` after a PLAIN name stays
+            // inert (side-set in both styles), and armed stacking
+            // never leaks to symbols (`\sum\limits`, `\lim\limits`
+            // keep both scripts side-set in text style).
+            .opname => |o| {
+                if (o.forced) return .{
+                    .cp = 0,
+                    .large = false,
+                    .func = true,
+                    .limits = .on,
+                    .lim_def = true,
+                    .force_stack = true,
+                };
+                return .{
+                    .cp = 0,
+                    .large = false,
+                    .func = true,
+                    .limits = .auto,
+                    .lim_def = o.limits == .on,
+                };
             },
             // Built-limit operators stack like the star form (their
             // KaTeX source is `\operatorname*{...}`).
@@ -513,6 +530,9 @@ pub const Node = union(enum) {
     opname: struct {
         toks: Range,
         limits: LimitsMode,
+        /// Explicit `\limits` after a star-armed name (`*`,
+        /// `withlimits`): stacking in every style (issue #98).
+        forced: bool = false,
     },
     /// Limit operator with a built body (`\varinjlim` and family,
     /// KaTeX `macros.js`: `\operatorname*` over an under/over
@@ -1431,12 +1451,16 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool) Err
                         .classwrap => |*c| if (c.class == .Op) {
                             c.limits = if (isName(t, "limits")) .on else .off;
                         } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
-                        // Explicit `\limits`/`\nolimits` after a word
-                        // operator parses but never moves scripts
-                        // (KaTeX 0.18.7: only the star stacks).
+                        // Explicit `\limits` after a star-armed word
+                        // operator arms forced stacking in every style
+                        // (KaTeX 0.18.7, issue #98); after a plain
+                        // name it stays inert (side-set in both
+                        // styles), as does `\nolimits` everywhere.
                         // Built-limit operators are already
                         // star-like (their `opBase` stacks).
-                        .opname => {},
+                        .opname => |*o| if (isName(t, "limits") and o.limits == .on) {
+                            o.forced = true;
+                        },
                         .varlim => {},
                         else => return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                     }
@@ -2018,12 +2042,16 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                         .classwrap => |*c| if (c.class == .Op) {
                             c.limits = if (isName(t, "limits")) .on else .off;
                         } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
-                        // Explicit `\limits`/`\nolimits` after a word
-                        // operator parses but never moves scripts
-                        // (KaTeX 0.18.7: only the star stacks).
+                        // Explicit `\limits` after a star-armed word
+                        // operator arms forced stacking in every style
+                        // (KaTeX 0.18.7, issue #98); after a plain
+                        // name it stays inert (side-set in both
+                        // styles), as does `\nolimits` everywhere.
                         // Built-limit operators are already
                         // star-like (their `opBase` stacks).
-                        .opname => {},
+                        .opname => |*o| if (isName(t, "limits") and o.limits == .on) {
+                            o.forced = true;
+                        },
                         .varlim => {},
                         else => return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                     }

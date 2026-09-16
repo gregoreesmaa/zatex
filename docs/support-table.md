@@ -23,6 +23,16 @@ but support requires the mhchem contrib extension — the pinned core
 bundle rejects both (`Undefined control sequence`), so this table
 (and the engine) honestly report `unsup` with reject-row evidence.
 Extension support is future work.
+Scoping decision (issue #98): `\htmlClass`, `\htmlData`, `\htmlId`,
+`\htmlStyle` stay `accept` as transparent wrappers — the HTML span
+annotation has no native-layout meaning, and KaTeX's own MathML output
+drops it too (sweep t-html* rows agree tag-for-tag with the bare body).
+`\includegraphics` stays `accept`: MathML emits the `<mglyph>` element
+KaTeX emits (sweep graphics-* rows agree; representative shapes pinned
+byte-exact in `qa` goldens) while layout reserves the metric box for
+the host to paint — image loading stays out of the core per the
+zero-dependency tenet, so PNG renders show the reserved space, never
+fetched pixels. Neither row claims pixels the core cannot produce.
 
 ## Symbols
 
@@ -1510,11 +1520,11 @@ Extension support is future work.
 
 | `\ominus` | accept | goldens: sym-gal-6 |
 
-| `\operatorname` | accept | goldens: operatorname, operatorname-star |
+| `\operatorname` | accept | goldens: operatorname, operatorname-star, operatorname-plain-limits |
 
-| `\operatorname*` | accept | goldens: operatorname, limits-force, operatorname-star |
+| `\operatorname*` | accept | goldens: operatorname, limits-force, operatorname-star, operatorname-star-limits |
 
-| `\operatornamewithlimits` | accept | goldens: limits-force |
+| `\operatornamewithlimits` | accept | goldens: limits-force, operatorname-withlimits-limits |
 
 | `\oplus` | accept | goldens: sym-gal-6 |
 
@@ -1946,7 +1956,7 @@ Extension support is future work.
 
 | `\succsim` | accept | goldens: sym-succsim |
 
-| `\sum` | accept | goldens: sum, demo-cauchy, demo-sumsq, atomgrid, flite-series |
+| `\sum` | accept | goldens: sum, demo-cauchy, demo-sumsq, atomgrid, flite-series, sum-limits-both-text |
 
 | `\sup` | accept | goldens: sym-gal-8 |
 

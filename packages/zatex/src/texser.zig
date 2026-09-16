@@ -395,6 +395,9 @@ const Walker = struct {
                 try self.put("{");
                 try self.textToks(parse.toksOf(self.ctx, o.toks));
                 try self.put("}");
+                // Forced stacking re-emits its marker: without it the
+                // scripts would re-parse side-set (issue #98).
+                if (o.forced) try self.cmd("limits");
             },
             .varlim => |v| {
                 // The body is always the built under/over; the
@@ -1085,6 +1088,7 @@ test "serializer: round-trip keeps MathML identical" {
         "\\mathop{x}_{y}",
         "\\mathop{x}\\limits_{y}",
         "\\mathop{x}\\nolimits_{y}",
+        "\\operatorname*{asin}\\limits_y",
         "\\mathrel{x}",
         "\\mathinner{x}",
         "\\varinjlim x",

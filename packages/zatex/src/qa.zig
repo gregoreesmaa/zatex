@@ -2360,6 +2360,52 @@ test "qa85 reflectbox mirrors ink about the box center (issue #97)" {
     }
 }
 
+test "qa86 operatorname forced limits stack in every style (issue #98)" {
+    // KaTeX parity (pinned 0.18.7 placement matrix): a star-armed
+    // `\operatorname` (`*`, `withlimits`) with explicit `\limits`
+    // stacks in every style — even text style with both scripts,
+    // where forced symbols stay side-set. Explicit `\limits` after
+    // a PLAIN name stays inert.
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\operatorname*{lim}\\limits_{x}", .{}, &buf);
+    try expectGolden("operatorname-star-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></munder></mrow></math>", got);
+    var buf2: [4096]u8 = undefined;
+    const got2 = try zatex.mathml("\\operatorname*{lim}\\limits_{x}^{n}", .{}, &buf2);
+    try expectGolden("operatorname-star-limits-both", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munderover><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi><mi>n</mi></munderover></mrow></math>", got2);
+    var buf3: [4096]u8 = undefined;
+    const got3 = try zatex.mathml("\\operatorname*{lim}\\limits^{x}", .{}, &buf3);
+    try expectGolden("operatorname-star-limits-sup", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></mover></mrow></math>", got3);
+    // Guards: unforced star stays side-set inline, stacks in display;
+    // plain names ignore explicit limits; forced symbols stay
+    // side-set for both scripts inline.
+    var buf4: [4096]u8 = undefined;
+    const got4 = try zatex.mathml("\\operatorname*{lim}_{x}", .{}, &buf4);
+    try expectGolden("operatorname-star-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></msub></mrow></math>", got4);
+    var buf5: [4096]u8 = undefined;
+    const got5 = try zatex.mathml("\\operatorname{lim}\\limits_{x}", .{}, &buf5);
+    try expectGolden("operatorname-plain-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></msub></mrow></math>", got5);
+    var buf6: [4096]u8 = undefined;
+    const got6 = try zatex.mathml("\\sum\\limits_{i}^{n}", .{}, &buf6);
+    try expectGolden("sum-limits-both-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msubsup><mo>\u{2211}</mo><mi>i</mi><mi>n</mi></msubsup></mrow></math>", got6);
+    var buf7: [4096]u8 = undefined;
+    const got7 = try zatex.mathml("\\operatornamewithlimits{lim}\\limits_{x}", .{}, &buf7);
+    try expectGolden("operatorname-withlimits-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></munder></mrow></math>", got7);
+    // Layout: forced-inline stacks exactly like star-display (same
+    // limits box either way), while unforced star-inline stays side.
+    var b1: B = .{};
+    const f = try lay("\\operatorname*{lim}\\limits_{x}", false, &b1);
+    var b2: B = .{};
+    const d = try lay("\\operatorname*{lim}_{x}", true, &b2);
+    try std.testing.expectEqual(d.width, f.width);
+    try std.testing.expectEqual(d.height_above, f.height_above);
+    try std.testing.expectEqual(d.depth_below, f.depth_below);
+    try std.testing.expectEqual(d.runs.len, f.runs.len);
+    var b3: B = .{};
+    const s = try lay("\\operatorname*{lim}_{x}", false, &b3);
+    try std.testing.expect(s.depth_below < f.depth_below);
+    try std.testing.expect(s.width > f.width);
+}
+
 
 
 

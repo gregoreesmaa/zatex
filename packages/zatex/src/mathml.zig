@@ -889,12 +889,14 @@ const Writer = struct {
                 // KaTeX parity (pinned 0.18.7 `supsub.ts` mathmlBuilder):
                 // with both scripts present, `munderover` needs display
                 // style even for forced `\limits` (`\int\limits_0^1` in
-                // text is `msubsup` in MathML while the HTML stacks);
+                // text is `msubsup` in MathML while the HTML stacks) —
+                // except a star-armed `\operatorname` with explicit
+                // `\limits`, which stacks in every style (issue #98);
                 // single scripts follow the shared limit decision.
                 const stacked = if (parse.opBase(self.pc, s.base)) |o| blk: {
                     if (has_sup and has_sub) {
-                        break :blk self.style.isDisplay() and o.limits != .off and
-                            (o.limits == .on or o.lim_def);
+                        break :blk (self.style.isDisplay() and o.limits != .off and
+                            (o.limits == .on or o.lim_def)) or o.force_stack;
                     }
                     break :blk parse.useLimits(self.style, o);
                 } else false;

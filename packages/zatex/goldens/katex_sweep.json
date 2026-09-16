@@ -542,6 +542,76 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>n</mi></msub><msub><mi>x</mi><mi>n</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}_{n} x_n</annotation></semantics></math>"
   },
   {
+   "id": "operatorname-star-limits",
+   "tex": "\\operatorname*{lim}\\limits_{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munder><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>x</mi></munder></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}\\limits_{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "operatorname-star-limits-both",
+   "tex": "\\operatorname*{lim}\\limits_{x}^{n}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munderover><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>x</mi><mi>n</mi></munderover></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}\\limits_{x}^{n}</annotation></semantics></math>"
+  },
+  {
+   "id": "operatorname-star-limits-sup",
+   "tex": "\\operatorname*{lim}\\limits^{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>x</mi></mover></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}\\limits^{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "operatorname-star-limits-display",
+   "tex": "\\operatorname*{lim}\\limits_{x}^{n}",
+   "display": true,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><munderover><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>x</mi><mi>n</mi></munderover></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}\\limits_{x}^{n}</annotation></semantics></math>"
+  },
+  {
+   "id": "operatorname-withlimits-limits",
+   "tex": "\\operatornamewithlimits{lim}\\limits_{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munder><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>x</mi></munder></mrow><annotation encoding=\"application/x-tex\">\\operatornamewithlimits{lim}\\limits_{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "operatorname-plain-limits",
+   "tex": "\\operatorname{lim}\\limits_{x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi mathvariant=\"normal\">lim</mi><mo>⁡</mo></mrow><mi>x</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\operatorname{lim}\\limits_{x}</annotation></semantics></math>"
+  },
+  {
+   "id": "sum-limits-both-text",
+   "tex": "\\sum\\limits_{i}^{n}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>∑</mo><mi>i</mi><mi>n</mi></msubsup></mrow><annotation encoding=\"application/x-tex\">\\sum\\limits_{i}^{n}</annotation></semantics></math>"
+  },
+  {
    "id": "leftright",
    "tex": "\\left(\\frac12\\right)",
    "display": false,
