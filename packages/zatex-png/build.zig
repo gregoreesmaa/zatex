@@ -83,7 +83,31 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    const mod_tests = b.addTest(.{ .root_module = mod });
+    // Portable-CLI unit tests (main.zig root): separate module from the
+    // exe's `mod` so Apple test binaries can link the system frameworks
+    // the exe itself must NOT take (macOS/iOS + software stays libc-only
+    // so cross-compiles link without an SDK). Needed whatever `-Dbackend`
+    // selects: the import chain always reaches sw_backend.zig, whose
+    // CoreText cross-check test emits CoreGraphics symbols on Apple
+    // hosts (same rule as sw_mod/nmod).
+    const mod_test_mod = b.addModule("zatex_png_mod_tests", .{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    mod_test_mod.addOptions("build_options", opts);
+    mod_test_mod.addImport("zatex", zatex_dep.module("zatex"));
+    mod_test_mod.addImport("otmath", zatex_dep.module("otmath"));
+    mod_test_mod.addImport("fontstack", zatex_dep.module("fontstack"));
+    if (apple) {
+        mod_test_mod.linkFramework("CoreGraphics", .{});
+        mod_test_mod.linkFramework("CoreText", .{});
+        mod_test_mod.linkFramework("ImageIO", .{});
+        mod_test_mod.linkFramework("CoreFoundation", .{});
+    }
+    if (backend_is_win_native) mod_test_mod.linkSystemLibrary("gdi32", .{});
+    const mod_tests = b.addTest(.{ .root_module = mod_test_mod });
     const run_mod_tests = b.addRunArtifact(mod_tests);
     const test_step = b.step("test", "Run tests (pure logic; rendering is exercised via the CLI)");
     test_step.dependOn(&run_mod_tests.step);

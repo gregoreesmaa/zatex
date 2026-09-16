@@ -252,8 +252,12 @@ test "software extents agree with CoreText ink boxes" {
     // any systematic disagreement here shifts LAYOUT, not just pixels,
     // so investigate rather than tolerate. Skipped off-mac; the
     // dimension-equality corpus re-render covers determinism there.
-    // The cg import lives inside the comptime branch so foreign test
-    // binaries never reference CoreText symbols.
+    // The cg import lives inside the comptime branch so this test
+    // compiles off-Apple, but on Apple hosts the branch IS taken: the
+    // body is emitted in every test binary whose import chain reaches
+    // this file, so every such binary must link the Apple frameworks
+    // (see build.zig: the mod/sw/nmod test modules link them on Apple
+    // whatever -Dbackend selects).
     if (comptime @import("builtin").os.tag != .macos) return error.SkipZigTest;
     if (comptime @import("builtin").os.tag == .macos) {
         const cg = @import("cg_backend.zig");

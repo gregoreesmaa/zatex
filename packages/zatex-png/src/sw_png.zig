@@ -81,7 +81,16 @@ test "png round-trips through a real decoder" {
         rgba[i * 4 + 2] = @intCast((i * 13 + 101) & 0xFF);
         rgba[i * 4 + 3] = 255;
     }
-    const path = "/tmp/sw_png_selftest.png";
+    // Unique scratch dir per run: the sw/win/linux test binaries all
+    // embed this test and `zig build test` runs them concurrently, so a
+    // fixed path races (one binary read an empty file another had just
+    // truncated). tmpDir's random sub_path is the uniqueness source;
+    // both ends anchor at the process CWD so the relative path below
+    // stays consistent wherever the runner executes us.
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var path_buf: [128]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, ".zig-cache/tmp/{s}/sw_png_selftest.png", .{tmp.sub_path});
     try writeRgba(alloc, path, w, h, rgba);
     // Decode independently (stdlib zlib + filter 0) and compare bytes.
     var threaded = std.Io.Threaded.init(alloc, .{});
