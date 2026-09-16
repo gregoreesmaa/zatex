@@ -559,6 +559,22 @@ fn baseY(l: zatex.ir.Layout, glyph: u16) !i32 {
     return error.TestUnexpectedResult;
 }
 
+/// Provider font id of the first run containing `glyph`.
+fn runFont(l: zatex.ir.Layout, glyph: u16) !u16 {
+    for (l.runs) |r| {
+        for (r.glyphs) |g| if (g == glyph) return r.font_id;
+    }
+    return error.TestUnexpectedResult;
+}
+
+/// Size units of the first run containing `glyph`.
+fn runSize(l: zatex.ir.Layout, glyph: u16) !u16 {
+    for (l.runs) |r| {
+        for (r.glyphs) |g| if (g == glyph) return r.size_units;
+    }
+    return error.TestUnexpectedResult;
+}
+
 test "qa43 lim stacks in display, sits aside in text" {
     // `\lim` is a default-limits word operator: same placement split.
     var bd: B = .{};
@@ -568,10 +584,12 @@ test "qa43 lim stacks in display, sits aside in text" {
     const y_base_d = try baseY(d, 108); // 'l' of "lim" (opname, roman)
     const y_sub_d = try baseY(d, 0xD465); // mathit 'x'
     try std.testing.expect(y_sub_d > y_base_d);
-    // Text mode: the subscript starts one 60mu gap past "lim" (1500 units).
+    // Text mode: the subscript starts at the "lim" edge with no gap —
+    // KaTeX leaves marginLeft null for non-symbol (word) bases, so the
+    // old 60mu script gap was KaTeX-untrue here (issue #101).
     const x_sub_t = try glyphX(t, 0xD465);
     const x_lim_t = try glyphX(t, 108);
-    try std.testing.expectEqual(x_lim_t + 1500 + 60, x_sub_t);
+    try std.testing.expectEqual(x_lim_t + 1500, x_sub_t);
     // Display mode centers the subscript under the word, not aside it.
     const x_sub_d = try glyphX(d, 0xD465);
     try std.testing.expect(x_sub_d < x_lim_t + 1500);
@@ -579,11 +597,12 @@ test "qa43 lim stacks in display, sits aside in text" {
 
 test "qa43 int scripts sit aside in both modes" {
     // Integrals never take limits (`lim_def = false`): side scripts in
-    // both modes; only the large-op sizing differs (1400 vs 1000).
+    // both modes; only the large-op face differs (size2 in display,
+    // size1 in text — both at the ambient size, never scaled).
     for ([_]bool{ false, true }) |display| {
         var b: B = .{};
         const l = try lay("\\int_{0}^{1} x", display, &b);
-        const base_w: i32 = if (display) 700 else 500;
+        const base_w: i32 = 500;
         const x_base = try glyphX(l, 8747);
         try std.testing.expectEqual(x_base + base_w + 60, try glyphX(l, 49));
         try std.testing.expectEqual(x_base + base_w + 60, try glyphX(l, 48));
@@ -592,7 +611,51 @@ test "qa43 int scripts sit aside in both modes" {
     var bt: B = .{};
     const d = try lay("\\int_{0}^{1} x", true, &bd);
     const t = try lay("\\int_{0}^{1} x", false, &bt);
-    try std.testing.expect(d.width > t.width);
+    // Same ambient size, same stub advance: only the face differs, so
+    // the stub boxes (and widths) coincide exactly (issue #101).
+    try std.testing.expectEqual(t.width, d.width);
+}
+
+test "qa101 display large ops use size2, text uses size1" {
+    // KaTeX (pinned 0.18.7 op builder): display symbol operators come
+    // from Size2-Regular, every other style from Size1-Regular — at
+    // the ambient size, never scaled. No scalar fits both (LM sum ink
+    // 1.0em needs 1.4x, LM integral ink 1.111em needs 2x), so the core
+    // routes faces instead of scaling (issue #101).
+    const size1: u16 = @intFromEnum(zatex.FontId.size1);
+    const size2: u16 = @intFromEnum(zatex.FontId.size2);
+    var bd: B = .{};
+    const d = try lay("\\sum", true, &bd);
+    try std.testing.expectEqual(size2, try runFont(d, 8721));
+    try std.testing.expectEqual(@as(u16, 1000), try runSize(d, 8721));
+    var bt: B = .{};
+    const t = try lay("\\sum", false, &bt);
+    try std.testing.expectEqual(size1, try runFont(t, 8721));
+    try std.testing.expectEqual(@as(u16, 1000), try runSize(t, 8721));
+    var bi: B = .{};
+    const i = try lay("\\int", true, &bi);
+    try std.testing.expectEqual(size2, try runFont(i, 8747));
+    try std.testing.expectEqual(@as(u16, 1000), try runSize(i, 8747));
+}
+
+test "qa101 substack rows clear by strut floors, no fixed gap" {
+    // KaTeX subarray (arraystretch 0.5, script cells, pinned 0.18.7):
+    // each row floors at the 0.42/0.18em strut and pitch is exactly
+    // prev.db + next.ha — no extra gap. Stub script cells are
+    // 490/175, so pitch = 180 + 490 = 670 (issue #101).
+    var b: B = .{};
+    const l = try lay("\\substack{a\\\\b}", false, &b);
+    // One run per script-size row (rows sit on distinct baselines).
+    var ys: [2]i32 = undefined;
+    var n: usize = 0;
+    for (l.runs) |r| {
+        if (r.size_units == 700 and n < 2) {
+            ys[n] = r.baseline_y;
+            n += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 2), n);
+    try std.testing.expectEqual(@as(i32, 670), ys[1] - ys[0]);
 }
 
 test "qa43 fraction shifts differ per mode" {

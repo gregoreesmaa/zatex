@@ -78,6 +78,10 @@ const Ref = struct {
             r.addOptional(p, .stix) catch continue;
             break;
         }
+        // Large operators (issue #101) load last so every existing
+        // unified gid stays bit-identical.
+        try r.addRequired("fixtures/fonts/katex/KaTeX_Size1-Regular.otf", .size1);
+        try r.addRequired("fixtures/fonts/katex/KaTeX_Size2-Regular.otf", .size2);
         return r;
     }
 

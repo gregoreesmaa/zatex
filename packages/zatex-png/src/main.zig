@@ -40,6 +40,10 @@ const default_stack = [_]Font.StackFile{
     .{ .path = "../zatex/fixtures/fonts/STIXTwoMath-overline.otf", .role = .stix },
     .{ .path = "/System/Library/Fonts/Supplemental/STIXTwoMath.otf", .role = .stix, .required = false },
     .{ .path = "/Library/Fonts/STIXTwoMath.otf", .role = .stix, .required = false },
+    // Large operators (issue #101) load last so every existing
+    // unified gid stays bit-identical.
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Size1-Regular.otf", .role = .size1 },
+    .{ .path = "../zatex/fixtures/fonts/katex/KaTeX_Size2-Regular.otf", .role = .size2 },
 };
 
 pub fn main(min: std.process.Init.Minimal) !void {

@@ -891,12 +891,15 @@ fn layoutOp(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
         }
         return layoutWord(lc, lc.effSize(style), .rm, o.text);
     }
-    // Single-glyph operator, possibly large.
-    const size: u16 = if (o.large and style.isDisplay())
-        @intCast(@divTrunc(@as(i32, lc.effSize(style)) * 14, 10))
+    // Single-glyph operator, possibly large. KaTeX draws symbol
+    // operators from Size1-Regular, swapping to Size2-Regular in
+    // display style (issue #101) — at the ambient size, never scaled.
+    // (No scalar fits both: LM sum ink needs 1.4x, LM integral 2x.)
+    const size: u16 = lc.effSize(style);
+    const font: u16 = @intFromEnum(if (o.large and style.isDisplay())
+        contract.FontId.size2
     else
-        lc.effSize(style);
-    const font: u16 = @intFromEnum(contract.FontId.rm);
+        contract.FontId.size1);
     const g = lc.glyphId(font, o.cp);
     const adv = lc.advance(font, g);
     const e = lc.extents(font, g);
@@ -1071,8 +1074,10 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 }
 
 fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
+    var word_base = false;
     if (parse.opBase(lc.pctx, s.base)) |o| {
         if (parse.useLimits(style, o)) return layoutLimits(lc, style, s);
+        word_base = o.func;
     }
     const size = lc.effSize(style);
     const base = try layoutNode(lc, style, s.base);
@@ -1162,7 +1167,10 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     if (style == .Dc or style == .Tc or style == .Sc or style == .SSc) sup_mu -= 30;
     const sup_up: i32 = @divTrunc(sup_mu * size, 1000);
     const sub_down: i32 = @divTrunc((@as(i32, 260) * size), 1000);
-    const script_gap: i32 = 60;
+    // KaTeX leaves the script marginLeft null for non-symbol (word)
+    // bases, so `\lim`-style word operators take no leading gap
+    // (issue #101). Single-glyph bases keep the legacy 60mu gap.
+    const script_gap: i32 = if (word_base) 0 else 60;
     _ = sc_size;
     const sx = bb.w + @divTrunc(script_gap * size, 1000);
     // MathKern cut-ins (provider v3): top-right tucks superscripts,
@@ -3049,11 +3057,15 @@ fn hlineDashed(pc: *const parse.ParseCtx, id: Idx) ?bool {
 }
 
 fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
-    _ = style;
     const rows = parse.rowsOf(lc.pctx, r.start, r.len);
     var parts: [128]BKid = undefined;
     var nparts: usize = 0;
-    const gap: i32 = 140;
+    // KaTeX subarray (arraystretch 0.5, script cells, issue #101):
+    // each row floors at the 0.42/0.18em strut and pitch is exactly
+    // prev.db + next.ha — no extra gap.
+    const size = lc.effSize(style);
+    const strut_ha = @divTrunc(@as(i32, 420) * size, 1000);
+    const strut_db = @divTrunc(@as(i32, 180) * size, 1000);
     // First pass for widths.
     var widths: [64]i32 = undefined;
     var ids: [64]u16 = undefined;
@@ -3088,7 +3100,7 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
         const bb = lc.boxes[b];
         ids[n] = b;
         widths[n] = bb.w;
-        heights[n] = .{ bb.ha, bb.db };
+        heights[n] = .{ @max(bb.ha, strut_ha), @max(bb.db, strut_db) };
         n += 1;
     }
     var w: i32 = 0;
@@ -3104,9 +3116,9 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
     while (k < n) : (k += 1) {
         y += heights[k][0];
         bases[k] = b0 - y;
-        y += heights[k][1] + gap;
+        y += heights[k][1];
     }
-    const total = y - gap;
+    const total = y;
     const first_base = total - b0;
     k = 0;
     while (k < n) : (k += 1) {

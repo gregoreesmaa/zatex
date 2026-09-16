@@ -47,9 +47,11 @@ pub const Role = enum {
     frak,
     script,
     stix,
+    size1,
+    size2,
 };
 
-pub const max_faces = 16;
+pub const max_faces = 18;
 
 pub const Face = struct {
     role: Role,
@@ -119,6 +121,10 @@ pub const Stack = struct {
             8 => &.{ .cal, .lm, .stix },
             9 => &.{ .main_bi, .lm, .stix },
             10 => &.{ .main, .lm, .ams, .stix },
+            // Large operators (issue #101): the Size face first, LM
+            // as the fallback for hosts that do not ship it.
+            11 => &.{ .size1, .lm, .stix },
+            12 => &.{ .size2, .lm, .stix },
             else => &.{ .lm, .main, .ams, .stix },
         };
     }

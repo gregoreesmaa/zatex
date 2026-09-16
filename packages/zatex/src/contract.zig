@@ -110,4 +110,10 @@ pub const FontId = enum(u16) {
     /// its Main face, whose designs (hat ink half the LM width) the
     /// reference font does not match. Appended, never renumbered.
     main = 10,
+    /// Large operators (issue #101): KaTeX draws symbol operators
+    /// from Size1-Regular, swapping to Size2-Regular in display
+    /// style — no scalar approximates both (sum needs 1.4x, integrals
+    /// need 2x). Appended, never renumbered.
+    size1 = 11,
+    size2 = 12,
 };
