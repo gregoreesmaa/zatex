@@ -8528,5 +8528,225 @@
   "tex": "\\pu{1 m}",
   "display": false,
   "expect": "reject"
+ },
+ {
+  "id": "disp-align",
+  "tex": "\\begin{align}x&=1\\\\y&=2\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-star",
+  "tex": "\\begin{align*}x&=1\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-alignat",
+  "tex": "\\begin{alignat}{2}x&=1&y&=2\\end{alignat}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-alignat-star",
+  "tex": "\\begin{alignat*}{2}x&=1\\end{alignat*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation",
+  "tex": "\\begin{equation}x=1\\end{equation}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation-star",
+  "tex": "\\begin{equation*}x=1\\end{equation*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-gather",
+  "tex": "\\begin{gather}x=1\\\\y=2\\end{gather}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-gather-star",
+  "tex": "\\begin{gather*}x=1\\end{gather*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-split-eq",
+  "tex": "\\begin{equation}\\begin{split}x&=1\\\\y&=2\\end{split}\\end{equation}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-split-alone",
+  "tex": "\\begin{split}x&=1\\\\y&=2\\end{split}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-h",
+  "tex": "\\begin{CD}A@>>>B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-hlabels",
+  "tex": "\\begin{CD}A@>a>b>B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-v",
+  "tex": "\\begin{CD}A\\\\@VVV\\\\C\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-eq",
+  "tex": "\\begin{CD}C@=D\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-vert",
+  "tex": "\\begin{CD}A@|B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-dot",
+  "tex": "\\begin{CD}A@.B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation-amp",
+  "tex": "\\begin{equation}x&=1\\end{equation}",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-align-inline",
+  "tex": "\\begin{align}x&=1\\end{align}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-split-alone-inline",
+  "tex": "\\begin{split}x&=1\\end{split}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-cd-h-inline",
+  "tex": "\\begin{CD}A@>>>B\\end{CD}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-alignat-noarg",
+  "tex": "\\begin{alignat}x&=1\\end{alignat}",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-cd-badarrow",
+  "tex": "\\begin{CD}A@?B\\end{CD}",
+  "display": true,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "disp-cd-incomplete",
+  "tex": "\\begin{CD}A@>B\\end{CD}",
+  "display": true,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "disp-nonumber-align",
+  "tex": "\\begin{align}x&=1\\nonumber\\\\y&=2\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-notag-align",
+  "tex": "\\begin{align}x&=1\\notag\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "nonumber-out",
+  "tex": "x\\nonumber",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "Set-basic",
+  "tex": "\\Set{x|x<5}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Set-dbl",
+  "tex": "\\Set{a\\|b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Set-barefrac",
+  "tex": "\\Set{x|x\\frac12}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Braket-basic",
+  "tex": "\\Braket{\\phi|\\psi}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Braket-two",
+  "tex": "\\Braket{a|b|c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Braket-dbl",
+  "tex": "\\Braket{a||b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "braket-basic",
+  "tex": "\\braket{\\phi|\\psi}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "braket-nobar",
+  "tex": "\\braket{ab}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "set-barefrac",
+  "tex": "\\set{x|x\\frac12}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "notag-out",
+  "tex": "x\\notag",
+  "display": true,
+  "expect": "accept"
  }
 ]

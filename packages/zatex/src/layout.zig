@@ -384,6 +384,10 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .phase => |b| return layoutPhase(lc, style, b),
         .sout => |b| return layoutSout(lc, style, b),
         .lap => |l| return layoutLap(lc, style, l),
+        // amscd side labels lay out inline at script size (the
+        // bundle overlaps them at zero width — geometry follow-up,
+        // issue #85; structure is what parity pins).
+        .cdlabel => |c| return layoutNode(lc, style.script(), c.body),
         .not => |nt| return layoutNot(lc, style, nt),
         .smash => |s| {
             const b = try layoutNode(lc, style, s.body);
@@ -711,6 +715,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .phase => |b| return classOf(pc, b),
         .sout => |b| return classOf(pc, b),
         .lap => |l| return classOf(pc, l.body),
+        .cdlabel => |c| return classOf(pc, c.body),
         // KaTeX wraps `\not` in `\mathrel` unconditionally.
         .not => return .Rel,
         .smash => |s| return classOf(pc, s.body),
@@ -2058,7 +2063,21 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 .invisible = false,
             });
             if (is_x) {
-                const above = try layoutNode(lc, style.script(), o.extra);
+                // A missing over-label (CD `@=`, whose KaTeX
+                // `\cdlongequal` call passes no labels) contributes
+                // an empty box; every other x-arrow carries a group.
+                const above = if (o.extra != NONE)
+                    try layoutNode(lc, style.script(), o.extra)
+                else blk: {
+                    const s = try lc.allocKids(0);
+                    break :blk try lc.allocBox(.{
+                        .w = 0,
+                        .ha = 0,
+                        .db = 0,
+                        .kind = .{ .list = .{ .start = s, .len = 0 } },
+                        .invisible = false,
+                    });
+                };
                 const ab = lc.boxes[above];
                 var below_w: i32 = 0;
                 var below_ha: i32 = 0;
@@ -2567,10 +2586,15 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
                 cells[nrows][c] = .{ .id = 0, .w = 0, .ha = 0, .db = 0, .is_rule = true, .dash = dash };
             } else {
                 // Display-cases cells are displaystyle (KaTeX parity);
-                // smallmatrix is scriptstyle; everything else textstyle.
+                // smallmatrix is scriptstyle; top-level display envs
+                // (align/equation/gather/CD/split) are displaystyle
+                // like their KaTeX `styling` wrappers; everything
+                // else textstyle.
                 const cell_style = if (e.kind == .smallmatrix or e.kind == .subarray)
                     parse.Style.S
-                else if (e.kind == .dcases or e.kind == .drcases)
+                else if (e.kind == .dcases or e.kind == .drcases or e.kind == .alignenv or
+                    e.kind == .alignat or e.kind == .equation or e.kind == .gather or
+                    e.kind == .split or e.kind == .cd)
                     parse.Style.D
                 else
                     parse.Style.T;
@@ -2597,7 +2621,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     var col_align: [8]u8 = undefined; // 0=l 1=c 2=r
     var vlines: [9]bool = .{false} ** 9; // vline before col i (ncols = after last)
     switch (e.kind) {
-        .array, .alignedat => {
+        .array, .alignedat, .alignat => {
             const spec = parse.kidsOf(lc.pctx, parse.Range{ .start = e.spec_start, .len = e.spec_len });
             var col: usize = 0;
             for (spec) |code| {
@@ -2619,7 +2643,7 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
                 ncols = speccols;
             }
         },
-        .aligned => {
+        .aligned, .alignenv, .split => {
             var col: usize = 0;
             while (col < 8) : (col += 1) col_align[col] = if (col % 2 == 0) 2 else 0;
         },
@@ -2686,12 +2710,21 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
                 post[i] = ssep;
             }
         },
-        .aligned => {
+        .aligned, .alignenv, .split => {
             var i: usize = 2;
             while (i < 8) : (i += 2) pre[i] = qsep;
         },
         .cases, .dcases, .drcases, .rcases => post[0] = qsep,
-        .alignedat, .gathered => {},
+        .alignedat, .alignat, .gathered, .equation, .gather => {},
+        .cd => {
+            // amscd parity (pinned 0.18.7): `\enskip` between
+            // columns, i.e. 0.25em pre + 0.25em post each side.
+            var i: usize = 0;
+            while (i < 8) : (i += 1) {
+                pre[i] = @divTrunc(size, 4);
+                post[i] = @divTrunc(size, 4);
+            }
+        },
         else => {
             var i: usize = 0;
             while (i < 8) : (i += 1) {

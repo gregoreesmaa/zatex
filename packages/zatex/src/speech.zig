@@ -196,6 +196,7 @@ const Walker = struct {
             .sout => |b| try self.node(b),
             .phase => |b| try self.node(b),
             .lap => |l| try self.node(l.body),
+            .cdlabel => |c| try self.node(c.body),
             // KaTeX a11y order ("not equals"): modifier first.
             .not => |nt| {
                 try self.word("not");

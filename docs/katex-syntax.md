@@ -61,11 +61,11 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\alef` | `\alef` | ![](renders/alef.png) |  |
 | `\alefsym` | `\alefsym` | ![](renders/alefsym.png) |  |
 | `\aleph` | `\aleph` | ![](renders/aleph.png) |  |
-| `{align}` | `\begin{align}\na&=b+c \\\nd+e&=f\n\end{align}` | *no render (overclaim)* | pinned KaTeX rejects unstarred align; table needs a reject row |
-| `{align*}` | `\begin{align*}\na&=b+c \\\nd+e&=f\n\end{align*}` | *no render (engine)* | top-level align missing; KaTeX accepts |
+| `{align}` | `\begin{align}\na&=b+c \\\nd+e&=f\n\end{align}` | ![](renders/align.png) |  |
+| `{align*}` | `\begin{align*}\na&=b+c \\\nd+e&=f\n\end{align*}` | ![](renders/alignstar.png) |  |
 | `{aligned}` | `\begin{aligned}\na&=b+c \\\nd+e&=f\n\end{aligned}` | ![](renders/aligned.png) |  |
-| `{alignat}` | `\begin{alignat}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat}` | *no render (engine)* | top-level alignat missing (alignedat works); KaTeX accepts |
-| `{alignat*}` | `\begin{alignat*}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat*}` | *no render (engine)* | top-level alignat missing; KaTeX accepts |
+| `{alignat}` | `\begin{alignat}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat}` | ![](renders/alignat.png) |  |
+| `{alignat*}` | `\begin{alignat*}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat*}` | ![](renders/alignatstar.png) |  |
 | `{alignedat}` | `\begin{alignedat}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignedat}` | ![](renders/alignedat.png) |  |
 | `\allowbreak` | `x \allowbreak y` | ![](renders/allowbreak.png) |  |
 | `\Alpha` | `\Alpha` | ![](renders/alpha.png) |  |
@@ -180,8 +180,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\boxtimes` | `\boxtimes` | ![](renders/boxtimes.png) |  |
 | `\Bra` | `\Bra{\psi}` | ![](renders/bra.png) |  |
 | `\bra` | `\bra{\psi}` | ![](renders/bra-2.png) |  |
-| `\braket` | `\braket{\phi\VERT\psi}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
-| `\Braket` | `\Braket{ ϕ \VERT \frac{∂^2}{∂ t^2} \VERT ψ }` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
+| `\braket` | `\braket{\phi\|\psi}` | ![](renders/braket.png) |  |
+| `\Braket` | `\Braket{\phi\|\frac12\|\psi}` | ![](renders/braket-2.png) |  |
 | `\brace` | `{n\brace k}` | ![](renders/brace.png) |  |
 | `\bracevert` | — | — | goldens: rej-unsup-bracevert |
 | `\brack` | `{n\brack k}` | ![](renders/brack.png) |  |
@@ -204,7 +204,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\cap` | `\cap` | ![](renders/cap-2.png) |  |
 | `{cases}` | `\begin{cases}\na &\text{if } b  \\\nc &\text{if } d\n\end{cases}` | ![](renders/cases.png) |  |
 | `\cases` | — | — | goldens: rej-unsup-cases |
-| `{CD}` | `\begin{CD}\nA  @>a>>  B  \\\n@VbVV    @AAcA \\\nC  @=     D\n\end{CD}` | *no render (overclaim)* | pinned KaTeX rejects CD; table needs a reject row |
+| `{CD}` | `\begin{CD}\nA  @>a>>  B  \\\n@VbVV    @AAcA \\\nC  @=     D\n\end{CD}` | ![](renders/cd.png) |  |
 | `\cdot` | `\cdot` | ![](renders/cdot.png) |  |
 | `\cdotp` | `\cdotp` | ![](renders/cdotp.png) |  |
 | `\cdots` | `\cdots` | ![](renders/cdots.png) |  |
@@ -367,8 +367,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\eqcirc` | `\eqcirc` | ![](renders/eqcirc.png) |  |
 | `\Eqcolon` | `\Eqcolon` | ![](renders/eqcolon.png) |  |
 | `\eqcolon` | `\eqcolon` | ![](renders/eqcolon-2.png) |  |
-| `{equation}` | `\begin{equation}\na = b + c\n\end{equation}` | *no render (overclaim)* | pinned KaTeX rejects equation; table needs a reject row |
-| `{equation*}` | `\begin{equation*}\na = b + c\n\end{equation*}` | *no render (overclaim)* | pinned KaTeX rejects equation*; table needs a reject row |
+| `{equation}` | `\begin{equation}\na = b + c\n\end{equation}` | ![](renders/equation.png) |  |
+| `{equation*}` | `\begin{equation*}\na = b + c\n\end{equation*}` | ![](renders/equationstar.png) |  |
 | `{eqnarray}` | — | — | goldens: rej-unsup-eqnarray |
 | `\Eqqcolon` | `\Eqqcolon` | ![](renders/eqqcolon.png) |  |
 | `\eqqcolon` | `\eqqcolon` | ![](renders/eqqcolon-2.png) |  |
@@ -412,7 +412,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\Game` | `\Game` | ![](renders/game.png) |  |
 | `\Gamma` | `\Gamma` | ![](renders/gamma.png) |  |
 | `\gamma` | `\gamma` | ![](renders/gamma-2.png) |  |
-| `{gather}` | `\begin{gather}\na=b \\ \ne=b+c\n\end{gather}` | *no render (overclaim)* | pinned KaTeX rejects gather; table needs a reject row |
+| `{gather}` | `\begin{gather}\na=b \\ \ne=b+c\n\end{gather}` | ![](renders/gather.png) |  |
 | `{gathered}` | `\begin{gathered}\na=b \\ \ne=b+c\n\end{gathered}` | ![](renders/gathered.png) |  |
 | `\gcd` | `\gcd` | ![](renders/gcd.png) |  |
 | `\gdef` | `\gdef\sqr#1{#1^2} \sqr{y} + \sqr{y}` | ![](renders/gdef.png) |  |
@@ -737,11 +737,11 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\nobreakspace` | `a\nobreakspace b` | ![](renders/nobreakspace.png) |  |
 | `\noexpand` | `x \noexpand y` | ![](renders/noexpand.png) |  |
 | `\nolimits` | `\lim\nolimits_x` | ![](renders/nolimits.png) |  |
-| `\nonumber` | `\begin{align}\na&=b+c \nonumber\\\nd+e&=f\n\end{align}` | *no render (engine)* | equation numbering context missing; KaTeX accepts |
+| `\nonumber` | `\begin{align}\na&=b+c \nonumber\\\nd+e&=f\n\end{align}` | ![](renders/nonumber.png) |  |
 | `\normalfont` | — | — | goldens: rej-unsup-normalfont |
 | `\normalsize` | `\normalsize normalsize` | ![](renders/normalsize.png) |  |
 | `\not` | `\not =` | ![](renders/not.png) |  |
-| `\notag` | `\begin{align}\na&=b+c \notag\\\nd+e&=f\n\end{align}` | *no render (engine)* | equation numbering context missing; KaTeX accepts |
+| `\notag` | `\begin{align}\na&=b+c \notag\\\nd+e&=f\n\end{align}` | ![](renders/notag.png) |  |
 | `\notin` | `\notin` | ![](renders/notin.png) |  |
 | `\notni` | `\notni` | ![](renders/notni.png) |  |
 | `\nparallel` | `\nparallel` | ![](renders/nparallel.png) |  |
@@ -944,7 +944,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\sec` | `\sec` | ![](renders/sec.png) |  |
 | `\sect` | `\text{\sect}` | ![](renders/sect.png) |  |
 | `\set` | `\set{x}` | ![](renders/set.png) |  |
-| `\Set` | `\Set{ x \VERT x<\frac 1 2 }` | *no render (engine)* | set notation missing; KaTeX accepts |
+| `\Set` | `\Set{ x \| x<\frac 1 2}` | ![](renders/set-2.png) |  |
 | `\setlength` | — | — | goldens: rej-unsup-setlength |
 | `\setminus` | `\setminus` | ![](renders/setminus.png) |  |
 | `\sf` | `\sf AaBb123` | ![](renders/sf.png) |  |
@@ -982,7 +982,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\spades` | `\spades` | ![](renders/spades.png) |  |
 | `\spadesuit` | `\spadesuit` | ![](renders/spadesuit.png) |  |
 | `\sphericalangle` | `\sphericalangle` | ![](renders/sphericalangle.png) |  |
-| `{split}` | `\begin{equation}\n\begin{split}\na &=b+c\\\n&=e+f\n\end{split}\n\end{equation}` | *no render (overclaim)* | pinned KaTeX rejects standalone split; table needs a reject row |
+| `{split}` | `\begin{equation}\n\begin{split}\na &=b+c\\\n&=e+f\n\end{split}\n\end{equation}` | ![](renders/split.png) |  |
 | `\sqcap` | `\sqcap` | ![](renders/sqcap.png) |  |
 | `\sqcup` | `\sqcup` | ![](renders/sqcup.png) |  |
 | `\square` | `\square` | ![](renders/square.png) |  |

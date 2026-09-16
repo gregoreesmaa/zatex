@@ -500,6 +500,11 @@ const Walker = struct {
                 });
                 try self.arg(l.body);
             },
+            .cdlabel => |c| {
+                // No TeX spelling (CD-internal): serialize the label
+                // body transparently (CD tables do not round-trip).
+                try self.node(c.body);
+            },
             .smash => |s| {
                 try self.cmd("smash");
                 if (s.keep_t and !s.keep_b) try self.put("[b]");

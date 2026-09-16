@@ -1350,6 +1350,16 @@ const Writer = struct {
                 try self.node(l.body, face);
                 self.str("</mpadded>");
             },
+            .cdlabel => |c| {
+                // KaTeX `cdlabel` parity (pinned 0.18.7, issue #85):
+                // `mstyle`/`mpadded`/`mrow` around the label group;
+                // the left side overlaps (`lspace="-1width"`).
+                self.str("<mstyle displaystyle=\"false\" scriptlevel=\"1\"><mpadded width=\"0\"");
+                if (c.left) self.str(" lspace=\"-1width\"");
+                self.str(" voffset=\"0.7em\"><mrow>");
+                try self.node(c.body, face);
+                self.str("</mrow></mpadded></mstyle>");
+            },
             .smash => |s| {
                 // KaTeX wraps the body in mpadded, zeroing the smashed
                 // sides (`keep_*` is the complement: kept sides stay).
@@ -1684,7 +1694,9 @@ const Writer = struct {
         // smallmatrix, text otherwise), whose MathML is an mstyle
         // wrapping the cell group under the normal row rule.
         const disp_cell = e.kind == .aligned or e.kind == .alignedat or e.kind == .gathered or
-            e.kind == .dcases or e.kind == .drcases;
+            e.kind == .dcases or e.kind == .drcases or e.kind == .alignenv or
+            e.kind == .alignat or e.kind == .equation or e.kind == .gather or
+            e.kind == .split or e.kind == .cd;
         const script_cell = e.kind == .smallmatrix or e.kind == .subarray;
         // Small tables keep a small row gap (KaTeX `arraystretch<1`).
         if (script_cell) self.str("<mstyle scriptlevel=\"1\">");
@@ -1732,6 +1744,12 @@ const Writer = struct {
             // (KaTeX parity).
             if (kids.len == 1 and isHlineNode(self.pc, kids[0])) continue;
             self.str("<mtr>");
+            // Unstarred top-level display envs keep KaTeX's number
+            // columns: a leading glue cell plus trailing glue and
+            // equation-number cells per row (issues #83/#86/#87) —
+            // unless the row carries `\nonumber`/`\notag` (#88).
+            const numbered = e.numbered and !row.nonumber;
+            if (numbered) self.str("<mtd class=\"mtr-glue\"></mtd>");
             for (kids) |k| {
                 self.str("<mtd><mstyle scriptlevel=\"");
                 self.str(if (script_cell) "1" else "0");
@@ -1741,6 +1759,7 @@ const Writer = struct {
                 try self.atStyle(cs, k, face);
                 self.str("</mstyle></mtd>");
             }
+            if (numbered) self.str("<mtd class=\"mtr-glue\"></mtd><mtd class=\"mml-eqn-num\"></mtd>");
             self.str("</mtr>");
         }
         self.str("</mtable>");

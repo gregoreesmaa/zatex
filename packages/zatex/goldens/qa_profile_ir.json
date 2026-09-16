@@ -2172,6 +2172,18 @@
       "tex": "\\frak{A}",
       "display": false,
       "ir": "500/700/250|5,1000,0,700:54532.;|"
+    },
+    {
+      "id": "nonumber-out",
+      "tex": "x\\nonumber",
+      "display": true,
+      "ir": "500/700/250|1,1000,0,700:54373.;|"
+    },
+    {
+      "id": "notag-out",
+      "tex": "x\\notag",
+      "display": true,
+      "ir": "500/700/250|1,1000,0,700:54373.;|"
     }
   ]
 }

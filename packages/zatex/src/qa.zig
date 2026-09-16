@@ -694,6 +694,11 @@ test "qa43 mode never changes the accept set" {
         // tag unit test pins both error messages) rather than across
         // modes here.
         if (std.mem.eql(u8, id, "tag") or std.mem.startsWith(u8, id, "tag-")) continue;
+        // Display-only environments (issues #83/#85/#86/#87/#90):
+        // KaTeX itself accepts these rows in display mode and
+        // rejects them inline, so cross-mode agreement cannot hold
+        // by design. `parity.zig` checks each row in its own mode.
+        if (std.mem.startsWith(u8, id, "disp-")) continue;
         if (ok_d != ok_t) {
             std.debug.print("\n[{s}] mode changes accept set: display={} text={}\n", .{ id, ok_d, ok_t });
             return error.TestUnexpectedResult;
@@ -2127,6 +2132,8 @@ test "qa80 lap family overlaps with zero width" {
     // Centered: content [-1000, 0], middle at the zero-width origin.
     try std.testing.expectEqual(@as(i32, -500), mc.runs[0].x);
 }
+
+
 
 
 

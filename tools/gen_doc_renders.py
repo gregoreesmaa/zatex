@@ -102,8 +102,6 @@ EXACT = {
     "\\boldsymbol": ("\\boldsymbol{\\alpha}", False),
     "\\pmb": ("\\pmb{x}", False),
     "\\mod": ("x\\mod y", False),
-    "\\braket": ("\\braket{x}{y}", False),
-    "\\Braket": ("\\Braket{x}{y}", False),
     "\\bra": ("\\bra{x}", False),
     "\\ket": ("\\ket{x}", False),
     "\\Bra": ("\\Bra{x}", False),
@@ -526,6 +524,14 @@ OVERRIDES = {
     "\\hbox": ("\\hbox{x}", False),
     "\\reflectbox": ("\\reflectbox{x}", False),
     "\\set": ("\\set{x}", False),
+    # KaTeX's own Source examples use `\\VERT`, which is undefined in
+    # BOTH engines (issue #84: use Vert, never VERT), and wrap in `$`
+    # delimiters this engine rejects in math input — so the mirror
+    # uses the Rendered-column single-bar shapes instead. `\\Set`
+    # keeps KaTeX's bare `\\frac 1 2` args (issue #89's case).
+    "\\braket": ("\\braket{\\phi|\\psi}", False),
+    "\\Braket": ("\\Braket{\\phi|\\frac12|\\psi}", False),
+    "\\Set": ("\\Set{ x | x<\\frac 1 2}", False),
 }
 
 

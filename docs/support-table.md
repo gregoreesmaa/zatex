@@ -132,15 +132,15 @@ Extension support is future work.
 
 | `\aleph` | accept | goldens: sym-gal-1 |
 
-| `{align}` | accept | goldens: aligned, alignedat, array |
+| `{align}` | accept | goldens: disp-align, disp-align-star |
 
-| `{align*}` | accept | goldens: aligned, alignedat, array |
+| `{align*}` | accept | goldens: disp-align-star |
 
 | `{aligned}` | accept | goldens: aligned, alignedat, array |
 
-| `{alignat}` | accept | goldens: aligned, alignedat, array |
+| `{alignat}` | accept | goldens: disp-alignat, disp-alignat-star, disp-alignat-noarg |
 
-| `{alignat*}` | accept | goldens: aligned, alignedat, array |
+| `{alignat*}` | accept | goldens: disp-alignat-star |
 
 | `{alignedat}` | accept | goldens: alignedat, aligned, array |
 
@@ -364,9 +364,9 @@ Extension support is future work.
 
 | `\bra` | accept | goldens: sym-greek3 |
 
-| `\braket` | accept | goldens: demo-cfrac, sym-greek3 |
+| `\braket` | accept | goldens: braket-basic, braket-nobar |
 
-| `\Braket` | accept | goldens: frac, bigl, demo-cfrac |
+| `\Braket` | accept | goldens: Braket-basic, Braket-two, Braket-dbl |
 
 | `\brace` | accept | goldens: brace |
 
@@ -406,7 +406,7 @@ Extension support is future work.
 
 | `\cases` | unsup | goldens: rej-unsup-cases |
 
-| `{CD}` | accept | goldens: aligned, alignedat, array |
+| `{CD}` | accept | goldens: disp-cd-h, disp-cd-hlabels, disp-cd-v, disp-cd-eq, disp-cd-vert, disp-cd-dot, disp-cd-badarrow, disp-cd-incomplete |
 
 | `\cdot` | accept | goldens: sym-gal-2 |
 
@@ -720,9 +720,9 @@ Extension support is future work.
 
 | `\eqcolon` | accept | goldens: t-eqcolon |
 
-| `{equation}` | accept | goldens: aligned, alignedat, array |
+| `{equation}` | accept | goldens: disp-equation, disp-equation-amp |
 
-| `{equation*}` | accept | goldens: aligned, alignedat, array |
+| `{equation*}` | accept | goldens: disp-equation-star |
 
 | `{eqnarray}` | unsup | goldens: rej-unsup-eqnarray |
 
@@ -798,7 +798,7 @@ Extension support is future work.
 
 | `\gamma` | accept | goldens: sym-greek |
 
-| `{gather}` | accept | goldens: aligned, alignedat, array |
+| `{gather}` | accept | goldens: disp-gather, disp-gather-star |
 
 | `{gathered}` | accept | goldens: gathered, aligned, alignedat |
 
@@ -1412,7 +1412,7 @@ Extension support is future work.
 
 | `\nolimits` | accept | goldens: lim, nolimits, lim-display |
 
-| `\nonumber` | accept | goldens: aligned, alignedat, array |
+| `\nonumber` | accept | goldens: disp-nonumber-align, nonumber-out |
 
 | `\normalfont` | unsup | goldens: rej-unsup-normalfont |
 
@@ -1420,7 +1420,7 @@ Extension support is future work.
 
 | `\not` | accept | goldens: not |
 
-| `\notag` | accept | goldens: aligned, alignedat, array |
+| `\notag` | accept | goldens: disp-notag-align, notag-out |
 
 | `\notin` | accept | goldens: sym-notin |
 
@@ -1800,9 +1800,9 @@ Extension support is future work.
 
 | `\sect` | accept | goldens: text |
 
-| `\set` | accept | goldens: set, set-bar, set-bare-bar |
+| `\set` | accept | goldens: set, set-bar, set-bare-bar, set-barefrac |
 
-| `\Set` | accept | goldens: frac, bigl, demo-cfrac |
+| `\Set` | accept | goldens: Set-basic, Set-dbl, Set-barefrac |
 
 | `\setlength` | unsup | goldens: rej-unsup-setlength |
 
@@ -1878,7 +1878,7 @@ Extension support is future work.
 
 | `\sphericalangle` | accept | goldens: sym-gal-8 |
 
-| `{split}` | accept | goldens: aligned, alignedat, array |
+| `{split}` | accept | goldens: disp-split-eq, disp-split-alone |
 
 | `\sqcap` | accept | goldens: sym-gal-8 |
 
