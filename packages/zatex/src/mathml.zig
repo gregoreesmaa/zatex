@@ -293,7 +293,7 @@ fn rendersRow(pc: *const parse.ParseCtx, id: Idx) bool {
         .delim, .href => return true,
         // `genfrac` rows its fence expression whenever delimiters
         // are present (KaTeX `makeRow` parity).
-        .frac => |f| return f.kind.parens,
+        .frac => |f| return f.kind.fence != .none,
         else => return false,
     }
 }
@@ -828,12 +828,24 @@ const Writer = struct {
                 }
             },
             .frac => |f| {
-                if (f.kind.parens) self.str("<mrow><mo>(</mo>");
+                // KaTeX wraps every fence pair (choose/brace/brack)
+                // in fence mo's (pinned 0.18.7, issue #93).
+                switch (f.kind.fence) {
+                    .none => {},
+                    .parens => self.str("<mrow><mo fence=\"true\">(</mo>"),
+                    .braces => self.str("<mrow><mo fence=\"true\">{</mo>"),
+                    .brackets => self.str("<mrow><mo fence=\"true\">[</mo>"),
+                }
                 if (!f.kind.bar) self.str("<mfrac linethickness=\"0\">") else self.str("<mfrac>");
                 try self.atStyle(self.style.numerator(), f.num, face);
                 try self.atStyle(self.style.denominator(), f.den, face);
                 self.str("</mfrac>");
-                if (f.kind.parens) self.str("<mo>)</mo></mrow>");
+                switch (f.kind.fence) {
+                    .none => {},
+                    .parens => self.str("<mo fence=\"true\">)</mo></mrow>"),
+                    .braces => self.str("<mo fence=\"true\">}</mo></mrow>"),
+                    .brackets => self.str("<mo fence=\"true\">]</mo></mrow>"),
+                }
             },
             .sqrt => |s| {
                 if (s.index == NONE) {

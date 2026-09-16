@@ -5300,6 +5300,18 @@
   "expect": "accept"
  },
  {
+  "id": "infix-brace",
+  "tex": "{n\\brace k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "infix-brack",
+  "tex": "{n\\brack k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "sw-textsout",
   "tex": "\\text{\\sout{abc}}",
   "display": false,

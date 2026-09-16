@@ -825,7 +825,7 @@ test "issue32: fraction shifts follow TeX rules 15b-e per style" {
     // Atop `\binom{n}{k}`: num3/denom2 (444/345), 3θ clearance met
     // exactly (no bump). Fence ink overflows the content box by
     // design when the provider offers no bigger variant
-    // (`wrapParens`: instruments are promises, not extents).
+    // (`wrapFence`: instruments are promises, not extents).
     const b = try layoutOk("\\binom{n}{k}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(u32, 444 + 490), b.height_above);
     try std.testing.expectEqual(@as(u32, 345 + 175), b.depth_below);

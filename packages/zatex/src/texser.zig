@@ -134,10 +134,23 @@ const Walker = struct {
             },
             .frac => |f| {
                 if (f.kind.thick != 0) return error.Unsupported;
-                if (f.kind.parens) {
+                if (f.kind.fence == .parens) {
                     try self.cmd("binom");
                     try self.arg(f.num);
                     try self.arg(f.den);
+                } else if (f.kind.fence != .none) {
+                    // Round-trip brace/brack through their infix
+                    // commands (issue #93), mirroring atop below.
+                    try self.put("{");
+                    try self.node(f.num);
+                    try self.put(switch (f.kind.fence) {
+                        .none => unreachable,
+                        .parens => unreachable,
+                        .braces => " \\brace ",
+                        .brackets => " \\brack ",
+                    });
+                    try self.node(f.den);
+                    try self.put("}");
                 } else if (f.kind.bar) {
                     try self.cmd("frac");
                     try self.arg(f.num);
@@ -1058,6 +1071,8 @@ test "serializer: round-trip keeps MathML identical" {
         "\\reflectbox{x}",
         "\\mathreflectbox{x}",
         "\\tbinom{n}{k}",
+        "{n\\brace k}",
+        "{n\\brack k}",
         "\\emph{x}",
         "\\hbox{x}",
         "a\\bmod b",

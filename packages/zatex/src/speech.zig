@@ -63,9 +63,14 @@ const Walker = struct {
             },
             .supsub => |s| try self.supsub(s),
             .frac => |f| {
-                if (f.kind.parens) {
+                if (f.kind.fence != .none) {
                     try self.node(f.num);
-                    try self.word("choose");
+                    try self.word(switch (f.kind.fence) {
+                        .none => unreachable,
+                        .parens => "choose",
+                        .braces => "brace",
+                        .brackets => "bracket",
+                    });
                     try self.node(f.den);
                 } else if (f.kind.bar) {
                     try self.word("fraction");
@@ -446,6 +451,22 @@ test "speech: scripts are compositional" {
     try std.testing.expectEqualStrings(
         "x, subscript, 1, end subscript",
         try speak("x_1", false, &out),
+    );
+}
+
+test "speech: fenced stacks speak their fence (issue #93)" {
+    var out: [256]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "n, choose, k",
+        try speak("\\binom{n}{k}", false, &out),
+    );
+    try std.testing.expectEqualStrings(
+        "n, brace, k",
+        try speak("{n\\brace k}", false, &out),
+    );
+    try std.testing.expectEqualStrings(
+        "n, bracket, k",
+        try speak("{n\\brack k}", false, &out),
     );
 }
 

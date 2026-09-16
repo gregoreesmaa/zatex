@@ -281,10 +281,15 @@ pub const Row = struct {
     tagged: bool = false,
 };
 
+/// Fence pair around a barless stacked fraction (KaTeX parity:
+/// `\choose` wraps in parens, `\brace` in braces, `\brack` in
+/// brackets — issue #93; the old `parens` bool drew parens for all
+/// three). `.none` is a bare stack (`\atop`).
+pub const FracFence = enum(u8) { none, parens, braces, brackets };
+
 pub const FracKind = struct {
     bar: bool = true,
-    /// Parenthesized (`\binom`, `\choose`).
-    parens: bool = false,
+    fence: FracFence = .none,
     /// Rule thickness override in font units (0 = font default).
     thick: i32 = 0,
 };
@@ -1540,9 +1545,19 @@ fn isInfix(t: Tok) bool {
 fn infixKind(t: Tok) FracKind {
     var kind = FracKind{ .bar = true };
     if (tokNameEq(t.name, "atop")) kind.bar = false;
-    if (tokNameEq(t.name, "choose") or tokNameEq(t.name, "brace") or tokNameEq(t.name, "brack")) {
+    if (tokNameEq(t.name, "choose")) {
         kind.bar = false;
-        kind.parens = true;
+        kind.fence = .parens;
+    }
+    // Issue #93: `\\brace`/`\\brack` are their own fences, not
+    // parens (KaTeX wraps `{n\\brace k}` in curly braces).
+    if (tokNameEq(t.name, "brace")) {
+        kind.bar = false;
+        kind.fence = .braces;
+    }
+    if (tokNameEq(t.name, "brack")) {
+        kind.bar = false;
+        kind.fence = .brackets;
     }
     return kind;
 }
@@ -2318,14 +2333,14 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (tokNameEq(name, "dfrac")) return parseStyledFrac(ctx, depth, .D, .{ .bar = true });
     if (tokNameEq(name, "tfrac")) return parseStyledFrac(ctx, depth, .T, .{ .bar = true });
     if (tokNameEq(name, "cfrac")) return parseStyledFrac(ctx, depth, .D, .{ .bar = true });
-    if (tokNameEq(name, "binom")) return parseFracLike(ctx, depth, .{ .bar = false, .parens = true });
+    if (tokNameEq(name, "binom")) return parseFracLike(ctx, depth, .{ .bar = false, .fence = .parens });
     if (tokNameEq(name, "dbinom")) {
-        return parseStyledFrac(ctx, depth, .D, .{ .bar = false, .parens = true });
+        return parseStyledFrac(ctx, depth, .D, .{ .bar = false, .fence = .parens });
     }
     if (tokNameEq(name, "tbinom")) {
         // KaTeX parity: text-style binomial (the `\dbinom` shape in
         // text style — pinned 0.18.7).
-        return parseStyledFrac(ctx, depth, .T, .{ .bar = false, .parens = true });
+        return parseStyledFrac(ctx, depth, .T, .{ .bar = false, .fence = .parens });
     }
     if (full_only and (tokNameEq(name, "genfrac"))) {
         return parseGenfrac(ctx, depth, t);
@@ -4897,7 +4912,7 @@ fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     var body = try ctx.allocNode(.{ .frac = .{
         .num = num,
         .den = den,
-        .kind = .{ .bar = true, .parens = false, .thick = thick },
+        .kind = .{ .bar = true, .thick = thick },
     } });
     if (left != 0 or right != 0) {
         body = try ctx.allocNode(.{ .delim = .{ .left = left, .right = right, .body = body } });

@@ -9006,6 +9006,26 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mi>a</mi><mo>◯</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\textcircled{a}</annotation></semantics></math>"
   },
   {
+   "id": "infix-brace",
+   "tex": "{n\\brace k}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">{</mo><mfrac linethickness=\"0px\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">}</mo></mrow><annotation encoding=\"application/x-tex\">{n\\brace k}</annotation></semantics></math>"
+  },
+  {
+   "id": "infix-brack",
+   "tex": "{n\\brack k}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">[</mo><mfrac linethickness=\"0px\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">]</mo></mrow><annotation encoding=\"application/x-tex\">{n\\brack k}</annotation></semantics></math>"
+  },
+  {
    "id": "sw-textsout",
    "tex": "\\text{\\sout{abc}}",
    "display": false,

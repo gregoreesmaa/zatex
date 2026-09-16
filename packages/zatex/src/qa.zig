@@ -1006,7 +1006,9 @@ const golden_mathml = [_][]const u8{
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold\"><mi>A</mi></mstyle><mo>+</mo><mstyle mathvariant=\"italic\"><mi>B</mi></mstyle></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathcolor=\"red\"><mi>x</mi><mo>+</mo><mi>y</mi></mstyle></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>hello </mtext><mo>+</mo><mi>x</mi></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo>(</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo>)</mo></mrow></math>",
+    // Issue #93: KaTeX wraps fenced stacks in fence mo's (pinned
+    // 0.18.7: `<mo fence="true">(</mo>` for `\binom{n}{k}`).
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">)</mo></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><msup><mi>x</mi><mn>2</mn></msup><mn>1</mn></mfrac></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mi>A</mi><msub><mi>B</mi><mi>C</mi></msub></msub></mrow></math>",
     "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"\" height=\"0.9em\" src=\"a\"></mglyph></mrow></math>",
@@ -2184,6 +2186,30 @@ test "qa81 dotless i/j shear for faux math-italic (issue #77)" {
     try std.testing.expectEqual(@as(usize, 2), mix.runs.len);
     try std.testing.expectEqual(@as(i16, 0), mix.runs[0].x_shear);
     try std.testing.expectEqual(@as(i16, 250), mix.runs[1].x_shear);
+}
+
+test "qa82 infix brace/brack are their own fences (issue #93)" {
+    // KaTeX parity (pinned 0.18.7): `{n\\brace k}` wraps in curly
+    // braces and `{n\\brack k}` in square brackets — the old
+    // `parens` bool drew parens for all three. Stub-exact: four
+    // runs (fence, num, den, fence); MathML matches KaTeX's fence
+    // mo's glyph-for-glyph.
+    var b1: B = .{};
+    const br = try lay("{n\\brace k}", false, &b1);
+    try std.testing.expectEqual(@as(usize, 4), br.runs.len);
+    try std.testing.expectEqual(@as(u16, '{'), br.runs[0].glyphs[0]);
+    try std.testing.expectEqual(@as(u16, '}'), br.runs[3].glyphs[0]);
+    var b2: B = .{};
+    const bk = try lay("{n\\brack k}", false, &b2);
+    try std.testing.expectEqual(@as(usize, 4), bk.runs.len);
+    try std.testing.expectEqual(@as(u16, '['), bk.runs[0].glyphs[0]);
+    try std.testing.expectEqual(@as(u16, ']'), bk.runs[3].glyphs[0]);
+    var buf: [4096]u8 = undefined;
+    const gotb = try zatex.mathml("{n\\brace k}", .{}, &buf);
+    try expectGolden("infix-brace", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">{</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">}</mo></mrow></math>", gotb);
+    var buf2: [4096]u8 = undefined;
+    const gotk = try zatex.mathml("{n\\brack k}", .{}, &buf2);
+    try expectGolden("infix-brack", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">[</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">]</mo></mrow></math>", gotk);
 }
 
 

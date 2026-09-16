@@ -1325,7 +1325,12 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
             .kind = .{ .list = .{ .start = s, .len = 2 } },
             .invisible = false,
         });
-        if (f.kind.parens) b = try wrapParens(lc, style, b);
+        switch (f.kind.fence) {
+            .none => {},
+            .parens => b = try wrapFence(lc, style, b, '(', ')'),
+            .braces => b = try wrapFence(lc, style, b, '{', '}'),
+            .brackets => b = try wrapFence(lc, style, b, '[', ']'),
+        }
         return b;
     }
     const s = try lc.allocKids(3);
@@ -1348,10 +1353,13 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
     });
 }
 
-fn wrapParens(lc: *LayCtx, style: parse.Style, inner: u16) Error!u16 {
+/// Fence pair around a barless stack (`\\choose`/`\\brace`/`\\brack`,
+/// issue #93): natural-size delimiters with the paren gap on both
+/// sides, shared by all three KaTeX fence pairs.
+fn wrapFence(lc: *LayCtx, style: parse.Style, inner: u16, left: u21, right: u21) Error!u16 {
     const ib = lc.boxes[inner];
-    const lp = try layoutFence(lc, style, '(', 0);
-    const rp = try layoutFence(lc, style, ')', 0);
+    const lp = try layoutFence(lc, style, left, 0);
+    const rp = try layoutFence(lc, style, right, 0);
     const lb = lc.boxes[lp];
     const rb = lc.boxes[rp];
     const gap: i32 = 100;
