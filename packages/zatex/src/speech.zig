@@ -124,6 +124,7 @@ const Walker = struct {
             .size => |s| try self.node(s.body),
             .font => |f| try self.node(f.body),
             .pmb => |p| try self.node(p.body),
+            .reflect => |r| try self.node(r.body),
             .vcenter => |v| try self.node(v.body),
             .circled => |c| try self.node(c.body),
             .text => |t| {

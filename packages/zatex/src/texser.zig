@@ -245,6 +245,16 @@ const Walker = struct {
             },
             .over => |o| try self.over(o),
             .style => |s| {
+                // A textstyle reset over a `\reflectbox` body is the
+                // box command itself (issue #97: the parser builds
+                // exactly this shape), so re-emit the command — a
+                // bare `\textstyle \reflectbox{…}` would re-parse
+                // with a doubled reset and drift the MathML.
+                const inner = parse.nodeAt(self.ctx, s.body);
+                if (s.style == .T and inner == .reflect and !inner.reflect.math) {
+                    try self.node(s.body);
+                    return;
+                }
                 try self.cmd(switch (s.style) {
                     .D, .Dc => "displaystyle",
                     .T, .Tc => "textstyle",
@@ -275,6 +285,20 @@ const Walker = struct {
             .pmb => |p| {
                 try self.cmd("pmb");
                 try self.arg(p.body);
+            },
+            .reflect => |r| {
+                // The box argument re-braces: a bare `\text{…}` would
+                // not re-parse as the captured argument. Literal text
+                // keeps its raw tokens (exact `\reflectbox{x}`).
+                try self.cmd(if (r.math) "mathreflectbox" else "reflectbox");
+                const inner = parse.nodeAt(self.ctx, r.body);
+                try self.put("{");
+                if (!r.math and inner == .text) {
+                    try self.textToks(parse.toksOf(self.ctx, inner.text.toks));
+                } else {
+                    try self.arg(r.body);
+                }
+                try self.put("}");
             },
             .vcenter => |v| {
                 try self.cmd("vcenter");

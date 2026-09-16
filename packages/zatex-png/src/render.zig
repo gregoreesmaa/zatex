@@ -76,7 +76,7 @@ pub fn renderToPng(
         // Faux-italic slant as a dimensionless ratio (issue #77).
         const sh: f64 = @as(f64, @floatFromInt(run.x_shear)) / 1000.0;
         setPaint(&canvas, run.color);
-        var rf = try canvas.beginRun(&font.handle, px_size, sx, sh);
+        var rf = try canvas.beginRun(&font.handle, px_size, sx, sh, run.mirrored);
         defer rf.end();
         var x_units: i64 = run.x;
         const base_y: f64 = glyphBaseY(run.baseline_y, s, pad, H);
@@ -103,6 +103,10 @@ const ShiftMetrics = struct {
     ptr: *const anyopaque,
     advance1000: *const fn (ptr: *const anyopaque, glyph: u16) i32,
     inkLeft1000: *const fn (ptr: *const anyopaque, glyph: u16) i32,
+    /// Ink right edge (origin-relative thousandths, y-up): mirrored
+    /// ink (issue #97) spans [-right, -left] about the origin, so the
+    /// left edge hangs off the right metric.
+    inkRight1000: *const fn (ptr: *const anyopaque, glyph: u16) i32,
     inkTop1000: ?*const fn (ptr: *const anyopaque, glyph: u16) i32 = null,
     inkBottom1000: ?*const fn (ptr: *const anyopaque, glyph: u16) i32 = null,
 };
@@ -117,6 +121,10 @@ fn fontShiftMetrics(font: *const Font) ShiftMetrics {
             const f: *const Font = @ptrCast(@alignCast(ptr));
             return f.handle.inkBounds1000(glyph)[0];
         }
+        fn inkR(ptr: *const anyopaque, glyph: u16) i32 {
+            const f: *const Font = @ptrCast(@alignCast(ptr));
+            return f.handle.inkBounds1000(glyph)[2];
+        }
         fn top(ptr: *const anyopaque, glyph: u16) i32 {
             const f: *const Font = @ptrCast(@alignCast(ptr));
             return f.handle.inkBounds1000(glyph)[3];
@@ -126,7 +134,7 @@ fn fontShiftMetrics(font: *const Font) ShiftMetrics {
             return f.handle.inkBounds1000(glyph)[1];
         }
     };
-    return .{ .ptr = font, .advance1000 = W.adv, .inkLeft1000 = W.ink, .inkTop1000 = W.top, .inkBottom1000 = W.bot };
+    return .{ .ptr = font, .advance1000 = W.adv, .inkLeft1000 = W.ink, .inkRight1000 = W.inkR, .inkTop1000 = W.top, .inkBottom1000 = W.bot };
 }
 
 /// Canvas shift (layout units, >= 0) so left-overflow ink lands on pad.
@@ -145,20 +153,29 @@ fn leftShiftUnits(m: ShiftMetrics, runs: []const zatex.ir.Run, rules: []const za
         if (run.glyphs.len == 0) continue;
         var x_units: i64 = run.x;
         for (run.glyphs) |g| {
-            const ink_left = @divTrunc(@as(i64, m.inkLeft1000(m.ptr, g)) * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
+            // Mirrored ink (issue #97) spans [-right, -left] about
+            // the origin, so its left edge hangs off the ink right.
+            const ink_o: i64 = if (run.mirrored) m.inkRight1000(m.ptr, g) else m.inkLeft1000(m.ptr, g);
+            const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
             // Faux-italic shear (issue #77) slides ink horizontally
             // with height: the shift is linear, so the extremes sit
             // at the ink top/bottom. Backends round each row to
             // nearest, so floor here stays conservative (never
             // under-shifts). Runs at shear 0, or stubs without
             // top/bottom metrics, keep the old bound exactly.
-            var edge = x_units + ink_left;
+            // Mirrored runs shear the other way (the backend negates
+            // the slant with the flip), so the extremes mirror too.
+            var edge = if (run.mirrored) x_units - ink_e else x_units + ink_e;
             if (run.x_shear != 0 and m.inkTop1000 != null and m.inkBottom1000 != null) {
                 const top_u = @divTrunc(@as(i64, m.inkTop1000.?(m.ptr, g)) * @as(i64, run.size_units), 1000);
                 const bot_u = @divTrunc(@as(i64, m.inkBottom1000.?(m.ptr, g)) * @as(i64, run.size_units), 1000);
                 const sh_top = @divFloor(@as(i64, run.x_shear) * top_u, 1000);
                 const sh_bot = @divFloor(@as(i64, run.x_shear) * bot_u, 1000);
-                edge += @min(@as(i64, 0), @min(sh_top, sh_bot));
+                if (run.mirrored) {
+                    edge -= @max(@as(i64, 0), @max(sh_top, sh_bot));
+                } else {
+                    edge += @min(@as(i64, 0), @min(sh_top, sh_bot));
+                }
             }
             if (edge < left) left = edge;
             const step: i64 = @divTrunc(
@@ -180,9 +197,13 @@ test "left shift covers runs and rules, else zero" {
             // `x` overhangs 50 left of its origin; `y` is inset 10.
             return if (g == 'x') -50 else 10;
         }
+        fn inkR(_: *const anyopaque, g: u16) i32 {
+            // Right edges: `x` overhangs 50 right too, `y` ends at 390.
+            return if (g == 'x') 550 else 390;
+        }
         var tag: u8 = 0;
     };
-    const m: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink };
+    const m: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink, .inkRight1000 = S.inkR };
     // No negative ink: zero shift (bit-identical canvas).
     const runs_ok = [_]zatex.ir.Run{
         .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'} },
@@ -205,6 +226,13 @@ test "left shift covers runs and rules, else zero" {
         .{ .x = -40, .y = 0, .w = 100, .h = 10 },
     };
     try std.testing.expectEqual(@as(u32, 40), leftShiftUnits(m, &runs_ok, &rules));
+    // Mirrored ink (issue #97) hangs off the ink right: `y` mirrored
+    // at 0 reaches 0-390; `x` mirrored at -500 reaches -500-550.
+    const runs_mir = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'}, .mirrored = true },
+        .{ .font_id = 0, .size_units = 1000, .x = -500, .baseline_y = 0, .glyphs = &[_]u16{'x'}, .mirrored = true },
+    };
+    try std.testing.expectEqual(@as(u32, 1050), leftShiftUnits(m, &runs_mir, &.{}));
 }
 
 test "left shift follows shear at ink extremes (issue #77)" {
@@ -226,15 +254,26 @@ test "left shift follows shear at ink extremes (issue #77)" {
         fn bot(_: *const anyopaque, g: u16) i32 {
             return if (g == 's') -205 else 0;
         }
+        fn inkR(_: *const anyopaque, g: u16) i32 {
+            return if (g == 's') 346 else 390;
+        }
         var tag: u8 = 0;
     };
-    const m: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink };
-    const m2: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink, .inkTop1000 = S.top, .inkBottom1000 = S.bot };
+    const m: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink, .inkRight1000 = S.inkR };
+    const m2: ShiftMetrics = .{ .ptr = &S.tag, .advance1000 = S.adv, .inkLeft1000 = S.ink, .inkRight1000 = S.inkR, .inkTop1000 = S.top, .inkBottom1000 = S.bot };
     const runs = [_]zatex.ir.Run{
         .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'s'}, .x_shear = 250 },
     };
     try std.testing.expectEqual(@as(u32, 92), leftShiftUnits(m2, &runs, &.{}));
     try std.testing.expectEqual(@as(u32, 40), leftShiftUnits(m, &runs, &.{}));
+    // Mirrored shear (issue #97) leans the other way: the top (+110)
+    // drags left, so the edge is 0-346-110 = -456. Without
+    // top/bottom metrics the sheared bound stays put (0-346).
+    const runs_mir = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'s'}, .x_shear = 250, .mirrored = true },
+    };
+    try std.testing.expectEqual(@as(u32, 456), leftShiftUnits(m2, &runs_mir, &.{}));
+    try std.testing.expectEqual(@as(u32, 346), leftShiftUnits(m, &runs_mir, &.{}));
 }
 
 /// Select the paint for one IR run/rule: ambient (null) is black ink;

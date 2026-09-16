@@ -14202,6 +14202,16 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mtext>x</mtext></mstyle></mrow><annotation encoding=\"application/x-tex\">\\reflectbox{x}</annotation></semantics></math>"
   },
   {
+   "id": "reflectbox-math",
+   "tex": "\\reflectbox{$x^2$}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><msup><mi>x</mi><mn>2</mn></msup></mstyle></mstyle></mrow><annotation encoding=\"application/x-tex\">\\reflectbox{$x^2$}</annotation></semantics></math>"
+  },
+  {
    "id": "overgroup",
    "tex": "\\overgroup{AB}",
    "display": false,

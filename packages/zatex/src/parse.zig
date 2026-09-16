@@ -479,6 +479,18 @@ pub const Node = union(enum) {
     vcenter: struct {
         body: Idx,
     },
+    /// Horizontally mirrored content (`\reflectbox` over an hbox,
+    /// `\mathreflectbox` over math, issue #97, pinned 0.18.7):
+    /// geometry-transparent like `.pmb` — layout mirrors the ink
+    /// about the box center (KaTeX's CSS flip), while MathML stays
+    /// the plain body (KaTeX's MathML carries no flip marker either).
+    reflect: struct {
+        /// True for `\mathreflectbox` (math body), false for
+        /// `\reflectbox` (hbox body): the serializer round-trips
+        /// the source command from this.
+        math: bool,
+        body: Idx,
+    },
     /// Token range (into the token arena) for `\text` bodies.
     text: struct {
         toks: Range,
@@ -2891,21 +2903,23 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         return ctx.allocNode(.{ .varlim = .{ .body = body } });
     }
     if (full_only and (tokNameEq(name, "reflectbox"))) {
-        // KaTeX parity (pinned 0.18.7): `\reflectbox` takes an hbox
-        // (text) argument; MathML is the text content under a
-        // textstyle reset. The visual mirror (KaTeX CSS) has no IR
-        // counterpart, so layout renders unmirrored (known gap).
+        // KaTeX parity (pinned 0.18.7, issue #97): `\reflectbox`
+        // takes an hbox argument — the same `parseTextBody` path as
+        // `\hbox`, so `$...$` math islands work — under a textstyle
+        // reset. The `.reflect` marker mirrors the ink about the box
+        // center at layout (KaTeX's CSS flip); MathML stays the
+        // plain content, as does KaTeX's.
         const toks = try parseBracedToks(ctx, t, false);
-        try checkTextToks(ctx, toks);
-        const body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        const inner = try parseTextBody(ctx, depth, toks, .rm);
+        const body = try ctx.allocNode(.{ .reflect = .{ .math = false, .body = inner } });
         return ctx.allocNode(.{ .style = .{ .style = .T, .body = body } });
     }
     if (full_only and (tokNameEq(name, "mathreflectbox"))) {
-        // KaTeX parity (pinned 0.18.7): `\mathreflectbox` takes math
-        // content and mirrors it visually; MathML is the content
-        // alone, so the body parses straight through (same
-        // unmirrored-layout gap as `\reflectbox` above).
-        return parseGroupOrAtom(ctx, depth);
+        // KaTeX parity (pinned 0.18.7, issue #97): `\mathreflectbox`
+        // takes math content; same `.reflect` mirror marker as
+        // `\reflectbox` above, plain-content MathML like KaTeX's.
+        const inner = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .reflect = .{ .math = true, .body = inner } });
     }
     if (full_only and (tokNameEq(name, "KaTeX") or tokNameEq(name, "LaTeX") or tokNameEq(name, "TeX"))) {
         // Logo macros (KaTeX 0.18.7 `macros.js`, all `\textrm` +

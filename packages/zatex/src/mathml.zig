@@ -1088,6 +1088,11 @@ const Writer = struct {
                 try self.node(p.body, face);
                 self.str("</mstyle>");
             },
+            // Mirrored content (issue #97): KaTeX's flip is CSS-only,
+            // so its MathML is the plain body — walk straight through.
+            .reflect => |r| {
+                try self.node(r.body, face);
+            },
             // Math-mode circled (issue #51 review, pinned 0.18.7):
             // mover with the circle operator, body row like KaTeX.
             .circled => |c| {

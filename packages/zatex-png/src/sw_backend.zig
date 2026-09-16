@@ -125,8 +125,8 @@ pub const Canvas = struct {
         sw_raster.fillRect(self.pixels, self.w, self.h, x, y, w, h, self.fill);
     }
 
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64) error{RenderInit}!Run {
-        return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale, .x_shear = x_shear };
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!Run {
+        return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
     }
 
     /// Write the canvas as 8-bit RGBA PNG to `out_path`.
@@ -144,6 +144,11 @@ pub const Run = struct {
     x_scale: f64,
     /// Faux-italic slant (0 = upright): dotless i/j lean (issue #77).
     x_shear: f64,
+    /// Horizontally mirrored ink about the glyph origin
+    /// (`\reflectbox`, issue #97): negated x-scale and slant flatten
+    /// the outline into its mirror image (nonzero winding is
+    /// sign-blind, so counters survive the flip).
+    mirrored: bool,
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
         const c = self.canvas;
@@ -153,7 +158,8 @@ pub const Run = struct {
         if (segs.len == 0) return;
         // Shear is a dimensionless ratio (device px shift per device
         // px above the baseline), so it passes through unscaled.
-        const lines = sw_raster.flatten(segs, scale * self.x_scale, scale, x, y, self.x_shear, c.lines);
+        const mx: f64 = if (self.mirrored) -1 else 1;
+        const lines = sw_raster.flatten(segs, mx * scale * self.x_scale, scale, x, y, mx * self.x_shear, c.lines);
         sw_raster.fillLines(c.pixels, c.w, c.h, lines, c.fill, c.row_cov);
     }
 
@@ -193,6 +199,22 @@ test "flatten shears ink right with height above baseline (issue #77)" {
     const plain = sw_raster.flatten(&seg, 1, 1, 0, 50, 0, &out);
     try std.testing.expectEqual(@as(f32, 10), plain[0].x1);
     try std.testing.expectEqual(@as(f32, 150), plain[0].y1);
+}
+
+test "mirrored runs negate x-scale and slant about the origin (issue #97)" {
+    // Asymmetric stroke (10,0)-(30,100), baseline at oy=50: negated
+    // x-scale mirrors about ox (100-10=90, 100-30=70), and the
+    // negated slant leans the top left (70-0.25*100=45).
+    const seg = [_]sw_font.Seg{
+        .{ .x = .{ 10, 0, 0, 30 }, .y = .{ 0, 0, 0, 100 }, .is_curve = false },
+    };
+    var out: [4]sw_raster.Line = undefined;
+    const mir = sw_raster.flatten(&seg, -1, 1, 100, 50, -0.25, &out);
+    try std.testing.expectEqual(@as(usize, 1), mir.len);
+    try std.testing.expectEqual(@as(f32, 90), mir[0].x0);
+    try std.testing.expectEqual(@as(f32, 50), mir[0].y0);
+    try std.testing.expectEqual(@as(f32, 45), mir[0].x1);
+    try std.testing.expectEqual(@as(f32, 150), mir[0].y1);
 }
 
 // extents1000 uses a 512-segment stack scratch: assert every fixture

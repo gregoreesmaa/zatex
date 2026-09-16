@@ -281,12 +281,12 @@ pub const GdiCanvas = struct {
         self.swc.fillRect(x, y, w, h);
     }
 
-    pub fn beginRun(self: *GdiCanvas, font: *const GdiFont, size_px: f64, x_scale: f64, x_shear: f64) error{RenderInit}!GdiRun {
+    pub fn beginRun(self: *GdiCanvas, font: *const GdiFont, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!GdiRun {
         if (comptime !on_windows) return error.RenderInit;
         const px: i32 = @intFromFloat(@max(1, @round(size_px)));
         const hf = CreateFontIndirectW(&LOGFONTW{ .lfHeight = -px, .lfFaceName = font.family }) orelse return error.RenderInit;
         const prev = SelectObject(font.hdc, hf);
-        return .{ .canvas = self, .font = font, .hfont = hf, .prev = prev, .x_scale = x_scale, .x_shear = x_shear };
+        return .{ .canvas = self, .font = font, .hfont = hf, .prev = prev, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
     }
 
     pub fn writePng(self: *GdiCanvas, out_path: []const u8) error{PngWrite}!void {
@@ -303,6 +303,11 @@ pub const GdiRun = struct {
     /// Faux-italic slant, device px right per device px above the
     /// baseline (dotless i/j, issue #77); 0 draws unchanged.
     x_shear: f64,
+    /// Mirror ink about the glyph origin (`\reflectbox`, issue #97):
+    /// source columns read right-to-left into the mirrored device
+    /// span, and the slant negates with the flip (same frame as the
+    /// FreeType backend).
+    mirrored: bool,
 
     pub fn drawGlyph(self: *GdiRun, glyph: u16, x: f64, y: f64) void {
         if (comptime !on_windows) return;
@@ -319,11 +324,14 @@ pub const GdiRun = struct {
         if (got == GDI_ERROR) return;
         const stride: usize = (gw + 3) & ~@as(usize, 3);
         const sx: f64 = if (self.x_scale > 0) self.x_scale else 1;
+        const dw: usize = @as(usize, @intFromFloat(@round(@as(f64, @floatFromInt(gw)) * sx)));
         // Pen maps to canvas: ink left/top in device px at the run
         // size (the run font was selected for size_px, so GDI units
         // are already output pixels — no rescaling, unlike metrics).
+        // Mirrored ink spans [x-origin-dw, x-origin]: the origin hangs
+        // right of the ink instead of left (issue #97).
         const y_base: i64 = @as(i64, @intFromFloat(@round(y)));
-        const ox: i64 = @as(i64, @intFromFloat(@round(x))) + gm.ptGlyphOrigin.x;
+        const ox: i64 = @as(i64, @intFromFloat(@round(x))) + (if (self.mirrored) -gm.ptGlyphOrigin.x - @as(i32, @intCast(dw)) else gm.ptGlyphOrigin.x);
         const oy_top: i64 = y_base - gm.ptGlyphOrigin.y;
         const W: i64 = @intCast(c.w);
         const H: i64 = @intCast(c.h);
@@ -342,13 +350,16 @@ pub const GdiRun = struct {
             // frame as the FreeType backend, inheriting this
             // backend's own origin mapping.
             const hab: i64 = row_up - y_base;
-            const shx: i64 = @as(i64, @intFromFloat(@round(self.x_shear * @as(f64, @floatFromInt(hab)))));
+            // Mirrored shear leans left (negated with the flip).
+            const shear: f64 = if (self.mirrored) -self.x_shear else self.x_shear;
+            const shx: i64 = @as(i64, @intFromFloat(@round(shear * @as(f64, @floatFromInt(hab)))));
             var dx: usize = 0;
-            const dw: usize = @as(usize, @intFromFloat(@round(@as(f64, @floatFromInt(gw)) * sx)));
             while (dx < dw) : (dx += 1) {
                 const col: i64 = ox + @as(i64, @intCast(dx)) + shx;
                 if (col < 0 or col >= W) continue;
-                const srcx: usize = @min(gw - 1, @as(usize, @intFromFloat(@floor(@as(f64, @floatFromInt(dx)) / sx))));
+                // Mirrored runs sample the source bitmap back-to-front.
+                const samp: usize = if (self.mirrored) dw - 1 - dx else dx;
+                const srcx: usize = @min(gw - 1, @as(usize, @intFromFloat(@floor(@as(f64, @floatFromInt(samp)) / sx))));
                 const v = self.canvas.scratch[dy * stride + srcx];
                 if (v == 0) continue;
                 const a = fill.a * @as(f64, @floatFromInt(v)) / 63.0;

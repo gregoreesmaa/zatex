@@ -319,10 +319,10 @@ pub const FtCanvas = struct {
         self.swc.fillRect(x, y, w, h);
     }
 
-    pub fn beginRun(self: *FtCanvas, font: *const FtFont, size_px: f64, x_scale: f64, x_shear: f64) error{RenderInit}!FtRun {
+    pub fn beginRun(self: *FtCanvas, font: *const FtFont, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!FtRun {
         const px: u32 = @intFromFloat(@max(1, @round(size_px)));
         if (font.fns.Set_Pixel_Sizes(font.face, 0, px) != 0) return error.RenderInit;
-        return .{ .canvas = self, .font = font, .x_scale = x_scale, .x_shear = x_shear };
+        return .{ .canvas = self, .font = font, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
     }
 
     pub fn writePng(self: *FtCanvas, out_path: []const u8) error{PngWrite}!void {
@@ -337,6 +337,10 @@ pub const FtRun = struct {
     /// Faux-italic slant, device px right per device px above the
     /// baseline (dotless i/j, issue #77); 0 draws unchanged.
     x_shear: f64,
+    /// Mirror ink about the glyph origin (`\reflectbox`, issue #97):
+    /// source columns read right-to-left into the mirrored device
+    /// span, and the slant negates with the flip.
+    mirrored: bool,
 
     pub fn drawGlyph(self: *FtRun, glyph: u16, x: f64, y: f64) void {
         // Caller floats are bottom-left y-up pixels (interface); the
@@ -347,13 +351,18 @@ pub const FtRun = struct {
         const bm = slot.bitmap;
         if (bm.pixel_mode != FT_PIXEL_MODE_GRAY or bm.buffer == null) return;
         const sx: f64 = if (self.x_scale > 0) self.x_scale else 1;
-        const ox: i64 = @as(i64, @intFromFloat(@round(x))) + slot.bitmap_left;
+        const dw: u32 = @intFromFloat(@round(@as(f64, @floatFromInt(bm.width)) * sx));
+        // Mirrored ink spans [x-left-dw, x-left]: the bearing hangs
+        // right of the origin instead of left.
+        const ox: i64 = @as(i64, @intFromFloat(@round(x))) + (if (self.mirrored) -slot.bitmap_left - @as(i64, @intCast(dw)) else slot.bitmap_left);
         const oy_top: i64 = @as(i64, @intFromFloat(@round(y))) + slot.bitmap_top;
         const W: i64 = @intCast(c.w);
         const H: i64 = @intCast(c.h);
         const fill = c.fill;
         if (fill.a <= 0) return;
         const buf = bm.buffer.?;
+        // Mirrored shear leans left (negated with the flip).
+        const shear: f64 = if (self.mirrored) -self.x_shear else self.x_shear;
         var dy: u32 = 0;
         while (dy < bm.rows) : (dy += 1) {
             const row: i64 = H - 1 - (oy_top - @as(i64, dy));
@@ -362,13 +371,14 @@ pub const FtRun = struct {
             // `bitmap_top - dy` device px above the baseline, so its
             // ink shifts right by shear times that height.
             const hab: i64 = @as(i64, slot.bitmap_top) - @as(i64, dy);
-            const shx: i64 = @as(i64, @intFromFloat(@round(self.x_shear * @as(f64, @floatFromInt(hab)))));
+            const shx: i64 = @as(i64, @intFromFloat(@round(shear * @as(f64, @floatFromInt(hab)))));
             var dx: u32 = 0;
-            const dw: u32 = @intFromFloat(@round(@as(f64, @floatFromInt(bm.width)) * sx));
             while (dx < dw) : (dx += 1) {
                 const col: i64 = ox + dx + shx;
                 if (col < 0 or col >= W) continue;
-                const srcx: u32 = @min(bm.width - 1, @as(u32, @intFromFloat(@floor(@as(f64, @floatFromInt(dx)) / sx))));
+                // Mirrored runs sample the source bitmap back-to-front.
+                const samp: u32 = if (self.mirrored) dw - 1 - dx else dx;
+                const srcx: u32 = @min(bm.width - 1, @as(u32, @intFromFloat(@floor(@as(f64, @floatFromInt(samp)) / sx))));
                 const v = buf[dy * @as(usize, @intCast(bm.pitch)) + srcx];
                 if (v == 0) continue;
                 const a = fill.a * @as(f64, @floatFromInt(v)) / 255.0;

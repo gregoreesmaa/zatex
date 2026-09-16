@@ -887,7 +887,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\Reals` | `\Reals` | ![](renders/reals.png) |  |
 | `\reals` | `\reals` | ![](renders/reals-2.png) |  |
 | `\ref` | — | — | goldens: rej-unsup-ref |
-| `\reflectbox` | `\reflectbox{x}` | ![](renders/reflectbox.png) |  |
+| `\reflectbox` | `\reflectbox{$x^2$}` | ![](renders/reflectbox.png) |  |
 | `\relax` | `x \relax y` | ![](renders/relax.png) |  |
 | `\renewcommand` | `\def\hail{Hi!}\n\renewcommand\hail{\text{Ahoy!}}\n\hail` | ![](renders/renewcommand.png) |  |
 | `\renewenvironment` | — | — | goldens: rej-unsup-renewenvironment |

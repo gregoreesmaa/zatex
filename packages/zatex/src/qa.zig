@@ -2278,6 +2278,88 @@ test "qa84 genfrac zero bar omits the rule (issue #105)" {
     try expectGolden("genfrac-0pt", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle displaystyle=\"false\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow></math>", got);
 }
 
+test "qa85 reflectbox mirrors ink about the box center (issue #97)" {
+    // KaTeX parity (pinned 0.18.7): `\reflectbox` / `\mathreflectbox`
+    // flip the ink (CSS scaleX(-1)) while the layout box stays
+    // bit-identical to the unmirrored twin. Runs carry mirrored=true
+    // with pre-mapped origins; rules arrive as plain pre-mirrored
+    // rects; MathML is the plain content (KaTeX marks no flip).
+    var b1: B = .{};
+    const m = try lay("\\mathreflectbox{R}", false, &b1);
+    var b2: B = .{};
+    const u = try lay("R", false, &b2);
+    try std.testing.expectEqual(u.width, m.width);
+    try std.testing.expectEqual(u.height_above, m.height_above);
+    try std.testing.expectEqual(u.depth_below, m.depth_below);
+    try std.testing.expectEqual(@as(usize, 1), u.runs.len);
+    try std.testing.expectEqual(@as(usize, 1), m.runs.len);
+    try std.testing.expect(!u.runs[0].mirrored);
+    try std.testing.expect(m.runs[0].mirrored);
+    try std.testing.expectEqualSlices(u16, u.runs[0].glyphs, m.runs[0].glyphs);
+    // Origins mirror about the box center: x' = 2*axis - x.
+    const axis: i32 = @divTrunc(@as(i32, @intCast(m.width)), 2);
+    try std.testing.expectEqual(2 * axis - u.runs[0].x, m.runs[0].x);
+    // A double mirror is the identity: nested CSS flips compose to a
+    // translation, and here both axes coincide, so nothing moves.
+    var b3: B = .{};
+    const d = try lay("\\mathreflectbox{\\mathreflectbox{R}}", false, &b3);
+    try std.testing.expectEqual(@as(usize, 1), d.runs.len);
+    try std.testing.expect(!d.runs[0].mirrored);
+    try std.testing.expectEqual(u.runs[0].x, d.runs[0].x);
+    // Rules mirror as plain rects: [x, x+w] -> [2A-x-w, 2A-x].
+    var b4: B = .{};
+    const mf = try lay("\\mathreflectbox{\\frac{a}{b}}", false, &b4);
+    var b5: B = .{};
+    const uf = try lay("\\frac{a}{b}", false, &b5);
+    try std.testing.expectEqual(@as(usize, 1), uf.rules.len);
+    try std.testing.expectEqual(@as(usize, 1), mf.rules.len);
+    const faxis: i32 = @divTrunc(@as(i32, @intCast(mf.width)), 2);
+    const ur = uf.rules[0];
+    const mr = mf.rules[0];
+    try std.testing.expectEqual(ur.w, mr.w);
+    try std.testing.expectEqual(ur.h, mr.h);
+    try std.testing.expectEqual(2 * faxis - ur.x - @as(i32, @intCast(ur.w)), mr.x);
+    try std.testing.expectEqual(ur.y, mr.y);
+    // MathML goldens: plain content, KaTeX-shaped (probed 0.18.7 —
+    // the flip is CSS-only, so neither side marks it).
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\mathreflectbox{x^2}", .{}, &buf);
+    try expectGolden("mathreflectbox", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow></math>", got);
+    var buf2: [4096]u8 = undefined;
+    const got2 = try zatex.mathml("\\reflectbox{R}", .{}, &buf2);
+    try expectGolden("reflectbox", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle displaystyle=\"false\"><mtext>R</mtext></mstyle></mrow></math>", got2);
+    // `$...$` math islands parse inside `\reflectbox` (the `\hbox`
+    // path): KaTeX wraps the island in a second textstyle reset.
+    var buf3: [4096]u8 = undefined;
+    const got3 = try zatex.mathml("\\reflectbox{$x^2$}", .{}, &buf3);
+    try expectGolden("reflectbox-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle displaystyle=\"false\"><mstyle displaystyle=\"false\"><msup><mi>x</mi><mn>2</mn></msup></mstyle></mstyle></mrow></math>", got3);
+    // The box body lays out like `\hbox` (same textbody path): same
+    // box, same glyph multiset, origins mirrored about the center.
+    var b6: B = .{};
+    const rb = try lay("\\reflectbox{$x^2$}", false, &b6);
+    var b7: B = .{};
+    const hb = try lay("\\hbox{$x^2$}", false, &b7);
+    try std.testing.expectEqual(hb.width, rb.width);
+    try std.testing.expectEqual(hb.height_above, rb.height_above);
+    try std.testing.expectEqual(hb.depth_below, rb.depth_below);
+    try std.testing.expectEqual(hb.rules.len, rb.rules.len);
+    var hn: usize = 0;
+    for (hb.runs) |r| hn += r.glyphs.len;
+    var rn: usize = 0;
+    for (rb.runs) |r| {
+        rn += r.glyphs.len;
+        try std.testing.expect(r.mirrored);
+    }
+    try std.testing.expectEqual(hn, rn);
+    const raxis: i32 = @divTrunc(@as(i32, @intCast(rb.width)), 2);
+    for (rb.runs) |r| {
+        for (r.glyphs) |g| {
+            const hx = try glyphX(hb, g);
+            try std.testing.expectEqual(2 * raxis - hx, r.x);
+        }
+    }
+}
+
 
 
 

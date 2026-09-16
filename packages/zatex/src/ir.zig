@@ -27,6 +27,14 @@ pub const Run = struct {
     /// default math face, whose upright host glyph stands in for
     /// KaTeX's math-italic ȷ/ı (issue #77). Additive like `x_scale`.
     x_shear: i16 = 0,
+    /// Horizontally mirrored ink (`\reflectbox` / `\mathreflectbox`,
+    /// issue #97): the backend flips each glyph about its own origin
+    /// (KaTeX's CSS flip). The core pre-maps every run origin through
+    /// the mirror, so backends never do coordinate math; rules in a
+    /// mirrored subtree arrive pre-mirrored as plain rects. Runs
+    /// never merge across the mirror boundary. Additive: existing
+    /// constructions omit it and render unmirrored.
+    mirrored: bool = false,
 };
 
 /// One filled rect in font units (fraction bars, radical vincula, rules).

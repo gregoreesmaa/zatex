@@ -565,10 +565,11 @@ OVERRIDES = {
     # whose bare `^` text capture rejects), but the true equation
     # re-enters math mode and renders.
     "\\hbox": ("\\hbox{$x^2$}", False),
-    # KaTeX's `\reflectbox{$x^2$}` needs math (scripts) inside the
-    # box arg (rejected here — even `\reflectbox{x^2}` fails; the
-    # flat form renders; issue #91, box-math is issue #97).
-    "\\reflectbox": ("\\reflectbox{x}", False),
+    # KaTeX's own `\reflectbox{$x^2$}` (restored verbatim, issue #97):
+    # the box arg takes the `\hbox` path, so `$...$` re-enters math
+    # mode and renders — and `x^2` is visibly asymmetric, proving the
+    # mirror (the old flat `x` was a mirror image of itself).
+    "\\reflectbox": ("\\reflectbox{$x^2$}", False),
     # KaTeX's Rendered column (`\set{x|x<5}`); its Source column uses
     # `\VERT`, undefined in BOTH engines (issue #84: Vert, not VERT).
     # The pipe form exercises the split path (issue #91).

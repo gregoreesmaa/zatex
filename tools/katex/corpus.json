@@ -8408,6 +8408,12 @@
   "expect": "accept"
  },
  {
+  "id": "reflectbox-math",
+  "tex": "\\reflectbox{$x^2$}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "overgroup",
   "tex": "\\overgroup{AB}",
   "display": false,

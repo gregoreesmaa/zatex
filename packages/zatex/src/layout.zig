@@ -71,6 +71,11 @@ pub const Box = struct {
     /// (issue #77): the backend shears the ink about the baseline.
     /// Runs split on shear change like on scale.
     x_shear: i16 = 0,
+    /// Horizontally mirrored subtree (`\reflectbox` /
+    /// `\mathreflectbox`, issue #97): geometry is the plain body
+    /// box bit-identically (KaTeX's CSS flip changes paint, not
+    /// layout); the emit walk mirrors the ink about the box center.
+    mirror: bool = false,
 };
 
 pub const max_boxes: usize = 640;
@@ -243,6 +248,23 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         // Poor-man's bold is a paint style (KaTeX text-shadow), so
         // layout is the bare body box, bit-identically.
         .pmb => |p| return layoutNode(lc, style, p.body),
+        .reflect => |r| {
+            // Mirrored content (issue #97): the layout box keeps the
+            // body geometry bit-identically — only the emit walk
+            // mirrors the ink, about this box's horizontal center.
+            const b = try layoutNode(lc, style, r.body);
+            const bb = lc.boxes[b];
+            const s = try lc.allocKids(1);
+            lc.bkids[s] = .{ .box = b, .dx = 0, .dy = 0 };
+            return lc.allocBox(.{
+                .w = bb.w,
+                .ha = bb.ha,
+                .db = bb.db,
+                .kind = .{ .list = .{ .start = s, .len = 1 } },
+                .invisible = false,
+                .mirror = true,
+            });
+        },
         .circled => |c| {
             // Ring-ABOVE accent (issue #80, pinned 0.18.7
             // `accent.ts`): KaTeX lays `\\textcircled` out as an
@@ -723,6 +745,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .classwrap => |c| return c.class,
         .font => |f| return classOf(pc, f.body),
         .pmb => |p| return classOf(pc, p.body),
+        .reflect => |r| return classOf(pc, r.body),
         .vcenter => |v| return classOf(pc, v.body),
         .circled => |c| return classOf(pc, c.body),
         .text => return .Ord,
@@ -1887,6 +1910,7 @@ fn nucleusFirstCp(pc: *const parse.ParseCtx, id: Idx) u21 {
         .size => |s| return nucleusFirstCp(pc, s.body),
         .classwrap => |c| return nucleusFirstCp(pc, c.body),
         .pmb => |p| return nucleusFirstCp(pc, p.body),
+        .reflect => |r| return nucleusFirstCp(pc, r.body),
         .vcenter => |v| return nucleusFirstCp(pc, v.body),
         .circled => |c| return nucleusFirstCp(pc, c.body),
         .sout => |b| return nucleusFirstCp(pc, b),
@@ -3269,12 +3293,19 @@ const EmitCtx = struct {
     open_color: ?u32 = null,
     open_scale: u16 = 1000,
     open_shear: i16 = 0,
+    open_mirrored: bool = false,
     open_y: i32 = 0,
     /// Expected pen x for run continuation.
     open_x: i32 = 0,
     open_run_x: i32 = 0,
     open_start: usize = 0,
     has_open: bool = false,
+    /// Mirror map for emitted x: `x' = x + m_off`, or `x' = m_off - x`
+    /// under an odd `\reflectbox` nesting (issue #97). Reflections
+    /// compose to x -> +/-x + c, so one flag plus one offset stays
+    /// exact for arbitrary nesting (a double flip is a translation).
+    m_neg: bool = false,
+    m_off: i32 = 0,
 
     fn closeRun(self: *EmitCtx) void {
         if (!self.has_open) return;
@@ -3288,6 +3319,7 @@ const EmitCtx = struct {
                 .color = self.open_color,
                 .x_scale = self.open_scale,
                 .x_shear = self.open_shear,
+                .mirrored = self.open_mirrored,
             };
             self.nr += 1;
         }
@@ -3300,10 +3332,14 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
     switch (b.kind) {
         .glyph => |g| {
             if (!b.invisible) {
+                // The mirror map (issue #97) moves the glyph origin;
+                // the backend flips the ink about that origin when
+                // the map is negating.
+                const ex = if (ec.m_neg) ec.m_off - x else x + ec.m_off;
                 // Break runs on position gaps: expected pen must equal x.
-                // Color, raster-scale, and shear boundaries split runs
-                // too (issues #35, #31, #77).
-                if (ec.has_open and (ec.open_font != g.font or ec.open_size != g.size or ec.open_color != b.color or ec.open_scale != b.x_scale or ec.open_shear != b.x_shear or ec.open_y != base or ec.open_x != x)) {
+                // Color, raster-scale, shear, and mirror boundaries
+                // split runs too (issues #35, #31, #77, #97).
+                if (ec.has_open and (ec.open_font != g.font or ec.open_size != g.size or ec.open_color != b.color or ec.open_scale != b.x_scale or ec.open_shear != b.x_shear or ec.open_mirrored != ec.m_neg or ec.open_y != base or ec.open_x != ex)) {
                     ec.closeRun();
                 }
                 if (!ec.has_open) {
@@ -3313,15 +3349,16 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     ec.open_color = b.color;
                     ec.open_scale = b.x_scale;
                     ec.open_shear = b.x_shear;
+                    ec.open_mirrored = ec.m_neg;
                     ec.open_y = base;
                     ec.open_start = ec.ng;
-                    ec.open_run_x = x;
+                    ec.open_run_x = ex;
                     ec.has_open = true;
                 }
                 if (ec.ng >= ec.glyphs.len) return error.NoSpace;
                 ec.glyphs[ec.ng] = g.glyph;
                 ec.ng += 1;
-                ec.open_x = x + b.w;
+                ec.open_x = ex + b.w;
             }
         },
         .kern, .empty => {},
@@ -3329,10 +3366,14 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
             if (!b.invisible) {
                 ec.closeRun();
                 if (ec.nl >= ec.rules.len) return error.NoSpace;
+                const w: u32 = if (b.w < 0) 0 else @intCast(b.w);
+                // Mirror the rect about the active axis (issue #97):
+                // [x, x+w] maps to [m_off-x-w, m_off-x].
+                const ex = if (ec.m_neg) ec.m_off - x - @as(i32, @intCast(w)) else x + ec.m_off;
                 ec.rules[ec.nl] = .{
-                    .x = x,
+                    .x = ex,
                     .y = base - b.ha,
-                    .w = if (b.w < 0) 0 else @intCast(b.w),
+                    .w = w,
                     .h = if (b.ha + b.db < 0) 0 else @intCast(b.ha + b.db),
                     .color = b.color,
                 };
@@ -3340,6 +3381,18 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
             }
         },
         .list => |r| {
+            // A mirror box (issue #97) flips about its own horizontal
+            // center in ORIGINAL coordinates, ahead of the accumulated
+            // outer map (CSS nests outer-to-inner): with old map
+            // s*x+c, the new map is s*(2*axis-x)+c. Saved and
+            // restored, so siblings keep the outer map.
+            const saved_neg = ec.m_neg;
+            const saved_off = ec.m_off;
+            if (b.mirror) {
+                const axis = x + @divTrunc(b.w, 2);
+                ec.m_off += if (ec.m_neg) -2 * axis else 2 * axis;
+                ec.m_neg = !ec.m_neg;
+            }
             const kids = lc.bkids[r.start .. r.start + r.len];
             for (kids) |k| {
                 // Invisibility propagates to children.
@@ -3349,6 +3402,8 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     try emitBox(lc, ec, k.box, x + k.dx, base - k.dy);
                 }
             }
+            ec.m_neg = saved_neg;
+            ec.m_off = saved_off;
         },
     }
 }
