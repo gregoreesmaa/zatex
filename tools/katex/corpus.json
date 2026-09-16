@@ -7586,6 +7586,24 @@
   "expect": "accept"
  },
  {
+  "id": "boldsymbol-letters",
+  "tex": "\\boldsymbol{AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "decl-group",
+  "tex": "{\\bf Aa}Bb",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "decl-over",
+  "tex": "\\bf a\\over b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "biggl",
   "tex": "\\biggl(",
   "display": false,

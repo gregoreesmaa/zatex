@@ -33,9 +33,14 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
         .tag => false,
         else => true,
     };
-    if (wrap) w.str("<mrow>");
-    w.node(root, .{ .fam = null, .script = false }) catch |e| return e;
-    if (wrap) w.str("</mrow>");
+    // Sole-threading (issue #94): the envelope row's lone child is
+    // sole in its row, so a sole font body splices flat (KaTeX pushes
+    // variants to leaves — the `.delim`/`.style` splice precedent).
+    if (wrap) {
+        w.str("<mrow>");
+        w.nodeSole(root, .{ .fam = null, .script = false }, true) catch |e| return e;
+        w.str("</mrow>");
+    } else w.node(root, .{ .fam = null, .script = false }) catch |e| return e;
     w.str("</math>");
     if (w.overflow) return error.NoSpace;
     const n = mergeNot(out[0..w.pos]);
@@ -76,9 +81,15 @@ fn mergeRuns(buf: []u8) usize {
                         }
                     }
                 }
-                st.push(tag.nameEqual("mrow"));
+                // `mstyle` is an attribute shell, not a structural
+                // position (issue #94): it stays off the stack, so
+                // merging stays row-local through it and sole-font
+                // digit runs fold like KaTeX (`\bf 12` → one `mn`).
+                // Strict adjacency still gates every fold (tryRun),
+                // so nothing merges across shells.
+                if (!tag.nameEqual("mstyle")) st.push(tag.nameEqual("mrow"));
             } else if (tag.closing) {
-                st.pop();
+                if (!tag.nameEqual("mstyle")) st.pop();
             }
             // Copy the whole tag.
             const tlen = tag.len;
@@ -759,6 +770,17 @@ const Writer = struct {
     }
 
     fn node(self: *Writer, id: Idx, face: Face) Error!void {
+        return self.nodeSole(id, face, false);
+    }
+
+    /// Row-sole threading (issue #94): `sole` is true when this node
+    /// is the lone child of its emitted row. A font whose multi-atom
+    /// body is sole splices flat (KaTeX pushes variants to leaves);
+    /// non-sole it rows its body like a brace group. Every other node
+    /// ignores `sole`, so `node()` (false) preserves today's shapes
+    /// exactly — only the envelope, `.group`, `.font`, and `.href`
+    /// arms below pass anything else.
+    fn nodeSole(self: *Writer, id: Idx, face: Face, sole: bool) Error!void {
         if (self.overflow) return error.NoSpace;
         const n = parse.nodeAt(self.pc, id);
         switch (n) {
@@ -816,11 +838,13 @@ const Writer = struct {
                 self.str("</mo>");
             },
             .group => |g| {
-                // Row rule (KaTeX parity): a lone child renders bare,
-                // an empty group keeps its row, the rest wrap in mrow.
+                // Row rule (KaTeX parity): a lone child renders bare
+                // (keeping row-sole: a sole font splices flat through
+                // it, issue #94), an empty group keeps its row, the
+                // rest wrap in mrow.
                 const kids = parse.kidsOf(self.pc, g);
                 if (kids.len == 1) {
-                    try self.node(kids[0], face);
+                    try self.nodeSole(kids[0], face, sole);
                 } else {
                     self.str("<mrow>");
                     for (kids) |k| try self.node(k, face);
@@ -1033,10 +1057,28 @@ const Writer = struct {
                 self.str("</mstyle>");
             },
             .font => |f| {
+                // Sole-threading (issue #94, pinned 0.18.7): a sole
+                // multi-atom body splices flat (KaTeX pushes the
+                // variant onto leaves — no row of its own); non-sole
+                // it rows like a brace group. Lone bodies render bare
+                // exactly like `.group` above, so single-atom fonts
+                // never change shape.
                 self.str("<mstyle mathvariant=\"");
                 self.str(variantFor(f.fam));
                 self.str("\">");
-                try self.node(f.body, .{ .fam = f.fam, .script = face.script });
+                switch (parse.nodeAt(self.pc, f.body)) {
+                    .group => |g| {
+                        const kids = parse.kidsOf(self.pc, g);
+                        if (kids.len == 1) {
+                            try self.nodeSole(kids[0], .{ .fam = f.fam, .script = face.script }, sole);
+                        } else {
+                            if (!sole) self.str("<mrow>");
+                            for (kids) |k| try self.node(k, .{ .fam = f.fam, .script = face.script });
+                            if (!sole) self.str("</mrow>");
+                        }
+                    },
+                    else => try self.node(f.body, .{ .fam = f.fam, .script = face.script }),
+                }
                 self.str("</mstyle>");
             },
             // KaTeX parity (pinned 0.18.7, issue #51): poor-man's
@@ -1217,7 +1259,14 @@ const Writer = struct {
                 }
                 self.str("\">");
                 switch (parse.nodeAt(self.pc, h.body)) {
-                    .group => |g| for (parse.kidsOf(self.pc, g)) |k| try self.node(k, face),
+                    .group => |g| {
+                        // Sole-threading (issue #94): our href shell
+                        // drops in the parity normalizer, so a sole
+                        // font body must splice flat here (pinned
+                        // 0.18.7 `\href{u}{\bf AaBb}` has no inner row).
+                        const kids = parse.kidsOf(self.pc, g);
+                        for (kids) |k| try self.nodeSole(k, face, kids.len == 1);
+                    },
                     else => try self.node(h.body, face),
                 }
                 self.str("</mrow>");

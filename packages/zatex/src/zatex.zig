@@ -724,7 +724,9 @@ test "issue34: alphabet commands request distinct provider fonts" {
         .{ .src = "\\mathtt{A}", .font = 4, .cp = 0xD670 },
         .{ .src = "\\mathbb{A}", .font = 7, .cp = 0xD538 },
         .{ .src = "\\Bbb{A}", .font = 7, .cp = 0xD538 },
-        .{ .src = "\\boldsymbol{A}", .font = 2, .cp = 0xD400 },
+        // `\boldsymbol` is `\bm` (issue #94, pinned 0.18.7):
+        // bold-italic A -> U+1D468 -> 0xD468 on font 9.
+        .{ .src = "\\boldsymbol{A}", .font = 9, .cp = 0xD468 },
         // Nested alphabets: the innermost command wins (KaTeX).
         .{ .src = "\\mathbf{\\mathcal{R}}", .font = 8, .cp = 0x211B },
         .{ .src = "\\mathcal{\\mathbf{R}}", .font = 2, .cp = 0xD411 },

@@ -2212,6 +2212,39 @@ test "qa82 infix brace/brack are their own fences (issue #93)" {
     try expectGolden("infix-brack", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">[</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">]</mo></mrow></math>", gotk);
 }
 
+test "qa83 old-style font declarations scope the rest of the group (issue #94)" {
+    // KaTeX parity (pinned 0.18.7): `\bf` et al take NO argument —
+    // they scope over the rest of the enclosing group (braces around
+    // the next atom do NOT scope them: `\sf{A}B` is all sans). The
+    // declaration stops at an infix (`\bf a\over b` bolds the
+    // numerator only) and at the group end (`{\bf Aa}Bb` leaves Bb
+    // bare). `\boldsymbol` is `\bm` (bold-italic, never bold).
+    var b1: B = .{};
+    const l = try lay("\\bf AaBb12", false, &b1);
+    // Every run requests the bold host font; the SMP remap is visible
+    // through the truncating stub (bold A -> U+1D400 -> 0xD400).
+    try std.testing.expect(l.runs.len >= 1);
+    var nglyphs: usize = 0;
+    for (l.runs) |r| {
+        try std.testing.expectEqual(@as(u16, 2), r.font_id);
+        nglyphs += r.glyphs.len;
+    }
+    try std.testing.expectEqual(@as(usize, 6), nglyphs);
+    try std.testing.expectEqual(@as(u16, 0xD400), l.runs[0].glyphs[0]);
+    var buf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\bf AaBb12", .{}, &buf);
+    try expectGolden("decl-bf", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold\"><mi>A</mi><mi>a</mi><mi>B</mi><mi>b</mi><mn>12</mn></mstyle></mrow></math>", got);
+    var buf2: [4096]u8 = undefined;
+    const gotg = try zatex.mathml("{\\bf Aa}Bb", .{}, &buf2);
+    try expectGolden("decl-group", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold\"><mrow><mi>A</mi><mi>a</mi></mrow></mstyle><mi>B</mi><mi>b</mi></mrow></math>", gotg);
+    var buf3: [4096]u8 = undefined;
+    const goto = try zatex.mathml("\\bf a\\over b", .{}, &buf3);
+    try expectGolden("decl-over", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathvariant=\"bold\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", goto);
+    var buf4: [4096]u8 = undefined;
+    const gotb = try zatex.mathml("\\boldsymbol{AaBb}", .{}, &buf4);
+    try expectGolden("decl-boldsymbol", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold-italic\"><mi>A</mi><mi>a</mi><mi>B</mi><mi>b</mi></mstyle></mrow></math>", gotb);
+}
+
 
 
 

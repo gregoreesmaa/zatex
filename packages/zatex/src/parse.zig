@@ -1260,7 +1260,7 @@ const CellTerm = enum { amp, newline, end, right };
 /// when `\tag` hoisted one).
 pub fn parse(ctx: *ParseCtx, display: bool) Error!Idx {
     ctx.display = display;
-    const root = try parseFormula(ctx, 0, .top);
+    const root = try parseFormula(ctx, 0, .top, null);
     const t = try ctx.next();
     if (t.kind != .end) return ctx.fail(t.pos, "unexpected input");
     if (ctx.tag_body == NONE) return root;
@@ -1305,7 +1305,14 @@ fn parseTag(ctx: *ParseCtx, t: Tok) Error!?Idx {
 }
 
 /// Parse a row of atoms until the frame terminator. Returns a group.
-fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
+/// `infix_stop` (issue #94): when non-null, an `\over`-family token
+/// ends the loop WITHOUT being consumed (the flag reports it), so a
+/// declaration rest stops at the infix (`\bf a\over b` bolds the
+/// numerator only — pinned KaTeX 0.18.7 splits the parsed-so-far
+/// body). Null keeps the legacy consume-through split. Only the
+/// old-style font-declaration arm passes non-null; every other call
+/// site (including the infix denominator) passes null.
+fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool) Error!Idx {
     var buf: [512]u16 = undefined;
     var n: usize = 0;
     var bdepth: u8 = 0;
@@ -1382,6 +1389,14 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                 if (isInfix(t)) {
                     // `\over`-family splits the current row: kids so
                     // far are the numerator. `\above` is full-only.
+                    // A declaration rest (non-null `infix_stop`) stops
+                    // here unconsumed instead — the outer loop owns the
+                    // split, so the declaration covers the numerator
+                    // only (issue #94, pinned KaTeX 0.18.7).
+                    if (infix_stop) |st| {
+                        st.* = true;
+                        break;
+                    }
                     _ = try ctx.next();
                     if (tokNameEq(t.name, "above")) try subsetGate(false) else try subsetGate(true);
                     const num = try finishGroup(ctx, buf[0..n]);
@@ -1432,7 +1447,7 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                         }));
                         continue;
                     }
-                    const rest = try parseFormula(ctx, depth, frame);
+                    const rest = try parseFormula(ctx, depth, frame, null);
                     // parseFormula consumed the frame end; wrap rest.
                     if (n >= 512) return error.NoSpace;
                     var nb: [512]u16 = undefined;
@@ -1445,7 +1460,7 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                 if (full_only and (isStyleName(t.name))) {
                     _ = try ctx.next();
                     const st = styleFor(t.name);
-                    const rest = try parseFormula(ctx, depth, frame);
+                    const rest = try parseFormula(ctx, depth, frame, null);
                     // parseFormula consumed the frame end; wrap rest.
                     const g = try finishGroup(ctx, buf[0..n]);
                     _ = g;
@@ -1464,13 +1479,41 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                     // (KaTeX `havingSize` resets, never compounds).
                     _ = try ctx.next();
                     const mult = sizeMultFor(t.name).?;
-                    const rest = try parseFormula(ctx, depth, frame);
+                    const rest = try parseFormula(ctx, depth, frame, null);
                     const g = try finishGroup(ctx, buf[0..n]);
                     _ = g;
                     const sized = try ctx.allocNode(.{ .size = .{ .mult = mult, .body = rest } });
                     var nb: [512]u16 = undefined;
                     @memcpy(nb[0..n], buf[0..n]);
                     nb[n] = sized;
+                    return finishGroup(ctx, nb[0 .. n + 1]);
+                }
+                if (oldStyleDeclFam(t.name)) |fam| {
+                    // Old-style font declarations (KaTeX parity, pinned
+                    // 0.18.7, issue #94): `\bf` etc. take NO argument —
+                    // their body is the rest of the enclosing group
+                    // (braces around the next atom do NOT scope them).
+                    // New-style `\mathbf` etc. keep the single
+                    // group-or-atom body (parseCtrl below). Unlike
+                    // color/style/size above, the rest stops at an
+                    // infix (`\bf a\over b` bolds the numerator only),
+                    // so a stopped rest joins the row and the loop
+                    // continues into the split; otherwise the frame end
+                    // was consumed and the row rebuilds like above.
+                    // Ungated: the subset profile allows these commands
+                    // (same `.font` node, core machinery only).
+                    _ = try ctx.next();
+                    var stopped = false;
+                    const rest = try parseFormula(ctx, depth, frame, &stopped);
+                    const decl = try ctx.allocNode(.{ .font = .{ .fam = fam, .body = rest } });
+                    if (stopped) {
+                        try put(&buf, &n, decl);
+                        continue;
+                    }
+                    if (n >= 512) return error.NoSpace;
+                    var nb: [512]u16 = undefined;
+                    @memcpy(nb[0..n], buf[0..n]);
+                    nb[n] = decl;
                     return finishGroup(ctx, nb[0 .. n + 1]);
                 }
                 const maybe = try parseAtom(ctx, depth);
@@ -1567,7 +1610,7 @@ fn infixKind(t: Tok) FracKind {
 fn parseInfix(ctx: *ParseCtx, depth: u8, frame: Frame, t: Tok, num: Idx) Error!Idx {
     var kind = infixKind(t);
     if (tokNameEq(t.name, "above")) kind.thick = try parseDimenArg(ctx, t);
-    const den = try parseFormula(ctx, depth, frame);
+    const den = try parseFormula(ctx, depth, frame, null);
     return finishInfix(ctx, t, num, den, kind.thick);
 }
 
@@ -1595,7 +1638,7 @@ fn parseGroupOrAtom(ctx: *ParseCtx, depth: u8) Error!Idx {
     const t = try ctx.peek();
     if (t.kind == .lbrace) {
         _ = try ctx.next();
-        return parseFormula(ctx, depth + 1, .group);
+        return parseFormula(ctx, depth + 1, .group, null);
     }
     // Depth guard: every nesting level passes through here or a group.
     if (depth >= contract.max_nesting_depth) {
@@ -1664,7 +1707,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
             return id;
         },
         .lbrace => {
-            const id: ?Idx = try parseFormula(ctx, depth + 1, .group);
+            const id: ?Idx = try parseFormula(ctx, depth + 1, .group, null);
             return id;
         },
         .sup => return ctx.fail(t.pos, "expected base before '^'"),
@@ -2402,7 +2445,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // Scope opener like `{` (KaTeX parity, pinned 0.18.7 — `t`
         // is already consumed), but the frame closes only on
         // `\\endgroup` (strict pairing — see the formula-loop arms).
-        return parseFormula(ctx, depth + 1, .begingroup);
+        return parseFormula(ctx, depth + 1, .begingroup, null);
     }
     // Rule commands only open rows (consumed by the environment row
     // loop, KaTeX `getHLines` parity); anywhere else they are
@@ -2431,8 +2474,11 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         return ctx.allocNode(.{ .font = .{ .fam = fam, .body = body } });
     }
     if (tokNameEq(name, "boldsymbol")) {
+        // `\boldsymbol` IS `\bm` (issue #94, pinned 0.18.7:
+        // bold-italic letters, bold digits — probed identical on
+        // letters, digits, Greek, and symbols alike).
         const body = try parseGroupOrAtom(ctx, depth);
-        return ctx.allocNode(.{ .font = .{ .fam = .bold, .body = body } });
+        return ctx.allocNode(.{ .font = .{ .fam = .bolditalic, .body = body } });
     }
     if (tokNameEq(name, "pmb")) {
         const body = try parseGroupOrAtom(ctx, depth);
@@ -3342,6 +3388,22 @@ fn fontFamFor(name: []const u8) ?FontFam {
     return null;
 }
 
+/// Old-style declarations: the six names KaTeX parses with zero
+/// arguments (issue #94, pinned 0.18.7) — they scope over the rest of
+/// the enclosing group instead of taking one group-or-atom. Every
+/// other `fontFamFor` name (`\mathbf`, `\mathcal`, `\bm`, ...) keeps
+/// its single argument (parseCtrl arm above stays for those and for
+/// single-atom nests like scripts).
+fn oldStyleDeclFam(name: []const u8) ?FontFam {
+    if (tokNameEq(name, "rm")) return .rm;
+    if (tokNameEq(name, "it")) return .mathit;
+    if (tokNameEq(name, "bf")) return .bold;
+    if (tokNameEq(name, "sf")) return .sans;
+    if (tokNameEq(name, "tt")) return .tt;
+    if (tokNameEq(name, "cal")) return .cal;
+    return null;
+}
+
 /// Text-mode families take text arguments (`\textbf{a+b}` is an
 /// `mtext`, and `\textbf{\alpha}` is a KaTeX error). `\textsl` is
 /// absent: KaTeX rejects it as undefined.
@@ -3421,7 +3483,7 @@ fn parseOver(ctx: *ParseCtx, depth: u8, t: Tok, kind: OverKind) Error!Idx {
             const pk = try ctx.peek();
             if (pk.kind == .char and pk.cp == '[') {
                 _ = try ctx.next();
-                const r = try parseFormula(ctx, depth, .bracket);
+                const r = try parseFormula(ctx, depth, .bracket, null);
                 under = r;
             }
             const above = try parseGroupOrAtom(ctx, depth);
@@ -3461,7 +3523,7 @@ fn parseSqrt(ctx: *ParseCtx, depth: u8) Error!Idx {
     const pk = try ctx.peek();
     if (pk.kind == .char and pk.cp == '[') {
         _ = try ctx.next();
-        index = try parseFormula(ctx, depth, .bracket);
+        index = try parseFormula(ctx, depth, .bracket, null);
     }
     // KaTeX parity: without an index the radicand is a `primitive`
     // argument — a bare `'`/`\rq` starts no atom there
@@ -3516,7 +3578,7 @@ fn parseDelimSpec(ctx: *ParseCtx) Error!u21 {
 fn parseLeftRight(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     const left = try parseDelimSpec(ctx);
     ctx.in_fence += 1;
-    const body = try parseFormula(ctx, depth, .leftright);
+    const body = try parseFormula(ctx, depth, .leftright, null);
     ctx.in_fence -= 1;
     // parseFormula stopped before `\right` (unconsumed).
     const r = try ctx.next();
@@ -4969,7 +5031,7 @@ fn parseTokenRange(ctx: *ParseCtx, depth: u8, r: Range) Error!Idx {
         i -= 1;
         try ctx.push(ctx.toks[r.start + i]);
     }
-    return parseFormula(ctx, depth, .top);
+    return parseFormula(ctx, depth, .top, null);
 }
 
 fn parseSmash(ctx: *ParseCtx, depth: u8) Error!Idx {
@@ -5056,7 +5118,7 @@ fn parseRule(ctx: *ParseCtx, depth: u8) Error!Idx {
     const pk = try ctx.peek();
     if (pk.kind == .char and pk.cp == '[') {
         _ = try ctx.next();
-        const r = try parseFormula(ctx, depth, .bracket);
+        const r = try parseFormula(ctx, depth, .bracket, null);
         // The bracket frame yields a group; interpret a bare dimension
         // from its single atom when possible.
         raise = try ruleDimenFromGroup(ctx, r, pk.pos);

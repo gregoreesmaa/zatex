@@ -12821,6 +12821,36 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"bold\">A</mi><mi mathvariant=\"bold\">a</mi><mi mathvariant=\"bold\">B</mi><mi mathvariant=\"bold\">b</mi><mn mathvariant=\"bold\">12</mn></mrow><annotation encoding=\"application/x-tex\">\\bf AaBb12</annotation></semantics></math>"
   },
   {
+   "id": "boldsymbol-letters",
+   "tex": "\\boldsymbol{AaBb}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi><mrow><mi mathvariant=\"bold-italic\">A</mi><mi mathvariant=\"bold-italic\">a</mi><mi mathvariant=\"bold-italic\">B</mi><mi mathvariant=\"bold-italic\">b</mi></mrow></mi></mrow><annotation encoding=\"application/x-tex\">\\boldsymbol{AaBb}</annotation></semantics></math>"
+  },
+  {
+   "id": "decl-group",
+   "tex": "{\\bf Aa}Bb",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mrow><mi mathvariant=\"bold\">A</mi><mi mathvariant=\"bold\">a</mi></mrow><mi>B</mi><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">{\\bf Aa}Bb</annotation></semantics></math>"
+  },
+  {
+   "id": "decl-over",
+   "tex": "\\bf a\\over b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mi mathvariant=\"bold\">a</mi><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\bf a\\over b</annotation></semantics></math>"
+  },
+  {
    "id": "biggl",
    "tex": "\\biggl(",
    "display": false,
