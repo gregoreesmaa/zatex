@@ -49,35 +49,55 @@ class Collector:
 
 
 def replay(contours, pen):
+    # Point-pen protocol (fontTools TTGlyph.drawPoints): an on-curve
+    # point carries the type of the segment ENDING at it ("line" /
+    # "qcurve" / "curve"); an off-curve control carries None. A
+    # quadratic run is controls (None) terminated by its on-curve
+    # endpoint ("qcurve"), with implied on-curve midpoints between
+    # consecutive controls (handled in flush()).
     for contour in contours:
         if not contour:
             continue
-        # rotate to an on-curve start
+        # Rotate to an on-curve start.
         start_idx = None
         for k, (pt, typ) in enumerate(contour):
-            if typ != "qcurve":
+            if typ is not None:
                 start_idx = k
                 break
         if start_idx is None:
-            continue  # all off-curve: degenerate, skip
+            # Degenerate all-off-curve contour: TrueType starts at
+            # the implied midpoint of last/first.
+            pts = [p for p, _ in contour]
+            n = len(pts)
+            start = ((pts[-1][0] + pts[0][0]) / 2,
+                     (pts[-1][1] + pts[0][1]) / 2)
+            pen.moveTo(start)
+            cur = start
+            for i in range(n):
+                mid = ((pts[i][0] + pts[(i + 1) % n][0]) / 2,
+                       (pts[i][1] + pts[(i + 1) % n][1]) / 2)
+                emit(pen, cur, pts[i], mid)
+                cur = mid
+            pen.closePath()
+            continue
         pts = contour[start_idx:] + contour[:start_idx]
         pen.moveTo(pts[0][0])
         cur = pts[0][0]
         pending = []
         items = pts[1:] + [(pts[0][0], "close")]
         for pt, typ in items:
-            if typ == "line":
+            if typ is None:
+                pending.append(pt)
+            elif typ == "line":
                 if pending:
-                    # on-curve endpoint of a quadratic run arrives
-                    # typed as a line point: flush the run into it.
-                    flush(pen, cur, pending, pt)
-                    pending = []
-                else:
-                    pen.lineTo(pt)
+                    raise ValueError("line point ends a curve run")
+                pen.lineTo(pt)
                 cur = pt
             elif typ == "qcurve":
-                pending.append(pt)
-            elif typ in (None, "close"):
+                flush(pen, cur, pending, pt)
+                cur = pt
+                pending = []
+            elif typ == "close":
                 flush(pen, cur, pending, pt)
                 cur = pt
                 pending = []
