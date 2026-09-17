@@ -10,6 +10,11 @@ pub const ir = @import("ir.zig");
 pub const parse = @import("parse.zig");
 pub const symbols = @import("symbols.zig");
 const engine = @import("layout.zig");
+/// Layout core namespace (box tree, `LayCtx` pools). Public so
+/// test-only modules (energy budgets, issue #160) can read pool
+/// high-water marks without duplicating the engine wiring; the
+/// stable embedding surface stays `layoutFull`/`layoutDiag`/C ABI.
+pub const layout_core = engine;
 const mathml_mod = @import("mathml.zig");
 pub const contract = @import("contract.zig");
 
@@ -108,9 +113,15 @@ pub fn mathml(source: []const u8, options: LayoutOptions, out: []u8) LayoutError
 }
 
 /// Lay out one formula into caller-owned buffers (zero allocations).
-/// `Run.glyphs` slices borrow a shared 8K-glyph ring that stays valid
-/// until the next `layout` call (documented ctime-style borrow);
-/// prefer `layoutFull` for reentrant use.
+///
+/// Deprecated in favor of `layoutFull` (energy, issue #154): `Run.glyphs`
+/// slices borrow a shared process-wide 8K-glyph (16 KiB `.bss`) ring with
+/// ctime-style borrow semantics — every `layout` call, from any caller,
+/// may overwrite it, so a previous result's glyph slices are valid only
+/// until the next `layout` call returns, and two live results can never
+/// coexist (not reentrant, not thread-safe). New hosts must pass their
+/// own glyph buffer to `layoutFull`; this wrapper stays only for
+/// source compatibility and carries the 16 KiB resident cost.
 pub fn layout(
     source: []const u8,
     options: LayoutOptions,
