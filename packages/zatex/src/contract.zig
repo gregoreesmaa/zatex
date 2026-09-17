@@ -125,4 +125,8 @@ pub const FontId = enum(u16) {
     /// need 2x). Appended, never renumbered.
     size1 = 11,
     size2 = 12,
+    /// `\mathsfit` sans-serif italic (issue #137): KaTeX's
+    /// SansSerif-Italic face (`mathvariant="sans-serif-italic"`).
+    /// Appended, never renumbered.
+    sans_italic = 13,
 };

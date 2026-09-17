@@ -632,6 +632,10 @@ fn alphaBase(fam: parse.FontFam, col: u2) ?u21 {
         // bold-italic font (KaTeX falls back to bold there —
         // accepted edge, same class as the mathit-digit note above).
         .bolditalic => .{ 0x1D468, 0x1D482, 0 },
+        // Sans-serif italic capitals/small live at U+1D608/U+1D622;
+        // no italic-digit block exists (U+1D7EC is sans-serif BOLD),
+        // so digits stay upright like mathit/frak digits above.
+        .sansitalic => .{ 0x1D608, 0x1D622, 0 },
         // .cal shares the script alphabet: MathML already unifies it
         // to the "script" variant (`variantFor`), and one host font
         // holds one script alphabet (KaTeX keeps two physical fonts —

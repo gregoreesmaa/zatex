@@ -260,6 +260,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\bfseries` | unsup | goldens: rej-unsup-bfseries |
 
+| `\bgroup` | accept | goldens: bgroup, bgroup-egroup, bgroup-unclosed, bgroup-extra-close, bgroup-endgroup-mismatch |
+
 | `\big` | accept | goldens: big-series |
 
 | `\Big` | accept | goldens: big-series |
@@ -698,6 +700,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 | --- | --- | --- |
 | `\edef` | accept | goldens: def, def-args |
 
+| `\egroup` | accept | goldens: bgroup-egroup, egroup-stray, bgroup-extra-close |
+
 | `\ell` | accept | goldens: sym-gal-3 |
 
 | `\else` | unsup | goldens: rej-unsup-else |
@@ -778,6 +782,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
+| `\@firstoftwo` | accept | goldens: at-firstoftwo, at-firstoftwo-nested, at-firstoftwo-drop, at-firstoftwo-text, at-firstoftwo-missing |
+
 | `\fallingdotseq` | accept | goldens: sym-fallingdotseq |
 
 | `\fbox` | accept | goldens: t-fbox |
@@ -940,6 +946,10 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
+| `\@ifnextchar` | accept | goldens: at-ifnextchar-match, at-ifnextchar-nomatch, at-ifnextchar-space, at-ifnextchar-ctrl, at-ifnextchar-eof, at-ifnextchar-missing |
+
+| `\@ifstar` | accept | goldens: at-ifstar-match, at-ifstar-nomatch, at-ifstar-eof |
+
 | `\i` | accept | goldens: text |
 
 | `\idotsint` | unsup | goldens: rej-unsup-idotsint |
@@ -1283,6 +1293,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 | `\mathscr` | accept | goldens: fonts |
 
 | `\mathsf` | accept | goldens: fonts2 |
+
+| `\mathsfit` | accept | goldens: font-mathsfit, mathsfit-alpha |
 
 | `\mathsterling` | accept | goldens: sym-mathsterling |
 
@@ -1790,6 +1802,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
+| `\@secondoftwo` | accept | goldens: at-secondoftwo, at-firstoftwo-nested |
+
 | `\S` | accept | goldens: text |
 
 | `\Sampi` | unsup | goldens: rej-unsup-sampi |
@@ -2024,6 +2038,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\textcircled` | accept | goldens: text |
 
+| `\textcopyright` | accept | goldens: textcopyright, textcopyright-text |
+
 | `\textcolor` | accept | goldens: textcolor |
 
 | `\textdagger` | accept | goldens: text |
@@ -2049,6 +2065,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 | `\textmd` | accept | goldens: textmd |
 
 | `\textnormal` | accept | goldens: textnormal |
+
+| `\TextOrMath` | accept | goldens: textormath-math, textormath-text, textormath-nested-text, textormath-frac, textormath-missing |
 
 | `\textquotedblleft` | accept | goldens: text |
 

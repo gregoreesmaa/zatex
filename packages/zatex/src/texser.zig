@@ -323,6 +323,7 @@ const Walker = struct {
                     .bb => "mathbb",
                     .cal => "mathcal",
                     .bolditalic => "bm",
+                    .sansitalic => "mathsfit",
                 });
                 try self.arg(f.body);
             },
@@ -682,6 +683,7 @@ const Walker = struct {
                 .bb => "mathbb",
                 .cal => "mathcal",
                 .bolditalic => "bm",
+                .sansitalic => "mathsfit",
             });
             try self.put("{");
             try self.putCp(cp);
