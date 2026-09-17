@@ -1,6 +1,1 @@
-{
- "\\(\u2026\\)": {
-  "kind": "overclaim",
-  "note": "inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math"
- }
-}
+{}
