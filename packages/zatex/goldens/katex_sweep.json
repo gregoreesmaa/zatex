@@ -1260,6 +1260,16 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded voffset=\"2pt\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mtext>x</mtext></mstyle></mpadded></mrow><annotation encoding=\"application/x-tex\">\\raisebox{2pt}{x}</annotation></semantics></math>"
   },
   {
+   "id": "raisebox-island",
+   "tex": "\\raisebox{2pt}{$ighe$}r",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded voffset=\"2pt\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>i</mi><mi>g</mi><mi>h</mi><mi>e</mi></mstyle></mstyle></mpadded><mi>r</mi></mrow><annotation encoding=\"application/x-tex\">\\raisebox{2pt}{$ighe$}r</annotation></semantics></math>"
+  },
+  {
    "id": "spacing",
    "tex": "a\\,b\\:c\\;d\\!e\\quad f\\qquad g",
    "display": false,
@@ -1596,6 +1606,17 @@
    "katex_error": "KaTeX parse error: \\renewcommand{\\nope} when command \\nope does not yet exist; use \\newcommand"
   },
   {
+   "id": "rej-newcommand-default",
+   "tex": "\\newcommand{\\zzq}[1][x]{#1}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 24,
+   "katex_error": "KaTeX parse error: Expected '}', got '#' at position 25: …nd{\\zzq}[1][x]{#̲1}"
+  },
+  {
    "id": "rej-declare-op",
    "tex": "\\DeclareMathOperator{\\Arg}{Arg}",
    "display": false,
@@ -1711,6 +1732,87 @@
    "note": null,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"monospace\">x</mtext></mrow><annotation encoding=\"application/x-tex\">\\newcommand{\\myverb}{\\verb|x|}\\myverb</annotation></semantics></math>"
+  },
+  {
+   "id": "message-basic",
+   "tex": "\\message{hi}x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\message{hi}x</annotation></semantics></math>"
+  },
+  {
+   "id": "errmessage-basic",
+   "tex": "\\errmessage{hi}x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\errmessage{hi}x</annotation></semantics></math>"
+  },
+  {
+   "id": "message-text",
+   "tex": "\\text{\\message{hi}x}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>x</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\message{hi}x}</annotation></semantics></math>"
+  },
+  {
+   "id": "show-basic",
+   "tex": "x\\show\\frac y",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">x\\show\\frac y</annotation></semantics></math>"
+  },
+  {
+   "id": "show-eof",
+   "tex": "\\show",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow></mrow><annotation encoding=\"application/x-tex\">\\show</annotation></semantics></math>"
+  },
+  {
+   "id": "show-rbrace",
+   "tex": "\\show}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow></mrow><annotation encoding=\"application/x-tex\">\\show}</annotation></semantics></math>"
+  },
+  {
+   "id": "show-text",
+   "tex": "\\text{\\show\\x y}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>y</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\show\\x y}</annotation></semantics></math>"
+  },
+  {
+   "id": "rej-message-rbrace",
+   "tex": "\\message}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 8,
+   "katex_error": "KaTeX parse error: Extra } at position 9: \\message}̲"
   },
   {
    "id": "color-rest",
@@ -15298,6 +15400,17 @@
    "katex_ok": false,
    "katex_pos": 9,
    "katex_error": "KaTeX parse error: Expected '$', got 'EOF' at position 10: \\hbox{a$b}̲"
+  },
+  {
+   "id": "raisebox-dollar",
+   "tex": "\\raisebox{2pt}{a$b}",
+   "display": false,
+   "ours": "Invalid",
+   "katex_only": true,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 18,
+   "katex_error": "KaTeX parse error: Expected '$', got 'EOF' at position 19: …isebox{2pt}{a$b}̲"
   },
   {
    "id": "rej-111-bf-sup",

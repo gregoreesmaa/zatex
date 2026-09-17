@@ -754,6 +754,12 @@
   "expect": "accept"
  },
  {
+  "id": "raisebox-island",
+  "tex": "\\raisebox{2pt}{$ighe$}r",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "spacing",
   "tex": "a\\,b\\:c\\;d\\!e\\quad f\\qquad g",
   "display": false,
@@ -946,6 +952,12 @@
   "expect": "reject"
  },
  {
+  "id": "rej-newcommand-default",
+  "tex": "\\newcommand{\\zzq}[1][x]{#1}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
   "id": "rej-declare-op",
   "tex": "\\DeclareMathOperator{\\Arg}{Arg}",
   "display": false,
@@ -1012,6 +1024,54 @@
   "expect": "reject",
   "ours": "Invalid",
   "katex_only": true
+ },
+ {
+  "id": "message-basic",
+  "tex": "\\message{hi}x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "errmessage-basic",
+  "tex": "\\errmessage{hi}x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "message-text",
+  "tex": "\\text{\\message{hi}x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "show-basic",
+  "tex": "x\\show\\frac y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "show-eof",
+  "tex": "\\show",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "show-rbrace",
+  "tex": "\\show}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "show-text",
+  "tex": "\\text{\\show\\x y}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rej-message-rbrace",
+  "tex": "\\message}",
+  "display": false,
+  "expect": "reject"
  },
  {
   "id": "color-rest",
@@ -9063,6 +9123,14 @@
  {
   "id": "hbox-dollar",
   "tex": "\\hbox{a$b}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "raisebox-dollar",
+  "tex": "\\raisebox{2pt}{a$b}",
   "display": false,
   "expect": "reject",
   "katex_only": true,

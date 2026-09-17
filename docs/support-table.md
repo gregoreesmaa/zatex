@@ -754,6 +754,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\equiv` | accept | goldens: sym-gal-3 |
 
+| `\errmessage` | accept | goldens: errmessage-basic |
+
 | `\Eta` | accept | goldens: sym-gal-0 |
 
 | `\eta` | accept | goldens: sym-greek |
@@ -1304,6 +1306,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\medspace` | accept | goldens: medspace |
 
+| `\message` | accept | goldens: message-basic, message-text, rej-message-rbrace |
+
 | `\mho` | accept | goldens: sym-gal-6 |
 
 | `\mid` | accept | goldens: big-series, sym-escapes, sym-gal-6, flite-bayes |
@@ -1376,7 +1380,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\neq` | accept | goldens: atom-rel, atomgrid |
 
-| `\newcommand` | accept | goldens: newcommand, color-macro, newcommand-arg |
+| `\newcommand` | accept | goldens: newcommand, color-macro, newcommand-arg, rej-newcommand-default |
 
 | `\newenvironment` | unsup | goldens: rej-unsup-newenvironment |
 
@@ -1670,7 +1674,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\raise` | unsup | goldens: rej-unsup-raise |
 
-| `\raisebox` | accept | goldens: raisebox |
+| `\raisebox` | accept | goldens: raisebox, raisebox-island, raisebox-dollar |
 
 | `\rang` | accept | goldens: big-series, delim-named, sym-gal-7 |
 
@@ -1829,6 +1833,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 | `\shoveleft` | unsup | goldens: rej-unsup-shoveleft |
 
 | `\shoveright` | unsup | goldens: rej-unsup-shoveright |
+
+| `\show` | accept | goldens: show-basic, show-eof, show-rbrace, show-text |
 
 | `\sideset` | unsup | goldens: rej-unsup-sideset |
 

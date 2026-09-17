@@ -1286,7 +1286,7 @@ pub const full_only_ctrl_names: []const []const u8 = &.{
     "huge", "Huge",
     "begingroup", "endgroup", "hbox", "mathreflectbox", "reflectbox",
     "set", "varinjlim", "varliminf", "varlimsup", "varprojlim",
-    "tag",
+    "tag", "message", "errmessage", "show",
 };
 
 fn isFullOnlyCtrlName(name: []const u8) bool {
@@ -1345,8 +1345,8 @@ fn parseTag(ctx: *ParseCtx, t: Tok) Error!?Idx {
     }
     // Nested `\text{...}` renders flat inside tags (issue #75).
     const flat = try spliceNestedText(ctx, toks);
-    try checkTextToks(ctx, flat);
-    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = flat, .fam = .rm } });
+    const checked = try checkTextToks(ctx, flat);
+    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = checked, .fam = .rm } });
     ctx.tag_starred = starred;
     ctx.row_tagged = true;
     return null;
@@ -2054,6 +2054,29 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                 }
                 if (tokNameEq(t.name, "relax")) {
                     // No-op primitive (KaTeX relax.ts, text+math): no node.
+                    return null;
+                }
+                if (full_only and (tokNameEq(t.name, "message") or tokNameEq(t.name, "errmessage"))) {
+                    // KaTeX console parity (`katex.js`, pinned 0.18.7):
+                    // `\message` / `\errmessage` consume one argument,
+                    // write it to the console log / error log, and
+                    // expand to nothing. A native library has no
+                    // console: the argument is consumed and discarded
+                    // (parse-level no-op, no node), so acceptance and
+                    // argument shape match while nothing is printed. A
+                    // `}` is refused like the bundle (its consumeArg
+                    // leaves the brace): fail there, don't eat it.
+                    const pk = try ctx.peek();
+                    if (pk.kind == .rbrace) return ctx.fail(pk.pos, "unexpected '}'");
+                    _ = try parseBracedToks(ctx, t, false);
+                    return null;
+                }
+                if (full_only and tokNameEq(t.name, "show")) {
+                    // KaTeX console parity: `\show` pops exactly one
+                    // raw token (even `{`, even at end of input — both
+                    // accepted) and expands to nothing. Consume and
+                    // discard; no node.
+                    _ = try ctx.next();
                     return null;
                 }
                 if (tokNameEq(t.name, "nonumber") or tokNameEq(t.name, "notag")) {
@@ -3050,8 +3073,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         if (tokNameEq(name, "fcolorbox")) frame = try captureColorSpec(ctx);
         const bg = try captureColorSpec(ctx);
         const toks = try parseBracedToks(ctx, t, true);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .colorbox = .{ .body = toks, .bg = bg, .frame = frame } });
+        const checked = try checkTextToks(ctx, toks);
+        return ctx.allocNode(.{ .colorbox = .{ .body = checked, .bg = bg, .frame = frame } });
     }
     if (full_only and (tokNameEq(name, "href"))) {
         const target = try ctx.captureArg();
@@ -3060,8 +3083,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     }
     if (full_only and (tokNameEq(name, "url"))) {
         const toks = try captureSpacedArg(ctx);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .tt } });
+        const checked = try checkTextToks(ctx, toks);
+        return ctx.allocNode(.{ .text = .{ .toks = checked, .fam = .tt } });
     }
     if (full_only and (tokNameEq(name, "includegraphics"))) {
         // KaTeX `functions/includegraphics.ts` (pinned 0.18.7): an
@@ -3107,8 +3130,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
             limits = .on;
         }
         const toks = try ctx.captureArg();
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .opname = .{ .toks = toks, .limits = limits } });
+        const checked = try checkTextToks(ctx, toks);
+        return ctx.allocNode(.{ .opname = .{ .toks = checked, .limits = limits } });
     }
     if (full_only and (tokNameEq(name, "dotsi"))) {
         // KaTeX macro parity: `\dotsi` = `\,\cdots` (negative thin
@@ -3320,10 +3343,10 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (full_only and (tokNameEq(name, "raisebox"))) {
         const dh = try parseDimenArg(ctx, t);
         // KaTeX parity: the body is an hbox (text mode), not math —
-        // math commands inside are rejected, as in `\text`.
+        // the same `parseTextBody` path as `\hbox`, so `$...$` math
+        // islands work (the audit's `{$ighe$}` example parses).
         const toks = try parseBracedToks(ctx, t, false);
-        try checkTextToks(ctx, toks);
-        const body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        const body = try parseTextBody(ctx, depth, toks, .rm);
         return ctx.allocNode(.{ .raisebox = .{ .body = body, .dh = dh } });
     }
     if (full_only and (tokNameEq(name, "rule"))) {
@@ -3342,8 +3365,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // commands inside are rejected, as in `\text` (the raisebox
         // precedent — never math, contra the old math-body shape).
         const toks = try parseBracedToks(ctx, t, true);
-        try checkTextToks(ctx, toks);
-        const body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        const checked = try checkTextToks(ctx, toks);
+        const body = try ctx.allocNode(.{ .text = .{ .toks = checked, .fam = .rm } });
         return ctx.allocNode(.{ .fbox = body });
     }
     if (full_only and (tokNameEq(name, "phantom") or tokNameEq(name, "hphantom") or tokNameEq(name, "vphantom"))) {
@@ -3408,8 +3431,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
             try parseGroupOrAtom(ctx, depth)
         else blk: {
             const toks = try parseBracedToks(ctx, t, false);
-            try checkTextToks(ctx, toks);
-            break :blk try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+            const checked = try checkTextToks(ctx, toks);
+            break :blk try ctx.allocNode(.{ .text = .{ .toks = checked, .fam = .rm } });
         };
         const kind: LapKind =
             if (tokNameEq(name, "llap") or tokNameEq(name, "mathllap")) .llap
@@ -3816,8 +3839,8 @@ fn parseOver(ctx: *ParseCtx, depth: u8, t: Tok, kind: OverKind) Error!Idx {
         // set their bodies in text mode — math commands reject,
         // like `\text`.
         const toks = try parseBracedToks(ctx, t, false);
-        try checkTextToks(ctx, toks);
-        const nuc = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        const checked = try checkTextToks(ctx, toks);
+        const nuc = try ctx.allocNode(.{ .text = .{ .toks = checked, .fam = .rm } });
         return ctx.allocNode(.{ .over = .{
             .kind = kind,
             .nucleus = nuc,
@@ -4962,14 +4985,36 @@ fn parseVerb(ctx: *ParseCtx, t: Tok) Error!Idx {
     } });
 }
 
-fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
+/// Validate a text-mode token range and strip console no-ops.
+/// Returns the range to embed: `r` itself when clean (no arena use
+/// on the hot path), otherwise a filtered arena copy. Stripping is
+/// load-bearing, not cosmetic — the `.text` node keeps raw tokens
+/// for layout, so a validated-but-kept `\message` would choke it.
+///
+/// Console no-ops (full profile only): KaTeX expands `\message`,
+/// `\errmessage` and `\show` at macro level, so they vanish even
+/// inside text bodies (`\text{\message{hi}x}` and `\text{\show\x y}`
+/// both render — pinned 0.18.7; `\url` addresses too, while `\verb`
+/// stays verbatim on a separate path). The skip extents mirror the
+/// math-mode handlers: one braced-or-bare argument (a `}` is refused,
+/// a missing one fails); `\show` pops one raw token, even `{`.
+fn checkTextToks(ctx: *ParseCtx, r: Range) Error!Range {
     var i: u16 = 0;
+    // Filtered-copy cursor: `out` is the arena start once allocated,
+    // `n` the kept count. Allocation happens at most once, only on
+    // the first strip, backfilling the validated prefix.
+    var out: u16 = 0;
+    var n: u16 = 0;
+    var stripped = false;
     while (i < r.len) : (i += 1) {
         const tk = ctx.toks[r.start + i];
+        // End index (exclusive) of a console construct to drop, or
+        // null when `tk` itself is kept.
+        var drop_to: ?u16 = null;
         switch (tk.kind) {
             .char, .lbrace, .rbrace, .newline => {
-                // KaTeX re-enters math mode on `$` inside `\text`;
-                // without math-in-text support the byte is rejected.
+                // A lone `$` (island partners are extracted upstream
+                // in `collectTextPieces`) is rejected.
                 if (tk.kind == .char and tk.cp == '$')
                     return ctx.fail(tk.pos, "can't use '$' in text mode");
             },
@@ -4982,16 +5027,45 @@ fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
                     symbols.lookupText(tk.name) != null or symbols.lookupTextArg(tk.name) != null
                 else
                     false;
-                if (tk.name.len != 1) {
-                    if (!is_text_cmd)
-                        return ctx.fail(tk.pos, "can't use math command in text mode");
-                    continue;
+                if (comptime active_profile == .full) {
+                    if (tokNameEq(tk.name, "message") or tokNameEq(tk.name, "errmessage")) {
+                        var j: u16 = i + 1;
+                        if (j >= r.len) return ctx.fail(tk.pos, "expected argument");
+                        const at = ctx.toks[r.start + j];
+                        if (at.kind == .lbrace) {
+                            var depth: u16 = 1;
+                            while (depth > 0) {
+                                j += 1;
+                                if (j >= r.len) return ctx.fail(tk.pos, "expected '}'");
+                                const q = ctx.toks[r.start + j];
+                                if (q.kind == .lbrace) depth += 1 else if (q.kind == .rbrace) depth -= 1;
+                            }
+                            j += 1;
+                        } else if (at.kind == .rbrace) {
+                            return ctx.fail(at.pos, "unexpected '}'");
+                        } else {
+                            j += 1;
+                        }
+                        drop_to = j;
+                    } else if (tokNameEq(tk.name, "show")) {
+                        // One raw token, whatever it is (KaTeX popToken
+                        // parity); trailing `\show` with nothing after
+                        // is accepted, like the bundle.
+                        drop_to = if (i + 1 < r.len) i + 2 else r.len;
+                    }
                 }
-                const c = tk.name[0];
-                switch (c) {
-                    '{', '}', '%', '&', '#', '_', '$', ' ', ',', ':', ';', '!', '>', '~', '|', '\'', '`', '^', '"', '=', '.', 'u', 'v', 'H', 't', 'c', 'd', 'b', 'r' => {},
-                    else => if (!is_text_cmd)
-                        return ctx.fail(tk.pos, "can't use math command in text mode"),
+                if (drop_to == null) {
+                    if (tk.name.len != 1) {
+                        if (!is_text_cmd)
+                            return ctx.fail(tk.pos, "can't use math command in text mode");
+                    } else {
+                        const c = tk.name[0];
+                        switch (c) {
+                            '{', '}', '%', '&', '#', '_', '$', ' ', ',', ':', ';', '!', '>', '~', '|', '\'', '`', '^', '"', '=', '.', 'u', 'v', 'H', 't', 'c', 'd', 'b', 'r' => {},
+                            else => if (!is_text_cmd)
+                                return ctx.fail(tk.pos, "can't use math command in text mode"),
+                        }
+                    }
                 }
             },
             .sup, .sub => return ctx.fail(tk.pos, "can't use '^'/'_' in text mode"),
@@ -4999,7 +5073,21 @@ fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
             .param => return ctx.fail(tk.pos, "unexpected '#'"),
             .marker, .end => return ctx.fail(tk.pos, "unexpected end of text"),
         }
+        if (drop_to) |to| {
+            if (!stripped) {
+                out = try ctx.allocToks(r.len);
+                @memcpy(ctx.toks[out .. out + i], ctx.toks[r.start .. r.start + i]);
+                n = i;
+                stripped = true;
+            }
+            i = to - 1;
+        } else if (stripped) {
+            ctx.toks[out + n] = tk;
+            n += 1;
+        }
     }
+    if (!stripped) return r;
+    return .{ .start = out, .len = n };
 }
 
 /// Copy a token slice into the toks arena.
@@ -5140,9 +5228,9 @@ fn parseTextBody(ctx: *ParseCtx, depth: u8, toks: Range, fam: FontFam) Error!Idx
     for (pieces[0..np]) |p| {
         switch (p) {
             .span => |r| {
-                try checkTextToks(ctx, r);
+                const checked = try checkTextToks(ctx, r);
                 if (no >= out.len) return error.NoSpace;
-                out[no] = try ctx.allocNode(.{ .text = .{ .toks = r, .fam = fam } });
+                out[no] = try ctx.allocNode(.{ .text = .{ .toks = checked, .fam = fam } });
                 no += 1;
             },
             .node => |id| {
@@ -7127,6 +7215,47 @@ test "nonumber and notag are inert no-ops (issue #88)" {
         },
         else => return error.TestUnexpectedResult,
     }
+}
+
+test "message, errmessage and show are console no-ops" {
+    // Pinned KaTeX 0.18.7 writes the argument to the console log /
+    // error log and expands to nothing; a native library has no
+    // console, so the argument is consumed and discarded (no node).
+    // `\show` pops exactly one raw token, even `{` or end of input.
+    const ok_cases = [_][]const u8{
+        "\\message{hi}x",
+        "\\errmessage{hi}x",
+        "\\message\\foo x",
+        "x\\show\\frac y",
+        "\\show",
+        "\\show}",
+        "\\text{\\message{hi}x}",
+        "\\text{\\show\\x y}",
+        "x^\\message{y}z",
+        "\\raisebox{2pt}{$x$}y",
+    };
+    for (ok_cases) |src| {
+        var ctx = ParseCtx.init(src);
+        _ = try parse(&ctx, false);
+    }
+    // `x\show\frac y` keeps exactly the neighbors (frac vanishes).
+    var ctx = ParseCtx.init("x\\show\\frac y");
+    const root = try parse(&ctx, false);
+    const g = switch (ctx.nodes[root]) {
+        .group => |gr| gr,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqual(@as(u16, 2), g.len);
+    // `\message}` refuses the brace like the bundle ("Extra }").
+    var ctxr = ParseCtx.init("\\message}");
+    const r = parse(&ctxr, false);
+    try std.testing.expectError(error.Invalid, r);
+    try std.testing.expectEqual(@as(u32, 8), ctxr.err_pos);
+    // A missing argument rejects, in math and in text alike.
+    var ctxe = ParseCtx.init("\\message");
+    try std.testing.expectError(error.Invalid, parse(&ctxe, false));
+    var ctxt = ParseCtx.init("\\text{\\message}");
+    try std.testing.expectError(error.Invalid, parse(&ctxt, false));
 }
 
 test "row-local tag wins over nonumber, cross-row tag does not (issue #75)" {

@@ -379,6 +379,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\equalscolon` | `\equalscolon` | ![](renders/equalscolon.png) |  |
 | `\equalscoloncolon` | `\equalscoloncolon` | ![](renders/equalscoloncolon.png) |  |
 | `\equiv` | `\equiv` | ![](renders/equiv.png) |  |
+| `\errmessage` | `\errmessage{hi}x` | ![](renders/errmessage.png) |  |
 | `\Eta` | `\Eta` | ![](renders/eta.png) |  |
 | `\eta` | `\eta` | ![](renders/eta-2.png) |  |
 | `\eth` | `\eth` | ![](renders/eth.png) |  |
@@ -675,6 +676,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\mdseries` | — | — | goldens: rej-unsup-mdseries |
 | `\measuredangle` | `\measuredangle` | ![](renders/measuredangle.png) |  |
 | `\medspace` | `a\medspace b` | ![](renders/medspace.png) |  |
+| `\message` | `\message{hi}x` | ![](renders/message.png) |  |
 | `\mho` | `\mho` | ![](renders/mho.png) |  |
 | `\mid` | `\{x∈ℝ\mid x>0\}` | ![](renders/mid.png) |  |
 | `\middle` | `P\left(A\middle\vert B\right)` | ![](renders/middle.png) |  |
@@ -953,6 +955,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\shortparallel` | `\shortparallel` | ![](renders/shortparallel.png) |  |
 | `\shoveleft` | — | — | goldens: rej-unsup-shoveleft |
 | `\shoveright` | — | — | goldens: rej-unsup-shoveright |
+| `\show` | `x\show y` | ![](renders/show.png) |  |
 | `\sideset` | — | — | goldens: rej-unsup-sideset |
 | `\Sigma` | `\Sigma` | ![](renders/sigma.png) |  |
 | `\sigma` | `\sigma` | ![](renders/sigma-2.png) |  |
