@@ -820,6 +820,12 @@
   "expect": "accept"
  },
  {
+  "id": "lap-clap",
+  "tex": "\\clap{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "lap-clap-sub",
   "tex": "\\sum_{\\mathclap{x}}",
   "display": false,
@@ -7666,6 +7672,12 @@
   "expect": "accept"
  },
  {
+  "id": "enskip",
+  "tex": "a\\enskip b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "newline",
   "tex": "a\\newline b",
   "display": false,
@@ -9563,6 +9575,30 @@
  {
   "id": "textit-x",
   "tex": "\\textit{AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "unit-px",
+  "tex": "a\\hspace{10px}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "array-row-size",
+  "tex": "\\begin{matrix}a\\\\[6pt]b\\end{matrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "array-stretch",
+  "tex": "\\def\\arraystretch{1.5}\\begin{array}{c}a\\\\b\\end{array}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "newline-size",
+  "tex": "a\\\\[6pt]b",
   "display": false,
   "expect": "accept"
  }

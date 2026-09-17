@@ -1,6 +1,6 @@
 {
- "accepted_floor": 678,
+ "accepted_floor": 1318,
  "floor_of": "katex_sweep.json",
  "katex_version": "0.18.7",
- "note": "Monotonic ratchet for issue #46: OUR engine accepted count over non-katex_only sweep rows must never fall below this floor. 678 = 681 KaTeX accepts minus 3 declared-divergence accepts (deep-nest, verb-in-macro, text-math, all katex_only with ours=TooDeep/Invalid). Bump only with KaTeX-side proof (AGENTS.md section 4)."
+ "note": "Monotonic ratchet for issue #46: OUR engine accepted count over non-katex_only sweep rows must never fall below this floor. 1318 = 1320 KaTeX accepts minus 2 declared-divergence accepts (deep-nest, verb-in-macro, both katex_only with ours=TooDeep/Invalid). Bump only with KaTeX-side proof (AGENTS.md section 4). Raised for issues #139/#140/#141/#144 (unit-px, array-row-size, array-stretch, newline-size)."
 }
