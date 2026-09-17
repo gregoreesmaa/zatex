@@ -165,35 +165,47 @@ export fn zatex_layout_utf8(
         out.err_offset = diag.offset;
         return out.status;
     };
-    // Diagonal strikes never reach this surface (skipped below), so
-    // only filled rects count against the caller's rule budget.
-    var nrects: usize = 0;
-    for (l.rules) |r| if (r.diag == .none) {
-        nrects += 1;
-    };
-    if (l.runs.len > runs_z.len or nrects > rules_z.len) {
+    if (l.runs.len > runs_z.len) {
         out.status = STATUS_NO_SPACE;
         out.err_offset = 0;
         return out.status;
     }
+    // Energy (#155): glyph slices emit run-sequentially into the
+    // caller buffer, so `glyph_start` is a running cursor — no
+    // per-run pointer subtraction. Debug builds assert contiguity
+    // against the old difference on every run.
+    var ng: u32 = 0;
     for (l.runs, 0..) |r, i| {
+        // Active in test/Debug builds; compiled out of ReleaseSmall.
         const start = (@intFromPtr(r.glyphs.ptr) - @intFromPtr(glyphs.ptr)) / 2;
+        std.debug.assert(start == ng);
         runs_z[i] = .{
             .font_id = r.font_id,
             .size_units = r.size_units,
             .x = r.x,
             .baseline_y = r.baseline_y,
-            .glyph_start = @intCast(start),
+            .glyph_start = ng,
             .glyph_count = @intCast(r.glyphs.len),
         };
+        ng += @intCast(r.glyphs.len);
     }
     // The frozen narrow surface projects filled rects only: diagonal
     // strikes (issue #107 `Rule.diag`) have no rect form, so they are
     // skipped rather than misdrawn (like color, which this surface
     // already drops — see `CRule`).
+    // Energy (#155): the rect recount and the translate copy fuse
+    // into one pass with an incremental cap check. Status contract
+    // is unchanged (`STATUS_NO_SPACE` exactly as before; error-path
+    // buffer contents were never specified); the happy path drops
+    // from two rule traversals to one.
     var nrules: u32 = 0;
     for (l.rules) |r| {
         if (r.diag != .none) continue;
+        if (nrules >= rules_z.len) {
+            out.status = STATUS_NO_SPACE;
+            out.err_offset = 0;
+            return out.status;
+        }
         rules_z[nrules] = .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
         nrules += 1;
     }
