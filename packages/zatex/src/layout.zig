@@ -161,15 +161,22 @@ pub const LayCtx = struct {
         // KaTeX `minRuleThickness` parity: the caller floor (in
         // thousandths of an em, like provider weights) applies to
         // every requested thickness; 0 disables it bit-identically.
+        // The floor is full-profile surface (subset entry points
+        // always pass the 0 default): subset keeps the bare weight
+        // so the extra max vanishes from its binary (size ratchet).
         const v = self.provider.ruleThickness(self.provider.ctx, font, kind);
         const base = if (v <= 0) 40 else v;
+        if (comptime active_profile == .subset) return base;
         return @max(base, self.pctx.min_rule_floor);
     }
     /// Hardcoded 0.04em rule weights (array vlines, `\fbox` frames)
     /// under the same floor: the constant stands in for a provider
     /// weight KaTeX would floor too.
     fn constRule(self: *LayCtx, size: i32) i32 {
-        return @divTrunc(@max(@as(i32, 40), self.pctx.min_rule_floor) * size, 1000);
+        // Subset keeps the bare constant (floor always 0 there);
+        // see `ruleTh`.
+        const w: i32 = if (comptime active_profile == .subset) 40 else @max(@as(i32, 40), self.pctx.min_rule_floor);
+        return @divTrunc(w * size, 1000);
     }
     fn variant(self: *LayCtx, font: u16, glyph: u16, need: i32) u16 {
         if (self.provider.glyphVariant) |f| return f(self.provider.ctx, font, glyph, need);
@@ -216,7 +223,9 @@ pub fn layout(
     // whole construction shifts right 2em and the width grows with
     // it, so hosts positioning the block keep the margin. Display
     // only; inline math is untouched.
-    const margin: i32 = if (lc.pctx.fleqn and style.isDisplay()) 2 * @as(i32, lc.effSize(style)) else 0;
+    // `fleqn` is full-profile surface (subset entry points always
+    // pass false): the margin folds to zero in subset binaries.
+    const margin: i32 = if (active_profile == .full and lc.pctx.fleqn and style.isDisplay()) 2 * @as(i32, lc.effSize(style)) else 0;
     // Origin top-left; the root baseline sits at height_above.
     try emitBox(lc, &ec, box, margin, b.ha);
     ec.closeRun();
@@ -2824,7 +2833,9 @@ fn layoutTag(lc: *LayCtx, style: parse.Style, tg: anytype) Error!u16 {
     // tag block leads instead (KaTeX left-tags, issue #120).
     var ids: [4]u16 = undefined;
     var nids: usize = 0;
-    const left = lc.pctx.leqno;
+    // `leqno` is full-profile surface (subset entry points always
+    // pass false): the tag always trails in subset binaries.
+    const left: bool = if (comptime active_profile == .full) lc.pctx.leqno else false;
     if (!left) {
         ids[0] = fb;
         nids = 1;

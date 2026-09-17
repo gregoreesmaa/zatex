@@ -1010,6 +1010,12 @@ pub const ParseCtx = struct {
     /// throws (error mode renders no break, already our zero-box
     /// shape; KaTeX likewise returns, not throws, for that code).
     pub fn reportStrict(self: *ParseCtx, code: contract.StrictCode, pos: u32) Error!void {
+        // Subset profile: entry points always run warn-with-null-log
+        // (the C ABI exposes no options surface), observably equal
+        // to ignore — reports drop, accept/reject never change. The
+        // empty body prunes every call site and the strict wording
+        // table from subset binaries (size ratchet).
+        if (comptime active_profile == .subset) return;
         switch (self.strict) {
             .ignore => {},
             .warn => {
@@ -1429,7 +1435,15 @@ pub fn parseWith(ctx: *ParseCtx, opts: contract.LayoutOptions) Error!Idx {
     ctx.leqno = opts.leqno;
     ctx.fleqn = opts.fleqn;
     ctx.min_rule_floor = opts.min_rule_thickness_milli_em;
-    try seedPresets(ctx, opts.macros);
+    // Preset seeding is full-profile surface: subset entry points
+    // (the C ABI, the subset contract tests) always pass default
+    // options, so the table stays empty there — and with `\def`
+    // full-only it cannot fill any other way. Pruning the call
+    // drops `seedPresets` (and its unique helpers) from subset
+    // binaries (size ratchet); full behavior is untouched.
+    if (full_only) {
+        try seedPresets(ctx, opts.macros);
+    }
     return parse(ctx, opts.display_mode);
 }
 
@@ -2125,7 +2139,10 @@ fn parseGroupOrAtomMode(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) E
         // zero-argument font handler). User macros still shadow.
         if (t.kind == .ctrl) {
             if (oldStyleDeclFam(t.name)) |fam| {
-                if (t.name.len > 0 and !t.noexpand and ctx.findDef(t.name) == null) {
+                // No user macros shadow in subset (no `\def`, no
+                // presets): the lookup always misses there.
+                const no_def = if (full_only) ctx.findDef(t.name) == null else true;
+                if (t.name.len > 0 and !t.noexpand and no_def) {
                     _ = try ctx.next();
                     const empty = try ctx.allocNode(.{ .group = .{ .start = 0, .len = 0 } });
                     return ctx.allocNode(.{ .font = .{ .fam = fam, .body = empty } });
@@ -2156,7 +2173,8 @@ fn parseScriptAtom(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!
                 // User macros shadow everything (KaTeX gullet expands
                 // first); the expansion re-enters this loop, so a
                 // macro expanding to a bare function still throws.
-                if (name.len > 0 and !t.noexpand) {
+                // Full profile only (subset defines no macros).
+                if (full_only and name.len > 0 and !t.noexpand) {
                     if (ctx.findDef(name)) |def| {
                         _ = try ctx.next();
                         try ctx.expandUse(def, t.pos);
@@ -2275,8 +2293,11 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
         .char => {
             // Preset active characters expand before builtins (KaTeX
             // expands macros first); `noexpand`-marked aliases parse
-            // as face value like their control-name kin.
-            if (!t.noexpand) {
+            // as face value like their control-name kin. Full
+            // profile only: the subset table never holds char defs
+            // (no presets seeded, `\def` full-only), so the lookup
+            // always misses there.
+            if (full_only and !t.noexpand) {
                 if (ctx.findCharDef(t.cp)) |def| {
                     try ctx.expandUse(def, t.pos);
                     return parseSingle(ctx, depth);
@@ -2445,8 +2466,9 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
             }
             // User macros shadow builtins. A `noexpand`-marked token
             // (alias bound to a then-undefined macro) skips expansion
-            // and parses as its face value, matching KaTeX.
-            if (t.name.len > 0 and isMacroName(t) and !t.noexpand) {
+            // and parses as its face value, matching KaTeX. Full
+            // profile only (subset defines no macros).
+            if (full_only and t.name.len > 0 and isMacroName(t) and !t.noexpand) {
                 if (ctx.findDef(t.name)) |def| {
                     try ctx.expandUse(def, t.pos);
                     return parseSingle(ctx, depth);
