@@ -8,6 +8,10 @@ const contract = @import("contract.zig");
 const parse = @import("parse.zig");
 const symbols = @import("symbols.zig");
 
+const build_options = @import("build_options");
+const active_profile: contract.Profile =
+    std.meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
+
 const Error = contract.LayoutError;
 const Idx = parse.Idx;
 const NONE = parse.NONE;
@@ -27,8 +31,16 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
     // KaTeX `buildMathML` (issue #119, pinned 0.18.7): the body lives
     // in `<semantics>` with the raw TeX source as the
     // `application/x-tex` annotation (copy-tex / AT consumers read
-    // the source back out of it).
-    w.str("><semantics>");
+    // the source back out of it). Full profile only: the subset
+    // profile keeps the bare envelope so its host-cost ratchet
+    // (`tools/size_gate.sh`) holds — subset MathML is already a
+    // reduced scope (full-only commands fail `Unsupported` before
+    // emitting anything).
+    if (comptime active_profile == .full) {
+        w.str("><semantics>");
+    } else {
+        w.str(">");
+    }
     // The root row wraps a lone child unless it already presents
     // as a row (KaTeX `buildMathML`: single rowlike passes through).
     // An equation tag is the table itself (never `mrow`-wrapped).
@@ -45,9 +57,13 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
         w.nodeSole(root, .{ .fam = null, .script = false }, true) catch |e| return e;
         w.str("</mrow>");
     } else w.node(root, .{ .fam = null, .script = false }) catch |e| return e;
-    w.str("<annotation encoding=\"application/x-tex\">");
-    w.anno(source);
-    w.str("</annotation></semantics></math>");
+    if (comptime active_profile == .full) {
+        w.str("<annotation encoding=\"application/x-tex\">");
+        w.anno(source);
+        w.str("</annotation></semantics></math>");
+    } else {
+        w.str("</math>");
+    }
     if (w.overflow) return error.NoSpace;
     const n = mergeNot(out[0..w.pos]);
     return out[0..mergeRuns(out[0..n])];
