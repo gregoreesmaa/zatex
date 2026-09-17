@@ -296,6 +296,11 @@ pub const Row = struct {
     /// *different* row does not rescue this row. Defaults off; only
     /// `parseEnv` sets it.
     tagged: bool = false,
+    /// Extra space after this row in thousandths of an em (may be
+    /// negative): the `\[size]` row gap (KaTeX `rowGaps` parity,
+    /// issues #140/#144). Only `\` takes a size — `\cr`,
+    /// `\newline`, and raw line breaks never do.
+    gap_after: i16 = 0,
 };
 
 /// Fence pair around a barless stacked fraction (KaTeX parity:
@@ -534,6 +539,13 @@ pub const Node = union(enum) {
         /// column (`mtr-glue`), which the MathML emitter reproduces.
         /// Layout treats it as zero-width (no numbering engine).
         numbered: bool,
+        /// `\arraystretch` row-spacing factor in thousandths
+        /// (1000 = 1.0; KaTeX `parseArray` parity, issue #141):
+        /// environments that fix it (smallmatrix/subarray 0.5, CD
+        /// and the cases family 1.0) ignore the macro; every other
+        /// env reads it at `\begin` (absent means 1.0, invalid
+        /// rejects).
+        stretch: u16 = 1000,
     },
     substack: Range,
     mathchoice: [4]Idx,
@@ -565,7 +577,12 @@ pub const Node = union(enum) {
     /// glue in layout; kept distinct so computed kern never aliases it.
     nbsp: void,
     vspace: i16,
-    newline: void,
+    /// Line break (`\\`, `\\[size]`, `\newline`, `\<newline>`):
+    /// `size` is the optional `[...]` distance in thousandths of an
+    /// em (0 when absent — only `\\` takes one, issues #140/#144).
+    newline: struct {
+        size: i16 = 0,
+    },
     /// Row rule (`\hline` solid, `\hdashline` dashed). Rules live in
     /// their own rows (KaTeX `getHLines` parity, issue #33).
     hline: struct {
@@ -1702,7 +1719,7 @@ fn parseFormulaInner(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool
                 // separators inside envs never reach here — the row
                 // loop consumes them, like KaTeX's array path).
                 if (ctx.display) try ctx.reportStrict(.new_line_in_display_mode, t.pos);
-                try put(&buf, &n, try ctx.allocNode(.{ .newline = {} }));
+                try put(&buf, &n, try ctx.allocNode(.{ .newline = .{ .size = 0 } }));
             },
             .ctrl => {
                 if (isName(t, "end")) {
@@ -2320,7 +2337,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
         .rbrace => return ctx.fail(t.pos, "unexpected '}'"),
         .newline => {
             if (ctx.display) try ctx.reportStrict(.new_line_in_display_mode, t.pos);
-            const id: ?Idx = try ctx.allocNode(.{ .newline = {} });
+            const id: ?Idx = try ctx.allocNode(.{ .newline = .{ .size = 0 } });
             return id;
         },
         .param => return ctx.fail(t.pos, "unexpected '#'"),
@@ -2543,7 +2560,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
 
 /// Parse one environment cell: a formula stopping at `&`, `\\`,
 /// `\cr`, `\end`, or `\right`. Returns the cell group and terminator.
-const CellResult = struct { cell: Idx, term: CellTerm, term_pos: u32 };
+const CellResult = struct { cell: Idx, term: CellTerm, term_pos: u32, gap: i16 };
 
 fn parseCell(ctx: *ParseCtx, depth: u8) Error!CellResult {
     // Cells scope like groups (probed KaTeX 0.18.7: a `\def` in one
@@ -2563,11 +2580,11 @@ fn parseCellInner(ctx: *ParseCtx, depth: u8) Error!CellResult {
             .rbrace => return ctx.fail(t.pos, "unexpected '}'"),
             .amp => {
                 _ = try ctx.next();
-                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .amp, .term_pos = t.pos };
+                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .amp, .term_pos = t.pos, .gap = 0 };
             },
             .newline => {
                 _ = try ctx.next();
-                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .term_pos = t.pos };
+                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .term_pos = t.pos, .gap = 0 };
             },
             .ctrl => {
                 if (isName(t, "end") or isName(t, "right") or isName(t, "cr") or isName(t, "newline")) {
@@ -2577,13 +2594,14 @@ fn parseCellInner(ctx: *ParseCtx, depth: u8) Error!CellResult {
                     // env rows per pinned KaTeX, issue #79).
                     // `\end`/`\right` stay for the caller.
                     if (isName(t, "cr") or isName(t, "newline")) _ = try ctx.next();
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "amp")) .amp else if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline, .term_pos = t.pos };
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "amp")) .amp else if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline, .term_pos = t.pos, .gap = 0 };
                 }
                 // `\\` is the row separator inside environments (the
                 // lexer yields it as `.ctrl("\\")`, never `.newline`).
                 if (tokNameEq(t.name, "\\")) {
                     _ = try ctx.next();
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .term_pos = t.pos };
+                    const gap = try parseRowGap(ctx, t);
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .term_pos = t.pos, .gap = gap };
                 }
                 // Gap-position rule (KaTeX `getHLines` parity): a rule
                 // command opening a cell belongs to the row gap, not
@@ -2605,7 +2623,7 @@ fn parseCellInner(ctx: *ParseCtx, depth: u8) Error!CellResult {
                     const frac_id = try finishInfix(ctx, t, num, rest.cell, thick);
                     buf[0] = frac_id;
                     n = 1;
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = rest.term, .term_pos = t.pos };
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = rest.term, .term_pos = t.pos, .gap = rest.gap };
                 }
                 if (isName(t, "limits") or isName(t, "nolimits")) {
                     _ = try ctx.next();
@@ -2660,7 +2678,7 @@ fn parseCellInner(ctx: *ParseCtx, depth: u8) Error!CellResult {
 /// Parse the remainder of a cell after an infix command (through the
 /// cell terminator, which is left for the caller to consume... no —
 /// consumed here and reported).
-fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm } {
+fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm, gap: i16 } {
     var buf: [512]u16 = undefined;
     var n: usize = 0;
     while (true) {
@@ -2670,22 +2688,23 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
             .rbrace => return ctx.fail(t.pos, "unexpected '}'"),
             .amp => {
                 _ = try ctx.next();
-                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .amp };
+                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .amp, .gap = 0 };
             },
             .newline => {
                 _ = try ctx.next();
-                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline };
+                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .gap = 0 };
             },
             .ctrl => {
                 if (isName(t, "end") or isName(t, "right") or isName(t, "cr") or isName(t, "newline")) {
                     // Same `\cr`/`\newline` consume as the cell path
                     // (issues #51/#79).
                     if (isName(t, "cr") or isName(t, "newline")) _ = try ctx.next();
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline };
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline, .gap = 0 };
                 }
                 if (tokNameEq(t.name, "\\")) {
                     _ = try ctx.next();
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline };
+                    const gap = try parseRowGap(ctx, t);
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .gap = gap };
                 }
                 // Same misplacement rule on the infix-rest path.
                 if (n == 0 and (tokNameEq(t.name, "hline") or tokNameEq(t.name, "hdashline"))) {
@@ -3828,7 +3847,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (tokNameEq(name, "enspace")) return ctx.allocNode(.{ .space = 500 });
     if (tokNameEq(name, "newline")) {
         if (ctx.display) try ctx.reportStrict(.new_line_in_display_mode, t.pos);
-        return ctx.allocNode(.{ .newline = {} });
+        return ctx.allocNode(.{ .newline = .{ .size = 0 } });
     }
     if (tokNameEq(name, "hspace") or tokNameEq(name, "kern") or
         tokNameEq(name, "hskip") or tokNameEq(name, "mkern") or tokNameEq(name, "mskip"))
@@ -3898,7 +3917,8 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // or text mode — it falls through to "undefined control sequence".
         '\\' => {
             if (ctx.display) try ctx.reportStrict(.new_line_in_display_mode, t.pos);
-            return ctx.allocNode(.{ .newline = {} });
+            const gap = try parseRowGap(ctx, t);
+            return ctx.allocNode(.{ .newline = .{ .size = gap } });
         },
         else => {},
     }
@@ -4442,6 +4462,8 @@ fn dimenFromBytes(b: []const u8, pos: u32, ctx: *ParseCtx) Error!i16 {
         7227
     else if (std.mem.eql(u8, unit, "bp"))
         100
+    else if (std.mem.eql(u8, unit, "px"))
+        100 // KaTeX `ptPerUnit`: px == bp == 803/800 pt (issue #139)
     else if (std.mem.eql(u8, unit, "cm"))
         2845
     else if (std.mem.eql(u8, unit, "mm"))
@@ -4579,6 +4601,180 @@ pub fn fmtEm4(v: i32, buf: []u8) []u8 {
     buf[n] = 'e';
     buf[n + 1] = 'm';
     return buf[0 .. n + 2];
+}
+
+/// Optional `[size]` after a row break (KaTeX `\@xnewline` /
+/// `\math@cr` parity, issues #140/#144): when `[` directly
+/// abuts the break, consume `[...]` as a dimension in thousandths
+/// of an em (which may be negative, like KaTeX). Anything else —
+/// including a `[` after a space — leaves the stream untouched and
+/// returns 0: the lexer already discarded the space, so abutment
+/// is positional (`[` at exactly `bs.pos + 2`). An abutting
+/// bracket whose content is not a valid size rejects, like KaTeX.
+/// `\cr`, `\newline`, and raw line breaks never take
+/// a size, so their arms never call here.
+fn parseRowGap(ctx: *ParseCtx, bs: Tok) Error!i16 {
+    const pk = try ctx.peek();
+    if (pk.kind != .char or pk.cp != '[' or pk.pos != bs.pos + 2) return 0;
+    _ = try ctx.next();
+    var buf: [24]u8 = undefined;
+    var n: usize = 0;
+    while (true) {
+        const q = try ctx.next();
+        switch (q.kind) {
+            .end => return ctx.fail(q.pos, "expected ']'"),
+            .char => {
+                if (q.cp == ']') break;
+                if (q.cp > 0x7F) return ctx.fail(q.pos, "expected dimension");
+                if (n >= buf.len) return ctx.fail(q.pos, "dimension too long");
+                buf[n] = @intCast(q.cp);
+                n += 1;
+            },
+            else => return ctx.fail(q.pos, "expected dimension"),
+        }
+    }
+    if (n == 0) return ctx.fail(pk.pos, "expected dimension");
+    return dimenFromBytes(buf[0..n], pk.pos, ctx);
+}
+
+/// `\arraystretch` factor in thousandths (1000 = 1.0) for one
+/// environment (KaTeX `parseArray` parity, issue #141). Smallmatrix
+/// and subarray fix 0.5, CD and the cases family fix 1.0 (pinned
+/// 0.18.7 — the macro is ignored there); every other env expands
+/// the current `\arraystretch` macro now (absent means 1.0).
+/// Present-but-invalid (unresolvable, unparseable, zero, or
+/// negative — KaTeX `parseFloat` plus `!v || v < 0`) fails here.
+fn arrayStretch(ctx: *ParseCtx, kind: EnvKind, pos: u32) Error!u16 {
+    switch (kind) {
+        .smallmatrix, .subarray => return 500,
+        .cd, .cases, .dcases, .drcases, .rcases => return 1000,
+        else => {},
+    }
+    const def = ctx.findDef("arraystretch") orelse return 1000;
+    // Follow `\let` aliases to the underlying definition
+    // (bounded, on the shared expansion budget like any expansion).
+    var cur = def;
+    var hops: u8 = 0;
+    while (cur.is_alias) {
+        ctx.expansions += 1;
+        if (ctx.expansions > contract.max_expand or hops >= max_defs) {
+            ctx.err_pos = pos;
+            ctx.err_msg = "macro expansion limit exceeded";
+            return error.ExpansionLimit;
+        }
+        hops += 1;
+        const at = cur.alias_tok;
+        if (at.kind != .ctrl) return ctx.fail(pos, "invalid \\arraystretch");
+        cur = ctx.findDef(at.name) orelse return ctx.fail(pos, "invalid \\arraystretch");
+    }
+    // Expand the body now (KaTeX `expandMacroAsText`); user macros
+    // resolve while primitives pass through to the scan below.
+    const expanded = try ctx.eagerExpand(cur.body);
+    // Collect the expanded text. The scan stops at the first token
+    // that cannot extend a decimal prefix (a primitive, a brace, a
+    // non-ASCII char): JS `parseFloat` reads the same longest valid
+    // prefix, so trailing material never affects the value.
+    var buf: [64]u8 = undefined;
+    var n: usize = 0;
+    var stopped = false;
+    const toks = ctx.toks[@as(usize, expanded.start) .. @as(usize, expanded.start) + @as(usize, expanded.len)];
+    for (toks) |t| {
+        if (stopped) break;
+        if (t.kind == .char and t.cp < 0x80) {
+            if (n >= buf.len) {
+                stopped = true;
+            } else {
+                buf[n] = @intCast(t.cp);
+                n += 1;
+            }
+        } else {
+            stopped = true;
+        }
+    }
+    return parseStretchMilli(buf[0..n]) orelse ctx.fail(pos, "invalid \\arraystretch");
+}
+
+/// JS-`parseFloat`-prefix decimal text to thousandths (1000 = 1.0),
+/// or null when invalid (KaTeX `!v || v < 0`): leading blanks are
+/// skipped, the longest valid mantissa/exponent prefix wins, and
+/// trailing material is ignored. Integer-only: no float anywhere.
+fn parseStretchMilli(text: []const u8) ?u16 {
+    var i: usize = 0;
+    while (i < text.len and (text[i] == ' ' or text[i] == '\t' or text[i] == '\r' or text[i] == '\n')) i += 1;
+    var neg = false;
+    if (i < text.len and (text[i] == '+' or text[i] == '-')) {
+        neg = text[i] == '-';
+        i += 1;
+    }
+    // Mantissa: digits with at most one point, at least one digit.
+    var int: i128 = 0;
+    var frac: i128 = 0;
+    var fdiv: i128 = 1;
+    var digits = false;
+    while (i < text.len and text[i] >= '0' and text[i] <= '9') : (i += 1) {
+        digits = true;
+        if (int < 1000000000000000000) int = int * 10 + (text[i] - '0');
+    }
+    if (i < text.len and text[i] == '.') {
+        i += 1;
+        while (i < text.len and text[i] >= '0' and text[i] <= '9') : (i += 1) {
+            digits = true;
+            if (fdiv < 1000000) {
+                frac = frac * 10 + (text[i] - '0');
+                fdiv *= 10;
+            }
+        }
+    }
+    if (!digits) return null;
+    // Optional exponent, only when well-formed (`1ex` and `1e` both
+    // parse as `1`, like `parseFloat`).
+    var exp: i32 = 0;
+    if (i < text.len and (text[i] == 'e' or text[i] == 'E')) {
+        var j = i + 1;
+        var eneg = false;
+        if (j < text.len and (text[j] == '+' or text[j] == '-')) {
+            eneg = text[j] == '-';
+            j += 1;
+        }
+        var k = j;
+        var e: i32 = 0;
+        while (k < text.len and text[k] >= '0' and text[k] <= '9') : (k += 1) {
+            if (e < 999) e = e * 10 + @as(i32, text[k] - '0');
+        }
+        if (k > j) {
+            i = k;
+            exp = if (eneg) -e else e;
+        }
+    }
+    if (neg) return null;
+    // Rational value num/den. Exponent scaling saturates i128 headroom
+    // (2^120); the shrink below then keeps num*1000 in range while
+    // preserving the ratio to milli precision.
+    const cap128: i128 = (1 << 120);
+    var num: i128 = int * fdiv + frac;
+    var den: i128 = fdiv;
+    var t: i32 = 0;
+    while (t < exp) : (t += 1) {
+        if (num > @divTrunc(cap128, 10)) num = cap128 else num *= 10;
+    }
+    t = 0;
+    while (t > exp) : (t -= 1) {
+        if (den > @divTrunc(cap128, 10)) den = cap128 else den *= 10;
+    }
+    if (num == 0) return null;
+    const sixty: i128 = (1 << 60);
+    while (num > sixty) {
+        if (den < 10) return 65535;
+        num = @divTrunc(num, 10);
+        den = @divTrunc(den, 10);
+    }
+    while (den > sixty) {
+        den = @divTrunc(den, 10);
+        num = @divTrunc(num, 10);
+    }
+    const scaled = @divTrunc(num * 1000 + @divTrunc(den, 2), den);
+    if (scaled >= 65535) return 65535;
+    return @intCast(scaled);
 }
 
 /// Exact em factor of a `\includegraphics` size unit as mult/div
@@ -5903,9 +6099,11 @@ fn parseSubstack(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     var rowbuf: [64]u16 = undefined;
     var nrow: usize = 0;
     var finished = false;
+    var gap: i16 = 0;
     while (!finished) {
         var buf: [512]u16 = undefined;
         var n: usize = 0;
+        gap = 0;
         while (true) {
             const t = try ctx.peek();
             switch (t.kind) {
@@ -5928,6 +6126,7 @@ fn parseSubstack(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
                     // `\\` is the row separator (lexed as `.ctrl("\\")`).
                     if (t.kind == .ctrl and tokNameEq(t.name, "\\")) {
                         _ = try ctx.next();
+                        gap = try parseRowGap(ctx, t);
                         break;
                     }
                     const maybe = try parseAtom(ctx, depth);
@@ -5943,7 +6142,7 @@ fn parseSubstack(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         const ks = try ctx.allocKids(1);
         ctx.kids[ks] = cell;
         if (nrow >= 64) return error.NoSpace;
-        rowbuf[nrow] = try ctx.allocRow(.{ .start = ks, .len = 1 });
+        rowbuf[nrow] = try ctx.allocRow(.{ .start = ks, .len = 1, .gap_after = gap });
         nrow += 1;
     }
     return ctx.allocNode(.{ .substack = .{
@@ -6382,6 +6581,10 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     ctx.row_nonumber = false;
     const saved_tagged = ctx.row_tagged;
     ctx.row_tagged = false;
+    // `\arraystretch` factor (KaTeX `parseArray` parity,
+    // issue #141): read now — a `\def` inside the body lands
+    // too late, exactly as in KaTeX (expansion is sequential).
+    const stretch = try arrayStretch(ctx, kind, cmd.pos);
     // Row spans are stashed locally and materialized densely at the
     // end: nested environments allocate pool rows while cells parse,
     // so the pool is not contiguous mid-parse.
@@ -6463,6 +6666,7 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
                 spans[nspans] = try stashRow(ctx, rowbuf[0..nrowbuf]);
                 spans[nspans].nonumber = ctx.row_nonumber;
                 spans[nspans].tagged = ctx.row_tagged;
+                spans[nspans].gap_after = c.gap;
                 if (ctx.row_tagged and numEnvKind(kind)) ctx.tag_adopted = true;
                 ctx.row_nonumber = false;
                 // Numbering rows consume a pending tag; other envs
@@ -6553,6 +6757,7 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         // Unstarred top-level display envs keep KaTeX's leading
         // number/glue column (issues #83/#86/#87).
         .numbered = numEnvKind(kind) and !display_star,
+        .stretch = stretch,
     } });
     // Delimiter pairing for matrix variants. `cases` is a leftright
     // with a null right delimiter (KaTeX parity: no trailing mo).
@@ -7198,6 +7403,183 @@ test "newline breaks env rows, stays mspace in running math (issue #79)" {
     }
     try std.testing.expect(saw_newline);
 }
+
+test "px unit parses at the KaTeX factor (issue #139)" {
+    // Pinned KaTeX 0.18.7 `ptPerUnit`: px == bp == 803/800 pt, so
+    // `10px` kerns 1000 thousandths of an em — exactly like `10bp`.
+    var ctx = ParseCtx.init("a\\hspace{10px}b");
+    const root = try parse(&ctx, false);
+    const g = switch (ctx.nodes[root]) {
+        .group => |gr| gr,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqual(@as(u16, 3), g.len);
+    switch (ctx.nodes[ctx.kids[g.start + 1]]) {
+        .space => |v| try std.testing.expectEqual(@as(i16, 1000), v),
+        else => return error.TestUnexpectedResult,
+    }
+    var ctx2 = ParseCtx.init("a\\kern1.5px");
+    const root2 = try parse(&ctx2, false);
+    const g2 = switch (ctx2.nodes[root2]) {
+        .group => |gr| gr,
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx2.nodes[ctx2.kids[g2.start + 1]]) {
+        .space => |v| try std.testing.expectEqual(@as(i16, 150), v),
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "array row size gap honors row-break size (issues #140/#144)" {
+    // Pinned KaTeX 0.18.7: `\\\\[6pt]` ends the row with a 6pt
+    // gap; `\\cr` and a spaced break take none (the bracket
+    // stays next-cell content).
+    var ctx = ParseCtx.init("\\begin{matrix}a\\\\[6pt]b\\end{matrix}");
+    const root = try parse(&ctx, false);
+    const env_id = switch (ctx.nodes[root]) {
+        .group => |g| ctx.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    const e = switch (ctx.nodes[env_id]) {
+        .env => |en| en,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+    const rows = rowsOf(&ctx, e.rows_start, e.rows_len);
+    try std.testing.expectEqual(@as(i16, 600), rows[0].gap_after);
+    try std.testing.expectEqual(@as(i16, 0), rows[1].gap_after);
+    // `\\cr[6pt]`: no gap — the bracket stays cell content.
+    var ctx2 = ParseCtx.init("\\begin{matrix}a\\cr[6pt]b\\end{matrix}");
+    const root2 = try parse(&ctx2, false);
+    const env2 = switch (ctx2.nodes[root2]) {
+        .group => |g| ctx2.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    const e2 = switch (ctx2.nodes[env2]) {
+        .env => |en| en,
+        else => return error.TestUnexpectedResult,
+    };
+    const rows2 = rowsOf(&ctx2, e2.rows_start, e2.rows_len);
+    try std.testing.expectEqual(@as(i16, 0), rows2[0].gap_after);
+    // `\\\\ [6pt]`: a space blocks the size (pinned KaTeX
+    // keeps it literal).
+    var ctx3 = ParseCtx.init("\\begin{matrix}a\\\\ [6pt]b\\end{matrix}");
+    const root3 = try parse(&ctx3, false);
+    const env3 = switch (ctx3.nodes[root3]) {
+        .group => |g| ctx3.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    const e3 = switch (ctx3.nodes[env3]) {
+        .env => |en| en,
+        else => return error.TestUnexpectedResult,
+    };
+    const rows3 = rowsOf(&ctx3, e3.rows_start, e3.rows_len);
+    try std.testing.expectEqual(@as(i16, 0), rows3[0].gap_after);
+    // An abutting bracket that is no valid size rejects (pinned
+    // KaTeX `Invalid size`).
+    var ctx4 = ParseCtx.init("\\begin{matrix}a\\\\[x]b\\end{matrix}");
+    try std.testing.expectError(error.Invalid, parse(&ctx4, false));
+}
+
+test "arraystretch scales env rows (issue #141)" {
+    // Pinned KaTeX 0.18.7: `\\def\\arraystretch{1.5}` scales
+    // array row spacing; absent means 1.0; smallmatrix fixes 0.5
+    // even with the macro set; invalid values reject.
+    var ctx = ParseCtx.init("\\def\\arraystretch{1.5}\\begin{array}{c}a\\\\b\\end{array}");
+    const root = try parse(&ctx, false);
+    const env_id = switch (ctx.nodes[root]) {
+        .group => |g| ctx.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx.nodes[env_id]) {
+        .env => |e| try std.testing.expectEqual(@as(u16, 1500), e.stretch),
+        else => return error.TestUnexpectedResult,
+    }
+    var ctxd = ParseCtx.init("\\begin{array}{c}a\\\\b\\end{array}");
+    const rootd = try parse(&ctxd, false);
+    const envd = switch (ctxd.nodes[rootd]) {
+        .group => |g| ctxd.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctxd.nodes[envd]) {
+        .env => |e| try std.testing.expectEqual(@as(u16, 1000), e.stretch),
+        else => return error.TestUnexpectedResult,
+    }
+    // A nested macro still expands (pinned KaTeX `expandMacroAsText`),
+    // and smallmatrix ignores the macro (fixed 0.5).
+    var ctxn = ParseCtx.init("\\def\\one{1.5}\\def\\arraystretch{\\one}\\begin{array}{c}a\\\\b\\end{array}");
+    const rootn = try parse(&ctxn, false);
+    const envn = switch (ctxn.nodes[rootn]) {
+        .group => |g| ctxn.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctxn.nodes[envn]) {
+        .env => |e| try std.testing.expectEqual(@as(u16, 1500), e.stretch),
+        else => return error.TestUnexpectedResult,
+    }
+    var ctxs = ParseCtx.init("\\def\\arraystretch{1.5}\\begin{smallmatrix}a\\\\b\\end{smallmatrix}");
+    const roots = try parse(&ctxs, false);
+    const envs = switch (ctxs.nodes[roots]) {
+        .group => |g| ctxs.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctxs.nodes[envs]) {
+        .env => |e| try std.testing.expectEqual(@as(u16, 500), e.stretch),
+        else => return error.TestUnexpectedResult,
+    }
+    // Invalid values reject: zero, negative, non-numeric.
+    var c0 = ParseCtx.init("\\def\\arraystretch{0}\\begin{array}{c}a\\\\b\\end{array}");
+    try std.testing.expectError(error.Invalid, parse(&c0, false));
+    var cn = ParseCtx.init("\\def\\arraystretch{-1}\\begin{array}{c}a\\\\b\\end{array}");
+    try std.testing.expectError(error.Invalid, parse(&cn, false));
+    var ca = ParseCtx.init("\\def\\arraystretch{abc}\\begin{array}{c}a\\\\b\\end{array}");
+    try std.testing.expectError(error.Invalid, parse(&ca, false));
+}
+
+test "top-level newline size (issue #144)" {
+    // Pinned KaTeX 0.18.7: `a\\\\[6pt]b` breaks with a sized
+    // mspace; `\\newline` never takes a size.
+    var ctx = ParseCtx.init("a\\\\[6pt]b");
+    const root = try parse(&ctx, false);
+    const g = switch (ctx.nodes[root]) {
+        .group => |gr| gr,
+        else => return error.TestUnexpectedResult,
+    };
+    var size: ?i16 = null;
+    for (ctx.kids[g.start .. g.start + g.len]) |k| {
+        if (ctx.nodes[k] == .newline) size = ctx.nodes[k].newline.size;
+    }
+    try std.testing.expectEqual(@as(?i16, 600), size);
+    var ctx2 = ParseCtx.init("a\\newline[6pt]b");
+    const root2 = try parse(&ctx2, false);
+    const g2 = switch (ctx2.nodes[root2]) {
+        .group => |gr| gr,
+        else => return error.TestUnexpectedResult,
+    };
+    var size2: ?i16 = null;
+    for (ctx2.kids[g2.start .. g2.start + g2.len]) |k| {
+        if (ctx2.nodes[k] == .newline) size2 = ctx2.nodes[k].newline.size;
+    }
+    try std.testing.expectEqual(@as(?i16, 0), size2);
+}
+
+test "substack row size gap (issues #140/#144)" {
+    // Substack rows are Row spans too, so `\\\\[size]` applies
+    // there as well (pinned KaTeX builds an mtable for substack).
+    var ctx = ParseCtx.init("\\sum_{\\substack{a\\\\[6pt]b}}");
+    _ = try parse(&ctx, false);
+    var gap: ?i16 = null;
+    var i: u16 = 0;
+    while (i < ctx.nnodes) : (i += 1) {
+        if (ctx.nodes[i] == .substack) {
+            const r = ctx.nodes[i].substack;
+            const rows = rowsOf(&ctx, r.start, r.len);
+            gap = rows[0].gap_after;
+        }
+    }
+    try std.testing.expectEqual(@as(?i16, 600), gap);
+}
+
 
 test "verb scans to delimiter as monospace text" {
     var ctx = ParseCtx.init("\\verb|x|");

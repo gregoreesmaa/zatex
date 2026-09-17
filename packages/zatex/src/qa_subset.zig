@@ -451,6 +451,7 @@ const full_only_markers = [_]struct { mark: []const u8, why: []const u8 }{
     .{ .mark = "\\vec", .why = "math accents are full-only" },
     .{ .mark = "\\mathclap", .why = "cancel/lap are full-only" },
     .{ .mark = "\\rlap", .why = "cancel/lap are full-only" },
+    .{ .mark = "\\clap", .why = "cancel/lap are full-only" },
     .{ .mark = "llap", .why = "cancel/lap are full-only" },
     .{ .mark = "\\fbox", .why = "boxes are full-only" },
     .{ .mark = "\\gt", .why = "AMS relations are full-only" },
