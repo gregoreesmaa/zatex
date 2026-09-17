@@ -447,6 +447,12 @@ const full_only_markers = [_]struct { mark: []const u8, why: []const u8 }{
     .{ .mark = "\\Lsh", .why = "AMS relations are full-only" },
     .{ .mark = "\\Rsh", .why = "AMS relations are full-only" },
 
+    // Console no-ops (longest-first): `\errmessage` must precede
+    // `\message`; neither shadows nor is shadowed by other markers
+    // (verified: no existing marker hits the console sweep rows).
+    .{ .mark = "\\errmessage", .why = "console no-ops are full-only" },
+    .{ .mark = "\\message", .why = "console no-ops are full-only" },
+    .{ .mark = "\\show", .why = "console no-ops are full-only" },
     .{ .mark = "\\def", .why = "macro definitions are full-only" },
     .{ .mark = "\\xdef", .why = "macro definitions are full-only" },
     .{ .mark = "\\hat", .why = "math accents are full-only" },

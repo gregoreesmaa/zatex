@@ -594,6 +594,12 @@ OVERRIDES = {
     # delimiters this engine rejects in math input — so the mirror
     # uses the Rendered-column single-bar shapes instead. `\\Set`
     # keeps KaTeX's bare `\\frac 1 2` args (issue #89's case).
+    # Console no-ops write to the JS console in KaTeX and vanish; the
+    # native engine consumes and discards (no console). Each example
+    # renders its surviving neighbor.
+    "\\message": ("\\message{hi}x", False),
+    "\\errmessage": ("\\errmessage{hi}x", False),
+    "\\show": ("x\\show y", False),
     "\\braket": ("\\braket{\\phi|\\psi}", False),
     "\\Braket": ("\\Braket{\\phi|\\frac12|\\psi}", False),
     "\\Set": ("\\Set{ x | x<\\frac 1 2}", False),
