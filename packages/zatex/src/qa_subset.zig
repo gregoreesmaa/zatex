@@ -442,6 +442,7 @@ const full_only_markers = [_]struct { mark: []const u8, why: []const u8 }{
     .{ .mark = "\\Rsh", .why = "AMS relations are full-only" },
 
     .{ .mark = "\\def", .why = "macro definitions are full-only" },
+    .{ .mark = "\\xdef", .why = "macro definitions are full-only" },
     .{ .mark = "\\hat", .why = "math accents are full-only" },
     .{ .mark = "\\let", .why = "macro definitions are full-only" },
     .{ .mark = "\\not", .why = "negation is full-only" },

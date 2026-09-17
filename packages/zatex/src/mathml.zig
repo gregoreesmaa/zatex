@@ -16,7 +16,7 @@ const NONE = parse.NONE;
 pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Error![]const u8 {
     if (source.len > contract.max_input_len) return error.TooLong;
     var pc = parse.ParseCtx.init(source);
-    const root = parse.parse(&pc, options.display_mode) catch |e| return e;
+    const root = parse.parseWith(&pc, options) catch |e| return e;
     var w = Writer{
         .pc = &pc,
         .buf = out,

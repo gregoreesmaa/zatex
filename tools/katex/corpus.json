@@ -594,6 +594,72 @@
   "expect": "accept"
  },
  {
+  "id": "def-group-local",
+  "tex": "{\\def\\foo{X}}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "edef-group-local",
+  "tex": "{\\edef\\foo{X}}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "newcommand-group-local",
+  "tex": "{\\newcommand{\\f}{x}}\\f",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "let-group-local",
+  "tex": "{\\let\\a=\\alpha}\\a",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "gdef-group-global",
+  "tex": "{\\gdef\\foo{X}}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xdef-group-global",
+  "tex": "{\\xdef\\foo{X}}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "global-def-group",
+  "tex": "{\\global\\def\\foo{X}}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "def-shadow-group",
+  "tex": "\\def\\foo{O}{\\def\\foo{I}\\foo}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "frac-arg-local",
+  "tex": "\\frac{\\def\\foo{X}}{2}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "envcell-def-local",
+  "tex": "\\begin{matrix}\\def\\foo{X}\\foo&y\\end{matrix}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "fence-def-nogroup",
+  "tex": "\\left(\\def\\foo{X}\\right.\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "maxexpand-loop",
   "tex": "\\def\\a{\\a}\\a",
   "display": false,
