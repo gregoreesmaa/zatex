@@ -54,6 +54,38 @@ fn lay(src: []const u8, display: bool, b: *B) !zatex.ir.Layout {
     return zatex.layoutDiag(src, .{ .display_mode = display }, stubProvider(), &b.runs, &b.rules, &b.glyphs, &diag);
 }
 
+/// Stub variant with a double-wide U+25EF ring (KaTeX's ring advance is
+/// ~2x a letter advance): the uniform stub cannot distinguish a centered
+/// narrow body from a left-aligned one, this one can.
+const WideRing = struct {
+    fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+        return @truncate(cp);
+    }
+    fn advance(_: *const anyopaque, _: u16, glyph: u16) i32 {
+        return if (glyph == 0x25EF) 1000 else 500;
+    }
+    fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+        return 40;
+    }
+};
+
+fn wideRingProvider() zatex.MetricsProvider {
+    const S = struct {
+        var dummy: u8 = 0;
+    };
+    return .{
+        .ctx = &S.dummy,
+        .glyphId = WideRing.glyphId,
+        .advance = WideRing.advance,
+        .ruleThickness = WideRing.ruleThickness,
+    };
+}
+
+fn layWideRing(src: []const u8, display: bool, b: *B) !zatex.ir.Layout {
+    var diag = zatex.Diag.empty();
+    return zatex.layoutDiag(src, .{ .display_mode = display }, wideRingProvider(), &b.runs, &b.rules, &b.glyphs, &diag);
+}
+
 /// Absolute x of the first run containing `glyph` (the stub maps
 /// codepoint to glyph id 1:1, so representatives stay distinguishable).
 fn glyphX(l: zatex.ir.Layout, glyph: u16) !i32 {
@@ -2113,9 +2145,10 @@ test "qa70 textcircled encloses the body on the baseline (issue #80)" {
     // KaTeX parity (pinned 0.18.7 browser pixels): `\textcircled`
     // lays out as an enclosure, not a floating accent — the U+25EF
     // baseline coincides with the body baseline, so the body sits
-    // inside the ring (a: pads 21px/17px of a 72px ring; a tall
-    // body overflows the ring top while the ring stays put). The
-    // ring sits at the span left with no centering, and the span
+    // inside the ring (a tall body overflows the ring top while
+    // the ring stays put). Body and ring center in the max-width
+    // construction (`text-align: center` on KaTeX's accent vlist;
+    // pixel proof: symmetric 33/31px side pads), and the span
     // widens to the ring when narrower. Stub metrics (advance 500,
     // extents 700/250): ring and letter share one baseline, the
     // construction is 700 tall and 250 deep, and letter and ring
@@ -2133,15 +2166,15 @@ test "qa70 textcircled encloses the body on the baseline (issue #80)" {
     try std.testing.expectEqual(@as(i32, 0), circ.runs[0].x);
     try std.testing.expectEqual(@as(i32, 0), circ.runs[1].x);
     try std.testing.expectEqual(circ.runs[0].baseline_y, circ.runs[1].baseline_y);
-    // A wider-than-ring span stays left-aligned (the overlay
-    // centered it): the letter run and the ring run both start
-    // at x = 0.
+    // A wider-than-ring span centers the ring on the body: the
+    // 500-advance ring sits at x = 250 inside the 1000-wide `ab`
+    // span, which fills the box and stays at x = 0.
     var bw: B = .{};
     const wide = try lay("\\text{\\textcircled{ab}}", false, &bw);
     try std.testing.expectEqual(@as(u32, 1000), wide.width);
     try std.testing.expectEqual(@as(usize, 2), wide.runs.len);
     try std.testing.expectEqual(@as(i32, 0), wide.runs[0].x);
-    try std.testing.expectEqual(@as(i32, 0), wide.runs[1].x);
+    try std.testing.expectEqual(@as(i32, 250), wide.runs[1].x);
     try std.testing.expectEqual(@as(u16, 0x25EF), wide.runs[1].glyphs[0]);
     // Issue #70: TeX control-word space skipping — the unbraced form
     // `\textcircled a` typesets no phantom space inside the span, so
@@ -2177,6 +2210,39 @@ test "qa114 islands take space-separated args like math" {
     const dsp = try lay("\\text{$\\frac a b$}", false, &b3);
     try std.testing.expectEqual(@as(usize, 1), dsp.rules.len);
     try std.testing.expectEqual(braced.width, dsp.width);
+}
+
+test "qa115 narrow-body textcircled centers in the ring" {
+    // KaTeX parity (pinned 0.18.7 `katex.css`: `.katex-accent >
+    // .vlist-t { text-align: center }`): body and ring center in the
+    // max-width construction — the body does NOT hug the left edge.
+    // Pixel proof from pinned Chromium pixels: `\textcircled{a}`
+    // ring ink x 24..161, glyph ink x 57..130 — symmetric 33/31px
+    // pads, i.e. centered to rounding. The wide-ring stub (U+25EF
+    // advance 1000, letters 500) makes the centering observable:
+    // construction 1000 wide, body at x 250, ring at x 0. Vertical
+    // geometry is unchanged: ring baseline = body baseline.
+    var b1: B = .{};
+    const m = try layWideRing("\\textcircled{a}", false, &b1);
+    try std.testing.expectEqual(@as(u32, 1000), m.width);
+    try std.testing.expectEqual(@as(usize, 2), m.runs.len);
+    try std.testing.expectEqual(@as(i32, 250), m.runs[0].x);
+    // Math-mode body: math-italic `a` (U+1D44E, truncated to u16).
+    try std.testing.expectEqual(@as(u16, 0xD44E), m.runs[0].glyphs[0]);
+    try std.testing.expectEqual(@as(i32, 0), m.runs[1].x);
+    try std.testing.expectEqual(@as(u16, 0x25EF), m.runs[1].glyphs[0]);
+    try std.testing.expectEqual(m.runs[0].baseline_y, m.runs[1].baseline_y);
+    try std.testing.expectEqual(@as(u32, 700), m.height_above);
+    try std.testing.expectEqual(@as(u32, 250), m.depth_below);
+    var b2: B = .{};
+    const t = try layWideRing("\\text{\\textcircled a}", false, &b2);
+    try std.testing.expectEqual(@as(u32, 1000), t.width);
+    try std.testing.expectEqual(@as(usize, 2), t.runs.len);
+    try std.testing.expectEqual(@as(i32, 250), t.runs[0].x);
+    try std.testing.expectEqual(@as(u16, 'a'), t.runs[0].glyphs[0]);
+    try std.testing.expectEqual(@as(i32, 0), t.runs[1].x);
+    try std.testing.expectEqual(@as(u16, 0x25EF), t.runs[1].glyphs[0]);
+    try std.testing.expectEqual(t.runs[0].baseline_y, t.runs[1].baseline_y);
 }
 
 test "qa113 textcircled ring sits on the body baseline" {
