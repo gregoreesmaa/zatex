@@ -1946,6 +1946,7 @@ fn variantFor(fam: parse.FontFam) []const u8 {
         .bb => "double-struck",
         .cal => "script",
         .bolditalic => "bold-italic",
+        .sansitalic => "sans-serif-italic",
     };
 }
 

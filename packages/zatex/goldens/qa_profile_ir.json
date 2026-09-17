@@ -2370,6 +2370,30 @@
       "tex": "\\textit{AaBb}",
       "display": false,
       "ir": "2000/700/250|1,1000,0,700:65.97.66.98.;|"
+    },
+    {
+      "id": "bgroup",
+      "tex": "\\bgroup a}",
+      "display": false,
+      "ir": "500/700/250|1,1000,0,700:54350.;|"
+    },
+    {
+      "id": "bgroup-egroup",
+      "tex": "\\bgroup a\\egroup",
+      "display": false,
+      "ir": "500/700/250|1,1000,0,700:54350.;|"
+    },
+    {
+      "id": "font-mathsfit",
+      "tex": "\\mathsfit{AaBb}",
+      "display": false,
+      "ir": "2000/700/250|13,1000,0,700:54792.54818.54793.54819.;|"
+    },
+    {
+      "id": "mathsfit-alpha",
+      "tex": "\\mathsfit\\alpha",
+      "display": false,
+      "ir": "500/700/250|13,1000,0,700:945.;|"
     }
   ]
 }

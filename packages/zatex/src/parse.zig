@@ -257,6 +257,8 @@ pub const FontFam = enum(u8) {
     cal,
     /// `\bm` (issue #73): KaTeX `mathvariant="bold-italic"`.
     bolditalic,
+    /// `\mathsfit` (issue #137): KaTeX `mathvariant="sans-serif-italic"`.
+    sansitalic,
 
     pub fn id(self: FontFam) u16 {
         return @intFromEnum(@as(contract.FontId, switch (self) {
@@ -270,6 +272,7 @@ pub const FontFam = enum(u8) {
             .bb => .bb,
             .cal => .cal,
             .bolditalic => .bold_italic,
+            .sansitalic => .sans_italic,
         }));
     }
 };
@@ -1268,8 +1271,8 @@ pub const full_only_ctrl_names: []const []const u8 = &.{
     "coloncolon", "colonequals", "coloncolonequals", "equalscolon",
     "equalscoloncolon", "colonminus", "coloncolonminus", "minuscolon",
     "minuscoloncolon", "coloncolonapprox", "coloncolonsim", "ratio",
-    "char", "@char", "html@mathml", "rq", "lBrace", "rBrace", "minuso", "angl", "angln",
-    "xcancel", "bmod", "pod", "pmod", "copyright", "verb", "color", "textcolor",
+    "char", "@char", "@firstoftwo", "@secondoftwo", "@ifnextchar", "@ifstar", "TextOrMath", "html@mathml", "rq", "lBrace", "rBrace", "minuso", "angl", "angln",
+    "xcancel", "bmod", "pod", "pmod", "copyright", "textcopyright", "verb", "color", "textcolor",
     "colorbox", "fcolorbox", "href", "url", "includegraphics", "stackrel",
     "htmlClass", "htmlId",
     "htmlStyle", "htmlData", "operatorname", "operatornamewithlimits",
@@ -1345,11 +1348,95 @@ fn parseTag(ctx: *ParseCtx, t: Tok) Error!?Idx {
     }
     // Nested `\text{...}` renders flat inside tags (issue #75).
     const flat = try spliceNestedText(ctx, toks);
-    try checkTextToks(ctx, flat);
-    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = flat, .fam = .rm } });
+    // Text-mode branch selection (issue #163): `\\TextOrMath` keeps
+    // its first argument here (math mode keeps the second).
+    const sel = try selectBranchToks(ctx, flat, false);
+    try checkTextToks(ctx, sel);
+    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = sel, .fam = .rm } });
     ctx.tag_starred = starred;
     ctx.row_tagged = true;
     return null;
+}
+
+/// Charge one macro expansion against `maxExpand` (KaTeX parity:
+/// every builtin-macro use counts there too, issues #161-163).
+fn chargeExpansion(ctx: *ParseCtx, use_pos: u32) Error!void {
+    ctx.expansions += 1;
+    if (ctx.expansions > contract.max_expand) {
+        ctx.err_pos = use_pos;
+        ctx.err_msg = "macro expansion limit exceeded";
+        return error.ExpansionLimit;
+    }
+}
+
+/// Push a captured argument's tokens back onto the stream (KaTeX
+/// macro-result parity: the kept branch parses as enclosing-row
+/// siblings at original positions).
+fn pushKeptArg(ctx: *ParseCtx, arg: Range) Error!void {
+    var i: usize = arg.len;
+    while (i > 0) {
+        i -= 1;
+        try ctx.push(ctx.toks[@as(usize, arg.start) + i]);
+    }
+}
+
+/// Single-token text equality for `\\@ifnextchar` (KaTeX parity:
+/// `args[0][0].text === nextToken.text`): kinds must match, then
+/// characters compare by codepoint, control words by name.
+fn tokTextEq(a: Tok, b: Tok) bool {
+    if (a.kind != b.kind) return false;
+    return switch (a.kind) {
+        .char => a.cp == b.cp,
+        .ctrl => tokNameEq(a.name, b.name),
+        .param => a.arg == b.arg,
+        else => true,
+    };
+}
+
+/// Two-branch selector macros (KaTeX `macros.ts`, issues #161-163):
+/// `\\@firstoftwo{A}{B}` keeps A, `\\@secondoftwo{A}{B}` keeps B,
+/// `\\TextOrMath{A}{B}` keeps B in math mode (text ranges filter to
+/// A earlier via `selectBranchToks`), `\\@ifnextchar{S}{T}{E}`
+/// keeps T iff the next unexpanded non-space token matches the
+/// single token S (else E, never consuming the probe), and
+/// `\\@ifstar{T}{E}` runs through `\\@ifnextchar` exactly like KaTeX
+/// (`\\@ifnextchar *{\\@firstoftwo{T}}`, so a matched `*` is consumed
+/// as the inner `\\@firstoftwo`'s dropped second argument).
+/// Nullable like `\\tag`/`\\relax` (a kept side-effect-only branch
+/// propagates null): the formula loop skips, argument positions fail
+/// exactly as for those. Each use charges `maxExpand`.
+fn parseSelectorMacro(ctx: *ParseCtx, depth: u8, t: Tok) Error!?Idx {
+    try chargeExpansion(ctx, t.pos);
+    if (tokNameEq(t.name, "@ifstar")) {
+        const a = try ctx.captureArg();
+        try pushExpansionArg(ctx, t, "\\@ifnextchar *{\\@firstoftwo{", a, "}}");
+        return parseSingle(ctx, depth);
+    }
+    if (tokNameEq(t.name, "@ifnextchar")) {
+        const sym = try ctx.captureArg();
+        const ifb = try ctx.captureArg();
+        const elb = try ctx.captureArg();
+        // KaTeX `consumeSpaces`: spaces vanish, the probed token
+        // never does (math lexing drops whitespace runs already;
+        // only pushed-back space chars survive to here).
+        while (true) {
+            const s = try ctx.peek();
+            if (s.kind != .char or s.cp != ' ') break;
+            _ = try ctx.next();
+        }
+        const nxt = try ctx.peek();
+        const keep = if (sym.len == 1 and tokTextEq(ctx.toks[sym.start], nxt)) ifb else elb;
+        try pushKeptArg(ctx, keep);
+        return parseSingle(ctx, depth);
+    }
+    const a = try ctx.captureArg();
+    const b = try ctx.captureArg();
+    if (tokNameEq(t.name, "TextOrMath")) {
+        try pushKeptArg(ctx, b);
+    } else {
+        try pushKeptArg(ctx, if (tokNameEq(t.name, "@firstoftwo")) a else b);
+    }
+    return parseSingle(ctx, depth);
 }
 
 /// Parse a row of atoms until the frame terminator. Returns a group.
@@ -1427,6 +1514,19 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool) Err
                     // ctrl-dispatch gate).
                     try subsetGate(false);
                     if (frame != .begingroup) return ctx.fail(t.pos, "unexpected '\\endgroup'");
+                    _ = try ctx.next();
+                    break;
+                }
+                if (isName(t, "egroup")) {
+                    // `\\egroup` is `}` (KaTeX `\\let\\egroup=}` parity,
+                    // issue #134): closes `{`/`\\bgroup` groups only —
+                    // never `\\begingroup` (strict pairing, the
+                    // `\\begingroup a\\egroup` probe) — mirroring the
+                    // `.rbrace` arm above. Both profiles: grouping is
+                    // core syntax, so no subset gate (unlike
+                    // `\\endgroup` just above).
+                    if (frame == .begingroup) return ctx.fail(t.pos, "expected '\\endgroup'");
+                    if (frame != .group) return ctx.fail(t.pos, "unexpected '}'");
                     _ = try ctx.next();
                     break;
                 }
@@ -2131,6 +2231,17 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
             // user `\tag` macro shadows the builtin — rather than in
             // `parseCtrl`, which cannot return null.
             if (full_only and tokNameEq(t.name, "tag")) return parseTag(ctx, t);
+            // Selector macros (issues #161-163): nullable like
+            // `\\tag` above (a kept side-effect-only branch
+            // propagates null), after macro expansion so user
+            // definitions shadow the builtins. The subset gate below
+            // reports them `Unsupported` via `full_only_ctrl_names`.
+            if (full_only and (tokNameEq(t.name, "@firstoftwo") or tokNameEq(t.name, "@secondoftwo") or
+                tokNameEq(t.name, "@ifnextchar") or tokNameEq(t.name, "@ifstar") or
+                tokNameEq(t.name, "TextOrMath")))
+            {
+                return parseSelectorMacro(ctx, depth, t);
+            }
             // Subset profile: the full-only `parseCtrl` branches below
             // vanish at compile time (`full_only`); fail fast here so
             // the `Unsupported` contract (and positions) never change.
@@ -2743,6 +2854,15 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     }
     if (tokNameEq(name, "end")) return ctx.fail(t.pos, "unexpected '\\end'");
     if (tokNameEq(name, "endgroup")) return ctx.fail(t.pos, "unexpected '\\endgroup'");
+    if (tokNameEq(name, "egroup")) return ctx.fail(t.pos, "unexpected '}'");
+    if (tokNameEq(name, "bgroup")) {
+        // `{` by another name (KaTeX `\\let\\bgroup={` parity, issue
+        // #134 — `t` is already consumed): opens a `.group` frame the
+        // formula loop closes on `}` or `\\egroup`, never on
+        // `\\endgroup` (strict pairing, like the `.lbrace` arm of
+        // `parseSingle`). Both profiles: grouping is core syntax.
+        return parseFormula(ctx, depth + 1, .group, null);
+    }
     if (full_only and (tokNameEq(name, "begingroup"))) {
         // Scope opener like `{` (KaTeX parity, pinned 0.18.7 — `t`
         // is already consumed), but the frame closes only on
@@ -3036,6 +3156,15 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // to the text batch, and renders these same tokens.
         return textLit(ctx, t.pos, "©");
     }
+    if (full_only and (tokNameEq(name, "textcopyright"))) {
+        // KaTeX parity (`macros.ts`, issue #132): `\textcopyright` =
+        // `\html@mathml{\textcircled{c}}{\char`©}` — observably the
+        // `\char` textord in MathML (`<mi mathvariant="normal">©</mi>`,
+        // pinned 0.18.7 probe), exactly what `charAtom` builds (the
+        // `\char` test pins the shape). Text mode resolves through
+        // the `text_cmds` table instead (same codepoint, mtext).
+        return charAtom(ctx, 0x00A9);
+    }
     if (full_only and (tokNameEq(name, "verb"))) {
         return parseVerb(ctx, t);
     }
@@ -3049,7 +3178,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         var frame: Range = .{ .start = 0, .len = 0 };
         if (tokNameEq(name, "fcolorbox")) frame = try captureColorSpec(ctx);
         const bg = try captureColorSpec(ctx);
-        const toks = try parseBracedToks(ctx, t, true);
+        const raw = try parseBracedToks(ctx, t, true);
+        const toks = try selectBranchToks(ctx, raw, false);
         try checkTextToks(ctx, toks);
         return ctx.allocNode(.{ .colorbox = .{ .body = toks, .bg = bg, .frame = frame } });
     }
@@ -3059,7 +3189,11 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         return ctx.allocNode(.{ .href = .{ .body = body, .target = target } });
     }
     if (full_only and (tokNameEq(name, "url"))) {
-        const toks = try captureSpacedArg(ctx);
+        const raw = try captureSpacedArg(ctx);
+        // Math flavor: `\\url` arguments expand in math mode in KaTeX
+        // (pinned `\\TextOrMath` probe), even though the capture
+        // validates as text afterwards.
+        const toks = try selectBranchToks(ctx, raw, true);
         try checkTextToks(ctx, toks);
         return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .tt } });
     }
@@ -3106,7 +3240,12 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
             _ = try ctx.next();
             limits = .on;
         }
-        const toks = try ctx.captureArg();
+        const raw = try ctx.captureArg();
+        // Math flavor: `\\operatorname` arguments parse in math mode
+        // in KaTeX (it is a macro over `\\operatorname@`; pinned
+        // `\\TextOrMath` probe), even though the capture validates as
+        // text afterwards.
+        const toks = try selectBranchToks(ctx, raw, true);
         try checkTextToks(ctx, toks);
         return ctx.allocNode(.{ .opname = .{ .toks = toks, .limits = limits } });
     }
@@ -3321,7 +3460,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         const dh = try parseDimenArg(ctx, t);
         // KaTeX parity: the body is an hbox (text mode), not math —
         // math commands inside are rejected, as in `\text`.
-        const toks = try parseBracedToks(ctx, t, false);
+        const raw = try parseBracedToks(ctx, t, false);
+        const toks = try selectBranchToks(ctx, raw, false);
         try checkTextToks(ctx, toks);
         const body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
         return ctx.allocNode(.{ .raisebox = .{ .body = body, .dh = dh } });
@@ -3341,7 +3481,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // KaTeX `enclose` takes an hbox here (text mode): math
         // commands inside are rejected, as in `\text` (the raisebox
         // precedent — never math, contra the old math-body shape).
-        const toks = try parseBracedToks(ctx, t, true);
+        const raw = try parseBracedToks(ctx, t, true);
+        const toks = try selectBranchToks(ctx, raw, false);
         try checkTextToks(ctx, toks);
         const body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
         return ctx.allocNode(.{ .fbox = body });
@@ -3407,7 +3548,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         const body = if (math_body)
             try parseGroupOrAtom(ctx, depth)
         else blk: {
-            const toks = try parseBracedToks(ctx, t, false);
+            const raw = try parseBracedToks(ctx, t, false);
+            const toks = try selectBranchToks(ctx, raw, false);
             try checkTextToks(ctx, toks);
             break :blk try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
         };
@@ -3726,6 +3868,9 @@ fn fontFamFor(name: []const u8) ?FontFam {
     if (tokNameEq(name, "mathbf") or tokNameEq(name, "bf") or
         tokNameEq(name, "bold")) return .bold;
     if (tokNameEq(name, "mathsf") or tokNameEq(name, "sf")) return .sans;
+    // `\mathsfit` sans-serif italic (issue #137, KaTeX `font.ts` +
+    // `buildMathML.ts` `sans-serif-italic`). Core like `\mathsf`.
+    if (tokNameEq(name, "mathsfit")) return .sansitalic;
     if (tokNameEq(name, "mathtt") or tokNameEq(name, "tt")) return .tt;
     if (tokNameEq(name, "mathfrak") or tokNameEq(name, "frak")) return .frak;
     if (tokNameEq(name, "mathscr")) return .script;
@@ -3815,7 +3960,8 @@ fn parseOver(ctx: *ParseCtx, depth: u8, t: Tok, kind: OverKind) Error!Idx {
         // KaTeX parity (pinned 0.18.7): `\underbar` and `\angl`
         // set their bodies in text mode — math commands reject,
         // like `\text`.
-        const toks = try parseBracedToks(ctx, t, false);
+        const raw = try parseBracedToks(ctx, t, false);
+        const toks = try selectBranchToks(ctx, raw, false);
         try checkTextToks(ctx, toks);
         const nuc = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
         return ctx.allocNode(.{ .over = .{
@@ -4962,6 +5108,85 @@ fn parseVerb(ctx: *ParseCtx, t: Tok) Error!Idx {
     } });
 }
 
+/// One `captureArg`-shaped argument inside an already-captured token
+/// array: a balanced `{...}` group (delimiters excluded from the
+/// inner range) or a single token. Returns the inner token span plus
+/// the index just past the argument. Structural tokens that cannot
+/// stand alone (`.end`/`.marker`, a stray `.rbrace`, an unbalanced
+/// group) are malformed (null) — the caller leaves the construct for
+/// `checkTextToks` to reject.
+fn arrayArg(ctx: *ParseCtx, base: usize, len: usize, at: usize) ?struct {
+    inner_start: usize,
+    inner_len: usize,
+    end: usize,
+} {
+    if (at >= len) return null;
+    const tk = ctx.toks[base + at];
+    if (tk.kind == .lbrace) {
+        var d: usize = 1;
+        var e = at + 1;
+        while (e < len and d > 0) : (e += 1) {
+            const tk2 = ctx.toks[base + e];
+            if (tk2.kind == .lbrace) d += 1 else if (tk2.kind == .rbrace) d -= 1;
+        }
+        if (d > 0) return null;
+        return .{ .inner_start = at + 1, .inner_len = (e - 1) - (at + 1), .end = e };
+    }
+    switch (tk.kind) {
+        .end, .marker, .rbrace => return null,
+        else => return .{ .inner_start = at, .inner_len = 1, .end = at + 1 },
+    }
+}
+
+/// Select the kept branch of two-argument selector macros in a flat
+/// captured text range (KaTeX text-mode expansion parity, pinned
+/// 0.18.7, issues #161/#163): `\\@firstoftwo` keeps its first
+/// argument, `\\@secondoftwo` its second (mode-independent, like the
+/// math-stream handlers), and `\\TextOrMath` keeps its first
+/// argument in text contexts. With `math_side`, `\\TextOrMath` keeps
+/// its second: `\\url`/`\\operatorname` arguments expand in math
+/// mode in KaTeX (pinned probes), even though this engine validates
+/// those captures as text afterwards. The dropped branch's tokens
+/// are never copied (never parsed); only brace boundaries are
+/// scanned. A malformed construct is left in place for
+/// `checkTextToks` to reject. Repeats to fixpoint; every pass drops
+/// at least the command token, so passes are bounded by the range
+/// length. The subset profile returns the range untouched (these
+/// names stay `Unsupported` there). Flat only: `\\text`-family
+/// bodies resolve selectors in `collectTextPieces` instead, where
+/// `$`/`\\(`/`\\)` math islands keep their mode.
+fn selectBranchToks(ctx: *ParseCtx, r: Range, comptime math_side: bool) Error!Range {
+    if (comptime active_profile != .full) return r;
+    var work = r;
+    while (true) {
+        const base: usize = @as(usize, work.start);
+        var found: ?struct { at: usize, inner_start: usize, inner_len: usize, end: usize } = null;
+        var k: usize = 0;
+        while (k < work.len) : (k += 1) {
+            const tk = ctx.toks[base + k];
+            if (tk.kind != .ctrl) continue;
+            const is_first = tokNameEq(tk.name, "@firstoftwo");
+            const is_second = tokNameEq(tk.name, "@secondoftwo");
+            const is_tom = tokNameEq(tk.name, "TextOrMath");
+            if (!is_first and !is_second and !is_tom) continue;
+            const a1 = arrayArg(ctx, base, work.len, k + 1) orelse continue;
+            const a2 = arrayArg(ctx, base, work.len, a1.end) orelse continue;
+            const keep_b = is_second or (is_tom and math_side);
+            const ai = if (keep_b) a2 else a1;
+            found = .{ .at = k, .inner_start = ai.inner_start, .inner_len = ai.inner_len, .end = a2.end };
+            break;
+        }
+        const f = found orelse return work;
+        const rest = work.len - (f.end - f.at) + f.inner_len;
+        const out = try ctx.allocToks(rest);
+        const ob: usize = out;
+        @memcpy(ctx.toks[ob .. ob + f.at], ctx.toks[base .. base + f.at]);
+        @memcpy(ctx.toks[ob + f.at .. ob + f.at + f.inner_len], ctx.toks[base + f.inner_start .. base + f.inner_start + f.inner_len]);
+        @memcpy(ctx.toks[ob + f.at + f.inner_len .. ob + rest], ctx.toks[base + f.end .. base + work.len]);
+        work = .{ .start = out, .len = @intCast(rest) };
+    }
+}
+
 fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
     var i: u16 = 0;
     while (i < r.len) : (i += 1) {
@@ -5226,6 +5451,34 @@ fn collectTextPieces(
             k += 2;
             start = k;
             continue;
+        }
+        // Selector macros (issues #161/#163, text flavor):
+        // `\\@firstoftwo` keeps its first argument, `\\@secondoftwo`
+        // its second, `\\TextOrMath` its first. The kept branch
+        // collects into this same piece list (so `$` islands and
+        // nested `\\text` inside keep their meaning); the dropped
+        // branch is skipped unread. A malformed construct falls
+        // through to the literal arms below, and `checkTextToks`
+        // rejects it. Subset profile: these names stay `Unsupported`
+        // (validation rejects them; see `selectBranchToks`).
+        if (full_only and tk.kind == .ctrl and
+            (tokNameEq(tk.name, "@firstoftwo") or tokNameEq(tk.name, "@secondoftwo") or
+            tokNameEq(tk.name, "TextOrMath")))
+        {
+            if (arrayArg(ctx, base, work.len, k + 1)) |a1| {
+                if (arrayArg(ctx, base, work.len, a1.end)) |a2| {
+                    try flush(ctx, work, start, k, pieces, np);
+                    const ai = if (tokNameEq(tk.name, "@secondoftwo")) a2 else a1;
+                    const kept = Range{
+                        .start = @intCast(base + ai.inner_start),
+                        .len = @intCast(ai.inner_len),
+                    };
+                    try collectTextPieces(ctx, depth, kept, fam, pieces, np);
+                    k = a2.end;
+                    start = a2.end;
+                    continue;
+                }
+            }
         }
         // A braced group bound to a control token is atomic: nested
         // `\text{...}` recurses (same list, so merging still
@@ -5835,6 +6088,7 @@ fn isBuiltin(name: []const u8) bool {
     const prims: []const []const u8 = &.{
         "frac", "dfrac", "tfrac", "cfrac", "binom", "dbinom", "genfrac",
         "sqrt", "left", "right", "middle", "begin", "end", "hline", "cr",
+        "bgroup", "egroup",
         "text", "mbox", "boldsymbol", "pmb", "vcenter", "color", "href", "url", "includegraphics",
         "htmlClass",
         "htmlId", "htmlStyle", "htmlData", "operatorname", "substack",
@@ -7306,3 +7560,218 @@ test "text bodies hoist tag, nest, and shift math (issues #75/#81)" {
 }
 
 
+
+test "textcopyright math+text parity (issue #132)" {
+    // Math mode: the `\\char` textord KaTeX observes
+    // (`<mi mathvariant="normal">©</mi>`, pinned 0.18.7 probe).
+    var ctx = ParseCtx.init("\\textcopyright");
+    const root = try parse(&ctx, false);
+    switch (ctx.nodes[root]) {
+        .group => |g| {
+            try std.testing.expectEqual(@as(u16, 1), g.len);
+            switch (ctx.nodes[ctx.kids[g.start]]) {
+                .atom => |a| {
+                    try std.testing.expect(a.textord);
+                    try std.testing.expectEqual(@as(u21, 0x00A9), a.cp);
+                },
+                else => return error.TestUnexpectedResult,
+            }
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // Text mode: the same codepoint through the text table (mtext,
+    // like `\\textregistered`).
+    for ([_][]const u8{ "\\text{\\textcopyright}", "\\textbf{\\textcopyright}" }) |src| {
+        var ctxt = ParseCtx.init(src);
+        _ = try parse(&ctxt, false);
+    }
+}
+
+test "bgroup/egroup group like braces (issue #134)" {
+    const ok_cases = [_][]const u8{
+        "\\bgroup a}",
+        "\\bgroup a\\egroup",
+        "{\\bgroup a}}",
+        "\\frac\\bgroup a}{b}",
+    };
+    for (ok_cases) |src| {
+        var ctx = ParseCtx.init(src);
+        _ = try parse(&ctx, false);
+    }
+    // `\\bgroup a}` shapes exactly like `{a}`: one group kid holding the atom.
+    for ([_][]const u8{ "\\bgroup a}", "{a}" }) |src| {
+        var ctx = ParseCtx.init(src);
+        const root = try parse(&ctx, false);
+        switch (ctx.nodes[root]) {
+            .group => |g| {
+                try std.testing.expectEqual(@as(u16, 1), g.len);
+                switch (ctx.nodes[ctx.kids[g.start]]) {
+                    .group => |inner| {
+                        try std.testing.expectEqual(@as(u16, 1), inner.len);
+                        switch (ctx.nodes[ctx.kids[inner.start]]) {
+                            .atom => |a| try std.testing.expectEqual(@as(u21, 'a'), a.cp),
+                            else => return error.TestUnexpectedResult,
+                        }
+                    },
+                    else => return error.TestUnexpectedResult,
+                }
+            },
+            else => return error.TestUnexpectedResult,
+        }
+    }
+    // Rejects mirror `}`/`\\begingroup` pairing at KaTeX positions
+    // (pinned 0.18.7 probes).
+    const rej_cases = [_]struct { src: []const u8, pos: u32 }{
+        .{ .src = "\\egroup", .pos = 0 },
+        .{ .src = "\\bgroup", .pos = 7 },
+        .{ .src = "{a\\egroup}", .pos = 9 },
+        .{ .src = "\\bgroup a\\endgroup}", .pos = 9 },
+    };
+    for (rej_cases) |c| {
+        var ctxr = ParseCtx.init(c.src);
+        try std.testing.expectError(error.Invalid, parse(&ctxr, false));
+        try std.testing.expectEqual(c.pos, ctxr.err_pos);
+    }
+    // `\\newcommand` refuses the grouping primitives like KaTeX.
+    var ctxn = ParseCtx.init("\\newcommand{\\bgroup}{x}");
+    try std.testing.expectError(error.Invalid, parse(&ctxn, false));
+}
+
+test "mathsfit is sans-serif italic (issue #137)" {
+    var ctx = ParseCtx.init("\\mathsfit{AaBb}");
+    const root = try parse(&ctx, false);
+    switch (ctx.nodes[root]) {
+        .group => |g| {
+            try std.testing.expectEqual(@as(u16, 1), g.len);
+            switch (ctx.nodes[ctx.kids[g.start]]) {
+                .font => |f| try std.testing.expectEqual(FontFam.sansitalic, f.fam),
+                else => return error.TestUnexpectedResult,
+            }
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // Single-atom form takes the atom; `\\mathsf` is untouched.
+    var ctxa = ParseCtx.init("\\mathsfit\\alpha");
+    _ = try parse(&ctxa, false);
+    var ctxs = ParseCtx.init("\\mathsf{H}");
+    const roots = try parse(&ctxs, false);
+    switch (ctxs.nodes[roots]) {
+        .group => |g| switch (ctxs.nodes[ctxs.kids[g.start]]) {
+            .font => |f| try std.testing.expectEqual(FontFam.sans, f.fam),
+            else => return error.TestUnexpectedResult,
+        },
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "firstoftwo/secondoftwo keep their branch (issue #161)" {
+    // The kept branch parses as siblings; the dropped branch is
+    // never parsed — even undefined commands there accept.
+    const ok_cases = [_][]const u8{
+        "\\@firstoftwo{a}{b}",
+        "\\@secondoftwo{a}{b}",
+        "\\@firstoftwo{a}{\\undefinedcommand}",
+        "\\@secondoftwo{\\undefinedcommand}{b}",
+        "\\@firstoftwo{{a}b}{c}",
+        "\\text{\\@firstoftwo{a}{b}}",
+        "\\text{\\@secondoftwo{a}{b}}",
+    };
+    for (ok_cases) |src| {
+        var ctx = ParseCtx.init(src);
+        _ = try parse(&ctx, false);
+    }
+    // `\\@firstoftwo{a}{b}` leaves exactly `a`.
+    var ctx = ParseCtx.init("\\@firstoftwo{a}{b}");
+    const root = try parse(&ctx, false);
+    switch (ctx.nodes[root]) {
+        .group => |g| {
+            try std.testing.expectEqual(@as(u16, 1), g.len);
+            switch (ctx.nodes[ctx.kids[g.start]]) {
+                .atom => |a| try std.testing.expectEqual(@as(u21, 'a'), a.cp),
+                else => return error.TestUnexpectedResult,
+            }
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // A missing second argument rejects at end of input like KaTeX.
+    var ctxm = ParseCtx.init("\\@firstoftwo{a}");
+    try std.testing.expectError(error.Invalid, parse(&ctxm, false));
+    try std.testing.expectEqual(@as(u32, 15), ctxm.err_pos);
+}
+
+test "ifnextchar/ifstar lookahead (issue #162)" {
+    // Match keeps the if-branch and never consumes the probe.
+    const match_cases = [_]struct { src: []const u8, first: u21, n: u16 }{
+        .{ .src = "\\@ifnextchar{a}{T}{E}a", .first = 'T', .n = 2 },
+        .{ .src = "\\@ifnextchar{a}{T}{E}b", .first = 'E', .n = 2 },
+        .{ .src = "\\@ifnextchar{a}{T}{E} a", .first = 'T', .n = 2 },
+        .{ .src = "\\@ifnextchar\\alpha{T}{E}\\alpha", .first = 'T', .n = 2 },
+        .{ .src = "\\@ifstar{T}{E}*", .first = 'T', .n = 1 },
+        .{ .src = "\\@ifstar{T}{E}x", .first = 'E', .n = 2 },
+        .{ .src = "\\@ifstar{T}{E}", .first = 'E', .n = 1 },
+    };
+    for (match_cases) |c| {
+        var ctx = ParseCtx.init(c.src);
+        const root = try parse(&ctx, false);
+        switch (ctx.nodes[root]) {
+            .group => |g| {
+                try std.testing.expectEqual(c.n, g.len);
+                switch (ctx.nodes[ctx.kids[g.start]]) {
+                    .atom => |a| try std.testing.expectEqual(c.first, a.cp),
+                    else => return error.TestUnexpectedResult,
+                }
+            },
+            else => return error.TestUnexpectedResult,
+        }
+    }
+    // A missing third argument rejects at end of input like KaTeX.
+    var ctxu = ParseCtx.init("\\@ifnextchar{a}{T}");
+    try std.testing.expectError(error.Invalid, parse(&ctxu, false));
+    try std.testing.expectEqual(@as(u32, 18), ctxu.err_pos);
+}
+
+test "TextOrMath picks the math branch in math (issue #163)" {
+    // Math mode keeps the second argument.
+    var ctx = ParseCtx.init("\\TextOrMath{a}{b}");
+    const root = try parse(&ctx, false);
+    switch (ctx.nodes[root]) {
+        .group => |g| {
+            try std.testing.expectEqual(@as(u16, 1), g.len);
+            switch (ctx.nodes[ctx.kids[g.start]]) {
+                .atom => |a| try std.testing.expectEqual(@as(u21, 'b'), a.cp),
+                else => return error.TestUnexpectedResult,
+            }
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // Text mode keeps the first, inline and nested; math nesting
+    // re-enters normally.
+    const ok_cases = [_][]const u8{
+        "\\text{\\TextOrMath{a}{b}}",
+        "\\text{x\\TextOrMath{a}{b}y}",
+        "\\text{\\TextOrMath{{a}b}{c}}",
+        "\\frac{\\TextOrMath{a}{b}}{c}",
+        "\\TextOrMath{\\frac12}{x}",
+    };
+    for (ok_cases) |src| {
+        var ctxt = ParseCtx.init(src);
+        _ = try parse(&ctxt, false);
+    }
+    // The text side keeps `a` as text.
+    var ctxt = ParseCtx.init("\\text{\\TextOrMath{a}{b}}");
+    const roott = try parse(&ctxt, false);
+    switch (ctxt.nodes[roott]) {
+        .group => |g| switch (ctxt.nodes[ctxt.kids[g.start]]) {
+            .text => |tx| {
+                const tk = ctxt.toks[tx.toks.start];
+                try std.testing.expect(tk.kind == .char and tk.cp == 'a');
+            },
+            else => return error.TestUnexpectedResult,
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // A missing second argument rejects at end of input like KaTeX.
+    var ctxm = ParseCtx.init("\\TextOrMath{a}");
+    try std.testing.expectError(error.Invalid, parse(&ctxm, false));
+    try std.testing.expectEqual(@as(u32, 14), ctxm.err_pos);
+}

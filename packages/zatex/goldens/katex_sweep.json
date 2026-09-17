@@ -16108,6 +16108,313 @@
    "note": null,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"italic\">AaBb</mtext></mrow><annotation encoding=\"application/x-tex\">\\textit{AaBb}</annotation></semantics></math>"
+  },
+  {
+   "id": "textcopyright",
+   "tex": "\\textcopyright",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"normal\">©</mi></mrow><annotation encoding=\"application/x-tex\">\\textcopyright</annotation></semantics></math>"
+  },
+  {
+   "id": "textcopyright-text",
+   "tex": "\\text{\\textcopyright}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>©</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\textcopyright}</annotation></semantics></math>"
+  },
+  {
+   "id": "bgroup",
+   "tex": "\\bgroup a}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\bgroup a}</annotation></semantics></math>"
+  },
+  {
+   "id": "bgroup-egroup",
+   "tex": "\\bgroup a\\egroup",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\bgroup a\\egroup</annotation></semantics></math>"
+  },
+  {
+   "id": "egroup-stray",
+   "tex": "\\egroup",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 0,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '}' at position 1: }̲"
+  },
+  {
+   "id": "bgroup-unclosed",
+   "tex": "\\bgroup",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 7,
+   "katex_error": "KaTeX parse error: Expected '}', got 'EOF' at end of input: \\bgroup"
+  },
+  {
+   "id": "bgroup-extra-close",
+   "tex": "{a\\egroup}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 9,
+   "katex_error": "KaTeX parse error: Expected 'EOF', got '}' at position 10: {a\\egroup}̲"
+  },
+  {
+   "id": "bgroup-endgroup-mismatch",
+   "tex": "\\bgroup a\\endgroup}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 9,
+   "katex_error": "KaTeX parse error: Expected '}', got '\\endgroup' at position 10: \\bgroup a\\̲e̲n̲d̲g̲r̲o̲u̲p̲}"
+  },
+  {
+   "id": "font-mathsfit",
+   "tex": "\\mathsfit{AaBb}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"sans-serif-italic\">A</mi><mi mathvariant=\"sans-serif-italic\">a</mi><mi mathvariant=\"sans-serif-italic\">B</mi><mi mathvariant=\"sans-serif-italic\">b</mi></mrow><annotation encoding=\"application/x-tex\">\\mathsfit{AaBb}</annotation></semantics></math>"
+  },
+  {
+   "id": "mathsfit-alpha",
+   "tex": "\\mathsfit\\alpha",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi mathvariant=\"sans-serif-italic\">α</mi></mrow><annotation encoding=\"application/x-tex\">\\mathsfit\\alpha</annotation></semantics></math>"
+  },
+  {
+   "id": "at-firstoftwo",
+   "tex": "\\@firstoftwo{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\@firstoftwo{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "at-secondoftwo",
+   "tex": "\\@secondoftwo{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">\\@secondoftwo{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "at-firstoftwo-nested",
+   "tex": "\\@secondoftwo{a}{{b}c}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>b</mi><mi>c</mi></mrow><annotation encoding=\"application/x-tex\">\\@secondoftwo{a}{{b}c}</annotation></semantics></math>"
+  },
+  {
+   "id": "at-firstoftwo-drop",
+   "tex": "\\@firstoftwo{a}{\\undefinedcommand}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\@firstoftwo{a}{\\undefinedcommand}</annotation></semantics></math>"
+  },
+  {
+   "id": "at-firstoftwo-text",
+   "tex": "\\text{\\@firstoftwo{a}{b}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\@firstoftwo{a}{b}}</annotation></semantics></math>"
+  },
+  {
+   "id": "at-firstoftwo-missing",
+   "tex": "\\@firstoftwo{a}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 15,
+   "katex_error": "KaTeX parse error: Unexpected end of input in a macro argument, expected '}' at end of input: \\@firstoftwo{a}"
+  },
+  {
+   "id": "at-ifnextchar-match",
+   "tex": "\\@ifnextchar{a}{T}{E}a",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>T</mi><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\@ifnextchar{a}{T}{E}a</annotation></semantics></math>"
+  },
+  {
+   "id": "at-ifnextchar-nomatch",
+   "tex": "\\@ifnextchar{a}{T}{E}b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>E</mi><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">\\@ifnextchar{a}{T}{E}b</annotation></semantics></math>"
+  },
+  {
+   "id": "at-ifnextchar-space",
+   "tex": "\\@ifnextchar{a}{T}{E} a",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>T</mi><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\@ifnextchar{a}{T}{E} a</annotation></semantics></math>"
+  },
+  {
+   "id": "at-ifnextchar-ctrl",
+   "tex": "\\@ifnextchar\\alpha{T}{E}\\alpha",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>T</mi><mi>α</mi></mrow><annotation encoding=\"application/x-tex\">\\@ifnextchar\\alpha{T}{E}\\alpha</annotation></semantics></math>"
+  },
+  {
+   "id": "at-ifnextchar-eof",
+   "tex": "x\\@ifnextchar{a}{T}{E}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi><mi>E</mi></mrow><annotation encoding=\"application/x-tex\">x\\@ifnextchar{a}{T}{E}</annotation></semantics></math>"
+  },
+  {
+   "id": "at-ifnextchar-missing",
+   "tex": "\\@ifnextchar{a}{T}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 18,
+   "katex_error": "KaTeX parse error: Unexpected end of input in a macro argument, expected '}' at end of input: …fnextchar{a}{T}"
+  },
+  {
+   "id": "at-ifstar-match",
+   "tex": "\\@ifstar{T}{E}*",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>T</mi></mrow><annotation encoding=\"application/x-tex\">\\@ifstar{T}{E}*</annotation></semantics></math>"
+  },
+  {
+   "id": "at-ifstar-nomatch",
+   "tex": "\\@ifstar{T}{E}x",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>E</mi><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\@ifstar{T}{E}x</annotation></semantics></math>"
+  },
+  {
+   "id": "at-ifstar-eof",
+   "tex": "\\@ifstar{T}{E}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>E</mi></mrow><annotation encoding=\"application/x-tex\">\\@ifstar{T}{E}</annotation></semantics></math>"
+  },
+  {
+   "id": "textormath-math",
+   "tex": "\\TextOrMath{a}{b}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">\\TextOrMath{a}{b}</annotation></semantics></math>"
+  },
+  {
+   "id": "textormath-text",
+   "tex": "\\text{\\TextOrMath{a}{b}}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>a</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\TextOrMath{a}{b}}</annotation></semantics></math>"
+  },
+  {
+   "id": "textormath-nested-text",
+   "tex": "\\text{x\\TextOrMath{a}{b}y}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>xay</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{x\\TextOrMath{a}{b}y}</annotation></semantics></math>"
+  },
+  {
+   "id": "textormath-frac",
+   "tex": "\\frac{\\TextOrMath{a}{b}}{c}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mi>b</mi><mi>c</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\frac{\\TextOrMath{a}{b}}{c}</annotation></semantics></math>"
+  },
+  {
+   "id": "textormath-missing",
+   "tex": "\\TextOrMath{a}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 14,
+   "katex_error": "KaTeX parse error: Unexpected end of input in a macro argument, expected '}' at end of input: \\TextOrMath{a}"
   }
  ]
 }
