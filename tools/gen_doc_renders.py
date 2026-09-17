@@ -161,6 +161,7 @@ EXACT = {
     "\\long": ("\\long\\def\\foo{A}\\foo", False),
     "\\url": ("\\url{https://example.com/a}", False),
     "\\verb": ("\\verb|x|", False),
+    "\\verb*": ("\\verb*|a b|", False),
     "\\operatorname": ("\\operatorname{sin}x", False),
     "\\operatorname*": ("\\operatorname*{lim}_{n}", False),
     "\\operatorname\\*": ("\\operatorname*{lim}_{n}", False),
