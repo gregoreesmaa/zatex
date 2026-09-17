@@ -152,6 +152,15 @@ pub const KernCorner = enum(u32) {
 pub const provider_version: u32 = 4;
 pub const MetricsProvider = struct {
     ctx: *const anyopaque,
+    /// Glyph id for (`font`, `codepoint`) in the host's namespace.
+    /// Id 0 means missing (issue #142): the core lays out the run
+    /// with the provider's advance/extents for 0 anyway, so hosts
+    /// seeing boxes/tofu should check which (font, codepoint) pairs
+    /// come back 0 — that is the whole coverage diagnostic. The
+    /// reference host (`refhost.zig`) resolves vendored Latin Modern
+    /// Math first, system STIX Two Math second; anything 0 in both
+    /// is genuinely uncovered (see the font troubleshooting note in
+    /// `docs/parity.md`).
     glyphId: *const fn (ctx: *const anyopaque, font: u16, codepoint: u21) u16,
     advance: *const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32,
     ruleThickness: *const fn (ctx: *const anyopaque, font: u16, kind: RuleKind) i32,

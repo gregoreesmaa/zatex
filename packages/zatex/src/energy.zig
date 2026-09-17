@@ -267,10 +267,14 @@ test "energy mathml byte budgets" {
     // adjacent `mo`s — verified by direct probe (see issues #157,
     // #158). These pins fail on ANY drift so the parity question
     // reopens loudly instead of silently.
-    try std.testing.expectEqual(@as(usize, 111), try mathmlLen("\\normalsize{x}"));
-    try std.testing.expectEqual(@as(usize, 119), try mathmlLen("x+y+z"));
-    try std.testing.expectEqual(@as(usize, 116), try mathmlLen("\\mathbf{12}"));
-    try std.testing.expectEqual(@as(usize, 104), try mathmlLen("\\frac{1}{2}"));
+    // Values include the #119 `<semantics>` + `application/x-tex`
+    // annotation wrapper (KaTeX 0.18.7 parity); the pinned shapes
+    // inside are unchanged: the `mathsize="1em"` shell (#157),
+    // unmerged `mo`s (#158).
+    try std.testing.expectEqual(@as(usize, 202), try mathmlLen("\\normalsize{x}"));
+    try std.testing.expectEqual(@as(usize, 201), try mathmlLen("x+y+z"));
+    try std.testing.expectEqual(@as(usize, 204), try mathmlLen("\\mathbf{12}"));
+    try std.testing.expectEqual(@as(usize, 192), try mathmlLen("\\frac{1}{2}"));
 }
 
 // ---------------------------------------------------------------------------
