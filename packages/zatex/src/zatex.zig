@@ -771,7 +771,7 @@ test "issue33: matrix column gaps match KaTeX separation" {
     var rules_buf: [8]ir.Rule = undefined;
     var glyphs_buf: [128]u16 = undefined;
     const m = try layoutOk("\\begin{matrix}a&b\\end{matrix}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
-    try std.testing.expectEqual(@as(u32, 1500 + 1500), m.width);
+    try std.testing.expectEqual(@as(u32, 500 + 1000 + 500), m.width);
     const a = try layoutOk("\\begin{array}{cc}a&b\\end{array}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(u32, 500 + 1500 + 1500 + 500), a.width);
     // `aligned` rl pairs touch (the `=` cell keeps its own Rel glue;

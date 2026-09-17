@@ -331,6 +331,9 @@ const StyleCtx = struct {
     name: []const u8,
     display: bool,
     size: i16,
+    /// Script/scriptscript contexts use KaTeX's tight spacing table
+    /// (issue #168: most pairs zero there).
+    tight: bool,
     /// Wrapper split around the body (`pre + body + suf`); empty
     /// strings for bare bodies. Cramped contexts wrap in `\sqrt{}` so
     /// the radicand style (Dc/Tc/Sc/SSc) is ambient.
@@ -342,14 +345,14 @@ const StyleCtx = struct {
 };
 
 const style_ctxs = [_]StyleCtx{
-    .{ .name = "D", .display = true, .size = 1000, .pre = "", .suf = "", .empty = "" },
-    .{ .name = "Dc", .display = true, .size = 1000, .pre = "\\sqrt{", .suf = "}", .empty = "\\sqrt{}" },
-    .{ .name = "T", .display = false, .size = 1000, .pre = "", .suf = "", .empty = "" },
-    .{ .name = "Tc", .display = false, .size = 1000, .pre = "\\sqrt{", .suf = "}", .empty = "\\sqrt{}" },
-    .{ .name = "S", .display = false, .size = 700, .pre = "\\scriptstyle{", .suf = "}", .empty = "" },
-    .{ .name = "Sc", .display = false, .size = 700, .pre = "\\scriptstyle{\\sqrt{", .suf = "}}", .empty = "\\scriptstyle{\\sqrt{}}" },
-    .{ .name = "SS", .display = false, .size = 500, .pre = "\\scriptscriptstyle{", .suf = "}", .empty = "" },
-    .{ .name = "SSc", .display = false, .size = 500, .pre = "\\scriptscriptstyle{\\sqrt{", .suf = "}}", .empty = "\\scriptscriptstyle{\\sqrt{}}" },
+    .{ .name = "D", .display = true, .size = 1000, .tight = false, .pre = "", .suf = "", .empty = "" },
+    .{ .name = "Dc", .display = true, .size = 1000, .tight = false, .pre = "\\sqrt{", .suf = "}", .empty = "\\sqrt{}" },
+    .{ .name = "T", .display = false, .size = 1000, .tight = false, .pre = "", .suf = "", .empty = "" },
+    .{ .name = "Tc", .display = false, .size = 1000, .tight = false, .pre = "\\sqrt{", .suf = "}", .empty = "\\sqrt{}" },
+    .{ .name = "S", .display = false, .size = 700, .tight = true, .pre = "\\scriptstyle{", .suf = "}", .empty = "" },
+    .{ .name = "Sc", .display = false, .size = 700, .tight = true, .pre = "\\scriptstyle{\\sqrt{", .suf = "}}", .empty = "\\scriptstyle{\\sqrt{}}" },
+    .{ .name = "SS", .display = false, .size = 500, .tight = true, .pre = "\\scriptscriptstyle{", .suf = "}", .empty = "" },
+    .{ .name = "SSc", .display = false, .size = 500, .tight = true, .pre = "\\scriptscriptstyle{\\sqrt{", .suf = "}}", .empty = "\\scriptscriptstyle{\\sqrt{}}" },
 };
 
 /// Wrap `body` as `pre + body + suf` into `out`.
@@ -374,15 +377,13 @@ fn cellLay(src: []const u8, display: bool, b: *CellBuf) !zatex.ir.Layout {
 
 test "qa41 atom spacing grid is 512 for 512" {
     // Every ordered atom-class pair in every TeX style: the measured
-    // inter-atom gap must equal the core-owned `symbols.glueBetween`
+    // inter-atom gap must equal the core-owned `symbols.glueTight`
     // decision (with `degradeBin`), scaled by the style size exactly as
     // `layoutGroup` scales it. Nonzero glue values coincide with the
     // shared `parse.space_*` mu widths (pinned by qa41 glue-space link).
-    // NOTE on the issue premise: this engine keeps inter-atom spacing
-    // uniform across styles (scaled by size) — script styles do NOT
-    // suppress it (`symbols.glueBetween` docs: KaTeX keeps spacing in
-    // all styles). The grid pins that uniform behavior; a suppression
-    // change would fail all 192 script-style cells loudly.
+    // Script styles follow KaTeX's tight table (pinned 0.18.7
+    // `tightSpacings`, issue #168 — most pairs zero there), chosen
+    // per context exactly as `layoutGroup` chooses it.
     var n_gap: usize = 0;
     var n_ok: usize = 0;
     for (atom_reps) |L| {
@@ -393,8 +394,10 @@ test "qa41 atom spacing grid is 512 for 512" {
             if (effL == .Bin and zatex.symbols.degradeBin(null)) effL = .Ord;
             var effR = R.class;
             if (effR == .Bin and zatex.symbols.degradeBin(effL)) effR = .Ord;
-            const glue1000: i32 = zatex.symbols.glueBetween(effL, effR);
+            const glue_full: i32 = zatex.symbols.glueBetween(effL, effR);
+            const glue_tight: i32 = zatex.symbols.glueTight(effL, effR, true);
             for (style_ctxs) |st| {
+                const glue1000 = if (st.tight) glue_tight else glue_full;
                 const want = @divTrunc(glue1000 * @as(i32, st.size), 1000);
                 var pair: [64]u8 = undefined;
                 var pw: usize = 0;
@@ -484,6 +487,82 @@ test "qa41 inter-atom glue uses the shared mu widths" {
         try std.testing.expectEqual(@as(u32, 500), w_b);
         try std.testing.expectEqual(s.want, @as(i32, @intCast(w_both)) - 1000);
     }
+}
+
+test "oracle-geometry middle spans with zero glue" {
+    // Issue #166 (pinned KaTeX 0.18.7: `\middle` is a class-less span,
+    // so Ord-Ord glue on both sides): under the stub provider every
+    // advance is 500 and every extent is 700/250, so
+    // `\left(a\middle|b\right)` is fence 500 + a 500 + bar 500 + b
+    // 500 + fence 500 = 2500 with no kern (2x thick before the fix).
+    // The Main `(` covers the 901 need, so fences stay natural.
+    var b: B = .{};
+    const l = try lay("\\left(a\\middle|b\\right)", false, &b);
+    try std.testing.expectEqual(@as(u32, 2500), l.width);
+    try std.testing.expectEqual(@as(u32, 700), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+    // Structural MathML parity: KaTeX tags every `\middle` with
+    // lspace/rspace 0.05em (probed on `\|`, `|`, `/` spellings).
+    var mbuf: [4096]u8 = undefined;
+    const got = try zatex.mathml("\\left( a \\middle| b \\right)", .{}, &mbuf);
+    try std.testing.expect(std.mem.indexOf(u8, got, "<mo fence=\"true\" lspace=\"0.05em\" rspace=\"0.05em\">|</mo>") != null);
+}
+
+test "oracle-geometry matrix rows use arstruts and hug fences" {
+    // Issue #167 (pinned KaTeX 0.18.7 `array.ts`): rows carry an
+    // arstrut (840/360 thousandths at arraystretch 1, x1.2 for cases,
+    // x0.5 for smallmatrix), and column separation lives BETWEEN
+    // columns only (`hskipBeforeAndAfter: false`), so tables hug
+    // their fences. Stub provider: advance 500, extents 700/250.
+    var b1: B = .{};
+    // bmatrix x/y: rows max(700,840)/max(250,360); table 500 wide
+    // (single column, no outer pad); total 2400, axis-centered.
+    const m = try lay("\\begin{bmatrix}x\\\\y\\end{bmatrix}", false, &b1);
+    try std.testing.expectEqual(@as(u32, 1500), m.width);
+    try std.testing.expectEqual(@as(u32, 1450), m.height_above);
+    try std.testing.expectEqual(@as(u32, 950), m.depth_below);
+    var b2: B = .{};
+    // gathered a/b (display cells): rows 840/(360+300 jot);
+    // total 2700, no fences, no outer pad.
+    const g = try lay("\\begin{gathered}a\\\\b\\end{gathered}", false, &b2);
+    try std.testing.expectEqual(@as(u32, 500), g.width);
+    try std.testing.expectEqual(@as(u32, 1600), g.height_above);
+    try std.testing.expectEqual(@as(u32, 1100), g.depth_below);
+    var b3: B = .{};
+    // cases (arraystretch 1.2): rows 1008/432; columns 500 + 1em
+    // quad + 500 under a 500 `{` fence.
+    const c = try lay("\\begin{cases}a&b\\\\c&d\\end{cases}", false, &b3);
+    try std.testing.expectEqual(@as(u32, 2500), c.width);
+    try std.testing.expectEqual(@as(u32, 1690), c.height_above);
+    try std.testing.expectEqual(@as(u32, 1190), c.depth_below);
+}
+
+test "oracle-geometry op-adjacent glue tucks and scripts go tight" {
+    // Issue #168 (pinned KaTeX 0.18.7 `spacingData.ts`): Op-Open and
+    // Op-Close take zero (`{\\displaystyle \\sum(}` tucks the
+    // paren); script styles zero every non-Op-adjacent pair, so a
+    // script `a=b` is exactly as wide as `ab`.
+    var b1: B = .{};
+    const o = try lay("{\\displaystyle \\sum(}", false, &b1);
+    try std.testing.expectEqual(@as(u32, 1000), o.width);
+    var b2: B = .{};
+    const c = try lay("{\\displaystyle \\sum)}", false, &b2);
+    try std.testing.expectEqual(@as(u32, 1000), c.width);
+    var b3: B = .{};
+    // Denominator `{\sum(}` in script-cramped style: the `\sum` run
+    // starts at the denominator origin and the `(` run follows
+    // exactly one stub advance later (Op-Open tucks in every style).
+    const s = try lay("\\frac{y}{{\\sum(}}", false, &b3);
+    try std.testing.expectEqual(@as(usize, 3), s.runs.len);
+    try std.testing.expectEqual(s.runs[1].x + 350, s.runs[2].x);
+    var b4: B = .{};
+    // Script `a=b`: three stub advances back to back (both Rel
+    // glues zero in the tight table). Runs emit numerator first,
+    // then denominator left to right.
+    const rel = try lay("\\frac{y}{{a=b}}", false, &b4);
+    try std.testing.expectEqual(@as(usize, 4), rel.runs.len);
+    try std.testing.expectEqual(rel.runs[1].x + 350, rel.runs[2].x);
+    try std.testing.expectEqual(rel.runs[2].x + 350, rel.runs[3].x);
 }
 
 // ---------------------------------------------------------------------------
@@ -1262,9 +1341,15 @@ test "qa140 sized rows grow taller at equal width" {
 }
 
 test "qa141 arraystretch scales the row gap linearly" {
-    // The 0.28em base gap scales with the env factor: 1.5 adds
-    // exactly 140 ambient units per inter-row gap at text size, 2.0
-    // adds 280 — widths and run shapes are unchanged.
+    // Pinned KaTeX 0.18.7 `array.ts` (issue #167): there is no fixed
+    // inter-row gap — every row carries the arstrut (0.7/0.3 x
+    // arraystretch x the 12pt baselineskip = 840/360 thousandths at
+    // stretch 1), so each +0.5 of stretch adds 600 ambient units per
+    // row: a 2-row array grows by 1200 at 1.5 and 2400 at 2.0.
+    // KaTeX HTML proof (pinned katex.mjs): the array vlist totals
+    // 2.4em / 3.6em / 4.8em at stretch 1 / 1.5 / 2 — deltas +1.2em
+    // and +2.4em, matching 1200/2400 at text size. Widths and run
+    // shapes are unchanged.
     var b1: B = .{};
     var b15: B = .{};
     var b2: B = .{};
@@ -1276,8 +1361,9 @@ test "qa141 arraystretch scales the row gap linearly" {
     const t2 = two.height_above + two.depth_below;
     try std.testing.expectEqual(one.width, onehalf.width);
     try std.testing.expectEqual(one.width, two.width);
-    try std.testing.expectEqual(@as(u32, 140), t15 - t1);
-    try std.testing.expectEqual(@as(u32, 280), t2 - t1);
+    try std.testing.expectEqual(@as(u32, 2400), t1);
+    try std.testing.expectEqual(@as(u32, 1200), t15 - t1);
+    try std.testing.expectEqual(@as(u32, 2400), t2 - t1);
     try std.testing.expectEqual(one.runs.len, two.runs.len);
 }
 
@@ -2516,15 +2602,16 @@ test "qa73 subarray takes c-l alignment" {
     // single column, `{r}` and mixed groups reject, `&` rejects with
     // "only one column"): script cells like smallmatrix, one spec
     // code, column-count clamp in layoutEnv. Cells lay out at script
-    // size (stub advance scales 500 -> 350), so the `a` row sits at
-    // the column origin when left and centered in the `bb` row
-    // otherwise: 194 vs 194 + (700 - 350) / 2 = 369.
+    // size (stub advance scales 500 -> 350); a single column carries
+    // no outer separation (KaTeX `hskipBeforeAndAfter: false`, issue
+    // #167), so the `a` row sits at the table origin when left and
+    // centered in the `bb` row otherwise: 0 vs (700 - 350) / 2 = 175.
     var b1: B = .{};
     const l = try lay("\\begin{subarray}{l}a\\\\bb\\end{subarray}", false, &b1);
-    try std.testing.expectEqual(@as(i32, 194), l.runs[0].x);
+    try std.testing.expectEqual(@as(i32, 0), l.runs[0].x);
     var b2: B = .{};
     const c = try lay("\\begin{subarray}{c}a\\\\bb\\end{subarray}", false, &b2);
-    try std.testing.expectEqual(@as(i32, 369), c.runs[0].x);
+    try std.testing.expectEqual(@as(i32, 175), c.runs[0].x);
     try std.testing.expectEqual(l.width, c.width);
     var b3: B = .{};
     var diag = zatex.Diag.empty();
