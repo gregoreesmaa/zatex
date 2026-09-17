@@ -18,6 +18,14 @@ const symbols = @import("symbols.zig");
 const active_profile: contract.Profile =
     std.meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
 
+/// Environment row/column geometry (arstruts, jot, fence-hugging)
+/// is full-profile-only (issue #167): subset parse rejects `\begin`
+/// as a full-only command, so no `.env` node can ever reach
+/// `layoutEnv` there and the legacy row rule + padding below stay
+/// byte-identical to baseline (subset __TEXT gate, issue #12).
+/// Comptime-folded, so the dead path emits zero code.
+const full_env_geometry = active_profile == .full;
+
 const Error = contract.LayoutError;
 const Idx = parse.Idx;
 const NONE = parse.NONE;
@@ -746,7 +754,9 @@ fn layoutGroup(lc: *LayCtx, style: parse.Style, g: parse.Range) Error!u16 {
                 // the next kid's `dx` instead of materializing a kern
                 // box plus a kid slot per gap (emit ignores kerns, so
                 // runs/rules are bit-identical with more pool headroom).
-                x += @divTrunc(@as(i32, symbols.glueBetween(p, eff)) * sz, 1000);
+                // Tight table in script styles (KaTeX `tightSpacings`,
+                // issues #166/#168).
+                x += @divTrunc(@as(i32, symbols.glueTight(p, eff, style.isTight())) * sz, 1000);
             }
             const b = try layoutNode(lc, style, id);
             const bb = lc.boxes[b];
@@ -807,7 +817,10 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
         .sqrt => return .Ord,
         .supsub => |s| return classOf(pc, s.base),
         .delim => return .Inner,
-        .middle => return .Rel,
+        // KaTeX renders `\middle` as a class-less span (pinned
+        // 0.18.7 HTML: no mord/mrel wrapper), so it takes no
+        // inter-atom glue — Ord, never Rel (issue #166).
+        .middle => return .Ord,
         .big => |b| return b.class,
         .accent => |a| return classOf(pc, a.nucleus) orelse .Ord,
         // KaTeX parity: `\stackrel` forces Rel; every other
@@ -2865,6 +2878,29 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     var row_rule: [64]bool = .{false} ** 64;
     var nrows: usize = 0;
     var ncols: usize = 0;
+    // KaTeX row rule (pinned 0.18.7 `array.ts`, issue #167): every
+    // content row carries an arstrut (0.7/0.3 x arraystretch x the
+    // 12pt baselineskip = 840/360 thousandths at stretch 1); AMS
+    // multiline envs (aligned-family, gather/gathered) add \jot
+    // (0.3em) to each non-last row. The effective stretch is
+    // `e.stretch` (issue #141: macro value, or the env-fixed 0.5
+    // for smallmatrix/subarray and 1.2 for the cases family — the
+    // pinned cases payload). Rule rows keep legacy extents and CD
+    // keeps content extents (3ex baselineskip unmodeled). i64
+    // headroom follows issue #141: size and the factor are both
+    // small, but their product need not be.
+    const stretch1000: i32 = e.stretch;
+    const strut_h: i32 = blk_h: {
+        const s: i64 = @divTrunc(@as(i64, 840) * @as(i64, stretch1000) * @as(i64, size), 1000000);
+        break :blk_h if (s > std.math.maxInt(i32)) std.math.maxInt(i32) else @intCast(s);
+    };
+    const strut_d: i32 = blk_d: {
+        const s: i64 = @divTrunc(@as(i64, 360) * @as(i64, stretch1000) * @as(i64, size), 1000000);
+        break :blk_d if (s > std.math.maxInt(i32)) std.math.maxInt(i32) else @intCast(s);
+    };
+    const add_jot: bool = e.kind == .aligned or e.kind == .alignedat or e.kind == .alignenv or
+        e.kind == .alignat or e.kind == .split or e.kind == .gather or e.kind == .gathered;
+    const jot: i32 = @divTrunc(@as(i32, 300) * size, 1000);
     for (rows) |r| {
         if (nrows >= 64) return error.NoSpace;
         const kids = parse.kidsOf(lc.pctx, parse.Range{ .start = r.start, .len = r.len });
@@ -2878,13 +2914,15 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
                 // Display-cases cells are displaystyle (KaTeX parity);
                 // smallmatrix is scriptstyle; top-level display envs
                 // (align/equation/gather/CD/split) are displaystyle
-                // like their KaTeX `styling` wrappers; everything
+                // like their KaTeX `styling` wrappers; `gathered`
+                // cells are displaystyle too (KaTeX `gathered`
+                // handler passes `"display"` — issue #167); everything
                 // else textstyle.
                 const cell_style = if (e.kind == .smallmatrix or e.kind == .subarray)
                     parse.Style.S
                 else if (e.kind == .dcases or e.kind == .drcases or e.kind == .alignenv or
                     e.kind == .alignat or e.kind == .equation or e.kind == .gather or
-                    e.kind == .split or e.kind == .cd)
+                    e.kind == .gathered or e.kind == .split or e.kind == .cd)
                     parse.Style.D
                 else
                     parse.Style.T;
@@ -2903,6 +2941,17 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
         if (row_rule[nrows] and c == 1) {
             row_ha[nrows] = 100;
             row_db[nrows] = 100;
+        }
+        // Arstrut floors + jot closeout (full profile only — subset
+        // rejects `\begin`, so the legacy zeros stand there): seed
+        // this content row with the strut, and close out the
+        // previous row's jot. Jot flows only between content rows
+        // (KaTeX splits row groups at hlines); rule rows and CD
+        // keep legacy extents.
+        if (full_env_geometry and e.kind != .cd and !row_rule[nrows]) {
+            if (strut_h > row_ha[nrows]) row_ha[nrows] = strut_h;
+            if (strut_d > row_db[nrows]) row_db[nrows] = strut_d;
+            if (add_jot and nrows > 0 and !row_rule[nrows - 1]) row_db[nrows - 1] += jot;
         }
         nrows += 1;
     }
@@ -2970,12 +3019,14 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     }
     // Column widths and row extents already folded into the first
     // pass above (energy, issue #153); only the loop cursors remain.
+    // (Arstrut floors live in the first pass, issue #167.)
     var r: usize = 0;
-    // `\arraystretch` scaling (issue #141): the 0.28em base gap
-    // scales with the env factor (smallmatrix/subarray fix 0.5, so
-    // their 0.14em falls out unchanged). i64 headroom: size and the
-    // factor are both small, but their product need not be.
+    // CD keeps the legacy fixed gap (its 3ex baselineskip is
+    // unmodeled, issue #167); every other env centers rows on
+    // arstruts, so its base gap is zero. i64 headroom and the
+    // stretch factor follow issue #141.
     const row_gap: i32 = blk: {
+        if (e.kind != .cd) break :blk 0;
         const g: i64 = @divTrunc(@as(i64, 280) * @as(i64, size) * @as(i64, e.stretch), 1000000);
         break :blk if (g > std.math.maxInt(i32)) std.math.maxInt(i32) else @intCast(g);
     };
@@ -3030,6 +3081,16 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
                 post[i] = dsep;
             }
         },
+    }
+    // KaTeX parity (issue #167): `hskipBeforeAndAfter` is false for
+    // every env but `array`, so column separation lives BETWEEN
+    // columns only (`c > 0` / `c < nc - 1` guards) — the outer edges
+    // hug the fences instead of standing 0.5em off. Full profile
+    // only (see `full_env_geometry`): subset rejects `\begin` at
+    // parse, so this dead path costs zero __TEXT there.
+    if (full_env_geometry and e.kind != .array) {
+        pre[0] = 0;
+        if (ncols > 0) post[ncols - 1] = 0;
     }
     // Total width.
     var total_w: i32 = outer;

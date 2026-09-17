@@ -256,6 +256,12 @@ pub const Style = enum(u8) {
     pub fn isDisplay(self: Style) bool {
         return self == .D or self == .Dc;
     }
+    /// Script styles (KaTeX `isTight`, issues #166/#168): inter-atom
+    /// spacing follows the tight table there (most pairs zero).
+    /// A single compare: script arms are the top half of the enum.
+    pub fn isTight(self: Style) bool {
+        return @intFromEnum(self) >= @intFromEnum(Style.S);
+    }
 };
 
 /// Math font families (see `contract.FontId` for the provider mapping).
@@ -555,8 +561,8 @@ pub const Node = union(enum) {
         numbered: bool,
         /// `\arraystretch` row-spacing factor in thousandths
         /// (1000 = 1.0; KaTeX `parseArray` parity, issue #141):
-        /// environments that fix it (smallmatrix/subarray 0.5, CD
-        /// and the cases family 1.0) ignore the macro; every other
+        /// environments that fix it (smallmatrix/subarray 0.5, the
+        /// cases family 1.2, CD 1.0) ignore the macro; every other
         /// env reads it at `\begin` (absent means 1.0, invalid
         /// rejects).
         stretch: u16 = 1000,
@@ -4808,7 +4814,13 @@ fn parseRowGap(ctx: *ParseCtx, bs: Tok) Error!i16 {
 fn arrayStretch(ctx: *ParseCtx, kind: EnvKind, pos: u32) Error!u16 {
     switch (kind) {
         .smallmatrix, .subarray => return 500,
-        .cd, .cases, .dcases, .drcases, .rcases => return 1000,
+        // The cases family fixes 1.2 (pinned KaTeX 0.18.7 cases
+        // payload `arraystretch: 1.2`, issue #167 — not 1.0); like
+        // every env-set factor it ignores the macro. CD keeps 1.0:
+        // its rows stay on the legacy gap (3ex baselineskip
+        // unmodeled), so the factor never reaches layout there.
+        .cases, .dcases, .drcases, .rcases => return 1200,
+        .cd => return 1000,
         else => {},
     }
     const def = ctx.findDef("arraystretch") orelse return 1000;

@@ -896,50 +896,75 @@ fn eq(a: []const u8, b: []const u8) bool {
 /// in all styles — keep uniform, document).
 /// 1mu = 1/18 em: thin=167, med=222, thick=278.
 pub fn glueBetween(left: AtomClass, right: AtomClass) u16 {
-    // No space involving Ord-Ord, Op-Op, etc. by default.
-    const thick: u16 = 278; // 5mu
-    const med: u16 = 222; // 4mu
-    const thin: u16 = 167; // 3mu
-    // Rel pairs (KaTeX 0.18.7 HTML adjacency probes, issue #36): thick
-    // against Ord/Op/Open/Inner, and against Punct/Close on the left;
-    // zero against Rel/Close/Punct/Bin on the right, against Open/Bin
-    // on the left, and Rel-Rel (so `\not` overlays add no width).
-    if (left == .Rel or right == .Rel) {
-        if (left == .Rel) {
-            return switch (right) {
-                .Ord, .Op, .Open, .Inner => thick,
-                else => 0,
-            };
-        }
-        return switch (left) {
-            .Ord, .Op, .Inner, .Close, .Punct => thick,
-            else => 0,
-        };
-    }
-    if (left == .Punct or right == .Punct) return 0;
-    if (left == .Open or right == .Close) return 0;
-    if (left == .Bin or right == .Bin) {
-        // Bin-Op, Bin-Inner etc: med. Bin next to Open/Rel/Punct/Op/
-        // Bin degrades to Ord (handled by caller via degradeBin).
-        return med;
-    }
-    if (left == .Op or right == .Op) {
-        // Op-Ord / Ord-Op: thin. Op-Op: 0? TeX: Op-Op = thin? The
-        // table row Op: Ord=thin? Actually: (Op,Ord)=thin, (Ord,Op)=
-        // thin only in display/text; Op-Op=thin? TeX table: Op row:
-        // Ord thin, Op thin, Bin *, Rel thick, Open 0, Close 0,
-        // Punct 0, Inner thin. Keep uniform thin.
-        if (left == .Inner or right == .Inner) return thin;
-        if (left == .Op and right == .Op) return thin;
-        return thin;
-    }
-    if (left == .Inner or right == .Inner) {
-        // Inner-Ord = thin? TeX Inner row: Ord thin? Inner-Ord=thin
-        // only display/text... use thin for Ord/Inner pairs.
-        if (left == .Ord or right == .Ord) return thin;
-        return 0;
-    }
-    return 0;
+    return glueTight(left, right, false);
+}
+
+/// Inter-atom glue in thousandths of an em, exactly KaTeX 0.18.7
+/// `spacingData.ts` (`spacings` for display/text, `tightSpacings`
+/// for script/scriptscript, gated per node by `mtight` — issues
+/// #166/#168). `tight` must be the ambient `parse.Style.isTight()`.
+/// Bin degradation stays caller-side (`degradeBin`): a surviving Bin
+/// beside Open/Rel/Punct/Op/Bin never reaches this table.
+///
+/// Kept as packed 2-bit data, not switch arms or u16 tables, so the
+/// subset profile pays ~40 __const bytes instead of __TEXT jump
+/// tables (gated): each cell stores an index into `glue_mu`
+/// (0 = none, 1 = thin, 2 = med, 3 = thick). Rows and columns track
+/// `AtomClass` declaration order
+/// (Ord, Op, Bin, Rel, Open, Close, Punct, Inner); the exhaustive
+/// `spacingData` test below pins every cell against KaTeX 0.18.7.
+const glue_mu: [4]u16 = .{ 0, 167, 222, 278 };
+const full_glue: [8]u16 = .{
+    // Ord: Op thin, Bin med, Rel thick, Inner thin.
+    0b00_01_10_11_00_00_00_01,
+    // Op: Ord/Op thin, Rel thick, Inner thin (Open/Close/Punct/
+    // Bin zero, so `{\displaystyle \sum(}` tucks the paren).
+    0b01_01_00_11_00_00_00_01,
+    // Bin: Ord/Op/Open/Inner med.
+    0b10_10_00_00_10_00_00_10,
+    // Rel: Ord/Op/Open/Inner thick (issue #36: Rel-Rel and Rel
+    // against Close/Punct/Bin stay zero, so `\not` overlays add
+    // no width).
+    0b11_11_00_00_11_00_00_11,
+    // Open: none.
+    0b00_00_00_00_00_00_00_00,
+    // Close: Op thin, Bin med, Rel thick, Inner thin.
+    0b00_01_10_11_00_00_00_01,
+    // Punct: thin against everything but Bin (`f(x, y)` keeps
+    // its comma space).
+    0b01_01_00_11_01_01_01_01,
+    // Inner: Ord/Op/Open/Punct/Inner thin, Bin med, Rel/Close
+    // zero (`\left(x\right)(` keeps its thin gap).
+    0b01_01_10_11_01_00_01_01,
+};
+
+/// KaTeX `tightSpacings`: only Op-adjacent thins survive
+/// (Ord/Op/Close/Inner against Op, Op against Ord/Op).
+const tight_glue: [8]u16 = .{
+    // Ord: Op thin only.
+    0b00_01_00_00_00_00_00_00,
+    // Op: Ord/Op thin only.
+    0b01_01_00_00_00_00_00_00,
+    // Bin/Rel/Open: none.
+    0b00_00_00_00_00_00_00_00,
+    0b00_00_00_00_00_00_00_00,
+    0b00_00_00_00_00_00_00_00,
+    // Close: Op thin only.
+    0b00_01_00_00_00_00_00_00,
+    // Punct: none.
+    0b00_00_00_00_00_00_00_00,
+    // Inner: Op thin only.
+    0b00_01_00_00_00_00_00_00,
+};
+
+pub fn glueTight(left: AtomClass, right: AtomClass, tight: bool) u16 {
+    const t = if (tight) tight_glue else full_glue;
+    const row: u16 = t[@intFromEnum(left)];
+    // Cells pack MSB-first in declaration order, so column 0
+    // (Ord) is the top pair of bits. Widen before doubling: the
+    // shift runs 0..14, past u3 range.
+    const col: u4 = @intCast(@intFromEnum(right));
+    return glue_mu[(row >> ((7 - col) * 2)) & 3];
 }
 
 /// A Bin atom degrades to Ord when it cannot be binary: first in a
@@ -1327,6 +1352,57 @@ test "rel spacing is thick, ord-ord is zero" {
     try std.testing.expectEqual(@as(u16, 278), glueBetween(.Ord, .Rel));
     try std.testing.expectEqual(@as(u16, 0), glueBetween(.Ord, .Ord));
     try std.testing.expectEqual(@as(u16, 222), glueBetween(.Ord, .Bin));
+}
+
+test "glue tables match pinned KaTeX spacingData" {
+    // Exhaustive parity against KaTeX 0.18.7 `spacingData.ts`:
+    // `spacings` (display/text) and `tightSpacings` (script/
+    // scriptscript), issues #166/#168. Row/column order: Ord, Op,
+    // Bin, Rel, Open, Close, Punct, Inner. Thin=167, med=222,
+    // thick=278 thousandths of an em.
+    const std = @import("std");
+    const full = [8][8]u16{
+        // Ord row: Op thin, Bin med, Rel thick, Inner thin.
+        .{ 0, 167, 222, 278, 0, 0, 0, 167 },
+        // Op row: Ord/Op thin, Rel thick, Inner thin.
+        .{ 167, 167, 0, 278, 0, 0, 0, 167 },
+        // Bin row: Ord/Op/Open/Inner med.
+        .{ 222, 222, 0, 0, 222, 0, 0, 222 },
+        // Rel row: Ord/Op/Open/Inner thick.
+        .{ 278, 278, 0, 0, 278, 0, 0, 278 },
+        // Open row: none.
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        // Close row: Op thin, Bin med, Rel thick, Inner thin.
+        .{ 0, 167, 222, 278, 0, 0, 0, 167 },
+        // Punct row: thin against everything but Bin.
+        .{ 167, 167, 0, 278, 167, 167, 167, 167 },
+        // Inner row: Ord/Op/Open/Punct/Inner thin, Bin med.
+        .{ 167, 167, 222, 278, 167, 0, 167, 167 },
+    };
+    const tight = [8][8]u16{
+        // Ord row: Op thin only.
+        .{ 0, 167, 0, 0, 0, 0, 0, 0 },
+        // Op row: Ord/Op thin only.
+        .{ 167, 167, 0, 0, 0, 0, 0, 0 },
+        // Bin/Rel/Open rows: none.
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        // Close row: Op thin only.
+        .{ 0, 167, 0, 0, 0, 0, 0, 0 },
+        // Punct row: none.
+        .{ 0, 0, 0, 0, 0, 0, 0, 0 },
+        // Inner row: Op thin only.
+        .{ 0, 167, 0, 0, 0, 0, 0, 0 },
+    };
+    const classes = [_]AtomClass{ .Ord, .Op, .Bin, .Rel, .Open, .Close, .Punct, .Inner };
+    for (classes, 0..) |l, i| {
+        for (classes, 0..) |r, j| {
+            try std.testing.expectEqual(full[i][j], glueBetween(l, r));
+            try std.testing.expectEqual(full[i][j], glueTight(l, r, false));
+            try std.testing.expectEqual(tight[i][j], glueTight(l, r, true));
+        }
+    }
 }
 
 test "rel pairs match pinned KaTeX adjacency" {

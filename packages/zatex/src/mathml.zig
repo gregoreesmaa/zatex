@@ -986,7 +986,9 @@ const Writer = struct {
                 self.str("</mrow>");
             },
             .middle => |m| {
-                self.str("<mo fence=\"true\">");
+                // KaTeX parity (pinned 0.18.7, issue #166): every
+                // `\middle` carries lspace/rspace 0.05em.
+                self.str("<mo fence=\"true\" lspace=\"0.05em\" rspace=\"0.05em\">");
                 self.cp(m.cp);
                 self.str("</mo>");
             },
