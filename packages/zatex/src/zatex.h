@@ -18,6 +18,10 @@ extern "C" {
 
 typedef struct zatex_metrics {
     const void *ctx;
+    // Glyph id for (font, codepoint). Id 0 means missing (issue
+    // #142): the core still lays the run out, so boxes/tofu on screen
+    // mean this callback returned 0 — log the (font, cp) pairs to
+    // enumerate coverage (see docs/parity.md font troubleshooting).
     uint16_t (*glyph_id)(const void *ctx, uint16_t font, uint32_t cp);
     int32_t (*advance)(const void *ctx, uint16_t font, uint16_t glyph);
     // kind: 0 fraction_bar, 1 radical, 2 overline, 3 underline

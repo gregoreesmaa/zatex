@@ -24,7 +24,11 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
     };
     w.str("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"");
     if (options.display_mode) w.str(" display=\"block\"");
-    w.str(">");
+    // KaTeX `buildMathML` (issue #119, pinned 0.18.7): the body lives
+    // in `<semantics>` with the raw TeX source as the
+    // `application/x-tex` annotation (copy-tex / AT consumers read
+    // the source back out of it).
+    w.str("><semantics>");
     // The root row wraps a lone child unless it already presents
     // as a row (KaTeX `buildMathML`: single rowlike passes through).
     // An equation tag is the table itself (never `mrow`-wrapped).
@@ -41,7 +45,9 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
         w.nodeSole(root, .{ .fam = null, .script = false }, true) catch |e| return e;
         w.str("</mrow>");
     } else w.node(root, .{ .fam = null, .script = false }) catch |e| return e;
-    w.str("</math>");
+    w.str("<annotation encoding=\"application/x-tex\">");
+    w.anno(source);
+    w.str("</annotation></semantics></math>");
     if (w.overflow) return error.NoSpace;
     const n = mergeNot(out[0..w.pos]);
     return out[0..mergeRuns(out[0..n])];
@@ -468,6 +474,23 @@ const Writer = struct {
             '<' => self.str("&lt;"),
             '>' => self.str("&gt;"),
             else => self.cp(c),
+        }
+    }
+
+    /// Raw-source annotation content (issue #119): KaTeX
+    /// `utils.escape` over the input bytes (`&<>"'` — byte-wise is
+    /// exact because every escape target is ASCII and multibyte
+    /// UTF-8 never contains ASCII bytes).
+    fn anno(self: *Writer, src: []const u8) void {
+        for (src) |b| {
+            switch (b) {
+                '&' => self.str("&amp;"),
+                '<' => self.str("&lt;"),
+                '>' => self.str("&gt;"),
+                '"' => self.str("&quot;"),
+                '\'' => self.str("&#x27;"),
+                else => self.byte(b),
+            }
         }
     }
 
@@ -1270,11 +1293,14 @@ const Writer = struct {
                 // flat (no row); the normalizer drops our shell.
                 self.str("<mrow href=\"");
                 const toks = parse.toksOf(self.pc, h.target);
+                // KaTeX `parseUrlGroup` + `utils.escape` (issue #123,
+                // pinned 0.18.7): single-char controls unescape,
+                // everything else emits escaped (`&<>"'`; non-ASCII
+                // passes through) — the `graphicsTok` path verbatim.
                 for (toks) |tk| {
-                    if (tk.kind == .char and tk.cp < 0x80) {
-                        const c: u8 = @intCast(tk.cp);
-                        if (c == '"') self.str("&quot;") else if (c == '&') self.str("&amp;") else self.byte(c);
-                    }
+                    if (tk.kind == .param) {
+                        self.byte('#');
+                    } else self.graphicsTok(tk, true);
                 }
                 self.str("\">");
                 switch (parse.nodeAt(self.pc, h.body)) {
@@ -2358,13 +2384,13 @@ test "color and style rests stop at over infixes" {
     // through (whole frac), unchanged.
     var out: [512]u8 = undefined;
     const c = try render("\\color{red}a\\over b", .{}, &out);
-    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", c);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\color{red}a\\over b</annotation></semantics></math>", c);
     var out2: [512]u8 = undefined;
     const cb = try render("{\\color{red}a\\over b}", .{}, &out2);
-    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", cb);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">{\\color{red}a\\over b}</annotation></semantics></math>", cb);
     var out3: [512]u8 = undefined;
     const d = try render("\\displaystyle a\\over b", .{}, &out3);
-    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle displaystyle=\"true\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", d);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mstyle displaystyle=\"true\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\displaystyle a\\over b</annotation></semantics></math>", d);
 }
 
 test "cancel directions match KaTeX menclose notations" {
@@ -2418,4 +2444,54 @@ test "verb and text fonts emit variant mtext" {
     const s = out[0..w.pos];
     try std.testing.expect(std.mem.indexOf(u8, s, "<mtext mathvariant=\"monospace\">x</mtext>") != null);
     try std.testing.expect(std.mem.indexOf(u8, s, "<mtext mathvariant=\"bold\">ab</mtext>") != null);
+}
+
+test "semantics annotation carries the raw source (issue #119)" {
+    // Pinned 0.18.7 bytes (KaTeX `renderToString(..., {output:
+    // 'mathml'})`; same bytes sit in `goldens/katex_sweep.json`):
+    // the body wraps in `<semantics>` and the raw source lands in
+    // the `application/x-tex` annotation, XML-escaped.
+    var out: [1024]u8 = undefined;
+    const s = try render("x^2", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<semantics><mrow>") != null);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        s,
+        "<annotation encoding=\"application/x-tex\">x^2</annotation>",
+    ) != null);
+    try std.testing.expect(std.mem.endsWith(u8, s, "</semantics></math>"));
+    var out2: [1024]u8 = undefined;
+    const s2 = try render("\\frac{1}{2}", .{}, &out2);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        s2,
+        "<annotation encoding=\"application/x-tex\">\\frac{1}{2}</annotation>",
+    ) != null);
+    var out3: [1024]u8 = undefined;
+    const s3 = try render("x<y>z", .{}, &out3);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        s3,
+        "<annotation encoding=\"application/x-tex\">x&lt;y&gt;z</annotation>",
+    ) != null);
+}
+
+test "href target escapes like KaTeX utils.escape (issue #123)" {
+    // Pinned 0.18.7 (`renderToString(..., {trust: true})`):
+    // `\href{a<b>"c&d}{x}` → `href="a&lt;b&gt;&quot;c&amp;d"`,
+    // `'` → `&#x27;`, non-ASCII passes through (never dropped),
+    // `\%`-style controls unescape, unknown controls keep the
+    // backslash.
+    var out: [1024]u8 = undefined;
+    const s = try render("\\href{a<b>\"c&d}{x}", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, s, "href=\"a&lt;b&gt;&quot;c&amp;d\"") != null);
+    var out2: [1024]u8 = undefined;
+    const s2 = try render("\\href{a'b}{x}", .{}, &out2);
+    try std.testing.expect(std.mem.indexOf(u8, s2, "href=\"a&#x27;b\"") != null);
+    var out3: [1024]u8 = undefined;
+    const s3 = try render("\\href{é}{x}", .{}, &out3);
+    try std.testing.expect(std.mem.indexOf(u8, s3, "href=\"\xc3\xa9\"") != null);
+    var out4: [1024]u8 = undefined;
+    const s4 = try render("\\href{a\\%b\\_c}{x}", .{}, &out4);
+    try std.testing.expect(std.mem.indexOf(u8, s4, "href=\"a%b_c\"") != null);
 }
