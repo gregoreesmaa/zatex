@@ -466,6 +466,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\circledS` | accept | goldens: sym-gal-2 |
 
+| `\clap` | accept | goldens: lap-clap |
+
 | `\class` | unsup | goldens: rej-unsup-class |
 
 | `\cline` | unsup | goldens: rej-unsup-cline |
@@ -714,6 +716,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\endgroup` | accept | goldens: begingroup, endgroup-stray, endgroup-in-brace |
 
+| `\enskip` | accept | goldens: enskip |
+
 | `\enspace` | accept | goldens: enspace |
 
 | `\Epsilon` | accept | goldens: sym-gal-0 |
@@ -809,6 +813,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 | `\gamma` | accept | goldens: sym-greek |
 
 | `{gather}` | accept | goldens: disp-gather, disp-gather-star |
+
+| `{gather*}` | accept | goldens: disp-gather-star |
 
 | `{gathered}` | accept | goldens: gathered, aligned, alignedat |
 
@@ -2297,6 +2303,8 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 | `\veebar` | accept | goldens: sym-veebar |
 
 | `\verb` | accept | goldens: frac, bigl, demo-cfrac |
+
+| `\verb*` | accept | goldens: verb-star |
 
 | `\Vert` | accept | goldens: sym-gal-1 |
 
