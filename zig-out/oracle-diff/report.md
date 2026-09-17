@@ -5,7 +5,7 @@ ZaTeX vs 3 independent oracle engines per case. `score(c) = max` oracle similari
 Normalization per case: tight-crop ink bbox + 10px white pad, uniform rescale to height 128 (aspect preserved), translation-aligned by ink centroid on the union canvas; block SSIM on grayscale. Pure offsets are layout noise, not structure: they cost ~nothing after alignment, so a low score means genuinely different shapes. `shift` is the largest ZaTeX-oracle alignment offset in rescaled px. Absolute-size divergences are out of scope here (covered by layout-IR tests).
 
 | case | source | score | KaTeX | LuaTeX | MathJax | spread | shift | tag | renders |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | bmatrix  | `\begin{bmatrix} x \\ y \end{bmatrix}` | 0.203 | 0.151 | 0.203 | 0.136 | 0.284 | 56 | spec-ambiguous katex-outlier | ![Z](png/bmatrix.zatex.png)<br>![K](png/bmatrix.katex.png)<br>![L](png/bmatrix.luatex.png)<br>![M](png/bmatrix.mathjax.png) |
 | atomgrid-op-close-d  | `{{\displaystyle \sum)}}` | 0.245 | 0.167 | 0.245 | 0.190 | 0.290 | 16 | spec-ambiguous katex-outlier | ![Z](png/atomgrid-op-close-d.zatex.png)<br>![K](png/atomgrid-op-close-d.katex.png)<br>![L](png/atomgrid-op-close-d.luatex.png)<br>![M](png/atomgrid-op-close-d.mathjax.png) |
 | atomgrid-op-open-d  | `{{\displaystyle \sum(}}` | 0.258 | 0.145 | 0.258 | 0.203 | 0.322 | 20 | spec-ambiguous katex-outlier | ![Z](png/atomgrid-op-open-d.zatex.png)<br>![K](png/atomgrid-op-open-d.katex.png)<br>![L](png/atomgrid-op-open-d.luatex.png)<br>![M](png/atomgrid-op-open-d.mathjax.png) |

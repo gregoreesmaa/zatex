@@ -441,7 +441,10 @@ def build_report(rawdir, outdir, corpus, jobs=1):
     header = ("| case | source | score | KaTeX | LuaTeX | MathJax | spread | "
               "shift | tag | renders |")
     lines.append(header)
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    # The delimiter must carry exactly as many cells as the header: GFM
+    # drops a table whose counts disagree (it renders as raw pipes),
+    # which is how a 9-cell delimiter broke this 10-column report.
+    lines.append("|" + " --- |" * (header.count("|") - 1))
     for r in rows:
         c = r["case"]
         src = "`%s`" % c["tex"].replace("|", "\\|").replace("\n", " ")
@@ -620,6 +623,20 @@ def selfcheck():
     on_disk = set(os.listdir(os.path.join(out, "png")))
     check("every referenced render exists (no dead images)",
           refs <= on_disk)
+    # Table shape: GFM drops a table whose header/delimiter cell counts
+    # disagree, so assert they (and every body row) agree. Split on
+    # unescaped pipes — `\|` inside a source cell does not delimit.
+    def ncells(row):
+        parts = re.split(r"(?<!\\)\|", row)
+        if parts and parts[0].strip() == "":
+            parts = parts[1:]
+        if parts and parts[-1].strip() == "":
+            parts = parts[:-1]
+        return len(parts)
+    table = [ln for ln in md.splitlines() if ln.startswith("|")]
+    check("report table header/delimiter/body column counts agree",
+          len(table) > 2 and
+          all(ncells(ln) == ncells(table[0]) for ln in table[1:]))
     part_md = [ln for ln in md.splitlines() if ln.startswith("| part ")]
     check("missing-engine row omits unrendered engines",
           len(part_md) == 1 and "part.luatex.png" not in part_md[0]
