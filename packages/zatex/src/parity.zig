@@ -24,6 +24,13 @@
 const std = @import("std");
 const zatex = @import("zatex");
 
+/// The single pinned KaTeX version (issue #143): `tools/katex` pins
+/// `katex` exact in `package.json` + lock, `sweep.mjs` stamps
+/// `pkg.version` into the goldens root, and this test fails on any
+/// drift — so a bump-plus-regen that renders byte-identically still
+/// goes red here (and in CI's `test` job, which runs this suite).
+pub const pinned_katex_version: []const u8 = "0.18.7";
+
 const Stub = struct {
     fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
         return @truncate(cp);
@@ -265,6 +272,16 @@ test "sweep agreement with pinned KaTeX" {
         .limited(4 * 1024 * 1024),
     );
     const parsed = try std.json.parseFromSlice(std.json.Value, alloc, goldens, .{});
+    // Issue #143: the goldens must come from the pinned KaTeX —
+    // version drift fails the build even when renders agree.
+    const goldens_version = parsed.value.object.get("katex_version").?.string;
+    if (!std.mem.eql(u8, goldens_version, pinned_katex_version)) {
+        std.debug.print(
+            "\nkatex pin drift: goldens say {s}, want {s}\n",
+            .{ goldens_version, pinned_katex_version },
+        );
+        return error.TestUnexpectedResult;
+    }
     const root = parsed.value.object.get("cases").?.array;
 
     var runs: [1024]zatex.ir.Run = undefined;

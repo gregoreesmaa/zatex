@@ -267,10 +267,14 @@ test "energy mathml byte budgets" {
     // adjacent `mo`s — verified by direct probe (see issues #157,
     // #158). These pins fail on ANY drift so the parity question
     // reopens loudly instead of silently.
-    try std.testing.expectEqual(@as(usize, 111), try mathmlLen("\\normalsize{x}"));
-    try std.testing.expectEqual(@as(usize, 119), try mathmlLen("x+y+z"));
-    try std.testing.expectEqual(@as(usize, 116), try mathmlLen("\\mathbf{12}"));
-    try std.testing.expectEqual(@as(usize, 104), try mathmlLen("\\frac{1}{2}"));
+    // Values include the #119 `<semantics>` + `application/x-tex`
+    // annotation wrapper (KaTeX 0.18.7 parity); the pinned shapes
+    // inside are unchanged: the `mathsize="1em"` shell (#157),
+    // unmerged `mo`s (#158).
+    try std.testing.expectEqual(@as(usize, 202), try mathmlLen("\\normalsize{x}"));
+    try std.testing.expectEqual(@as(usize, 201), try mathmlLen("x+y+z"));
+    try std.testing.expectEqual(@as(usize, 204), try mathmlLen("\\mathbf{12}"));
+    try std.testing.expectEqual(@as(usize, 192), try mathmlLen("\\frac{1}{2}"));
 }
 
 // ---------------------------------------------------------------------------
@@ -358,12 +362,14 @@ test "energy color sentinel survives white" {
 }
 
 // ---------------------------------------------------------------------------
-// Macro swap-with-previous (#147): redefine overwrites, order kept
+// Macro lookup (#147 with group-scope shadowing #125): definitions
+// append and lookup reads innermost-first, so redefine wins;
+// swap-with-previous applies only to global pairs (scope-safe).
 // ---------------------------------------------------------------------------
 
 test "energy macro redefine renders the latest body" {
-    // `\def\a{1}\def\a{2}\a` must render "2": `storeDef` overwrites
-    // through the pointer `findDef` returns after swapping.
+    // `\def\a{1}\def\a{2}\a` must render "2": back-to-front lookup
+    // returns the innermost definition.
     counters = .{};
     var runs_buf: [8]ir.Run = undefined;
     var rules_buf: [4]ir.Rule = undefined;

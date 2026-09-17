@@ -117,8 +117,12 @@ fn usageError() error{Usage} {
 }
 
 fn single(font: *Font, src: []const u8, dst: []const u8, display: bool, px: u32) !void {
-    const layout = zatex.layoutFull(src, .{ .display_mode = display }, font.provider(), runsBuf(), rulesBuf(), glyphsBuf()) catch |e| {
-        std.debug.print("zatex-png: layout failed: {s}\n", .{@errorName(e)});
+    var diag = zatex.Diag.empty();
+    const layout = zatex.layoutDiag(src, .{ .display_mode = display }, font.provider(), runsBuf(), rulesBuf(), glyphsBuf(), &diag) catch |e| {
+        // Readable-error parity (issue #126): offset + message, not
+        // just the error name — the same bytes a host renders as
+        // real text in its error fallback.
+        std.debug.print("zatex-png: layout failed: {s} at offset {d}: {s}\n", .{ @errorName(e), diag.offset, diag.message });
         return e;
     };
     try render.renderToPng(font, layout, px, 16, dst);
@@ -181,15 +185,17 @@ fn batch(
             skipped += 1;
             continue;
         };
-        const layout = zatex.layoutFull(
+        var diag = zatex.Diag.empty();
+        const layout = zatex.layoutDiag(
             src,
             .{ .display_mode = row.display },
             font.provider(),
             runsBuf(),
             rulesBuf(),
             glyphsBuf(),
+            &diag,
         ) catch |e| {
-            std.debug.print("zatex-png: row '{s}' failed ({s}), skipped\n", .{ row.id, @errorName(e) });
+            std.debug.print("zatex-png: row '{s}' failed ({s} at offset {d}: {s}), skipped\n", .{ row.id, @errorName(e), diag.offset, diag.message });
             failed += 1;
             continue;
         };

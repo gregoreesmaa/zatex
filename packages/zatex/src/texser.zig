@@ -1,9 +1,12 @@
 //! Canonical LaTeX serializer: AST back to tex (issue #27, copy-
 //! as-LaTeX). Thin text walker: no layout math, no fonts. The fidelity
 //! contract is a round-trip property — `mathml(serialize(x))` equals
-//! `mathml(x)` — pinned per formula below, plus exact spellings for
-//! the common cases. Unrepresentable nodes (rule-thickness-overridden
-//! genfrac fractions, exotic lengths) return `Unsupported` instead of
+//! `mathml(x)` outside the source annotation (issue #119: the
+//! serializer normalizes the source, so the two `application/x-tex`
+//! bytes differ by design; `expectSameBody` below pins the rest) —
+//! pinned per formula below, plus exact spellings for the common
+//! cases. Unrepresentable nodes (rule-thickness-overridden genfrac
+//! fractions, exotic lengths) return `Unsupported` instead of
 //! silently changing meaning.
 const std = @import("std");
 const zatex = @import("zatex");
@@ -320,6 +323,7 @@ const Walker = struct {
                     .bb => "mathbb",
                     .cal => "mathcal",
                     .bolditalic => "bm",
+                    .sansitalic => "mathsfit",
                 });
                 try self.arg(f.body);
             },
@@ -679,6 +683,7 @@ const Walker = struct {
                 .bb => "mathbb",
                 .cal => "mathcal",
                 .bolditalic => "bm",
+                .sansitalic => "mathsfit",
             });
             try self.put("{");
             try self.putCp(cp);
@@ -1080,6 +1085,25 @@ test "serializer: exact canonical spellings" {
     }
 }
 
+/// Round-trip body comparison (issue #119): `serialize` normalizes
+/// the source, so the two `application/x-tex` annotations differ by
+/// design — everything outside them must be byte-identical, and each
+/// side must carry exactly one annotation.
+fn expectSameBody(src: []const u8, tex: []const u8, a: []const u8, b: []const u8) !void {
+    const open = "<annotation encoding=\"application/x-tex\">";
+    const close = "</annotation>";
+    const a0 = std.mem.indexOf(u8, a, open) orelse return error.TestUnexpectedResult;
+    const b0 = std.mem.indexOf(u8, b, open) orelse return error.TestUnexpectedResult;
+    const a1 = std.mem.indexOf(u8, a, close) orelse return error.TestUnexpectedResult;
+    const b1 = std.mem.indexOf(u8, b, close) orelse return error.TestUnexpectedResult;
+    if (std.mem.indexOf(u8, a[a1 + close.len ..], open) != null) return error.TestUnexpectedResult;
+    if (std.mem.indexOf(u8, b[b1 + close.len ..], open) != null) return error.TestUnexpectedResult;
+    if (!std.mem.eql(u8, a[0..a0], b[0..b0]) or !std.mem.eql(u8, a[a1..], b[b1..])) {
+        std.debug.print("\nround-trip drift [{s}] -> [{s}]\n  was: {s}\n  now: {s}\n", .{ src, tex, a, b });
+        return error.TestUnexpectedResult;
+    }
+}
+
 test "serializer: round-trip keeps MathML identical" {
     const cases = [_][]const u8{
         "x",
@@ -1150,10 +1174,9 @@ test "serializer: round-trip keeps MathML identical" {
             var m2: [8192]u8 = undefined;
             const a = try zatex.mathml(src, opts, &m1);
             const b = try zatex.mathml(tex, opts, &m2);
-            if (!std.mem.eql(u8, a, b)) {
-                std.debug.print("\nround-trip drift [{s}] -> [{s}]\n  was: {s}\n  now: {s}\n", .{ src, tex, a, b });
-                return error.TestUnexpectedResult;
-            }
+            // The normalized source re-annotates by design (issue
+            // #119); the body must still be byte-identical.
+            try expectSameBody(src, tex, a, b);
         }
     }
 }
@@ -1174,7 +1197,7 @@ test "serializer: equation tag round-trips in display mode" {
         const opts: zatex.LayoutOptions = .{ .display_mode = true };
         const a = try zatex.mathml(c[0], opts, &m1);
         const b = try zatex.mathml(tex, opts, &m2);
-        try std.testing.expectEqualStrings(a, b);
+        try expectSameBody(c[0], tex, a, b);
     }
 }
 

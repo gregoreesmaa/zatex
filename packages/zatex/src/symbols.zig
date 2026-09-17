@@ -864,6 +864,7 @@ const text_cmds = if (active_profile == .full) [_]TextCmd{
     .{ .name = "textgreater", .cp = 0x003E },
     .{ .name = "textless", .cp = 0x003C },
     .{ .name = "textunderscore", .cp = 0x005F },
+    .{ .name = "textcopyright", .cp = 0x00A9 },
     .{ .name = "textregistered", .cp = 0x00AE },
 } else [_]TextCmd{};
 

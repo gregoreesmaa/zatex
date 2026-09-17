@@ -125,6 +125,11 @@ pub const Stack = struct {
             // as the fallback for hosts that do not ship it.
             11 => &.{ .size1, .lm, .stix },
             12 => &.{ .size2, .lm, .stix },
+            // Sans-serif italic (issue #137): no vendored italic
+            // face exists, so the upright sans face answers first
+            // (KaTeX keeps its own SansSerif-Italic; hosts with one
+            // map it here).
+            13 => &.{ .sans, .lm, .stix },
             else => &.{ .lm, .main, .ams, .stix },
         };
     }
