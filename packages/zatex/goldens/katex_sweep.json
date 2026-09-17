@@ -16128,6 +16128,46 @@
    "note": null,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext mathvariant=\"italic\">AaBb</mtext></mrow><annotation encoding=\"application/x-tex\">\\textit{AaBb}</annotation></semantics></math>"
+  },
+  {
+   "id": "unit-px",
+   "tex": "a\\hspace{10px}b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mspace width=\"1.0037em\"/><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">a\\hspace{10px}b</annotation></semantics></math>"
+  },
+  {
+   "id": "array-row-size",
+   "tex": "\\begin{matrix}a\\\\[6pt]b\\end{matrix}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.16em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{matrix}a\\\\[6pt]b\\end{matrix}</annotation></semantics></math>"
+  },
+  {
+   "id": "array-stretch",
+   "tex": "\\def\\arraystretch{1.5}\\begin{array}{c}a\\\\b\\end{array}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable rowspacing=\"0.66em\" columnalign=\"center\" columnspacing=\"1em\"><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\def\\arraystretch{1.5}\\begin{array}{c}a\\\\b\\end{array}</annotation></semantics></math>"
+  },
+  {
+   "id": "newline-size",
+   "tex": "a\\\\[6pt]b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mspace linebreak=\"newline\" height=\"0.6em\"></mspace><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">a\\\\[6pt]b</annotation></semantics></math>"
   }
  ]
 }

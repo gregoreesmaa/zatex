@@ -391,13 +391,18 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
                 .invisible = false,
             });
         },
-        .newline => return lc.allocBox(.{
-            .w = 0,
-            .ha = 0,
-            .db = 0,
-            .kind = .{ .kern = {} },
-            .invisible = false,
-        }),
+        .newline => |nl| {
+            // `\\[size]` (issues #140/#144): KaTeX sets the break
+            // apart vertically; unsized breaks take no space.
+            const v = scale(lc, nl.size, style);
+            return lc.allocBox(.{
+                .w = 0,
+                .ha = if (v > 0) v else 0,
+                .db = if (v < 0) -v else 0,
+                .kind = .{ .kern = {} },
+                .invisible = false,
+            });
+        },
         .hline => return lc.allocBox(.{
             .w = 0,
             .ha = 100,
@@ -509,6 +514,12 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
 /// the ambient `\tiny`…`\Huge` multiplier).
 fn scale(lc: *LayCtx, u: i16, style: parse.Style) i32 {
     return @divTrunc(@as(i32, u) * lc.effSize(style), 1000);
+}
+
+/// Scale a per-row `\\[size]` gap (thousandths of an em, possibly
+/// negative) into ambient units (issues #140/#144).
+fn scaleRowGap(gap: i16, size: u16) i32 {
+    return @divTrunc(@as(i32, gap) * @as(i32, size), 1000);
 }
 
 /// Scale hundred-thousandths-of-em by the effective size (the
@@ -2953,7 +2964,14 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             if (!cells[r][c].is_rule and cells[r][c].w > colw[c]) colw[c] = cells[r][c].w;
         }
     }
-    const row_gap: i32 = if (e.kind == .smallmatrix or e.kind == .subarray) @divTrunc((@as(i32, 140) * size), 1000) else @divTrunc((@as(i32, 280) * size), 1000);
+    // `\arraystretch` scaling (issue #141): the 0.28em base gap
+    // scales with the env factor (smallmatrix/subarray fix 0.5, so
+    // their 0.14em falls out unchanged). i64 headroom: size and the
+    // factor are both small, but their product need not be.
+    const row_gap: i32 = blk: {
+        const g: i64 = @divTrunc(@as(i64, 280) * @as(i64, size) * @as(i64, e.stretch), 1000000);
+        break :blk if (g > std.math.maxInt(i32)) std.math.maxInt(i32) else @intCast(g);
+    };
     const vline_w: i32 = @divTrunc((@as(i32, 40) * size), 1000);
     // KaTeX column separation (pinned 0.18.7 `array.ts`, issue #33):
     // each column carries a pre/post gap; `array` additionally pads
@@ -3050,9 +3068,12 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     while (r < nrows) : (r += 1) {
         y += row_ha[r];
         row_base[r] = r0 - y;
-        y += row_db[r] + row_gap;
+        // Each row adds its own `\\[size]` gap after the shared
+        // base gap (KaTeX `rowGaps`, issues #140/#144); the trailing
+        // row's gap comes back off below, like the base gap.
+        y += row_db[r] + row_gap + scaleRowGap(rows[r].gap_after, size);
     }
-    const total_h = y - row_gap;
+    const total_h = y - row_gap - scaleRowGap(rows[nrows - 1].gap_after, size);
     const axis = @divTrunc((@as(i32, 250) * size), 1000);
     const first_up = axis + @divTrunc(total_h, 2) - r0;
     r = 0;
@@ -3238,6 +3259,9 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
         y += heights[k][0];
         bases[k] = b0 - y;
         y += heights[k][1];
+        // `\\[size]` between substack rows (issues #140/#144); the
+        // last row's gap never applies (no following row).
+        if (k + 1 < n) y += scaleRowGap(rows[k].gap_after, size);
     }
     const total = y;
     const first_base = total - b0;

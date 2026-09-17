@@ -1217,6 +1217,90 @@ test "qa45 full profile matches the cross-profile golden" {
 // Issue #46: sweep accepted-count ratchet (coverage never regresses)
 // ---------------------------------------------------------------------------
 
+test "qa139 px unit lays out at the KaTeX factor" {
+    // `10px` == `10bp` == `10pt` in layout: all three are 1000
+    // thousandths of an em (pinned KaTeX widths agree up to its
+    // 803/800 rounding, which the tag-only sweep does not pin).
+    var b1: B = .{};
+    var b2: B = .{};
+    var b3: B = .{};
+    var b4: B = .{};
+    const px = try lay("a\\hspace{10px}b", false, &b1);
+    const bp = try lay("a\\hspace{10bp}b", false, &b2);
+    const pt = try lay("a\\hspace{10pt}b", false, &b3);
+    const qd = try lay("a\\quad b", false, &b4);
+    try std.testing.expectEqual(bp.width, px.width);
+    try std.testing.expectEqual(pt.width, px.width);
+    try std.testing.expectEqual(qd.width, px.width);
+    try std.testing.expectEqual(bp.height_above + bp.depth_below, px.height_above + px.depth_below);
+}
+
+test "qa140 sized rows grow taller at equal width" {
+    // Layout/IR evidence (issue #144.3): `\\[6pt]` adds exactly one
+    // linear step per 6pt — same width, no extra runs (no literal
+    // glyphs), each step 600 ambient units at text size.
+    var b0: B = .{};
+    var b6: B = .{};
+    var b12: B = .{};
+    const plain = try lay("\\begin{matrix}a\\\\b\\end{matrix}", false, &b0);
+    const six = try lay("\\begin{matrix}a\\\\[6pt]b\\end{matrix}", false, &b6);
+    const twelve = try lay("\\begin{matrix}a\\\\[12pt]b\\end{matrix}", false, &b12);
+    const t0 = plain.height_above + plain.depth_below;
+    const t6 = six.height_above + six.depth_below;
+    const t12 = twelve.height_above + twelve.depth_below;
+    try std.testing.expectEqual(six.width, plain.width);
+    try std.testing.expectEqual(twelve.width, plain.width);
+    try std.testing.expectEqual(@as(u32, 600), t6 - t0);
+    try std.testing.expectEqual(@as(u32, 600), t12 - t6);
+    try std.testing.expectEqual(plain.runs.len, six.runs.len);
+    try std.testing.expectEqual(plain.runs.len, twelve.runs.len);
+    var g0: usize = 0;
+    for (plain.runs) |r| g0 += r.glyphs.len;
+    var g6: usize = 0;
+    for (six.runs) |r| g6 += r.glyphs.len;
+    try std.testing.expectEqual(g0, g6);
+}
+
+test "qa141 arraystretch scales the row gap linearly" {
+    // The 0.28em base gap scales with the env factor: 1.5 adds
+    // exactly 140 ambient units per inter-row gap at text size, 2.0
+    // adds 280 — widths and run shapes are unchanged.
+    var b1: B = .{};
+    var b15: B = .{};
+    var b2: B = .{};
+    const one = try lay("\\begin{array}{c}a\\\\b\\end{array}", false, &b1);
+    const onehalf = try lay("\\def\\arraystretch{1.5}\\begin{array}{c}a\\\\b\\end{array}", false, &b15);
+    const two = try lay("\\def\\arraystretch{2}\\begin{array}{c}a\\\\b\\end{array}", false, &b2);
+    const t1 = one.height_above + one.depth_below;
+    const t15 = onehalf.height_above + onehalf.depth_below;
+    const t2 = two.height_above + two.depth_below;
+    try std.testing.expectEqual(one.width, onehalf.width);
+    try std.testing.expectEqual(one.width, two.width);
+    try std.testing.expectEqual(@as(u32, 140), t15 - t1);
+    try std.testing.expectEqual(@as(u32, 280), t2 - t1);
+    try std.testing.expectEqual(one.runs.len, two.runs.len);
+}
+
+test "qa144 sized top-level break grows without new runs" {
+    // `a\\[60pt]b` sets its row apart vertically (KaTeX marginTop
+    // parity): strictly taller than `a\\b`, same width, same
+    // run/glyph shape — the size never lexes as literal text.
+    var b0: B = .{};
+    var b6: B = .{};
+    const plain = try lay("a\\\\b", false, &b0);
+    const sized = try lay("a\\\\[60pt]b", false, &b6);
+    const t0 = plain.height_above + plain.depth_below;
+    const t6 = sized.height_above + sized.depth_below;
+    try std.testing.expect(t6 > t0);
+    try std.testing.expectEqual(plain.width, sized.width);
+    try std.testing.expectEqual(plain.runs.len, sized.runs.len);
+    var g0: usize = 0;
+    for (plain.runs) |r| g0 += r.glyphs.len;
+    var g6: usize = 0;
+    for (sized.runs) |r| g6 += r.glyphs.len;
+    try std.testing.expectEqual(g0, g6);
+}
+
 test "qa46 accepted count never regresses below the floor" {
     // Distinct from freshness ("goldens match the pin"): the ratchet
     // fails loudly if engine coverage SHRINKS. Reads the checked-in

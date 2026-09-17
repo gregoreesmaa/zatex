@@ -9577,5 +9577,29 @@
   "tex": "\\textit{AaBb}",
   "display": false,
   "expect": "accept"
+ },
+ {
+  "id": "unit-px",
+  "tex": "a\\hspace{10px}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "array-row-size",
+  "tex": "\\begin{matrix}a\\\\[6pt]b\\end{matrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "array-stretch",
+  "tex": "\\def\\arraystretch{1.5}\\begin{array}{c}a\\\\b\\end{array}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "newline-size",
+  "tex": "a\\\\[6pt]b",
+  "display": false,
+  "expect": "accept"
  }
 ]

@@ -112,7 +112,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\~` | accept | goldens: text, textaccent |
 
-| `\\ ` | accept | goldens: matrix, aligned, alignedat |
+| `\\ ` | accept | goldens: matrix, aligned, alignedat, array-row-size, newline-size; `\\[size]` row gap (`\cr`/spaced break take none) |
 
 | `^` | accept | goldens: boxed, braces, demo-cauchy, atomgrid, flite-euler, rej-malf-sup |
 
@@ -202,7 +202,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\array` | unsup | goldens: rej-unsup-array |
 
-| `\arraystretch` | accept | goldens: array, def, aligned |
+| `\arraystretch` | accept | goldens: array, def, aligned, array-stretch; scales row gaps, invalid rejects |
 
 | `\Arrowvert` | unsup | goldens: rej-unsup-arrowvert |
 
@@ -922,7 +922,7 @@ fetched pixels. Neither row claims pixels the core cannot produce.
 
 | `\hslash` | accept | goldens: sym-gal-4 |
 
-| `\hspace` | accept | goldens: hspace |
+| `\hspace` | accept | goldens: hspace, unit-px |
 
 | `\htmlClass` | accept | goldens: htmlClass |
 
