@@ -1370,6 +1370,16 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded lspace=\"-1width\" width=\"0px\"><mtext>x</mtext></mpadded><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">\\llap{x}y</annotation></semantics></math>"
   },
   {
+   "id": "lap-clap",
+   "tex": "\\clap{abc}",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded lspace=\"-0.5width\" width=\"0px\"><mtext>abc</mtext></mpadded></mrow><annotation encoding=\"application/x-tex\">\\clap{abc}</annotation></semantics></math>"
+  },
+  {
    "id": "lap-clap-sub",
    "tex": "\\sum_{\\mathclap{x}}",
    "display": false,
@@ -12952,6 +12962,16 @@
    "note": null,
    "katex_ok": true,
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mspace width=\"0.5em\"/><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">a\\enspace b</annotation></semantics></math>"
+  },
+  {
+   "id": "enskip",
+   "tex": "a\\enskip b",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mspace width=\"0.5em\"/><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">a\\enskip b</annotation></semantics></math>"
   },
   {
    "id": "newline",

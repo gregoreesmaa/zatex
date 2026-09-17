@@ -820,6 +820,12 @@
   "expect": "accept"
  },
  {
+  "id": "lap-clap",
+  "tex": "\\clap{abc}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "lap-clap-sub",
   "tex": "\\sum_{\\mathclap{x}}",
   "display": false,
@@ -7662,6 +7668,12 @@
  {
   "id": "enspace",
   "tex": "a\\enspace b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "enskip",
+  "tex": "a\\enskip b",
   "display": false,
   "expect": "accept"
  },
