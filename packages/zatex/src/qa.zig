@@ -734,7 +734,7 @@ test "qa96 negations render AMS PUA glyphs, MathML keeps the arbiter" {
     }
     var out: [512]u8 = undefined;
     try std.testing.expectEqualStrings(
-        "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo>≰</mo></mrow></math>",
+        "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>≰</mo></mrow><annotation encoding=\"application/x-tex\">\\nleqq</annotation></semantics></math>",
         try zatex.mathml("\\nleqq", .{}, &out),
     );
 }
@@ -1391,53 +1391,53 @@ fn expectGolden(id: []const u8, golden: []const u8, actual: []const u8) !void {
 }
 
 const golden_mathml = [_][]const u8{
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>x</mi><mo>+</mo><mi>y</mi><mo>=</mo><mi>z</mi></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mi>a</mi><mi>b</mi></mfrac></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msqrt><mi>x</mi></msqrt></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mroot><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow><mi>n</mi></mroot></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mi>i</mi></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mrow><mi>lim</mi><mo>⁡</mo></mrow><mi>x</mi></msub><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msubsup><mo>∫</mo><mn>0</mn><mn>1</mn></msubsup><mi>x</mi></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><msub><mi>y</mi><mn>1</mn></msub></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>α</mi><mo>+</mo><mi>β</mi></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mfrac><mn>1</mn><mi>x</mi></mfrac></mrow></mfrac></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mtable><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd></mtr></mtable></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">(</mo><mi>x</mi><mo fence=\"true\">)</mo></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>A</mi><mi>B</mi></mrow><mo>&#x203E;</mo></mover></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mi>x</mi><mo>^</mo></mover><mo>+</mo><mover><mi>y</mi><mo>⃗</mo></mover></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold\"><mi>A</mi></mstyle><mo>+</mo><mstyle mathvariant=\"italic\"><mi>B</mi></mstyle></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathcolor=\"red\"><mi>x</mi><mo>+</mo><mi>y</mi></mstyle></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>hello </mtext><mo>+</mo><mi>x</mi></mrow></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi><mo>+</mo><mi>y</mi><mo>=</mo><mi>z</mi></mrow><annotation encoding=\"application/x-tex\">x+y=z</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mi>a</mi><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\frac{a}{b}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msqrt><mi>x</mi></msqrt></mrow><annotation encoding=\"application/x-tex\">\\sqrt{x}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mroot><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow><mi>n</mi></mroot></mrow><annotation encoding=\"application/x-tex\">\\sqrt[n]{x+1}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mi>i</mi></mrow><annotation encoding=\"application/x-tex\">\\sum_{i=1}^{n} i</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi>lim</mi><mo>⁡</mo></mrow><mi>x</mi></msub><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow><annotation encoding=\"application/x-tex\">\\lim_{x} f(x)</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>∫</mo><mn>0</mn><mn>1</mn></msubsup><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\int_{0}^{1} x</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><msub><mi>y</mi><mn>1</mn></msub></mrow><annotation encoding=\"application/x-tex\">x^{2}+y_{1}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>α</mi><mo>+</mo><mi>β</mi></mrow><annotation encoding=\"application/x-tex\">\\alpha+\\beta</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mfrac><mn>1</mn><mi>x</mi></mfrac></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">\\frac{1}{1+\\frac{1}{x}}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mtable><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>a</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>b</mi></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>c</mi></mstyle></mtd><mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\"><mi>d</mi></mstyle></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{matrix}a&amp;b\\\\c&amp;d\\end{matrix}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mi>x</mi><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\left(x\\right)</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover><mrow><mi>A</mi><mi>B</mi></mrow><mo>&#x203E;</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\overline{AB}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover><mi>x</mi><mo>^</mo></mover><mo>+</mo><mover><mi>y</mi><mo>⃗</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\hat{x}+\\vec{y}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathvariant=\"bold\"><mi>A</mi></mstyle><mo>+</mo><mstyle mathvariant=\"italic\"><mi>B</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\mathbf{A}+\\mathit{B}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathcolor=\"red\"><mi>x</mi><mo>+</mo><mi>y</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\color{red}{x}+y</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>hello </mtext><mo>+</mo><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\text{hello }+x</annotation></semantics></math>",
     // Issue #93: KaTeX wraps fenced stacks in fence mo's (pinned
     // 0.18.7: `<mo fence="true">(</mo>` for `\binom{n}{k}`).
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">)</mo></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><msup><mi>x</mi><mn>2</mn></msup><mn>1</mn></mfrac></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mi>A</mi><msub><mi>B</mi><mi>C</mi></msub></msub></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"\" height=\"0.9em\" src=\"a\"></mglyph></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"\" height=\"0.1004em\" width=\"0.0556em\" src=\"a\"></mglyph></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"\" valign=\"-0.1em\" height=\"0.3em\" src=\"a\"></mglyph></mrow></math>",
-    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mglyph alt=\"x\" height=\"0.9em\" src=\"a\"></mglyph></mrow></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">)</mo></mrow><annotation encoding=\"application/x-tex\">\\binom{n}{k}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><msup><mi>x</mi><mn>2</mn></msup><mn>1</mn></mfrac></mrow><annotation encoding=\"application/x-tex\">\\frac{x^2}{1}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mi>A</mi><msub><mi>B</mi><mi>C</mi></msub></msub></mrow><annotation encoding=\"application/x-tex\">A_{B_C}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mglyph alt=\"\" height=\"0.9em\" src=\"a\"></mglyph></mrow><annotation encoding=\"application/x-tex\">\\includegraphics{a}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mglyph alt=\"\" height=\"0.1004em\" width=\"0.0556em\" src=\"a\"></mglyph></mrow><annotation encoding=\"application/x-tex\">\\includegraphics[width=1mu,height=1bp]{a}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mglyph alt=\"\" valign=\"-0.1em\" height=\"0.3em\" src=\"a\"></mglyph></mrow><annotation encoding=\"application/x-tex\">\\includegraphics[height=2pt,totalheight=3pt]{a}</annotation></semantics></math>",
+    "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mglyph alt=\"x\" height=\"0.9em\" src=\"a\"></mglyph></mrow><annotation encoding=\"application/x-tex\">\\includegraphics[alt=x]{a}</annotation></semantics></math>",
 };
 const golden_speech = [_][]const u8{
     "x, plus, y, equals, z",
-    "fraction, numerator, a, denominator, b, end fraction",
-    "square root of, x, end root",
-    "n, root of, x, plus, 1, end root",
+    "start fraction, a, divided by, b, end fraction",
+    "square root of, x, end square root",
+    "root, start index, n, end index",
     "sum, from, i, equals, 1, to, n, i",
-    "lim, subscript, x, end subscript, f, left parenthesis, x, right parenthesis",
+    "limit, subscript, x, end subscript, f, left parenthesis, x, right parenthesis",
     "integral, from, 0, to, 1, x",
-    "x, superscript, 2, end superscript, plus, y, subscript, 1, end subscript",
+    "x, squared, plus, y, subscript, 1, end subscript",
     "alpha, plus, beta",
-    "fraction, numerator, 1, denominator, 1, plus, fraction, numerator, 1, denominator, x, end fraction, end fraction",
+    "start fraction, 1, divided by, 1, plus, start fraction, 1, divided by, x, end fraction, end fraction",
     "matrix, row, a, b, row, c, d, end matrix",
-    "left, parenthesis, x, right, parenthesis",
+    "left parenthesis, x, right parenthesis",
     "A, B, overbar",
-    "x, hat, plus, y, vector",
+    "x, with, hat, on top, plus, y, with, vector, on top",
     "A, plus, B",
-    "x, plus, y",
-    "h, e, l, l, o,  , plus, x",
+    "start color red, x, plus, y, end color red",
+    "start text, h, e, l, l, o, space, end text, plus, x",
     "n, choose, k",
-    "fraction, numerator, x, superscript, 2, end superscript, denominator, 1, end fraction",
+    "start fraction, x, squared, divided by, 1, end fraction",
     "A, subscript, B, subscript, C, end subscript, end subscript",
     "image",
     "image",
@@ -2165,10 +2165,10 @@ test "qa62 bra ket are fixed inner fences" {
     // (attributes out of scope: this golden pins tags and text).
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\bra{\\psi}", .{}, &buf);
-    try expectGolden("\\bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mpadded><mo>⟨</mo><mi>ψ</mi><mi>∣</mi></mpadded></mrow></math>", got);
+    try expectGolden("\\bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded><mo>⟨</mo><mi>ψ</mi><mi>∣</mi></mpadded></mrow><annotation encoding=\"application/x-tex\">\\bra{\\psi}</annotation></semantics></math>", got);
     var buf2: [4096]u8 = undefined;
     const got2 = try zatex.mathml("\\ket{\\psi}", .{}, &buf2);
-    try expectGolden("\\ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mpadded><mi>∣</mi><mi>ψ</mi><mo>⟩</mo></mpadded></mrow></math>", got2);
+    try expectGolden("\\ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded><mi>∣</mi><mi>ψ</mi><mo>⟩</mo></mpadded></mrow><annotation encoding=\"application/x-tex\">\\ket{\\psi}</annotation></semantics></math>", got2);
 }
 
 test "qa64 display cases use displaystyle cells" {
@@ -2192,15 +2192,15 @@ test "qa66 edef snapshots expansion" {
     // time, so later redefinition does not affect the snapshot.
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\def\\foo{a}\\edef\\fcopy{\\foo}\\def\\foo{}\\fcopy", .{}, &buf);
-    try expectGolden("edef", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>a</mi></mrow></math>", got);
+    try expectGolden("edef", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\def\\foo{a}\\edef\\fcopy{\\foo}\\def\\foo{}\\fcopy</annotation></semantics></math>", got);
     // Parameters stay symbolic through the snapshot and bind at use.
     var buf2: [4096]u8 = undefined;
     const got2 = try zatex.mathml("\\edef\\add#1#2{#1+#2}\\add 2 3", .{}, &buf2);
-    try expectGolden("edef-params", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mn>2</mn><mo>+</mo><mn>3</mn></mrow></math>", got2);
+    try expectGolden("edef-params", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mn>2</mn><mo>+</mo><mn>3</mn></mrow><annotation encoding=\"application/x-tex\">\\edef\\add#1#2{#1+#2}\\add 2 3</annotation></semantics></math>", got2);
     // Nested parameterized uses resolve inside the snapshot.
     var buf3: [4096]u8 = undefined;
     const got3 = try zatex.mathml("\\def\\id#1{#1}\\edef\\a{\\id{xy}}\\a", .{}, &buf3);
-    try expectGolden("edef-nested", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>x</mi><mi>y</mi></mrow></math>", got3);
+    try expectGolden("edef-nested", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">\\def\\id#1{#1}\\edef\\a{\\id{xy}}\\a</annotation></semantics></math>", got3);
     // Undefined names fail at define time (KaTeX parity).
     var b: B = .{};
     const r = lay("\\edef\\a{\\foo}\\a", false, &b);
@@ -2212,7 +2212,7 @@ test "qa67 xdef defines globally expanded" {
     // \edef (all engine definitions are already global).
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\def\\foo{a}\\xdef\\fcopy{\\foo}\\def\\foo{}\\fcopy", .{}, &buf);
-    try expectGolden("xdef", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mi>a</mi></mrow></math>", got);
+    try expectGolden("xdef", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">\\def\\foo{a}\\xdef\\fcopy{\\foo}\\def\\foo{}\\fcopy</annotation></semantics></math>", got);
 }
 
 test "qa69 textregistered is text registered" {
@@ -2222,7 +2222,7 @@ test "qa69 textregistered is text registered" {
     _ = try lay("\\text{\\textregistered}", false, &b);
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\text{\\textregistered}", .{}, &buf);
-    try expectGolden("textregistered", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mtext>®</mtext></mrow></math>", got);
+    try expectGolden("textregistered", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mtext>®</mtext></mrow><annotation encoding=\"application/x-tex\">\\text{\\textregistered}</annotation></semantics></math>", got);
 }
 
 test "qa70 textcircled encloses the body on the baseline (issue #80)" {
@@ -2273,7 +2273,7 @@ test "qa70 textcircled encloses the body on the baseline (issue #80)" {
     }
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\text{\\textcircled a}", .{}, &buf);
-    try expectGolden("textcircled", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><mover accent=\"true\"><mrow><mtext>a</mtext></mrow><mo>◯</mo></mover></mrow></mrow></math>", got);
+    try expectGolden("textcircled", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mrow><mover accent=\"true\"><mrow><mtext>a</mtext></mrow><mo>◯</mo></mover></mrow></mrow><annotation encoding=\"application/x-tex\">\\text{\\textcircled a}</annotation></semantics></math>", got);
 }
 
 test "qa114 islands take space-separated args like math" {
@@ -2359,7 +2359,7 @@ test "qa71 sout strikes text" {
     try std.testing.expectEqual(@as(u32, 1500), l.rules[0].w);
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\text{\\sout{abc}}", .{}, &buf);
-    try expectGolden("sout-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mrow><menclose notation=\"horizontalstrike\"><mrow><mtext>abc</mtext></mrow></menclose></mrow></mrow></math>", got);
+    try expectGolden("sout-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mrow><menclose notation=\"horizontalstrike\"><mrow><mtext>abc</mtext></mrow></menclose></mrow></mrow><annotation encoding=\"application/x-tex\">\\text{\\sout{abc}}</annotation></semantics></math>", got);
 }
 
 test "qa73 overbracket draws a square bracket" {
@@ -2381,7 +2381,7 @@ test "qa73 overbracket draws a square bracket" {
     try std.testing.expectEqual(@as(u32, 1600), narrow.width);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\overbracket{x+1}", .{}, &buf);
-    try expectGolden("overbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow><mo>&#x23B4;</mo></mover></mrow></math>", got);
+    try expectGolden("overbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow><mo>&#x23B4;</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\overbracket{x+1}</annotation></semantics></math>", got);
 }
 
 test "qa79 math-mode textcircled is a mover" {
@@ -2400,7 +2400,7 @@ test "qa79 math-mode textcircled is a mover" {
     try std.testing.expectEqual(c.runs[0].baseline_y, c.runs[1].baseline_y);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\textcircled{a}", .{}, &buf);
-    try expectGolden("circled-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover accent=\"true\"><mi>a</mi><mo>◯</mo></mover></mrow></math>", got);
+    try expectGolden("circled-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover accent=\"true\"><mi>a</mi><mo>◯</mo></mover></mrow><annotation encoding=\"application/x-tex\">\\textcircled{a}</annotation></semantics></math>", got);
 }
 
 test "qa78 cr is a full row-separator alias" {
@@ -2461,7 +2461,7 @@ test "qa77 phase pads for the phasor angle" {
     try std.testing.expectEqual(@as(u32, 80), v.rules[0].h);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\phase{30}", .{}, &buf);
-    try expectGolden("phase", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><menclose notation=\"phasorangle\"><mrow><mn>30</mn></mrow></menclose></mrow></math>", got);
+    try expectGolden("phase", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><menclose notation=\"phasorangle\"><mrow><mn>30</mn></mrow></menclose></mrow><annotation encoding=\"application/x-tex\">\\phase{30}</annotation></semantics></math>", got);
 }
 
 test "qa76 vcenter centers on the math axis" {
@@ -2476,7 +2476,7 @@ test "qa76 vcenter centers on the math axis" {
     try std.testing.expectEqual(bare.height_above + bare.depth_below, v.height_above + v.depth_below);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\vcenter{x}", .{}, &buf);
-    try expectGolden("vcenter", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mpadded class=\"vcenter\"><mi>x</mi></mpadded></mrow></math>", got);
+    try expectGolden("vcenter", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mpadded class=\"vcenter\"><mi>x</mi></mpadded></mrow><annotation encoding=\"application/x-tex\">\\vcenter{x}</annotation></semantics></math>", got);
 }
 
 test "qa75 pmb keeps metrics, marks bold" {
@@ -2491,7 +2491,7 @@ test "qa75 pmb keeps metrics, marks bold" {
     try std.testing.expectEqual(bare.depth_below, p.depth_below);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\pmb{x}", .{}, &buf);
-    try expectGolden("pmb", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle style=\"text-shadow: 0.02em 0.01em 0.04px\"><mi>x</mi></mstyle></mrow></math>", got);
+    try expectGolden("pmb", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle style=\"text-shadow: 0.02em 0.01em 0.04px\"><mi>x</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\pmb{x}</annotation></semantics></math>", got);
 }
 
 test "qa74 underbracket mirrors below" {
@@ -2508,7 +2508,7 @@ test "qa74 underbracket mirrors below" {
     try std.testing.expectEqual(bare.height_above, br.height_above);
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\underbracket{x}", .{}, &buf);
-    try expectGolden("underbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mi>x</mi><mo>&#x23B5;</mo></munder></mrow></math>", got);
+    try expectGolden("underbracket", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munder><mi>x</mi><mo>&#x23B5;</mo></munder></mrow><annotation encoding=\"application/x-tex\">\\underbracket{x}</annotation></semantics></math>", got);
 }
 
 test "qa73 subarray takes c-l alignment" {
@@ -2544,10 +2544,10 @@ test "qa73 tag tables the equation with parens" {
     // 500 (formula) + 2000 (gap) = 2500 and the row is 4000 wide.
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\tag{1}x", .{ .display_mode = true }, &buf);
-    try expectGolden("tag-display", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mrow><mtext>(1)</mtext></mrow></mtd></mtr></mtable></math>", got);
+    try expectGolden("tag-display", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mrow><mtext>(1)</mtext></mrow></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag{1}x</annotation></semantics></math>", got);
     var buf2: [4096]u8 = undefined;
     const got2 = try zatex.mathml("\\tag*{a}x", .{ .display_mode = true }, &buf2);
-    try expectGolden("tag-star-display", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>a</mtext></mtd></mtr></mtable></math>", got2);
+    try expectGolden("tag-star-display", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd><mi>x</mi></mtd><mtd width=\"50%\"></mtd><mtd><mtext>a</mtext></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\tag*{a}x</annotation></semantics></math>", got2);
     var b1: B = .{};
     const l1 = try lay("\\tag{1}x", true, &b1);
     try std.testing.expectEqual(@as(i32, 2500), try glyphX(l1, '('));
@@ -2568,7 +2568,7 @@ test "qa72 sout strikes math" {
     // strike (menclose horizontalstrike, like `\cancel` diagonal).
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\sout{abc}", .{}, &buf);
-    try expectGolden("sout-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><menclose notation=\"horizontalstrike\"><mrow><mi>a</mi><mi>b</mi><mi>c</mi></mrow></menclose></mrow></math>", got);
+    try expectGolden("sout-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><menclose notation=\"horizontalstrike\"><mrow><mi>a</mi><mi>b</mi><mi>c</mi></mrow></menclose></mrow><annotation encoding=\"application/x-tex\">\\sout{abc}</annotation></semantics></math>", got);
 }
 
 test "qa68 global prefix takes definitions" {
@@ -2576,7 +2576,7 @@ test "qa68 global prefix takes definitions" {
     // next definition (`\def` here) and rejects anything else.
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\global\\def\\add#1#2{#1+#2} \\add 2 3", .{}, &buf);
-    try expectGolden("global", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mn>2</mn><mo>+</mo><mn>3</mn></mrow></math>", got);
+    try expectGolden("global", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mn>2</mn><mo>+</mo><mn>3</mn></mrow><annotation encoding=\"application/x-tex\">\\global\\def\\add#1#2{#1+#2} \\add 2 3</annotation></semantics></math>", got);
     var b: B = .{};
     const r = lay("\\global x", false, &b);
     try std.testing.expectError(error.Invalid, r);
@@ -2588,7 +2588,10 @@ test "qa65 right cases fence on the right" {
     var buf: [8192]u8 = undefined;
     const got = try zatex.mathml("\\begin{rcases}a\\end{rcases}", .{}, &buf);
     try std.testing.expect(std.mem.indexOf(u8, got, "<mo fence=\"true\">}</mo>") != null);
-    try std.testing.expect(std.mem.indexOf(u8, got, "{") == null);
+    // The source annotation legitimately carries braces (issue
+    // #119); the no-raw-brace check covers the body only.
+    const anno_at = std.mem.indexOf(u8, got, "<annotation").?;
+    try std.testing.expect(std.mem.indexOf(u8, got[0..anno_at], "{") == null);
     var buf2: [8192]u8 = undefined;
     _ = try zatex.mathml("\\begin{drcases}a\\end{drcases}", .{}, &buf2);
 }
@@ -2599,10 +2602,10 @@ test "qa63 sized bra ket are fences" {
     // output), so they serialize as fence delimiters.
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\Bra{\\psi}", .{}, &buf);
-    try expectGolden("\\Bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">⟨</mo><mi>ψ</mi><mo fence=\"true\">∣</mo></mrow></math>", got);
+    try expectGolden("\\Bra{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">⟨</mo><mi>ψ</mi><mo fence=\"true\">∣</mo></mrow><annotation encoding=\"application/x-tex\">\\Bra{\\psi}</annotation></semantics></math>", got);
     var buf2: [4096]u8 = undefined;
     const got2 = try zatex.mathml("\\Ket{\\psi}", .{}, &buf2);
-    try expectGolden("\\Ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">∣</mo><mi>ψ</mi><mo fence=\"true\">⟩</mo></mrow></math>", got2);
+    try expectGolden("\\Ket{\\psi}", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">∣</mo><mi>ψ</mi><mo fence=\"true\">⟩</mo></mrow><annotation encoding=\"application/x-tex\">\\Ket{\\psi}</annotation></semantics></math>", got2);
 }
 
 test "qa61 lbrace works after left" {
@@ -2694,10 +2697,10 @@ test "qa82 infix brace/brack are their own fences (issue #93)" {
     try std.testing.expectEqual(@as(u16, ']'), bk.runs[3].glyphs[0]);
     var buf: [4096]u8 = undefined;
     const gotb = try zatex.mathml("{n\\brace k}", .{}, &buf);
-    try expectGolden("infix-brace", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">{</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">}</mo></mrow></math>", gotb);
+    try expectGolden("infix-brace", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">{</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">}</mo></mrow><annotation encoding=\"application/x-tex\">{n\\brace k}</annotation></semantics></math>", gotb);
     var buf2: [4096]u8 = undefined;
     const gotk = try zatex.mathml("{n\\brack k}", .{}, &buf2);
-    try expectGolden("infix-brack", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mo fence=\"true\">[</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">]</mo></mrow></math>", gotk);
+    try expectGolden("infix-brack", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">[</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo fence=\"true\">]</mo></mrow><annotation encoding=\"application/x-tex\">{n\\brack k}</annotation></semantics></math>", gotk);
 }
 
 test "qa83 old-style font declarations scope the rest of the group (issue #94)" {
@@ -2721,16 +2724,16 @@ test "qa83 old-style font declarations scope the rest of the group (issue #94)" 
     try std.testing.expectEqual(@as(u16, 0xD400), l.runs[0].glyphs[0]);
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\bf AaBb12", .{}, &buf);
-    try expectGolden("decl-bf", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold\"><mi>A</mi><mi>a</mi><mi>B</mi><mi>b</mi><mn>12</mn></mstyle></mrow></math>", got);
+    try expectGolden("decl-bf", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathvariant=\"bold\"><mi>A</mi><mi>a</mi><mi>B</mi><mi>b</mi><mn>12</mn></mstyle></mrow><annotation encoding=\"application/x-tex\">\\bf AaBb12</annotation></semantics></math>", got);
     var buf2: [4096]u8 = undefined;
     const gotg = try zatex.mathml("{\\bf Aa}Bb", .{}, &buf2);
-    try expectGolden("decl-group", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold\"><mrow><mi>A</mi><mi>a</mi></mrow></mstyle><mi>B</mi><mi>b</mi></mrow></math>", gotg);
+    try expectGolden("decl-group", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathvariant=\"bold\"><mrow><mi>A</mi><mi>a</mi></mrow></mstyle><mi>B</mi><mi>b</mi></mrow><annotation encoding=\"application/x-tex\">{\\bf Aa}Bb</annotation></semantics></math>", gotg);
     var buf3: [4096]u8 = undefined;
     const goto = try zatex.mathml("\\bf a\\over b", .{}, &buf3);
-    try expectGolden("decl-over", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathvariant=\"bold\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", goto);
+    try expectGolden("decl-over", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mfrac><mstyle mathvariant=\"bold\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow><annotation encoding=\"application/x-tex\">\\bf a\\over b</annotation></semantics></math>", goto);
     var buf4: [4096]u8 = undefined;
     const gotb = try zatex.mathml("\\boldsymbol{AaBb}", .{}, &buf4);
-    try expectGolden("decl-boldsymbol", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle mathvariant=\"bold-italic\"><mi>A</mi><mi>a</mi><mi>B</mi><mi>b</mi></mstyle></mrow></math>", gotb);
+    try expectGolden("decl-boldsymbol", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle mathvariant=\"bold-italic\"><mi>A</mi><mi>a</mi><mi>B</mi><mi>b</mi></mstyle></mrow><annotation encoding=\"application/x-tex\">\\boldsymbol{AaBb}</annotation></semantics></math>", gotb);
 }
 
 test "qa84 genfrac zero bar omits the rule (issue #105)" {
@@ -2764,7 +2767,7 @@ test "qa84 genfrac zero bar omits the rule (issue #105)" {
     try std.testing.expectEqual(fr.rules[0].h, df.rules[0].h);
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\genfrac(){0pt}{1}{a}{b}", .{}, &buf);
-    try expectGolden("genfrac-0pt", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle displaystyle=\"false\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow></math>", got);
+    try expectGolden("genfrac-0pt", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle displaystyle=\"false\"><mrow><mo fence=\"true\">(</mo><mfrac linethickness=\"0\"><mi>a</mi><mi>b</mi></mfrac><mo fence=\"true\">)</mo></mrow></mstyle></mrow><annotation encoding=\"application/x-tex\">\\genfrac(){0pt}{1}{a}{b}</annotation></semantics></math>", got);
 }
 
 test "qa85 reflectbox mirrors ink about the box center (issue #97)" {
@@ -2813,15 +2816,15 @@ test "qa85 reflectbox mirrors ink about the box center (issue #97)" {
     // the flip is CSS-only, so neither side marks it).
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\mathreflectbox{x^2}", .{}, &buf);
-    try expectGolden("mathreflectbox", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow></math>", got);
+    try expectGolden("mathreflectbox", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding=\"application/x-tex\">\\mathreflectbox{x^2}</annotation></semantics></math>", got);
     var buf2: [4096]u8 = undefined;
     const got2 = try zatex.mathml("\\reflectbox{R}", .{}, &buf2);
-    try expectGolden("reflectbox", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle displaystyle=\"false\"><mtext>R</mtext></mstyle></mrow></math>", got2);
+    try expectGolden("reflectbox", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle displaystyle=\"false\"><mtext>R</mtext></mstyle></mrow><annotation encoding=\"application/x-tex\">\\reflectbox{R}</annotation></semantics></math>", got2);
     // `$...$` math islands parse inside `\reflectbox` (the `\hbox`
     // path): KaTeX wraps the island in a second textstyle reset.
     var buf3: [4096]u8 = undefined;
     const got3 = try zatex.mathml("\\reflectbox{$x^2$}", .{}, &buf3);
-    try expectGolden("reflectbox-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mstyle displaystyle=\"false\"><mstyle displaystyle=\"false\"><msup><mi>x</mi><mn>2</mn></msup></mstyle></mstyle></mrow></math>", got3);
+    try expectGolden("reflectbox-math", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mstyle displaystyle=\"false\"><mstyle displaystyle=\"false\"><msup><mi>x</mi><mn>2</mn></msup></mstyle></mstyle></mrow><annotation encoding=\"application/x-tex\">\\reflectbox{$x^2$}</annotation></semantics></math>", got3);
     // The box body lays out like `\hbox` (same textbody path): same
     // box, same glyph multiset, origins mirrored about the center.
     var b6: B = .{};
@@ -2857,28 +2860,28 @@ test "qa86 operatorname forced limits stack in every style (issue #98)" {
     // a PLAIN name stays inert.
     var buf: [4096]u8 = undefined;
     const got = try zatex.mathml("\\operatorname*{lim}\\limits_{x}", .{}, &buf);
-    try expectGolden("operatorname-star-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></munder></mrow></math>", got);
+    try expectGolden("operatorname-star-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munder><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></munder></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}\\limits_{x}</annotation></semantics></math>", got);
     var buf2: [4096]u8 = undefined;
     const got2 = try zatex.mathml("\\operatorname*{lim}\\limits_{x}^{n}", .{}, &buf2);
-    try expectGolden("operatorname-star-limits-both", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munderover><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi><mi>n</mi></munderover></mrow></math>", got2);
+    try expectGolden("operatorname-star-limits-both", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munderover><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi><mi>n</mi></munderover></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}\\limits_{x}^{n}</annotation></semantics></math>", got2);
     var buf3: [4096]u8 = undefined;
     const got3 = try zatex.mathml("\\operatorname*{lim}\\limits^{x}", .{}, &buf3);
-    try expectGolden("operatorname-star-limits-sup", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mover><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></mover></mrow></math>", got3);
+    try expectGolden("operatorname-star-limits-sup", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mover><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></mover></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}\\limits^{x}</annotation></semantics></math>", got3);
     // Guards: unforced star stays side-set inline, stacks in display;
     // plain names ignore explicit limits; forced symbols stay
     // side-set for both scripts inline.
     var buf4: [4096]u8 = undefined;
     const got4 = try zatex.mathml("\\operatorname*{lim}_{x}", .{}, &buf4);
-    try expectGolden("operatorname-star-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></msub></mrow></math>", got4);
+    try expectGolden("operatorname-star-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\operatorname*{lim}_{x}</annotation></semantics></math>", got4);
     var buf5: [4096]u8 = undefined;
     const got5 = try zatex.mathml("\\operatorname{lim}\\limits_{x}", .{}, &buf5);
-    try expectGolden("operatorname-plain-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msub><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></msub></mrow></math>", got5);
+    try expectGolden("operatorname-plain-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msub><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\operatorname{lim}\\limits_{x}</annotation></semantics></math>", got5);
     var buf6: [4096]u8 = undefined;
     const got6 = try zatex.mathml("\\sum\\limits_{i}^{n}", .{}, &buf6);
-    try expectGolden("sum-limits-both-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><msubsup><mo>\u{2211}</mo><mi>i</mi><mi>n</mi></msubsup></mrow></math>", got6);
+    try expectGolden("sum-limits-both-text", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msubsup><mo>\u{2211}</mo><mi>i</mi><mi>n</mi></msubsup></mrow><annotation encoding=\"application/x-tex\">\\sum\\limits_{i}^{n}</annotation></semantics></math>", got6);
     var buf7: [4096]u8 = undefined;
     const got7 = try zatex.mathml("\\operatornamewithlimits{lim}\\limits_{x}", .{}, &buf7);
-    try expectGolden("operatorname-withlimits-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><munder><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></munder></mrow></math>", got7);
+    try expectGolden("operatorname-withlimits-limits", "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><munder><mrow><mi>lim</mi><mo>\u{2061}</mo></mrow><mi>x</mi></munder></mrow><annotation encoding=\"application/x-tex\">\\operatornamewithlimits{lim}\\limits_{x}</annotation></semantics></math>", got7);
     // Layout: forced-inline stacks exactly like star-display (same
     // limits box either way), while unforced star-inline stays side.
     var b1: B = .{};
