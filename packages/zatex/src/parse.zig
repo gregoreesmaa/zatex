@@ -1299,7 +1299,7 @@ pub const full_only_ctrl_names: []const []const u8 = &.{
     "braket", "Braket", "Set",
     "mathstrut", "llap", "rlap", "clap", "mathllap", "mathrlap",
     "mathclap", "cancel", "bcancel", "sout", "phase", "textcircled",
-    "nobreakspace", "space", "vspace", "overset", "underset", "stackrel", "not",
+    "nobreakspace", "space", "vspace", "overset", "underset", "not",
     "begin", "vcenter", "displaystyle", "textstyle", "scriptstyle",
     "scriptscriptstyle", "tiny", "sixptsize", "scriptsize",
     "footnotesize", "small", "normalsize", "large", "Large", "LARGE",
@@ -1314,6 +1314,92 @@ fn isFullOnlyCtrlName(name: []const u8) bool {
     if (parseOverName(name) != null) return true;
     if (isBigName(name)) return true;
     for (full_only_ctrl_names) |c| if (tokNameEq(name, c)) return true;
+    return false;
+}
+
+/// Affix families inside `full_only_ctrl_names` (size ratchet: one
+/// check answers for the whole family, so the subset scan table
+/// below stays small). Coverage audit — every engine command under
+/// each affix is full-only, and subset accepts no command (nor any
+/// infix) under it, so in the subset profile these match exactly
+/// the listed names (verified: no affix hit across all 396 command
+/// names in `goldens/qa_profile_ir.json`, the complete
+/// subset-accepted vocabulary — the allowlist test forces every
+/// subset-accepted row into that map):
+/// `@*`: `@char`, `@firstoftwo`, `@secondoftwo`, `@ifnextchar`,
+///   `@ifstar` (the `@var*` PUA symbols live in the full-only
+///   symbol table, never in subset);
+/// `*copyright`: `copyright`, `textcopyright`;
+/// `*colon`: the 15 colon-family names ending there (`colon`,
+///   `eqcolon`, `coloncolon`, … `approxcoloncolon`; `coloneqq`,
+///   `coloneq`, `colonequals` forms keep their exact entries);
+/// `*box`: `hbox`, `reflectbox`, `mathreflectbox`, `fbox`,
+///   `raisebox` (`boxed`, `vcenter` keep theirs);
+/// `*style`: `textstyle`, `scriptstyle`, `scriptscriptstyle`,
+///   `displaystyle` (`htmlStyle` keeps its entry — capital S);
+/// `*size`: `sixptsize`, `scriptsize`, `normalsize`, `footnotesize`.
+/// Subset defines no user macros that could shadow any of these.
+/// Unknown names outside the engine's vocabulary report
+/// `Unsupported` instead of `Invalid`; both are honest subset
+/// fallbacks (see `qa45s subset fallback`). ADDING A SUBSET COMMAND
+/// UNDER ANY OF THESE AFFIXES MUST EXTEND THIS PREDICATE'S
+/// EXCLUSIONS (the sweep + subset-golden tests catch it, but only
+/// if the new command ships with sweep rows).
+/// Suffix families for `isAffixFullOnly`, data-driven so the check
+/// is one shared loop (size ratchet): extra families cost table
+/// bytes (free, in `__DATA`) without new code. The literals here
+/// are the only subset references to those bytes, so the 39
+/// command-name literals they replace strip out of `__TEXT`.
+const affix_suffixes: []const []const u8 = &.{
+    "copyright", "colon", "box", "style", "size",
+};
+
+fn isAffixFullOnly(name: []const u8) bool {
+    if (name.len > 0 and name[0] == '@') return true;
+    for (affix_suffixes) |sfx| {
+        if (name.len >= sfx.len and tokNameEq(name[name.len - sfx.len ..], sfx)) return true;
+    }
+    return false;
+}
+
+/// Subset scan table: `full_only_ctrl_names` minus the
+/// affix-covered families (see `isAffixFullOnly`). Explicit,
+/// not derived: comptime derivation blows the interpreter
+/// branch quota. Drift is caught by construction — the
+/// `subset scan table covers the public gate list` test fails
+/// if any public name is neither affix-covered nor scanned.
+const full_only_scan_names: []const []const u8 = &.{
+    "genfrac", "left", "middle", "mathinner", "mathop", "mathrel",
+    "mathpunct", "mathbin", "mathclose", "mathopen", "mathord", "coloneqq",
+    "Coloneqq", "coloneq", "Coloneq", "colonapprox", "Colonapprox", "colonsim",
+    "Colonsim", "colonequals", "coloncolonequals", "colonminus", "coloncolonminus", "coloncolonapprox",
+    "coloncolonsim", "ratio", "char", "TextOrMath", "html@mathml", "rq",
+    "lBrace", "rBrace", "minuso", "angl", "angln", "xcancel",
+    "bmod", "pod", "pmod", "verb", "color", "textcolor",
+    "href", "url", "includegraphics", "stackrel", "htmlClass", "htmlId",
+    "htmlStyle", "htmlData", "operatorname", "operatornamewithlimits", "dotsi", "mod",
+    "KaTeX", "LaTeX", "TeX", "substack", "mathchoice", "smash",
+    "rule", "boxed", "phantom", "hphantom", "vphantom", "bra",
+    "ket", "Bra", "Ket", "braket", "Braket", "Set",
+    "mathstrut", "llap", "rlap", "clap", "mathllap", "mathrlap",
+    "mathclap", "cancel", "bcancel", "sout", "phase", "textcircled",
+    "nobreakspace", "space", "vspace", "overset", "underset", "not",
+    "begin", "vcenter", "tiny", "small", "large", "Large",
+    "LARGE", "huge", "Huge", "begingroup", "endgroup", "set",
+    "varinjlim", "varliminf", "varlimsup", "varprojlim", "tag",
+};
+
+/// Subset-side `Unsupported` gate: same answer as
+/// `isFullOnlyCtrlName` for every engine command, computed over the
+/// affix families plus the reduced scan table. `isBuiltin` keeps
+/// the exact predicate (full-profile `\\newcommand` parity must not
+/// change for names outside the engine's vocabulary).
+fn isFullOnlyCtrlNameSubset(name: []const u8) bool {
+    if (symbols.lookupAccent(name) != null) return true;
+    if (parseOverName(name) != null) return true;
+    if (isBigName(name)) return true;
+    if (isAffixFullOnly(name)) return true;
+    for (full_only_scan_names) |c| if (tokNameEq(name, c)) return true;
     return false;
 }
 
@@ -1489,15 +1575,21 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool) Err
             bdepth -= 1;
         }
         if (frame == .bracket and t.kind == .char and t.cp == '[') bdepth += 1;
+        // `}` and `\\egroup` close groups identically (KaTeX
+        // `\\let\\egroup=}` parity, issue #134): `{`/`\\bgroup`
+        // groups only — never `\\begingroup` (strict pairing, the
+        // `\\begingroup a\\egroup` probe). One site, both profiles
+        // (grouping is core syntax, so no subset gate — unlike
+        // `\\endgroup` below).
+        if (t.kind == .rbrace or isName(t, "egroup")) {
+            if (frame == .begingroup) return ctx.fail(t.pos, "expected '\\endgroup'");
+            if (frame != .group) return ctx.fail(t.pos, "unexpected '}'");
+            _ = try ctx.next();
+            break;
+        }
         switch (t.kind) {
             .end => {
                 if (frame != .top) return ctx.fail(t.pos, "unexpected end of input");
-                _ = try ctx.next();
-                break;
-            },
-            .rbrace => {
-                if (frame == .begingroup) return ctx.fail(t.pos, "expected '\\endgroup'");
-                if (frame != .group) return ctx.fail(t.pos, "unexpected '}'");
                 _ = try ctx.next();
                 break;
             },
@@ -1531,19 +1623,6 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool) Err
                     // ctrl-dispatch gate).
                     try subsetGate(false);
                     if (frame != .begingroup) return ctx.fail(t.pos, "unexpected '\\endgroup'");
-                    _ = try ctx.next();
-                    break;
-                }
-                if (isName(t, "egroup")) {
-                    // `\\egroup` is `}` (KaTeX `\\let\\egroup=}` parity,
-                    // issue #134): closes `{`/`\\bgroup` groups only —
-                    // never `\\begingroup` (strict pairing, the
-                    // `\\begingroup a\\egroup` probe) — mirroring the
-                    // `.rbrace` arm above. Both profiles: grouping is
-                    // core syntax, so no subset gate (unlike
-                    // `\\endgroup` just above).
-                    if (frame == .begingroup) return ctx.fail(t.pos, "expected '\\endgroup'");
-                    if (frame != .group) return ctx.fail(t.pos, "unexpected '}'");
                     _ = try ctx.next();
                     break;
                 }
@@ -2264,7 +2343,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
             // the `Unsupported` contract (and positions) never change.
             // Sits after macro expansion so shadowing still works.
             if (comptime active_profile == .subset) {
-                if (isFullOnlyCtrlName(t.name)) return error.Unsupported;
+                if (isFullOnlyCtrlNameSubset(t.name)) return error.Unsupported;
             }
             const id: ?Idx = try parseCtrl(ctx, depth, t);
             return id;
@@ -8158,4 +8237,37 @@ test "TextOrMath picks the math branch in math (issue #163)" {
     var ctxm = ParseCtx.init("\\TextOrMath{a}");
     try std.testing.expectError(error.Invalid, parse(&ctxm, false));
     try std.testing.expectEqual(@as(u32, 14), ctxm.err_pos);
+}
+
+test "subset scan table covers the public gate list" {
+    // The explicit `full_only_scan_names` must answer exactly the
+    // public `full_only_ctrl_names` minus the `isAffixFullOnly`
+    // families: every public name is affix-covered or scanned (else
+    // the subset gate would miss it), and every scanned name is
+    // public (else the gate would over-reject). The subset contract
+    // test (`qa45s`) pins the behavior end to end.
+    for (full_only_ctrl_names) |c| {
+        if (isAffixFullOnly(c)) continue;
+        var found = false;
+        for (full_only_scan_names) |s| {
+            if (tokNameEq(c, s)) {
+                found = true;
+                break;
+            }
+        }
+        try std.testing.expect(found);
+    }
+    for (full_only_scan_names) |s| {
+        var found = false;
+        for (full_only_ctrl_names) |c| {
+            if (tokNameEq(s, c)) {
+                found = true;
+                break;
+            }
+        }
+        try std.testing.expect(found);
+    }
+    for (full_only_ctrl_names) |c| {
+        try std.testing.expect(isFullOnlyCtrlNameSubset(c));
+    }
 }
