@@ -123,6 +123,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\between` | `\between` | ![](renders/between.png) |  |
 | `\bf` | `\bf AaBb12` | ![](renders/bf.png) |  |
 | `\bfseries` | — | — | goldens: rej-unsup-bfseries |
+| `\bgroup` | `\bgroup x}` | ![](renders/bgroup.png) |  |
 | `\big` | `\big(\big)` | ![](renders/big.png) |  |
 | `\Big` | `\Big(\Big)` | ![](renders/big-2.png) |  |
 | `\bigcap` | `\bigcap` | ![](renders/bigcap.png) |  |
@@ -351,6 +352,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
 | `\edef` | `\def\foo{a}\edef\fcopy{\foo}\def\foo{}\fcopy` | ![](renders/edef.png) |  |
+| `\egroup` | `x{a\egroup` | ![](renders/egroup.png) |  |
 | `\ell` | `\ell` | ![](renders/ell.png) |  |
 | `\else` | — | — | goldens: rej-unsup-else |
 | `\em` | — | — | goldens: rej-unsup-em |
@@ -394,6 +396,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
+| `\@firstoftwo` | `\@firstoftwo{a}{b}` | ![](renders/firstoftwo.png) |  |
 | `\fallingdotseq` | `\fallingdotseq` | ![](renders/fallingdotseq.png) |  |
 | `\fbox` | `\fbox{Hi there!}` | ![](renders/fbox.png) |  |
 | `\fcolorbox` | `\fcolorbox{red}{aqua}{A}` | ![](renders/fcolorbox.png) |  |
@@ -484,6 +487,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
+| `\@ifnextchar` | `\@ifnextchar{a}{T}{E}a` | ![](renders/ifnextchar.png) |  |
+| `\@ifstar` | `\@ifstar{T}{E}*` | ![](renders/ifstar.png) |  |
 | `\i` | `\text{\i}` | ![](renders/i.png) |  |
 | `\idotsint` | — | — | goldens: rej-unsup-idotsint |
 | `\iddots` | — | — | goldens: rej-unsup-iddots |
@@ -665,6 +670,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\mathrm` | `\mathrm{AaBb123}` | ![](renders/mathrm.png) |  |
 | `\mathscr` | `\mathscr{AaBb123}` | ![](renders/mathscr.png) |  |
 | `\mathsf` | `\mathsf{AaBb123}` | ![](renders/mathsf.png) |  |
+| `\mathsfit` | `\mathsfit{AaBb}` | ![](renders/mathsfit.png) |  |
 | `\mathsterling` | `\mathsterling` | ![](renders/mathsterling.png) |  |
 | `\mathstrut` | `\sqrt{\mathstrut a}` | ![](renders/mathstrut.png) |  |
 | `\mathtip` | — | — | goldens: rej-unsup-mathtip |
@@ -933,6 +939,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
+| `\@secondoftwo` | `\@secondoftwo{a}{b}` | ![](renders/secondoftwo.png) |  |
 | `\S` | `\text{\S}` | ![](renders/s.png) |  |
 | `\Sampi` | — | — | goldens: rej-unsup-sampi |
 | `\sampi` | — | — | goldens: rej-unsup-sampi-2 |
@@ -1053,6 +1060,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\textbraceleft` | `\text{\textbraceleft}` | ![](renders/textbraceleft.png) |  |
 | `\textbraceright` | `\text{\textbraceright}` | ![](renders/textbraceright.png) |  |
 | `\textcircled` | `\text{\textcircled a}` | ![](renders/textcircled.png) |  |
+| `\textcopyright` | `\textcopyright` | ![](renders/textcopyright.png) |  |
 | `\textcolor` | `\textcolor{blue}{F=ma}` | ![](renders/textcolor.png) |  |
 | `\textdagger` | `\text{\textdagger}` | ![](renders/textdagger.png) |  |
 | `\textdaggerdbl` | `\text{\textdaggerdbl}` | ![](renders/textdaggerdbl.png) |  |
@@ -1066,6 +1074,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\textless` | `\text{\textless}` | ![](renders/textless.png) |  |
 | `\textmd` | `\textmd{AaBb123}` | ![](renders/textmd.png) |  |
 | `\textnormal` | `\textnormal{AB}` | ![](renders/textnormal.png) |  |
+| `\TextOrMath` | `\TextOrMath{a}{b}` | ![](renders/textormath.png) |  |
 | `\textquotedblleft` | `\text{\textquotedblleft}` | ![](renders/textquotedblleft.png) |  |
 | `\textquotedblright` | `\text{\textquotedblright}` | ![](renders/textquotedblright.png) |  |
 | `\textquoteleft` | `\text{\textquoteleft}` | ![](renders/textquoteleft.png) |  |
