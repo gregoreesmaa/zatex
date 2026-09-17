@@ -203,4 +203,26 @@ pub fn build(b: *std.Build) void {
     run_qa_subset_tests.setCwd(b.path("."));
     test_step.dependOn(&run_qa_subset_tests.step);
     // ---- end QA coverage module ----
+
+    // ---- Energy budget module (issue #160; test-only, appended) ----
+    // Non-functional regression budgets for the #145-#159 energy work:
+    // hook-call counts, pool high-water marks, MathML byte budgets,
+    // struct-size ratchets. Deterministic counts only, never timings.
+    const energy_options = b.addOptions();
+    energy_options.addOption([]const u8, "profile", profile);
+    const energy_mod = b.addModule("energy", .{
+        .root_source_file = b.path("src/energy.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    energy_mod.addOptions("build_options", energy_options);
+    energy_mod.addImport("zatex", mod);
+    const energy_tests = b.addTest(.{
+        .root_module = energy_mod,
+        .filters = &.{"energy"},
+    });
+    const run_energy_tests = b.addRunArtifact(energy_tests);
+    run_energy_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_energy_tests.step);
+    // ---- end energy budget module ----
 }
