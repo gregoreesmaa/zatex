@@ -21,7 +21,10 @@ no untracked float in the contract.
   skip those rules rather than filling the rect.
 * **Emitters** walk the same tree: MathML ships in the core,
   `packages/zatex-png` renders PNG (macOS-only backend), SVG is future.
-  Emitters contain no layout math.
+  Emitters contain no layout math. Trust posture for embedding the
+  MathML (sanitizer allowlist, CSP, URL filtering) lives in
+  `docs/parity.md` ("Host security guidance") — the engine applies
+  no protocol gate, the host owns it.
 
 ## Stable calling contract (frozen 2026-09-12)
 

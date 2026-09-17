@@ -1229,7 +1229,17 @@ const Writer = struct {
             },
             // KaTeX emits open+close (never self-closed — the sweep
             // normalizer counts both); same rule as zero glue above.
-            .newline => self.str("<mspace linebreak=\"newline\"></mspace>"),
+            .newline => |nl| {
+                // `\\[size]` height (pinned 0.18.7: `height="0.6em"`
+                // for `[6pt]`; issues #140/#144).
+                if (nl.size == 0) {
+                    self.str("<mspace linebreak=\"newline\"></mspace>");
+                } else {
+                    self.str("<mspace linebreak=\"newline\" height=\"");
+                    self.em(@as(i32, nl.size));
+                    self.str("\"></mspace>");
+                }
+            },
             .hline => {},
             .color => |c| {
                 // KaTeX builds the body as a flat expression (no row),
@@ -2419,4 +2429,22 @@ test "verb and text fonts emit variant mtext" {
     const s = out[0..w.pos];
     try std.testing.expect(std.mem.indexOf(u8, s, "<mtext mathvariant=\"monospace\">x</mtext>") != null);
     try std.testing.expect(std.mem.indexOf(u8, s, "<mtext mathvariant=\"bold\">ab</mtext>") != null);
+}
+
+test "sized newline emits break height (issue #144)" {
+    // Pinned KaTeX 0.18.7: `a\\\\[6pt]b` is an mspace with
+    // `linebreak="newline"` and `height="0.6em"`; an unsized break
+    // carries no height attribute.
+    var pc = parse.ParseCtx.init("a\\\\[6pt]b");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "height=\"0.6em\"") != null);
+    var pc2 = parse.ParseCtx.init("a\\\\b");
+    const root2 = try parse.parse(&pc2, false);
+    var out2: [256]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out2[0..w2.pos], "height=") == null);
 }

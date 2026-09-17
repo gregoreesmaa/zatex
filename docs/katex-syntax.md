@@ -230,6 +230,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\circleddash` | `\circleddash` | ![](renders/circleddash.png) |  |
 | `\circledR` | `\circledR` | ![](renders/circledr.png) |  |
 | `\circledS` | `\circledS` | ![](renders/circleds.png) |  |
+| `\clap` | `\clap{x}y` | ![](renders/clap.png) |  |
 | `\class` | — | — | goldens: rej-unsup-class |
 | `\cline` | — | — | goldens: rej-unsup-cline |
 | `\clubs` | `\clubs` | ![](renders/clubs.png) |  |
@@ -361,6 +362,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\enclose` | — | — | goldens: rej-unsup-enclose |
 | `\end` | `\begin{matrix}\na & b \\\nc & d\n\end{matrix}` | ![](renders/end.png) |  |
 | `\endgroup` | `\begingroup x\endgroup` | ![](renders/endgroup.png) |  |
+| `\enskip` | `x\enskip y` | ![](renders/enskip.png) |  |
 | `\enspace` | `a\enspace b` | ![](renders/enspace.png) |  |
 | `\Epsilon` | `\Epsilon` | ![](renders/epsilon.png) |  |
 | `\epsilon` | `\epsilon` | ![](renders/epsilon-2.png) |  |
@@ -416,6 +418,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\Gamma` | `\Gamma` | ![](renders/gamma.png) |  |
 | `\gamma` | `\gamma` | ![](renders/gamma-2.png) |  |
 | `{gather}` | `\begin{gather}\na=b \\ \ne=b+c\n\end{gather}` | ![](renders/gather.png) |  |
+| `{gather*}` | `\begin{gather*}a\\b\end{gather*}` | ![](renders/gatherstar.png) |  |
 | `{gathered}` | `\begin{gathered}\na=b \\ \ne=b+c\n\end{gathered}` | ![](renders/gathered.png) |  |
 | `\gcd` | `\gcd` | ![](renders/gcd.png) |  |
 | `\gdef` | `\gdef\sqr#1{#1^2} \sqr{y} + \sqr{y}` | ![](renders/gdef.png) |  |
@@ -1205,6 +1208,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\vee` | `\vee` | ![](renders/vee.png) |  |
 | `\veebar` | `\veebar` | ![](renders/veebar.png) |  |
 | `\verb` | `\verb!\frac a b!` | ![](renders/verb.png) |  |
+| `\verb*` | `\verb*&#124;a b&#124;` | ![](renders/verbstar.png) |  |
 | `\Vert` | `\Vert` | ![](renders/vert.png) |  |
 | `\vert` | `\vert` | ![](renders/vert-2.png) |  |
 | `\vfil` | — | — | goldens: rej-unsup-vfil |
