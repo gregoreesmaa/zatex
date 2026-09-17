@@ -134,10 +134,23 @@ const Walker = struct {
             },
             .frac => |f| {
                 if (f.kind.thick != 0) return error.Unsupported;
-                if (f.kind.parens) {
+                if (f.kind.fence == .parens) {
                     try self.cmd("binom");
                     try self.arg(f.num);
                     try self.arg(f.den);
+                } else if (f.kind.fence != .none) {
+                    // Round-trip brace/brack through their infix
+                    // commands (issue #93), mirroring atop below.
+                    try self.put("{");
+                    try self.node(f.num);
+                    try self.put(switch (f.kind.fence) {
+                        .none => unreachable,
+                        .parens => unreachable,
+                        .braces => " \\brace ",
+                        .brackets => " \\brack ",
+                    });
+                    try self.node(f.den);
+                    try self.put("}");
                 } else if (f.kind.bar) {
                     try self.cmd("frac");
                     try self.arg(f.num);
@@ -232,6 +245,16 @@ const Walker = struct {
             },
             .over => |o| try self.over(o),
             .style => |s| {
+                // A textstyle reset over a `\reflectbox` body is the
+                // box command itself (issue #97: the parser builds
+                // exactly this shape), so re-emit the command — a
+                // bare `\textstyle \reflectbox{…}` would re-parse
+                // with a doubled reset and drift the MathML.
+                const inner = parse.nodeAt(self.ctx, s.body);
+                if (s.style == .T and inner == .reflect and !inner.reflect.math) {
+                    try self.node(s.body);
+                    return;
+                }
                 try self.cmd(switch (s.style) {
                     .D, .Dc => "displaystyle",
                     .T, .Tc => "textstyle",
@@ -262,6 +285,20 @@ const Walker = struct {
             .pmb => |p| {
                 try self.cmd("pmb");
                 try self.arg(p.body);
+            },
+            .reflect => |r| {
+                // The box argument re-braces: a bare `\text{…}` would
+                // not re-parse as the captured argument. Literal text
+                // keeps its raw tokens (exact `\reflectbox{x}`).
+                try self.cmd(if (r.math) "mathreflectbox" else "reflectbox");
+                const inner = parse.nodeAt(self.ctx, r.body);
+                try self.put("{");
+                if (!r.math and inner == .text) {
+                    try self.textToks(parse.toksOf(self.ctx, inner.text.toks));
+                } else {
+                    try self.arg(r.body);
+                }
+                try self.put("}");
             },
             .vcenter => |v| {
                 try self.cmd("vcenter");
@@ -358,6 +395,9 @@ const Walker = struct {
                 try self.put("{");
                 try self.textToks(parse.toksOf(self.ctx, o.toks));
                 try self.put("}");
+                // Forced stacking re-emits its marker: without it the
+                // scripts would re-parse side-set (issue #98).
+                if (o.forced) try self.cmd("limits");
             },
             .varlim => |v| {
                 // The body is always the built under/over; the
@@ -472,9 +512,11 @@ const Walker = struct {
             // Dual-branch content round-trips through the visual
             // branch (what layout and speech also read).
             .htmlmathml => |h| try self.node(h.html),
-            .cancel => |b| {
-                try self.cmd("cancel");
-                try self.arg(b);
+            .cancel => |c| {
+                // Issue #107: `\bcancel` round-trips through its own
+                // command (it used to serialize as `\cancel`).
+                try self.cmd(if (c.down) "bcancel" else "cancel");
+                try self.arg(c.body);
             },
             .xcancel => |b| {
                 try self.cmd("xcancel");
@@ -499,6 +541,11 @@ const Walker = struct {
                     .clap => "clap",
                 });
                 try self.arg(l.body);
+            },
+            .cdlabel => |c| {
+                // No TeX spelling (CD-internal): serialize the label
+                // body transparently (CD tables do not round-trip).
+                try self.node(c.body);
             },
             .smash => |s| {
                 try self.cmd("smash");
@@ -1001,6 +1048,9 @@ test "serializer: exact canonical spellings" {
         .{ "\\binom{n}{k}", "\\binom{n}{k}" },
         .{ "a+b=c", "a+b=c" },
         .{ "\\overline{AB}", "\\overline{AB}" },
+        .{ "\\cancel{x}", "\\cancel{x}" },
+        .{ "\\bcancel{x}", "\\bcancel{x}" },
+        .{ "\\xcancel{AB}", "\\xcancel{AB}" },
         .{ "\\sum x", "\\sum x" },
         .{ "\\fbox{Hi}", "\\fbox{Hi}" },
     };
@@ -1043,6 +1093,7 @@ test "serializer: round-trip keeps MathML identical" {
         "\\mathop{x}_{y}",
         "\\mathop{x}\\limits_{y}",
         "\\mathop{x}\\nolimits_{y}",
+        "\\operatorname*{asin}\\limits_y",
         "\\mathrel{x}",
         "\\mathinner{x}",
         "\\varinjlim x",
@@ -1053,6 +1104,8 @@ test "serializer: round-trip keeps MathML identical" {
         "\\reflectbox{x}",
         "\\mathreflectbox{x}",
         "\\tbinom{n}{k}",
+        "{n\\brace k}",
+        "{n\\brack k}",
         "\\emph{x}",
         "\\hbox{x}",
         "a\\bmod b",

@@ -74,12 +74,28 @@ pub fn build(b: *std.Build) void {
     });
     refhost_mod.addImport("zatex", mod);
     refhost_mod.addImport("invariants", invariants_mod);
-    const otm = b.addModule("otmath_link", .{
-        .root_source_file = b.path("src/otmath.zig"),
+    // NOTE: the shared `otmath` module (issue #92): `fontstack` and
+    // `refhost` must resolve one instance — one file in two modules
+    // is a hard error, and `fontstack` crosses into `zatex-png`
+    // through this same instance.
+    refhost_mod.addImport("otmath", otmath_mod);
+    // Multi-face host font stack (issue #92; host/tool code, never
+    // in the subset library). Exposed by name so `zatex-png` links it.
+    const fontstack_mod = b.addModule("fontstack", .{
+        .root_source_file = b.path("src/fontstack.zig"),
         .target = target,
         .optimize = optimize,
     });
-    refhost_mod.addImport("otmath", otm);
+    fontstack_mod.addImport("zatex", mod);
+    // NOTE: the shared `otmath` module, never `otmath_link` — the
+    // latter is refhost-local; fontstack crosses into `zatex-png`,
+    // which resolves the same `otmath` instance through the package
+    // dependency, and one file in two modules is a hard error.
+    fontstack_mod.addImport("otmath", otmath_mod);
+    const fontstack_tests = b.addTest(.{ .root_module = fontstack_mod });
+    const run_fontstack_tests = b.addRunArtifact(fontstack_tests);
+    test_step.dependOn(&run_fontstack_tests.step);
+    refhost_mod.addImport("fontstack", fontstack_mod);
     const refhost_tests = b.addTest(.{ .root_module = refhost_mod });
     const run_refhost_tests = b.addRunArtifact(refhost_tests);
     test_step.dependOn(&run_refhost_tests.step);
@@ -163,7 +179,7 @@ pub fn build(b: *std.Build) void {
     // engine (full profile), whose suite runs in its own targets.
     const qa_tests = b.addTest(.{
         .root_module = qa_mod,
-        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa dump" },
+        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa81", "qa82", "qa83", "qa84", "qa85", "qa86", "qa87", "qa88", "qa dump", "qa101", "qa104", "qa96", "qa107", "qa108" },
     });
     const run_qa_tests = b.addRunArtifact(qa_tests);
     run_qa_tests.setCwd(b.path("."));

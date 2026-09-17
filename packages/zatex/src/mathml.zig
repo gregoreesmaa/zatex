@@ -33,9 +33,14 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
         .tag => false,
         else => true,
     };
-    if (wrap) w.str("<mrow>");
-    w.node(root, .{ .fam = null, .script = false }) catch |e| return e;
-    if (wrap) w.str("</mrow>");
+    // Sole-threading (issue #94): the envelope row's lone child is
+    // sole in its row, so a sole font body splices flat (KaTeX pushes
+    // variants to leaves — the `.delim`/`.style` splice precedent).
+    if (wrap) {
+        w.str("<mrow>");
+        w.nodeSole(root, .{ .fam = null, .script = false }, true) catch |e| return e;
+        w.str("</mrow>");
+    } else w.node(root, .{ .fam = null, .script = false }) catch |e| return e;
     w.str("</math>");
     if (w.overflow) return error.NoSpace;
     const n = mergeNot(out[0..w.pos]);
@@ -76,9 +81,15 @@ fn mergeRuns(buf: []u8) usize {
                         }
                     }
                 }
-                st.push(tag.nameEqual("mrow"));
+                // `mstyle` is an attribute shell, not a structural
+                // position (issue #94): it stays off the stack, so
+                // merging stays row-local through it and sole-font
+                // digit runs fold like KaTeX (`\bf 12` → one `mn`).
+                // Strict adjacency still gates every fold (tryRun),
+                // so nothing merges across shells.
+                if (!tag.nameEqual("mstyle")) st.push(tag.nameEqual("mrow"));
             } else if (tag.closing) {
-                st.pop();
+                if (!tag.nameEqual("mstyle")) st.pop();
             }
             // Copy the whole tag.
             const tlen = tag.len;
@@ -293,7 +304,7 @@ fn rendersRow(pc: *const parse.ParseCtx, id: Idx) bool {
         .delim, .href => return true,
         // `genfrac` rows its fence expression whenever delimiters
         // are present (KaTeX `makeRow` parity).
-        .frac => |f| return f.kind.parens,
+        .frac => |f| return f.kind.fence != .none,
         else => return false,
     }
 }
@@ -759,10 +770,21 @@ const Writer = struct {
     }
 
     fn node(self: *Writer, id: Idx, face: Face) Error!void {
+        return self.nodeSole(id, face, false);
+    }
+
+    /// Row-sole threading (issue #94): `sole` is true when this node
+    /// is the lone child of its emitted row. A font whose multi-atom
+    /// body is sole splices flat (KaTeX pushes variants to leaves);
+    /// non-sole it rows its body like a brace group. Every other node
+    /// ignores `sole`, so `node()` (false) preserves today's shapes
+    /// exactly — only the envelope, `.group`, `.font`, and `.href`
+    /// arms below pass anything else.
+    fn nodeSole(self: *Writer, id: Idx, face: Face, sole: bool) Error!void {
         if (self.overflow) return error.NoSpace;
         const n = parse.nodeAt(self.pc, id);
         switch (n) {
-            .atom => |a| self.atom(a.class, self.effFam(face, a.font), a.cp),
+            .atom => |a| self.atom(a.class, self.effFam(face, a.font), a.cp, a.textord, face.fam == null),
             .op => |o| {
                 if (o.func) {
                     self.str("<mi>");
@@ -816,11 +838,13 @@ const Writer = struct {
                 self.str("</mo>");
             },
             .group => |g| {
-                // Row rule (KaTeX parity): a lone child renders bare,
-                // an empty group keeps its row, the rest wrap in mrow.
+                // Row rule (KaTeX parity): a lone child renders bare
+                // (keeping row-sole: a sole font splices flat through
+                // it, issue #94), an empty group keeps its row, the
+                // rest wrap in mrow.
                 const kids = parse.kidsOf(self.pc, g);
                 if (kids.len == 1) {
-                    try self.node(kids[0], face);
+                    try self.nodeSole(kids[0], face, sole);
                 } else {
                     self.str("<mrow>");
                     for (kids) |k| try self.node(k, face);
@@ -828,12 +852,24 @@ const Writer = struct {
                 }
             },
             .frac => |f| {
-                if (f.kind.parens) self.str("<mrow><mo>(</mo>");
+                // KaTeX wraps every fence pair (choose/brace/brack)
+                // in fence mo's (pinned 0.18.7, issue #93).
+                switch (f.kind.fence) {
+                    .none => {},
+                    .parens => self.str("<mrow><mo fence=\"true\">(</mo>"),
+                    .braces => self.str("<mrow><mo fence=\"true\">{</mo>"),
+                    .brackets => self.str("<mrow><mo fence=\"true\">[</mo>"),
+                }
                 if (!f.kind.bar) self.str("<mfrac linethickness=\"0\">") else self.str("<mfrac>");
                 try self.atStyle(self.style.numerator(), f.num, face);
                 try self.atStyle(self.style.denominator(), f.den, face);
                 self.str("</mfrac>");
-                if (f.kind.parens) self.str("<mo>)</mo></mrow>");
+                switch (f.kind.fence) {
+                    .none => {},
+                    .parens => self.str("<mo fence=\"true\">)</mo></mrow>"),
+                    .braces => self.str("<mo fence=\"true\">}</mo></mrow>"),
+                    .brackets => self.str("<mo fence=\"true\">]</mo></mrow>"),
+                }
             },
             .sqrt => |s| {
                 if (s.index == NONE) {
@@ -853,12 +889,14 @@ const Writer = struct {
                 // KaTeX parity (pinned 0.18.7 `supsub.ts` mathmlBuilder):
                 // with both scripts present, `munderover` needs display
                 // style even for forced `\limits` (`\int\limits_0^1` in
-                // text is `msubsup` in MathML while the HTML stacks);
+                // text is `msubsup` in MathML while the HTML stacks) —
+                // except a star-armed `\operatorname` with explicit
+                // `\limits`, which stacks in every style (issue #98);
                 // single scripts follow the shared limit decision.
                 const stacked = if (parse.opBase(self.pc, s.base)) |o| blk: {
                     if (has_sup and has_sub) {
-                        break :blk self.style.isDisplay() and o.limits != .off and
-                            (o.limits == .on or o.lim_def);
+                        break :blk (self.style.isDisplay() and o.limits != .off and
+                            (o.limits == .on or o.lim_def)) or o.force_stack;
                     }
                     break :blk parse.useLimits(self.style, o);
                 } else false;
@@ -1021,11 +1059,41 @@ const Writer = struct {
                 self.str("</mstyle>");
             },
             .font => |f| {
-                self.str("<mstyle mathvariant=\"");
-                self.str(variantFor(f.fam));
-                self.str("\">");
-                try self.node(f.body, .{ .fam = f.fam, .script = face.script });
-                self.str("</mstyle>");
+                // Sole-threading (issue #94, pinned 0.18.7): a sole
+                // multi-atom body splices flat (KaTeX pushes the
+                // variant onto leaves — no row of its own); non-sole
+                // it rows like a brace group. Lone bodies render bare
+                // exactly like `.group` above, so single-atom fonts
+                // never change shape.
+                // Empty bodies (issue #111: the isolated-argument
+                // quirk, `{\bf}`) render a bare empty row — KaTeX's
+                // font builder emits `<mrow></mrow>` for an empty
+                // ordgroup, with no variant shell around nothing.
+                const fempty = switch (parse.nodeAt(self.pc, f.body)) {
+                    .group => |g| parse.kidsOf(self.pc, g).len == 0,
+                    else => false,
+                };
+                if (fempty) {
+                    self.str("<mrow></mrow>");
+                } else {
+                    self.str("<mstyle mathvariant=\"");
+                    self.str(variantFor(f.fam));
+                    self.str("\">");
+                    switch (parse.nodeAt(self.pc, f.body)) {
+                        .group => |g| {
+                            const kids = parse.kidsOf(self.pc, g);
+                            if (kids.len == 1) {
+                                try self.nodeSole(kids[0], .{ .fam = f.fam, .script = face.script }, sole);
+                            } else {
+                                if (!sole) self.str("<mrow>");
+                                for (kids) |k| try self.node(k, .{ .fam = f.fam, .script = face.script });
+                                if (!sole) self.str("</mrow>");
+                            }
+                        },
+                        else => try self.node(f.body, .{ .fam = f.fam, .script = face.script }),
+                    }
+                    self.str("</mstyle>");
+                }
             },
             // KaTeX parity (pinned 0.18.7, issue #51): poor-man's
             // bold is a text-shadow paint style on the same glyphs.
@@ -1033,6 +1101,11 @@ const Writer = struct {
                 self.str("<mstyle style=\"text-shadow: 0.02em 0.01em 0.04px\">");
                 try self.node(p.body, face);
                 self.str("</mstyle>");
+            },
+            // Mirrored content (issue #97): KaTeX's flip is CSS-only,
+            // so its MathML is the plain body — walk straight through.
+            .reflect => |r| {
+                try self.node(r.body, face);
             },
             // Math-mode circled (issue #51 review, pinned 0.18.7):
             // mover with the circle operator, body row like KaTeX.
@@ -1205,7 +1278,14 @@ const Writer = struct {
                 }
                 self.str("\">");
                 switch (parse.nodeAt(self.pc, h.body)) {
-                    .group => |g| for (parse.kidsOf(self.pc, g)) |k| try self.node(k, face),
+                    .group => |g| {
+                        // Sole-threading (issue #94): our href shell
+                        // drops in the parity normalizer, so a sole
+                        // font body must splice flat here (pinned
+                        // 0.18.7 `\href{u}{\bf AaBb}` has no inner row).
+                        const kids = parse.kidsOf(self.pc, g);
+                        for (kids) |k| try self.nodeSole(k, face, kids.len == 1);
+                    },
                     else => try self.node(h.body, face),
                 }
                 self.str("</mrow>");
@@ -1213,14 +1293,28 @@ const Writer = struct {
             .htmlwrap => |b| try self.node(b, face),
             .tag => |tg| {
                 // Display equation number (KaTeX `tag` MathML,
-                // pinned 0.18.7): the whole equation in a full-width
-                // table, the tag text right. Empty side cells stay
-                // open+close (the sweep normalizer counts both).
-                self.str("<mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd>");
-                try self.node(tg.formula, face);
-                self.str("</mtd><mtd width=\"50%\"></mtd><mtd>");
-                try self.tagCell(tg);
-                self.str("</mtd></mtr></mtable>");
+                // pinned 0.18.7): a tag ADOPTED by a numbering env
+                // belongs to the env's own number column, so the
+                // env renders alone with EMPTY number cells (the
+                // tag text is dropped). A tag that stayed pending
+                // (trailing the env, or claimed by no numbering
+                // row) keeps the whole equation in a full-width
+                // table with the tag text right. Empty side cells
+                // stay open+close (the sweep normalizer counts both).
+                const adopted_env: ?Idx =
+                    if (self.pc.tag_adopted) tagNumEnv(self.pc, tg.formula) else null;
+                if (adopted_env) |eid| {
+                    try self.env(switch (parse.nodeAt(self.pc, eid)) {
+                        .env => |e| e,
+                        else => unreachable,
+                    }, face);
+                } else {
+                    self.str("<mtable width=\"100%\"><mtr><mtd width=\"50%\"></mtd><mtd>");
+                    try self.node(tg.formula, face);
+                    self.str("</mtd><mtd width=\"50%\"></mtd><mtd>");
+                    try self.tagCell(tg);
+                    self.str("</mtd></mtr></mtable>");
+                }
             },
             // KaTeX parity (pinned 0.18.7 `mclass`/`op` builders):
             // `\mathrel{x}` retypes the lone inner node to `mo`
@@ -1308,9 +1402,11 @@ const Writer = struct {
             // Dual-branch content (KaTeX `\html@mathml`): the MathML
             // emitter renders the semantic (`math`) branch.
             .htmlmathml => |h| try self.node(h.math, face),
-            .cancel => |b| {
-                self.str("<menclose notation=\"updiagonalstrike\">");
-                try self.node(b, face);
+            .cancel => |c| {
+                // Issue #107: `\bcancel` strikes the other diagonal
+                // (pinned 0.18.7 `downdiagonalstrike`).
+                if (c.down) self.str("<menclose notation=\"downdiagonalstrike\">") else self.str("<menclose notation=\"updiagonalstrike\">");
+                try self.node(c.body, face);
                 self.str("</menclose>");
             },
             .xcancel => |b| {
@@ -1349,6 +1445,16 @@ const Writer = struct {
                 self.str(" width=\"0px\">");
                 try self.node(l.body, face);
                 self.str("</mpadded>");
+            },
+            .cdlabel => |c| {
+                // KaTeX `cdlabel` parity (pinned 0.18.7, issue #85):
+                // `mstyle`/`mpadded`/`mrow` around the label group;
+                // the left side overlaps (`lspace="-1width"`).
+                self.str("<mstyle displaystyle=\"false\" scriptlevel=\"1\"><mpadded width=\"0\"");
+                if (c.left) self.str(" lspace=\"-1width\"");
+                self.str(" voffset=\"0.7em\"><mrow>");
+                try self.node(c.body, face);
+                self.str("</mrow></mpadded></mstyle>");
             },
             .smash => |s| {
                 // KaTeX wraps the body in mpadded, zeroing the smashed
@@ -1426,8 +1532,7 @@ const Writer = struct {
         return face.fam orelse f;
     }
 
-    fn atom(self: *Writer, class: @import("symbols.zig").AtomClass, fam: parse.FontFam, c: u21) void {
-        _ = fam;
+    fn atom(self: *Writer, class: @import("symbols.zig").AtomClass, fam: parse.FontFam, c: u21, textord: bool, bare: bool) void {
         switch (class) {
             // KaTeX `atom` ParseNodes (every symbol group except
             // mathord/textord) render as mo — inner symbols included.
@@ -1439,10 +1544,12 @@ const Writer = struct {
                     self.escCp(c);
                     self.str("</mi></mo>");
                 } else if (c == 0x22EE) {
-                    // `\vdots` is a macro for `\varvdots\rule{0pt}{15pt}`;
-                    // KaTeX renders the rule as a fixed strut inside
-                    // its own mrow (ordgroup parity).
-                    self.str("<mrow><mi>");
+                    // `\vdots` is a macro for `\varvdots\rule{0pt}{15pt}`
+                    // (issue #109, pinned 0.18.7): the macro
+                    // expansion is an ordgroup, so KaTeX wraps the
+                    // textord leaf (`mi` with explicit normal) and
+                    // the rule strut in an `mrow` of their own.
+                    self.str("<mrow><mi mathvariant=\"normal\">");
                     self.escCp(c);
                     self.str("</mi>");
                     self.str("<mpadded height=\"0em\" voffset=\"0em\">");
@@ -1456,26 +1563,53 @@ const Writer = struct {
             },
             .Ord => {
                 if (c == 0x22EE) {
-                    // Directly-typed U+22EE takes KaTeX's `\vdots` macro
-                    // shape (mi plus the rule strut).
-                    self.str("<mi>");
+                    // Directly-typed U+22EE funnels through KaTeX's
+                    // `\vdots` macro (pinned 0.18.7, issue #109):
+                    // ordgroup mrow around the textord mi and the
+                    // rule strut, exactly like `\vdots` above.
+                    self.str("<mrow><mi mathvariant=\"normal\">");
                     self.escCp(c);
                     self.str("</mi>");
                     self.str("<mpadded height=\"0em\" voffset=\"0em\">");
                     self.str("<mspace mathbackground=\"black\" width=\"0em\" height=\"1.5em\">");
-                    self.str("</mspace></mpadded>");
+                    self.str("</mspace></mpadded></mrow>");
                 } else if (isDigit(c)) {
                     self.str("<mn>");
                     self.escCp(c);
                     self.str("</mn>");
                 } else if (c == 0x2032) {
-                    // `\prime`: KaTeX textord renders as mo (verified
-                    // against KaTeX 0.18.7 dist source).
-                    self.str("<mo>");
+                    // `\prime`: KaTeX textord renders as mo WITH the
+                    // variant (pinned 0.18.7 `<mo
+                    // mathvariant="normal">`; symbolsOrd has no mo
+                    // default, so it always emits). `\char"2032`
+                    // shares this shape — KaTeX gives it `mi`, a
+                    // nuance for a pathological input with no sweep
+                    // row.
+                    self.str("<mo mathvariant=\"normal\">");
                     self.escCp(c);
                     self.str("</mo>");
+                } else if ((c == 0x0131 or c == 0x0237) and fam == .rm) {
+                    // Dotless i/j with no explicit face carry an
+                    // explicit normal variant (pinned 0.18.7: `<mi
+                    // mathvariant="normal">ȷ</mi>`, while plain `j`
+                    // stays bare). An explicit face wins (its wrapper
+                    // supplies the variant), matching KaTeX's bold
+                    // but bare-mathit shapes (issue #77).
+                    self.str("<mi mathvariant=\"normal\">");
+                    self.escCp(c);
+                    self.str("</mi>");
+                } else if (textord and bare) {
+                    // KaTeX textord (issue #109, pinned 0.18.7
+                    // symbolsOrd): `mi` with an explicit variant
+                    // (normally "normal"; a face wrapper supplies its
+                    // own instead, so faced atoms stay bare here).
+                    self.str("<mi mathvariant=\"");
+                    self.str(variantFor(fam));
+                    self.str("\">");
+                    self.escCp(c);
+                    self.str("</mi>");
                 } else {
-                    // KaTeX mathord/textord render as mi unconditionally.
+                    // KaTeX mathord renders as mi unconditionally.
                     self.str("<mi>");
                     self.escCp(c);
                     self.str("</mi>");
@@ -1684,7 +1818,9 @@ const Writer = struct {
         // smallmatrix, text otherwise), whose MathML is an mstyle
         // wrapping the cell group under the normal row rule.
         const disp_cell = e.kind == .aligned or e.kind == .alignedat or e.kind == .gathered or
-            e.kind == .dcases or e.kind == .drcases;
+            e.kind == .dcases or e.kind == .drcases or e.kind == .alignenv or
+            e.kind == .alignat or e.kind == .equation or e.kind == .gather or
+            e.kind == .split or e.kind == .cd;
         const script_cell = e.kind == .smallmatrix or e.kind == .subarray;
         // Small tables keep a small row gap (KaTeX `arraystretch<1`).
         if (script_cell) self.str("<mstyle scriptlevel=\"1\">");
@@ -1732,6 +1868,17 @@ const Writer = struct {
             // (KaTeX parity).
             if (kids.len == 1 and isHlineNode(self.pc, kids[0])) continue;
             self.str("<mtr>");
+            // Numbering envs keep KaTeX's number columns: a leading
+            // glue cell plus trailing glue and equation-number cells
+            // per row (issues #83/#86/#87) — unless the row carries
+            // `nonumber`/`notag` (#88). A tagged row keeps its
+            // columns regardless: a row-local tag wins over the
+            // row's own nonumber, and a leading outside-tag lands
+            // on row 0 (even starred); the cells stay EMPTY either
+            // way (tag text is dropped, #75).
+            const numbered = parse.numEnvKind(e.kind) and
+                ((e.numbered and !row.nonumber) or row.tagged);
+            if (numbered) self.str("<mtd class=\"mtr-glue\"></mtd>");
             for (kids) |k| {
                 self.str("<mtd><mstyle scriptlevel=\"");
                 self.str(if (script_cell) "1" else "0");
@@ -1741,12 +1888,33 @@ const Writer = struct {
                 try self.atStyle(cs, k, face);
                 self.str("</mstyle></mtd>");
             }
+            if (numbered) self.str("<mtd class=\"mtr-glue\"></mtd><mtd class=\"mml-eqn-num\"></mtd>");
             self.str("</mtr>");
         }
         self.str("</mtable>");
         if (script_cell) self.str("</mstyle>");
     }
 };
+
+/// The numbering env a hoisted tag wraps: when the tag formula is a
+/// lone numbering env, KaTeX keeps the env's own table with EMPTY
+/// number cells (issue #75). Returns the env node id, or null for
+/// the full-width tag-table path.
+fn tagNumEnv(pc: *const parse.ParseCtx, formula: Idx) ?Idx {
+    const kid = switch (parse.nodeAt(pc, formula)) {
+        .group => |g| blk: {
+            const kids = parse.kidsOf(pc, g);
+            if (kids.len != 1) return null;
+            break :blk kids[0];
+        },
+        .env => formula,
+        else => return null,
+    };
+    return switch (parse.nodeAt(pc, kid)) {
+        .env => |e| if (parse.numEnvKind(e.kind)) kid else null,
+        else => null,
+    };
+}
 
 /// Row-rule detection (mirrors the layout core): bare rule node or a
 /// group wrapping exactly one. Returns dashedness (issue #33).
@@ -1839,6 +2007,45 @@ test "frac renders mfrac" {
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
     try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "<mfrac>") != null);
+}
+
+test "row-local tag keeps number cells despite nonumber (issue #75)" {
+    // End-to-end shape (pinned 0.18.7): same-row tag + nonumber
+    // keeps KaTeX's glue/eqn-num cells but the number cell stays
+    // EMPTY (tag text is dropped over numbering envs); nonumber
+    // alone drops the columns entirely.
+    var pc = parse.ParseCtx.init("\\begin{align}x&=1\\tag{a}\\nonumber\\end{align}");
+    const root = try parse.parse(&pc, true);
+    var out: [1024]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "mtr-glue") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "mml-eqn-num") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "<mtext>") == null);
+    var pc2 = parse.ParseCtx.init("\\begin{align}x&=1\\nonumber\\end{align}");
+    const root2 = try parse.parse(&pc2, true);
+    var out2: [1024]u8 = undefined;
+    var w2 = Writer{ .pc = &pc2, .buf = &out2 };
+    try w2.node(root2, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out2[0..w2.pos], "mtr-glue") == null);
+}
+
+test "jmath and imath carry mathvariant normal like KaTeX (issue #77)" {
+    // Pinned 0.18.7: `\jmath` → `<mi mathvariant="normal">ȷ</mi>`
+    // (plain `j` stays bare `<mi>j</mi>`); an explicit face wins
+    // (`\mathbf{\jmath}` → bold, `\mathit{\jmath}` → bare).
+    var pc = parse.ParseCtx.init("\\jmath");
+    const root = try parse.parse(&pc, false);
+    var out: [256]u8 = undefined;
+    var w = Writer{ .pc = &pc, .buf = &out };
+    try w.node(root, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, out[0..w.pos], "<mi mathvariant=\"normal\">") != null);
+    var pci = parse.ParseCtx.init("\\imath");
+    const rooti = try parse.parse(&pci, false);
+    var outi: [256]u8 = undefined;
+    var wi = Writer{ .pc = &pci, .buf = &outi };
+    try wi.node(rooti, .{ .fam = null, .script = false });
+    try std.testing.expect(std.mem.indexOf(u8, outi[0..wi.pos], "<mi mathvariant=\"normal\">") != null);
 }
 
 test "sum renders msubsup structurally" {
@@ -2000,7 +2207,10 @@ test "vcentcolon nests triple mo, coloneqq is one op char" {
     var out2: [256]u8 = undefined;
     var w2 = Writer{ .pc = &pc2, .buf = &out2 };
     try w2.node(root2, .{ .fam = null, .script = false });
-    try std.testing.expectEqualStrings("<mo><mi>\xe2\x89\x94</mi></mo>", out2[0..w2.pos]);
+    // Issue #109 (pinned 0.18.7 `<mo><mi
+    // mathvariant="normal">≔</mi></mo>`): the inner `\char` is a
+    // textord, so it carries the variant.
+    try std.testing.expectEqualStrings("<mo><mi mathvariant=\"normal\">\xe2\x89\x94</mi></mo>", out2[0..w2.pos]);
 }
 
 test "char scans decimal octal hex and backtick" {
@@ -2010,13 +2220,18 @@ test "char scans decimal octal hex and backtick" {
     var out: [256]u8 = undefined;
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
-    try std.testing.expectEqualStrings("<mi>\xe2\x89\x94</mi>", out[0..w.pos]);
+    // Issue #109 (pinned 0.18.7 `<mi
+    // mathvariant="normal">≔</mi>`): every `\char` result is a
+    // textord, so it carries the variant.
+    try std.testing.expectEqualStrings("<mi mathvariant=\"normal\">\xe2\x89\x94</mi>", out[0..w.pos]);
     var pc2 = parse.ParseCtx.init("\\char65\\char'101\\char`a\\@char{66}");
     const root2 = try parse.parse(&pc2, false);
     var out2: [256]u8 = undefined;
     var w2 = Writer{ .pc = &pc2, .buf = &out2 };
     try w2.node(root2, .{ .fam = null, .script = false });
-    try std.testing.expectEqualStrings("<mrow><mi>A</mi><mi>A</mi><mi>a</mi><mi>B</mi></mrow>", out2[0..w2.pos]);
+    // Issue #109: pinned KaTeX 0.18.7 wraps `\char` output as
+    // `<mi mathvariant="normal">…</mi>` (verified via KaTeX probe).
+    try std.testing.expectEqualStrings("<mrow><mi mathvariant=\"normal\">A</mi><mi mathvariant=\"normal\">A</mi><mi mathvariant=\"normal\">a</mi><mi mathvariant=\"normal\">B</mi></mrow>", out2[0..w2.pos]);
 }
 
 test "char rejects bad digits and code points" {
@@ -2108,14 +2323,16 @@ test "colorbox emits padded background box" {
 }
 
 test "textord symbols emit mi, vdots keeps its strut" {
+    // Issue #109 (pinned 0.18.7 `<mi mathvariant="normal">∞</mi>`,
+    // `<mi mathvariant="normal">∀</mi>`): textords carry the variant.
     var pc = parse.ParseCtx.init("\\infty+\\forall\\vdots");
     const root = try parse.parse(&pc, false);
     var out: [1024]u8 = undefined;
     var w = Writer{ .pc = &pc, .buf = &out };
     try w.node(root, .{ .fam = null, .script = false });
     const s = out[0..w.pos];
-    try std.testing.expect(std.mem.indexOf(u8, s, "<mi>\xe2\x88\x9e</mi>") != null);
-    try std.testing.expect(std.mem.indexOf(u8, s, "<mi>\xe2\x88\x80</mi>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<mi mathvariant=\"normal\">\xe2\x88\x9e</mi>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<mi mathvariant=\"normal\">\xe2\x88\x80</mi>") != null);
     try std.testing.expect(std.mem.indexOf(u8, s, "<mpadded height=\"0em\" voffset=\"0em\">") != null);
 }
 
@@ -2132,6 +2349,39 @@ test "display sums stack, integrals do not" {
     var out4: [512]u8 = undefined;
     const f = try render("\\int\\limits_a^b", .{ .display_mode = true }, &out4);
     try std.testing.expect(std.mem.indexOf(u8, f, "<munderover>") != null);
+}
+
+test "color and style rests stop at over infixes" {
+    // Issue #110 (pinned 0.18.7): declaration rests split at the
+    // infix like the #94 font rest — numerator only, denominator
+    // plain — braced or not. Size declarations keep consuming
+    // through (whole frac), unchanged.
+    var out: [512]u8 = undefined;
+    const c = try render("\\color{red}a\\over b", .{}, &out);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", c);
+    var out2: [512]u8 = undefined;
+    const cb = try render("{\\color{red}a\\over b}", .{}, &out2);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle mathcolor=\"red\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", cb);
+    var out3: [512]u8 = undefined;
+    const d = try render("\\displaystyle a\\over b", .{}, &out3);
+    try std.testing.expectEqualStrings("<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><mrow><mfrac><mstyle displaystyle=\"true\"><mi>a</mi></mstyle><mi>b</mi></mfrac></mrow></math>", d);
+}
+
+test "cancel directions match KaTeX menclose notations" {
+    // Issue #107 (pinned 0.18.7): `\cancel` strikes up, `\bcancel`
+    // down (it used to alias `\cancel` and serialize up), `\xcancel`
+    // both.
+    var out: [512]u8 = undefined;
+    const c = try render("\\cancel{x}", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, c, "<menclose notation=\"updiagonalstrike\">") != null);
+    try std.testing.expect(std.mem.indexOf(u8, c, "downdiagonalstrike") == null);
+    var out2: [512]u8 = undefined;
+    const b = try render("\\bcancel{x}", .{}, &out2);
+    try std.testing.expect(std.mem.indexOf(u8, b, "<menclose notation=\"downdiagonalstrike\">") != null);
+    try std.testing.expect(std.mem.indexOf(u8, b, "updiagonalstrike") == null);
+    var out3: [512]u8 = undefined;
+    const x = try render("\\xcancel{x}", .{}, &out3);
+    try std.testing.expect(std.mem.indexOf(u8, x, "<menclose notation=\"updiagonalstrike downdiagonalstrike\">") != null);
 }
 
 test "not overlays onto the following symbol" {
@@ -2153,7 +2403,9 @@ test "builtin func-ops and textord corners match KaTeX tags" {
         // wrong per the KaTeX-side proof.
         "<mrow><mi>lim\u{2009}inf</mi><mo>\u{2061}</mo>" ++
             "<mi>ln</mi><mo>\u{2061}</mo>" ++
-            "<mi>\u{ac}</mi><mo>\u{22d8}</mo>" ++
+            // Issue #109 (pinned 0.18.7 `<mi
+            // mathvariant="normal">¬</mi>`): `\lnot` is a textord.
+            "<mi mathvariant=\"normal\">\u{ac}</mi><mo>\u{22d8}</mo>" ++
             "<mo><mi mathvariant=\"normal\">\u{231e}</mi></mo></mrow>",
         s);
 }

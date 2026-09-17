@@ -23,6 +23,16 @@ but support requires the mhchem contrib extension — the pinned core
 bundle rejects both (`Undefined control sequence`), so this table
 (and the engine) honestly report `unsup` with reject-row evidence.
 Extension support is future work.
+Scoping decision (issue #98): `\htmlClass`, `\htmlData`, `\htmlId`,
+`\htmlStyle` stay `accept` as transparent wrappers — the HTML span
+annotation has no native-layout meaning, and KaTeX's own MathML output
+drops it too (sweep t-html* rows agree tag-for-tag with the bare body).
+`\includegraphics` stays `accept`: MathML emits the `<mglyph>` element
+KaTeX emits (sweep graphics-* rows agree; representative shapes pinned
+byte-exact in `qa` goldens) while layout reserves the metric box for
+the host to paint — image loading stays out of the core per the
+zero-dependency tenet, so PNG renders show the reserved space, never
+fetched pixels. Neither row claims pixels the core cannot produce.
 
 ## Symbols
 
@@ -102,7 +112,7 @@ Extension support is future work.
 
 | `\~` | accept | goldens: text, textaccent |
 
-| `\\` | accept | goldens: matrix, aligned, alignedat |
+| `\\ ` | accept | goldens: matrix, aligned, alignedat |
 
 | `^` | accept | goldens: boxed, braces, demo-cauchy, atomgrid, flite-euler, rej-malf-sup |
 
@@ -132,15 +142,15 @@ Extension support is future work.
 
 | `\aleph` | accept | goldens: sym-gal-1 |
 
-| `{align}` | accept | goldens: aligned, alignedat, array |
+| `{align}` | accept | goldens: disp-align, disp-align-star |
 
-| `{align*}` | accept | goldens: aligned, alignedat, array |
+| `{align*}` | accept | goldens: disp-align-star |
 
 | `{aligned}` | accept | goldens: aligned, alignedat, array |
 
-| `{alignat}` | accept | goldens: aligned, alignedat, array |
+| `{alignat}` | accept | goldens: disp-alignat, disp-alignat-star, disp-alignat-noarg |
 
-| `{alignat*}` | accept | goldens: aligned, alignedat, array |
+| `{alignat*}` | accept | goldens: disp-alignat-star |
 
 | `{alignedat}` | accept | goldens: alignedat, aligned, array |
 
@@ -364,9 +374,9 @@ Extension support is future work.
 
 | `\bra` | accept | goldens: sym-greek3 |
 
-| `\braket` | accept | goldens: demo-cfrac, sym-greek3 |
+| `\braket` | accept | goldens: braket-basic, braket-nobar |
 
-| `\Braket` | accept | goldens: frac, bigl, demo-cfrac |
+| `\Braket` | accept | goldens: Braket-basic, Braket-two, Braket-dbl |
 
 | `\brace` | accept | goldens: brace |
 
@@ -406,7 +416,7 @@ Extension support is future work.
 
 | `\cases` | unsup | goldens: rej-unsup-cases |
 
-| `{CD}` | accept | goldens: aligned, alignedat, array |
+| `{CD}` | accept | goldens: disp-cd-h, disp-cd-hlabels, disp-cd-v, disp-cd-eq, disp-cd-vert, disp-cd-dot, disp-cd-badarrow, disp-cd-incomplete |
 
 | `\cdot` | accept | goldens: sym-gal-2 |
 
@@ -498,7 +508,7 @@ Extension support is future work.
 
 | `\colonsim` | accept | goldens: t-colonsim |
 
-| `\color` | accept | goldens: color, color-hex, color-macro |
+| `\color` | accept | goldens: color, color-hex, color-macro, color-over-split |
 
 | `\colorbox` | accept | goldens: colorbox |
 
@@ -634,7 +644,7 @@ Extension support is future work.
 
 | `\displaylines` | unsup | goldens: rej-unsup-displaylines |
 
-| `\displaystyle` | accept | goldens: displaystyle, sum, demo-cauchy |
+| `\displaystyle` | accept | goldens: displaystyle, displaystyle-over-split, sum, demo-cauchy |
 
 | `\div` | accept | goldens: sym-gal-3 |
 
@@ -720,9 +730,9 @@ Extension support is future work.
 
 | `\eqcolon` | accept | goldens: t-eqcolon |
 
-| `{equation}` | accept | goldens: aligned, alignedat, array |
+| `{equation}` | accept | goldens: disp-equation, disp-equation-amp |
 
-| `{equation*}` | accept | goldens: aligned, alignedat, array |
+| `{equation*}` | accept | goldens: disp-equation-star |
 
 | `{eqnarray}` | unsup | goldens: rej-unsup-eqnarray |
 
@@ -798,7 +808,7 @@ Extension support is future work.
 
 | `\gamma` | accept | goldens: sym-greek |
 
-| `{gather}` | accept | goldens: aligned, alignedat, array |
+| `{gather}` | accept | goldens: disp-gather, disp-gather-star |
 
 | `{gathered}` | accept | goldens: gathered, aligned, alignedat |
 
@@ -1132,7 +1142,7 @@ Extension support is future work.
 
 | `\ll` | accept | goldens: sym-gal-5 |
 
-| `\llap` | accept | goldens: demo-fourier, int, int-display |
+| `\llap` | accept | goldens: lap, lap-llap-sub |
 
 | `\llbracket` | accept | goldens: sym-llbracket |
 
@@ -1230,7 +1240,7 @@ Extension support is future work.
 
 | `\mathchoice` | accept | goldens: mathchoice, demo-fourier, int |
 
-| `\mathclap` | accept | goldens: sum, demo-cauchy, demo-sumsq |
+| `\mathclap` | accept | goldens: lap-clap-sub, lap-clap-sub-text, lap-clap-sup |
 
 | `\mathclose` | accept | goldens: t-mathclose |
 
@@ -1412,7 +1422,7 @@ Extension support is future work.
 
 | `\nolimits` | accept | goldens: lim, nolimits, lim-display |
 
-| `\nonumber` | accept | goldens: aligned, alignedat, array |
+| `\nonumber` | accept | goldens: disp-nonumber-align, nonumber-out |
 
 | `\normalfont` | unsup | goldens: rej-unsup-normalfont |
 
@@ -1420,7 +1430,7 @@ Extension support is future work.
 
 | `\not` | accept | goldens: not |
 
-| `\notag` | accept | goldens: aligned, alignedat, array |
+| `\notag` | accept | goldens: disp-notag-align, notag-out |
 
 | `\notin` | accept | goldens: sym-notin |
 
@@ -1510,11 +1520,11 @@ Extension support is future work.
 
 | `\ominus` | accept | goldens: sym-gal-6 |
 
-| `\operatorname` | accept | goldens: operatorname, operatorname-star |
+| `\operatorname` | accept | goldens: operatorname, operatorname-star, operatorname-plain-limits |
 
-| `\operatorname*` | accept | goldens: operatorname, limits-force, operatorname-star |
+| `\operatorname*` | accept | goldens: operatorname, limits-force, operatorname-star, operatorname-star-limits |
 
-| `\operatornamewithlimits` | accept | goldens: limits-force |
+| `\operatornamewithlimits` | accept | goldens: limits-force, operatorname-withlimits-limits |
 
 | `\oplus` | accept | goldens: sym-gal-6 |
 
@@ -1740,7 +1750,7 @@ Extension support is future work.
 
 | `\risingdotseq` | accept | goldens: sym-risingdotseq |
 
-| `\rlap` | accept | goldens: demo-fourier, int, int-display |
+| `\rlap` | accept | goldens: lap-rlap-sub |
 
 | `\rm` | accept | goldens: rm |
 
@@ -1800,9 +1810,9 @@ Extension support is future work.
 
 | `\sect` | accept | goldens: text |
 
-| `\set` | accept | goldens: set, set-bar, set-bare-bar |
+| `\set` | accept | goldens: set, set-bar, set-bare-bar, set-barefrac |
 
-| `\Set` | accept | goldens: frac, bigl, demo-cfrac |
+| `\Set` | accept | goldens: Set-basic, Set-dbl, Set-barefrac |
 
 | `\setlength` | unsup | goldens: rej-unsup-setlength |
 
@@ -1878,7 +1888,7 @@ Extension support is future work.
 
 | `\sphericalangle` | accept | goldens: sym-gal-8 |
 
-| `{split}` | accept | goldens: aligned, alignedat, array |
+| `{split}` | accept | goldens: disp-split-eq, disp-split-alone |
 
 | `\sqcap` | accept | goldens: sym-gal-8 |
 
@@ -1946,7 +1956,7 @@ Extension support is future work.
 
 | `\succsim` | accept | goldens: sym-succsim |
 
-| `\sum` | accept | goldens: sum, demo-cauchy, demo-sumsq, atomgrid, flite-series |
+| `\sum` | accept | goldens: sum, demo-cauchy, demo-sumsq, atomgrid, flite-series, sum-limits-both-text |
 
 | `\sup` | accept | goldens: sym-gal-8 |
 
@@ -1972,7 +1982,7 @@ Extension support is future work.
 
 | Function | Status | Evidence / owner |
 | --- | --- | --- |
-| `\tag` | accept | goldens: tag, tag-display |
+| `\tag` | accept | goldens: tag, tag-display, tag-in-text, tag-text-body, tag-text-mid, tag-text-bare, tag-text-nested, tag-nonumber-same-row, tag-row0-nonumber-row1, disp-tag-leading-align, disp-tag-trailing-align-star, disp-matrix-tag, disp-split-tag |
 
 | `\tag*` | accept | goldens: tag-star, tag-star-display |
 
@@ -1988,7 +1998,7 @@ Extension support is future work.
 
 | `\TeX` | accept | goldens: t-TeX |
 
-| `\text` | accept | goldens: text, sym-escapes |
+| `\text` | accept | goldens: text, sym-escapes, text-math, text-nest, text-merge, text-nested-math, text-paren, text-paren-multi, text-paren-nested-text |
 
 | `\textasciitilde` | accept | goldens: text |
 

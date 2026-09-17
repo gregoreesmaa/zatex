@@ -21,17 +21,43 @@ pub const Run = struct {
     /// width (issues #31/#37). Additive: existing constructions omit
     /// it and render unstretched.
     x_scale: u16 = 1000,
+    /// Faux-italic slant in per-mille (0 = upright): the backend
+    /// shifts ink right by `x_shear` thousandths of the height above
+    /// the baseline. Set by the core for dotless i/j under the
+    /// default math face, whose upright host glyph stands in for
+    /// KaTeX's math-italic ȷ/ı (issue #77). Additive like `x_scale`.
+    x_shear: i16 = 0,
+    /// Horizontally mirrored ink (`\reflectbox` / `\mathreflectbox`,
+    /// issue #97): the backend flips each glyph about its own origin
+    /// (KaTeX's CSS flip). The core pre-maps every run origin through
+    /// the mirror, so backends never do coordinate math; rules in a
+    /// mirrored subtree arrive pre-mirrored as plain rects. Runs
+    /// never merge across the mirror boundary. Additive: existing
+    /// constructions omit it and render unmirrored.
+    mirrored: bool = false,
 };
+
+/// Corner-to-corner diagonal strike direction (`\cancel` family,
+/// issue #107): `up` runs bottom-left to top-right (`\cancel`),
+/// `down` runs top-left to bottom-right (`\bcancel`); `\xcancel`
+/// emits one rule of each. `none` fills the rect as before.
+pub const Diag = enum { none, up, down };
 
 /// One filled rect in font units (fraction bars, radical vincula, rules).
 /// `color` paints `\colorbox` backgrounds and `\fcolorbox` frames
-/// (issue #35); null means the ambient paint.
+/// (issue #35); null means the ambient paint. A non-`none` `diag` draws
+/// a `thick`-wide butt-cap diagonal across the rect instead of filling
+/// it (the `\cancel` SVG line, pinned KaTeX 0.18.7 `stretchyEnclose`).
+/// Additive like `Run.x_shear`: existing constructions omit both fields
+/// and render filled rects.
 pub const Rule = struct {
     x: i32,
     y: i32,
     w: u32,
     h: u32,
     color: ?u32 = null,
+    diag: Diag = .none,
+    thick: u32 = 0,
 };
 
 /// A fully laid-out formula: its ink box plus all marks.

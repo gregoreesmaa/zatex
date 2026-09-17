@@ -1,19 +1,46 @@
 //! ZaTeX reference host: test-only MetricsProvider over the vendored
-//! Latin Modern Math, plus the coverage/determinism probes.
+//! font stack, plus the coverage/determinism probes.
 //!
 //! This is HOST code (like `read`'s future math plugin), not the core:
-//! it reads a font file, drives `otmath`, and answers provider queries.
-//! It exists to prove the core against a real font — byte-identical
-//! input+font=output, every emittable glyph resolving.
+//! it reads font files, drives `otmath` through `fontstack`, and
+//! answers provider queries. It exists to prove the core against real
+//! fonts — byte-identical input+font=output, every emittable glyph
+//! resolving (issue #92: Latin Modern Math alone left 28 KaTeX-accepted
+//! glyphs blank, so the stack layers the vendored KaTeX CFF-OTF faces
+//! and the system STIX fallback under LM-first chains).
 const std = @import("std");
 const zatex = @import("zatex");
 const otmath = @import("otmath");
+const fontstack = @import("fontstack");
 const inv = @import("invariants");
 const contract = zatex.contract;
 const symbols = zatex.symbols;
 
 /// Vendored reference font (test fixture, never linked into hosts).
 const vendored_path = "fixtures/fonts/latinmodern-math.otf";
+
+/// Vendored one-glyph STIX subset (issue #92): the over/under hook
+/// U+203E lives in no other vendored face, so without this file the
+/// underbar would depend on the machine's system fonts.
+const stix_subset_path = "fixtures/fonts/STIXTwoMath-overline.otf";
+
+/// Vendored KaTeX faces (issue #92): CFF-OTF converts of the pinned
+/// bundle's TTFs — same outlines the software backend rasterizes.
+/// Order here is load order (LM stays face 0: unified gids for
+/// LM-resolved glyphs are unchanged).
+const katex_faces = [_]struct { path: []const u8, role: fontstack.Role }{
+    .{ .path = "fixtures/fonts/katex/KaTeX_Main-Regular.otf", .role = .main },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Main-Bold.otf", .role = .main_bold },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Main-Italic.otf", .role = .main_italic },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Main-BoldItalic.otf", .role = .main_bi },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Math-Italic.otf", .role = .math_italic },
+    .{ .path = "fixtures/fonts/katex/KaTeX_AMS-Regular.otf", .role = .ams },
+    .{ .path = "fixtures/fonts/katex/KaTeX_SansSerif-Regular.otf", .role = .sans },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Typewriter-Regular.otf", .role = .typewriter },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Caligraphic-Regular.otf", .role = .cal },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Fraktur-Regular.otf", .role = .frak },
+    .{ .path = "fixtures/fonts/katex/KaTeX_Script-Regular.otf", .role = .script },
+};
 
 /// System-font fallback candidates (issue 8): STIX Two Math ships in
 /// the macOS Supplemental fonts; /Library/Fonts covers user installs.
@@ -34,199 +61,132 @@ fn layoutCase(
 }
 
 const Ref = struct {
-    bytes: []u8,
-    font: otmath.Font,
-    /// Test knobs (all neutral by default):
-    /// - `no_italic` zeroes italic corrections.
-    /// - `kern_caps` answers every kern query with canned cut-ins
-    ///   (`sup` for top-right, `sub` for bottom-right).
-    /// - `extents_mul` scales the (otherwise default 700/250) extents.
-    no_italic: bool = false,
-    kern_caps: ?struct { sup: i32, sub: i32 } = null,
-    extents_mul: u32 = 1,
+    bufs: [fontstack.max_faces][]u8 = undefined,
+    nbufs: usize = 0,
+    stack: fontstack.Stack = .{},
 
+    /// Full fixture set: LM first (face 0, so LM-resolved unified
+    /// gids are unchanged), then the KaTeX faces, then the first
+    /// loadable system STIX (skipped where the OS lacks it).
     fn load() !Ref {
-        return loadFrom(vendored_path);
+        var r = Ref{};
+        errdefer r.free();
+        try r.addRequired(vendored_path, .lm);
+        for (katex_faces) |k| try r.addRequired(k.path, k.role);
+        try r.addRequired(stix_subset_path, .stix);
+        for (system_candidates) |p| {
+            r.addOptional(p, .stix) catch continue;
+            break;
+        }
+        // Large operators (issue #101) load last so every existing
+        // unified gid stays bit-identical.
+        try r.addRequired("fixtures/fonts/katex/KaTeX_Size1-Regular.otf", .size1);
+        try r.addRequired("fixtures/fonts/katex/KaTeX_Size2-Regular.otf", .size2);
+        return r;
     }
 
-    fn loadFrom(path: []const u8) !Ref {
+    /// Single-file host (system fallback, custom fonts): the one
+    /// face answers every chain position that names its role.
+    fn loadFrom(path: []const u8, role: fontstack.Role) !Ref {
+        var r = Ref{};
+        errdefer r.free();
+        try r.addRequired(path, role);
+        return r;
+    }
+
+    fn addRequired(self: *Ref, path: []const u8, role: fontstack.Role) !void {
+        const bytes = try readFile(path);
+        errdefer std.testing.allocator.free(bytes);
+        try self.stack.addFile(role, bytes);
+        self.bufs[self.nbufs] = bytes;
+        self.nbufs += 1;
+    }
+
+    fn addOptional(self: *Ref, path: []const u8, role: fontstack.Role) !void {
+        return self.addRequired(path, role);
+    }
+
+    fn readFile(path: []const u8) ![]u8 {
         var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
         defer threaded.deinit();
-        const bytes = try std.Io.Dir.cwd().readFileAlloc(
+        return std.Io.Dir.cwd().readFileAlloc(
             threaded.io(),
             path,
             std.testing.allocator,
             .limited(4 * 1024 * 1024),
         );
-        return .{ .bytes = bytes, .font = try otmath.load(bytes) };
     }
 
     fn free(self: *Ref) void {
-        std.testing.allocator.free(self.bytes);
-    }
-
-    fn scale1000(self: *const Ref, v: i32) i32 {
-        return @divTrunc(v * 1000, self.font.upm);
+        for (self.bufs[0..self.nbufs]) |b| std.testing.allocator.free(b);
+        self.nbufs = 0;
     }
 
     fn provider(self: *Ref) contract.MetricsProvider {
-        return .{
-            .ctx = @ptrCast(self),
-            .glyphId = gid,
-            .advance = adv,
-            .ruleThickness = rule,
-            .glyphVariant = variant,
-            .italicCorrection = italic,
-            .kernCorrection = kern,
-            .extents = ext,
-        };
-    }
-
-    fn gid(ctx: *const anyopaque, font_id: u16, cp: u21) u16 {
-        _ = font_id;
-        const self: *const Ref = @ptrCast(@alignCast(ctx));
-        return otmath.glyphId(self.font, cp) catch 0;
-    }
-
-    fn adv(ctx: *const anyopaque, font_id: u16, glyph: u16) i32 {
-        _ = font_id;
-        const self: *const Ref = @ptrCast(@alignCast(ctx));
-        const a = otmath.advance(self.font, glyph) catch 500;
-        return self.scale1000(a);
-    }
-
-    fn rule(ctx: *const anyopaque, font_id: u16, kind: contract.RuleKind) i32 {
-        _ = font_id;
-        const self: *const Ref = @ptrCast(@alignCast(ctx));
-        const c: otmath.Const = switch (kind) {
-            .fraction_bar => .frac_rule,
-            .radical => .radical_rule,
-            .overline => .overbar_rule,
-            .underline => .underbar_rule,
-        };
-        const v = otmath.constant(self.font, c) catch 40;
-        const s = self.scale1000(v);
-        return if (s <= 0) 40 else s;
-    }
-
-    fn variant(ctx: *const anyopaque, font_id: u16, glyph: u16, min_height: i32) u16 {
-        _ = font_id;
-        const self: *const Ref = @ptrCast(@alignCast(ctx));
-        // min_height arrives denominated at 1000 units; convert to
-        // font units for the MATH advance comparison.
-        const need = @divTrunc(min_height * self.font.upm, 1000);
-        return otmath.vertVariant(self.font, glyph, need) catch glyph;
-    }
-
-    fn italic(ctx: *const anyopaque, font_id: u16, glyph: u16) i32 {
-        _ = font_id;
-        const self: *const Ref = @ptrCast(@alignCast(ctx));
-        if (self.no_italic) return 0;
-        const v = otmath.italicCorrection(self.font, glyph) catch 0;
-        return self.scale1000(v);
-    }
-
-    fn kern(ctx: *const anyopaque, font_id: u16, glyph: u16, height: i32, corner: contract.KernCorner) i32 {
-        _ = font_id;
-        const self: *const Ref = @ptrCast(@alignCast(ctx));
-        if (self.kern_caps) |caps| {
-            return switch (corner) {
-                .top_right => caps.sup,
-                .bottom_right => caps.sub,
-                else => 0,
-            };
-        }
-        const oc: otmath.KernCorner = switch (corner) {
-            .top_right => .top_right,
-            .top_left => .top_left,
-            .bottom_right => .bottom_right,
-            .bottom_left => .bottom_left,
-        };
-        const v = otmath.kernCorrection(self.font, glyph, height, oc) catch 0;
-        return self.scale1000(v);
-    }
-
-    fn ext(ctx: *const anyopaque, font_id: u16, glyph: u16) [2]i32 {
-        _ = font_id;
-        _ = glyph;
-        const self: *const Ref = @ptrCast(@alignCast(ctx));
-        const m: i32 = @intCast(self.extents_mul);
-        return .{ 700 * m, 250 * m };
+        return self.stack.provider();
     }
 };
 
-/// First loadable font in `paths`, or null when none load. Unloadable
-/// entries are skipped, never fatal — this is what makes the fallback
-/// chain total on machines without any candidate installed.
-fn loadFirst(paths: []const []const u8) ?Ref {
+/// First loadable font in `paths` (single-face host), or null when
+/// none load. Unloadable entries are skipped, never fatal — this is
+/// what makes the fallback chain total on machines without any
+/// candidate installed.
+fn loadFirst(paths: []const []const u8, role: fontstack.Role) ?Ref {
     for (paths) |p| {
-        if (Ref.loadFrom(p)) |r| return r else |_| continue;
+        if (Ref.loadFrom(p, role)) |r| return r else |_| continue;
     }
     return null;
 }
 
-/// Vendored reference first, system font second (issue 8 fallback
-/// path). Hosts without the fixture checkout (like `read`) use the
-/// same order: bundled-or-vendored first, OS font second.
+/// Vendored stack first, system font second (issue 8 fallback path).
+/// Hosts without the fixture checkout (like `read`) use the same
+/// order: bundled-or-vendored first, OS font second.
 fn loadWithFallback() !Ref {
-    if (Ref.loadFrom(vendored_path)) |r| return r else |_| {}
-    if (loadFirst(&system_candidates)) |r| return r;
+    if (Ref.load()) |r| return r else |_| {}
+    if (loadFirst(&system_candidates, .stix)) |r| return r;
     return error.FileNotFound;
 }
 
 // Every codepoint the core can emit must resolve in the reference
-// font (issue 8 acceptance probe). All misses print before failing.
+// stack (issue 8 acceptance probe, issue #92: the 29 codepoints LM
+// Math 1.959 lacked now resolve through the KaTeX faces). All misses
+// print before failing; the vendored set suffices with no system
+// font, so the probe is deterministic on every machine.
 test "coverage: every emittable glyph resolves" {
     var ref = try Ref.load();
     defer ref.free();
-    // Glyphs absent from Latin Modern Math 1.959 itself (verified
-    // against the font's cmap): the core still accepts the commands
-    // (KaTeX parity) and providers report glyph 0 (.notdef fallback).
-    // The exact set is asserted below so font upgrades fail loudly.
-    const known_missing = [_]u21{
-        0x03DD, 0x2132, 0x2141, 0x24C8, 0x25B9, 0x25C3, 0x02C9, 0x02CA, 0x02CB,
-        // Issue #73 AMS batch: LM Math lacks these (STIX Two Math, the
-        // documented fallback, carries them; hosts resolve via provider).
-        0x21E0, 0x21E2, 0x22D4, 0x23B0, 0x23B1, 0x2571, 0x2572, 0x2605, 0x29EB,
-        0x2A5E, 0x2AB5, 0x2AB6, 0x2AB7, 0x2AB8, 0x2AB9, 0x2ABA, 0x2AC5, 0x2AC6,
-        0x2ACB, 0x2ACC,
-    };
     var misses: usize = 0;
-    var known: usize = 0;
     // Distinct commands can share a codepoint (`\\varsubsetneqq` is
     // `\\subsetneqq`'s alias twin, issue #73): count each codepoint
-    // once so the exact-set assertion below stays exact.
+    // once so the report stays exact.
     var seen: [64]u21 = undefined;
     var nseen: usize = 0;
     const miss = struct {
-        fn m(cp: u21, bad_out: *usize, known_out: *usize, allowed: []const u21, seen_out: *[64]u21, nseen_out: *usize) void {
+        fn m(cp: u21, bad_out: *usize, seen_out: *[64]u21, nseen_out: *usize) void {
             for (seen_out.*[0..nseen_out.*]) |s| if (s == cp) return;
             if (nseen_out.* < seen_out.len) {
                 seen_out.*[nseen_out.*] = cp;
                 nseen_out.* += 1;
             }
-            for (allowed) |k| {
-                if (k == cp) {
-                    known_out.* += 1;
-                    return;
-                }
-            }
             std.debug.print("unresolved U+{X}\n", .{cp});
             bad_out.* += 1;
         }
     }.m;
+    // The rm chain (LM + Main + AMS + STIX) is the broadest vendored
+    // chain: anything emittable resolves through it.
+    const rm: u16 = 0;
     for (symbols.all_symbols) |e| {
         if (e.sym.func) continue; // word operators are ASCII letters
-        if ((try otmath.glyphId(ref.font, e.sym.cp)) == 0) miss(e.sym.cp, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, e.sym.cp) == 0) miss(e.sym.cp, &misses, &seen, &nseen);
     }
     for (symbols.all_delims) |d| {
-        if ((try otmath.glyphId(ref.font, d.cp)) == 0) miss(d.cp, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, d.cp) == 0) miss(d.cp, &misses, &seen, &nseen);
     }
     for (symbols.all_accents) |a| {
-        if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, a.cp) == 0) miss(a.cp, &misses, &seen, &nseen);
     }
     for (symbols.all_math_text_accents) |a| {
-        if ((try otmath.glyphId(ref.font, a.cp)) == 0) miss(a.cp, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, a.cp) == 0) miss(a.cp, &misses, &seen, &nseen);
     }
     // Bare fence chars, rule/radical signs, arrows, text precomposes.
     const extra = [_]u21{
@@ -235,22 +195,21 @@ test "coverage: every emittable glyph resolves" {
         0x00E1, 0x00E9, 0x00F1, 0x00E7, 0x010D, 0x00E4, 0x00FC,
     };
     for (extra) |cp| {
-        if ((try otmath.glyphId(ref.font, cp)) == 0) miss(cp, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, cp) == 0) miss(cp, &misses, &seen, &nseen);
     }
     var c: u21 = '0';
     while (c <= '9') : (c += 1) {
-        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, c) == 0) miss(c, &misses, &seen, &nseen);
     }
     c = 'a';
     while (c <= 'z') : (c += 1) {
-        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, c) == 0) miss(c, &misses, &seen, &nseen);
     }
     c = 'A';
     while (c <= 'Z') : (c += 1) {
-        if ((try otmath.glyphId(ref.font, c)) == 0) miss(c, &misses, &known, &known_missing, &seen, &nseen);
+        if (ref.stack.glyphIdFor(rm, c) == 0) miss(c, &misses, &seen, &nseen);
     }
     try std.testing.expectEqual(@as(usize, 0), misses);
-    try std.testing.expectEqual(known_missing.len, known);
 }
 
 // Same input + same font = byte-identical layout.
@@ -313,25 +272,25 @@ test "reference: scaled fences use taller variants" {
 // resolves through the same entry point hosts use.
 test "fallback: unloadable paths skip, fixture resolves" {
     const bogus = [_][]const u8{"/nonexistent/zatex-font.otf"};
-    try std.testing.expect(loadFirst(&bogus) == null);
+    try std.testing.expect(loadFirst(&bogus, .stix) == null);
     var ref = try loadWithFallback();
     defer ref.free();
-    try std.testing.expect(ref.font.upm > 0);
+    try std.testing.expect(ref.stack.upm() > 0);
 }
 
 // System STIX Two Math drives the full provider when the OS ships it
 // (macOS Supplemental fonts); skips cleanly where it is absent.
 test "fallback: system font lays out deterministically when present" {
-    var sys = loadFirst(&system_candidates) orelse {
+    var sys = loadFirst(&system_candidates, .stix) orelse {
         std.debug.print("note: no system math font installed; probe skipped\n", .{});
         return;
     };
     defer sys.free();
-    try std.testing.expect(sys.font.upm > 0);
-    _ = try otmath.constant(sys.font, .frac_rule);
-    try std.testing.expect(try otmath.glyphId(sys.font, '(') != 0);
-    try std.testing.expect(try otmath.glyphId(sys.font, 0x2211) != 0); // summation
-    try std.testing.expect(try otmath.glyphId(sys.font, 0x03B1) != 0); // alpha
+    try std.testing.expect(sys.stack.upm() > 0);
+    _ = try otmath.constant(sys.stack.faces[0].font, .frac_rule);
+    try std.testing.expect(try otmath.glyphId(sys.stack.faces[0].font, '(') != 0);
+    try std.testing.expect(try otmath.glyphId(sys.stack.faces[0].font, 0x2211) != 0); // summation
+    try std.testing.expect(try otmath.glyphId(sys.stack.faces[0].font, 0x03B1) != 0); // alpha
     const src = "\\sum_{i=1}^{n}\\frac{i}{i+1}";
     var runs_a: [32]zatex.ir.Run = undefined;
     var rules_a: [8]zatex.ir.Rule = undefined;
@@ -561,12 +520,12 @@ test "metamorphic: frac clears numerator and denominator" {
 test "calibration: absent kern table reads graceful zeros" {
     var ref = try Ref.load();
     defer ref.free();
-    ref.kern_caps = .{ .sup = 0, .sub = 0 };
+    ref.stack.kern_caps = .{ .sup = 0, .sub = 0 };
     var r0: [64]zatex.ir.Run = undefined;
     var l0: [16]zatex.ir.Rule = undefined;
     var g0: [512]u16 = undefined;
     const canned = try layoutCase(&ref, "x^2_1", false, &r0, &l0, &g0);
-    ref.kern_caps = null;
+    ref.stack.kern_caps = null;
     var r1: [64]zatex.ir.Run = undefined;
     var l1: [16]zatex.ir.Rule = undefined;
     var g1: [512]u16 = undefined;
@@ -586,12 +545,12 @@ test "calibration: kern cut-ins tuck sup/sub exactly" {
         .{ .src = "x_1", .want = .{ 20, 0 } },
     };
     for (cases) |c| {
-        ref.kern_caps = .{ .sup = 40, .sub = 20 };
+        ref.stack.kern_caps = .{ .sup = 40, .sub = 20 };
         var ra: [64]zatex.ir.Run = undefined;
         var la: [16]zatex.ir.Rule = undefined;
         var ga: [512]u16 = undefined;
         const a = try layoutCase(&ref, c.src, false, &ra, &la, &ga);
-        ref.kern_caps = null;
+        ref.stack.kern_caps = null;
         var rb: [64]zatex.ir.Run = undefined;
         var lb: [16]zatex.ir.Rule = undefined;
         var gb: [512]u16 = undefined;
@@ -636,17 +595,17 @@ test "calibration: kern cut-ins tuck sup/sub exactly" {
 test "calibration: cut-ins clamp to the script gap" {
     var ref = try Ref.load();
     defer ref.free();
-    ref.kern_caps = .{ .sup = 1000, .sub = 1000 };
+    ref.stack.kern_caps = .{ .sup = 1000, .sub = 1000 };
     var ra: [64]zatex.ir.Run = undefined;
     var la: [16]zatex.ir.Rule = undefined;
     var ga: [512]u16 = undefined;
     const big = try layoutCase(&ref, "x^2_1", false, &ra, &la, &ga);
-    ref.kern_caps = .{ .sup = -50, .sub = -50 };
+    ref.stack.kern_caps = .{ .sup = -50, .sub = -50 };
     var rb: [64]zatex.ir.Run = undefined;
     var lb: [16]zatex.ir.Rule = undefined;
     var gb: [512]u16 = undefined;
     const neg = try layoutCase(&ref, "x^2_1", false, &rb, &lb, &gb);
-    ref.kern_caps = null;
+    ref.stack.kern_caps = null;
     var rc: [64]zatex.ir.Run = undefined;
     var lc: [16]zatex.ir.Rule = undefined;
     var gc: [512]u16 = undefined;
@@ -675,7 +634,7 @@ test "calibration: italic correction centers accents" {
     var la: [8]zatex.ir.Rule = undefined;
     var ga: [128]u16 = undefined;
     const a = try layoutCase(&ref, "\\hat{y}", false, &ra, &la, &ga);
-    ref.no_italic = true;
+    ref.stack.no_italic = true;
     var rb: [32]zatex.ir.Run = undefined;
     var lb: [8]zatex.ir.Rule = undefined;
     var gb: [128]u16 = undefined;
@@ -705,7 +664,7 @@ test "calibration: extents drive heights, advances drive widths" {
     const a = try layoutCase(&ref, "x", false, &ra, &la, &ga);
     try std.testing.expectEqual(@as(u32, 700), a.height_above);
     try std.testing.expectEqual(@as(u32, 250), a.depth_below);
-    ref.extents_mul = 2;
+    ref.stack.extents_mul = 2;
     var rb: [16]zatex.ir.Run = undefined;
     var lb: [4]zatex.ir.Rule = undefined;
     var gb: [64]u16 = undefined;
@@ -719,7 +678,7 @@ test "calibration: extents drive heights, advances drive widths" {
 test "calibration: tall braces use brace variants" {
     var ref = try Ref.load();
     defer ref.free();
-    const brace = try otmath.glyphId(ref.font, '{');
+    const brace = ref.stack.glyphIdFor(0, '{');
     try std.testing.expectEqual(@as(u16, 92), brace);
     var runs: [64]zatex.ir.Run = undefined;
     var rules: [16]zatex.ir.Rule = undefined;

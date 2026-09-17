@@ -93,14 +93,36 @@ pub const Canvas = struct {
         });
     }
 
+    /// Butt-cap thick segment in bottom-left float coords (diagonal
+    /// strikes, issue #107): mirrors the SVG `line` KaTeX emits
+    /// (`stroke-linecap: butt` there, `kCGLineCapButt` = 0 here).
+    /// The stroke paint must be set separately (`setFill` leaves the
+    /// stroke color untouched, so call `setStroke` first).
+    pub fn setStroke(self: *Canvas, r: f64, g: f64, b: f64, a: f64) void {
+        cg.CGContextSetRGBStrokeColor(self.ctx, r, g, b, a);
+    }
+
+    pub fn strokeLine(self: *Canvas, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) void {
+        if (!(t > 0)) return;
+        if (x0 == x1 and y0 == y1) return;
+        cg.CGContextSetLineWidth(self.ctx, t);
+        cg.CGContextSetLineCap(self.ctx, 0);
+        cg.CGContextMoveToPoint(self.ctx, x0, y0);
+        cg.CGContextAddLineToPoint(self.ctx, x1, y1);
+        cg.CGContextStrokePath(self.ctx);
+    }
+
     /// One CTFont per run at `size_px`, released by `Run.end` — the
     /// same object lifetime the renderer always had. `x_scale`
     /// stretches ink horizontally (wide accents, brace spans —
-    /// issues #31/#37); 1 draws unchanged.
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64) error{RenderInit}!Run {
+    /// issues #31/#37); 1 draws unchanged. `x_shear` slants ink
+    /// right per unit above the baseline (dotless i/j, issue #77);
+    /// 0 draws unchanged. `mirrored` flips ink about the glyph
+    /// origin (`\reflectbox`, issue #97); false draws unchanged.
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!Run {
         const ct = cg.CTFontCreateWithGraphicsFont(font.cgfont, size_px, null, null);
         if (ct == null) return error.RenderInit;
-        return .{ .ctx = self.ctx, .ct = ct, .x_scale = x_scale };
+        return .{ .ctx = self.ctx, .ct = ct, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
     }
 
     /// Snapshot the canvas and write an 8-bit RGBA PNG to `out_path`.
@@ -133,19 +155,33 @@ pub const Run = struct {
     ctx: cg.CGContextRef,
     ct: cg.CTFontRef,
     x_scale: f64,
+    /// Faux-italic slant, device px right per device px above the
+    /// glyph origin (dotless i/j, issue #77); 0 draws unchanged.
+    x_shear: f64,
+    /// Mirror ink about the glyph origin (`\reflectbox`, issue #97).
+    mirrored: bool,
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
         const gl: cg.CGGlyph = glyph;
-        if (self.x_scale == 1) {
+        if (!self.mirrored and self.x_scale == 1 and self.x_shear == 0) {
             const pos = cg.CGPoint{ .x = x, .y = y };
             cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&pos), 1, self.ctx);
             return;
         }
         // Stretched ink: draw in a translated + x-scaled CTM so the
         // glyph origin stays at (x, y) while ink widens rightward.
+        // Shear concatenates after the scale: heights stay unscaled
+        // (runs never scale y) while x gains sh per unit of height,
+        // slanting ink right above the origin like the SW backend.
+        // Mirrored ink negates the x-scale (and the slant with it),
+        // flipping about the origin like the SW backend.
+        const mx: f64 = if (self.mirrored) -1 else 1;
         cg.CGContextSaveGState(self.ctx);
         cg.CGContextTranslateCTM(self.ctx, x, y);
-        cg.CGContextScaleCTM(self.ctx, self.x_scale, 1);
+        cg.CGContextScaleCTM(self.ctx, mx * self.x_scale, 1);
+        if (self.x_shear != 0) {
+            cg.CGContextConcatCTM(self.ctx, .{ .a = 1, .b = 0, .c = mx * self.x_shear, .d = 1, .tx = 0, .ty = 0 });
+        }
         const origin = cg.CGPoint{ .x = 0, .y = 0 };
         cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&origin), 1, self.ctx);
         cg.CGContextRestoreGState(self.ctx);

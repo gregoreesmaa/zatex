@@ -21,14 +21,14 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\(…\)` | `\text{\(\frac a b\)}` | *no render (overclaim)* | inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math |
 | `\ ` | `a\ b` | ![](renders/ctrlspace.png) |  |
 | `\"` | `\text{\"{a}}` | ![](renders/quot.png) |  |
-| `\$` | `\$` | ![](renders/dollar.png) |  |
+| `\$` | `\$` | ![](renders/dollar.png) | KaTeX shows `\text{\textdollar}`; this form exercises `\$` |
 | `\,` | `a\,\,{b}` | ![](renders/comma.png) |  |
 | `\.` | `\text{\.{a}}` | ![](renders/dot.png) |  |
 | `\:` | `a\:\:{b}` | ![](renders/colon.png) |  |
 | `\;` | `a\n\;\;{b}` | ![](renders/semi.png) |  |
 | `_` | `x_i` | ![](renders/us.png) |  |
 | `\_` | `\_` | ![](renders/us-2.png) |  |
-| `\`` | `\text{\`{a}}` | ![](renders/fn.png) |  |
+| `` \` `` | ``\text{\`{a}}`` | ![](renders/fn.png) |  |
 | `<` | `<` | ![](renders/lt.png) |  |
 | `\=` | `\text{\={a}}` | ![](renders/eq.png) |  |
 | `>` | `>` | ![](renders/gt.png) |  |
@@ -39,11 +39,11 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `}` | `{a}` | ![](renders/fn-5.png) |  |
 | `\{` | `\{` | ![](renders/fn-6.png) |  |
 | `\}` | `\}` | ![](renders/fn-7.png) |  |
-| `|` | `\vert` | ![](renders/pipe.png) |  |
-| `\|` | `\\|x\\|` | ![](renders/pipe-2.png) |  |
+| `&#124;` | `\vert` | ![](renders/pipe.png) |  |
+| `\&#124;` | `\&#124;x\&#124;` | ![](renders/pipe-2.png) | KaTeX shows `\Vert`; this form exercises `\&#124;` |
 | `~` | `\text{no~no~no~breaks}` | ![](renders/tilde.png) |  |
 | `\~` | `\text{\~{a}}` | ![](renders/tilde-2.png) |  |
-| `\\` | `\begin{matrix}a\\b\end{matrix}` | ![](renders/fn-8.png) |  |
+| `\\ ` | `\begin{matrix}a\\b\end{matrix}` | ![](renders/dblbackslash.png) |  |
 | `^` | `x^i` | ![](renders/pow.png) |  |
 | `\^` | `\text{\^{a}}` | ![](renders/pow-2.png) |  |
 
@@ -61,11 +61,11 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\alef` | `\alef` | ![](renders/alef.png) |  |
 | `\alefsym` | `\alefsym` | ![](renders/alefsym.png) |  |
 | `\aleph` | `\aleph` | ![](renders/aleph.png) |  |
-| `{align}` | `\begin{align}\na&=b+c \\\nd+e&=f\n\end{align}` | *no render (overclaim)* | pinned KaTeX rejects unstarred align; table needs a reject row |
-| `{align*}` | `\begin{align*}\na&=b+c \\\nd+e&=f\n\end{align*}` | *no render (engine)* | top-level align missing; KaTeX accepts |
+| `{align}` | `\begin{align}\na&=b+c \\\nd+e&=f\n\end{align}` | ![](renders/align.png) |  |
+| `{align*}` | `\begin{align*}\na&=b+c \\\nd+e&=f\n\end{align*}` | ![](renders/alignstar.png) |  |
 | `{aligned}` | `\begin{aligned}\na&=b+c \\\nd+e&=f\n\end{aligned}` | ![](renders/aligned.png) |  |
-| `{alignat}` | `\begin{alignat}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat}` | *no render (engine)* | top-level alignat missing (alignedat works); KaTeX accepts |
-| `{alignat*}` | `\begin{alignat*}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat*}` | *no render (engine)* | top-level alignat missing; KaTeX accepts |
+| `{alignat}` | `\begin{alignat}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat}` | ![](renders/alignat.png) |  |
+| `{alignat*}` | `\begin{alignat*}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignat*}` | ![](renders/alignatstar.png) |  |
 | `{alignedat}` | `\begin{alignedat}{2}\n10&x+ &3&y = 2 \\\n 3&x+&13&y = 4\n\end{alignedat}` | ![](renders/alignedat.png) |  |
 | `\allowbreak` | `x \allowbreak y` | ![](renders/allowbreak.png) |  |
 | `\Alpha` | `\Alpha` | ![](renders/alpha.png) |  |
@@ -180,8 +180,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\boxtimes` | `\boxtimes` | ![](renders/boxtimes.png) |  |
 | `\Bra` | `\Bra{\psi}` | ![](renders/bra.png) |  |
 | `\bra` | `\bra{\psi}` | ![](renders/bra-2.png) |  |
-| `\braket` | `\braket{\phi\VERT\psi}` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
-| `\Braket` | `\Braket{ ϕ \VERT \frac{∂^2}{∂ t^2} \VERT ψ }` | *no render (engine)* | bra-ket notation missing; KaTeX accepts |
+| `\braket` | `\braket{\phi&#124;\psi}` | ![](renders/braket.png) |  |
+| `\Braket` | `\Braket{\phi&#124;\frac12&#124;\psi}` | ![](renders/braket-2.png) |  |
 | `\brace` | `{n\brace k}` | ![](renders/brace.png) |  |
 | `\bracevert` | — | — | goldens: rej-unsup-bracevert |
 | `\brack` | `{n\brack k}` | ![](renders/brack.png) |  |
@@ -204,7 +204,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\cap` | `\cap` | ![](renders/cap-2.png) |  |
 | `{cases}` | `\begin{cases}\na &\text{if } b  \\\nc &\text{if } d\n\end{cases}` | ![](renders/cases.png) |  |
 | `\cases` | — | — | goldens: rej-unsup-cases |
-| `{CD}` | `\begin{CD}\nA  @>a>>  B  \\\n@VbVV    @AAcA \\\nC  @=     D\n\end{CD}` | *no render (overclaim)* | pinned KaTeX rejects CD; table needs a reject row |
+| `{CD}` | `\begin{CD}\nA  @>a>>  B  \\\n@VbVV    @AAcA \\\nC  @=     D\n\end{CD}` | ![](renders/cd.png) |  |
 | `\cdot` | `\cdot` | ![](renders/cdot.png) |  |
 | `\cdotp` | `\cdotp` | ![](renders/cdotp.png) |  |
 | `\cdots` | `\cdots` | ![](renders/cdots.png) |  |
@@ -367,8 +367,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\eqcirc` | `\eqcirc` | ![](renders/eqcirc.png) |  |
 | `\Eqcolon` | `\Eqcolon` | ![](renders/eqcolon.png) |  |
 | `\eqcolon` | `\eqcolon` | ![](renders/eqcolon-2.png) |  |
-| `{equation}` | `\begin{equation}\na = b + c\n\end{equation}` | *no render (overclaim)* | pinned KaTeX rejects equation; table needs a reject row |
-| `{equation*}` | `\begin{equation*}\na = b + c\n\end{equation*}` | *no render (overclaim)* | pinned KaTeX rejects equation*; table needs a reject row |
+| `{equation}` | `\begin{equation}\na = b + c\n\end{equation}` | ![](renders/equation.png) |  |
+| `{equation*}` | `\begin{equation*}\na = b + c\n\end{equation*}` | ![](renders/equationstar.png) |  |
 | `{eqnarray}` | — | — | goldens: rej-unsup-eqnarray |
 | `\Eqqcolon` | `\Eqqcolon` | ![](renders/eqqcolon.png) |  |
 | `\eqqcolon` | `\eqqcolon` | ![](renders/eqqcolon-2.png) |  |
@@ -412,7 +412,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\Game` | `\Game` | ![](renders/game.png) |  |
 | `\Gamma` | `\Gamma` | ![](renders/gamma.png) |  |
 | `\gamma` | `\gamma` | ![](renders/gamma-2.png) |  |
-| `{gather}` | `\begin{gather}\na=b \\ \ne=b+c\n\end{gather}` | *no render (overclaim)* | pinned KaTeX rejects gather; table needs a reject row |
+| `{gather}` | `\begin{gather}\na=b \\ \ne=b+c\n\end{gather}` | ![](renders/gather.png) |  |
 | `{gathered}` | `\begin{gathered}\na=b \\ \ne=b+c\n\end{gathered}` | ![](renders/gathered.png) |  |
 | `\gcd` | `\gcd` | ![](renders/gcd.png) |  |
 | `\gdef` | `\gdef\sqr#1{#1^2} \sqr{y} + \sqr{y}` | ![](renders/gdef.png) |  |
@@ -454,7 +454,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\harr` | `\harr` | ![](renders/harr-3.png) |  |
 | `\hat` | `\hat{\theta}` | ![](renders/hat.png) |  |
 | `\hbar` | `\hbar` | ![](renders/hbar.png) |  |
-| `\hbox` | `\hbox{x}` | ![](renders/hbox.png) |  |
+| `\hbox` | `\hbox{$x^2$}` | ![](renders/hbox.png) |  |
 | `\hbox to <dimen>` | `\hbox to 10pt{A}` | ![](renders/hboxdashtodashltdimengt.png) |  |
 | `\hdashline` | `\begin{matrix}\na & b \\\n\hdashline\nc & d\n\end{matrix}` | ![](renders/hdashline.png) |  |
 | `\hearts` | `\hearts` | ![](renders/hearts.png) |  |
@@ -466,7 +466,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\hookleftarrow` | `\hookleftarrow` | ![](renders/hookleftarrow.png) |  |
 | `\hookrightarrow` | `\hookrightarrow` | ![](renders/hookrightarrow.png) |  |
 | `\hphantom` | `a\hphantom{bc}d` | ![](renders/hphantom.png) |  |
-| `\href` | `\href{https://github.com/gregoreesmaa/zatex}{\text{ZaTeX}}` | ![](renders/href.png) |  |
+| `\href` | `\href{https://github.com/gregoreesmaa/zatex}{\mathrm{Z\!^aT\!_EX}}` | ![](renders/href.png) |  |
 | `\hskip` | `w\hskip1em i\hskip2em d` | ![](renders/hskip.png) |  |
 | `\hslash` | `\hslash` | ![](renders/hslash.png) |  |
 | `\hspace` | `s\hspace7ex k` | ![](renders/hspace.png) |  |
@@ -717,7 +717,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\newcommand` | `\newcommand\chk{\checkmark} \chk` | ![](renders/newcommand.png) |  |
 | `\newenvironment` | — | — | goldens: rej-unsup-newenvironment |
 | `\Newextarrow` | — | — | goldens: rej-unsup-newextarrow |
-| `\newline` | `a\newline b` | ![](renders/newline.png) |  |
+| `\newline` | `a\newline b` | ![](renders/newline.png) | Breaks env rows like `\\`; inert mspace in running math |
 | `\nexists` | `\nexists` | ![](renders/nexists.png) |  |
 | `\ngeq` | `\ngeq` | ![](renders/ngeq.png) |  |
 | `\ngeqq` | `\ngeqq` | ![](renders/ngeqq.png) |  |
@@ -737,11 +737,11 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\nobreakspace` | `a\nobreakspace b` | ![](renders/nobreakspace.png) |  |
 | `\noexpand` | `x \noexpand y` | ![](renders/noexpand.png) |  |
 | `\nolimits` | `\lim\nolimits_x` | ![](renders/nolimits.png) |  |
-| `\nonumber` | `\begin{align}\na&=b+c \nonumber\\\nd+e&=f\n\end{align}` | *no render (engine)* | equation numbering context missing; KaTeX accepts |
+| `\nonumber` | `\begin{align}\na&=b+c \nonumber\\\nd+e&=f\n\end{align}` | ![](renders/nonumber.png) |  |
 | `\normalfont` | — | — | goldens: rej-unsup-normalfont |
 | `\normalsize` | `\normalsize normalsize` | ![](renders/normalsize.png) |  |
 | `\not` | `\not =` | ![](renders/not.png) |  |
-| `\notag` | `\begin{align}\na&=b+c \notag\\\nd+e&=f\n\end{align}` | *no render (engine)* | equation numbering context missing; KaTeX accepts |
+| `\notag` | `\begin{align}\na&=b+c \notag\\\nd+e&=f\n\end{align}` | ![](renders/notag.png) |  |
 | `\notin` | `\notin` | ![](renders/notin.png) |  |
 | `\notni` | `\notni` | ![](renders/notni.png) |  |
 | `\nparallel` | `\nparallel` | ![](renders/nparallel.png) |  |
@@ -887,7 +887,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\Reals` | `\Reals` | ![](renders/reals.png) |  |
 | `\reals` | `\reals` | ![](renders/reals-2.png) |  |
 | `\ref` | — | — | goldens: rej-unsup-ref |
-| `\reflectbox` | `\reflectbox{x}` | ![](renders/reflectbox.png) |  |
+| `\reflectbox` | `\reflectbox{$x^2$}` | ![](renders/reflectbox.png) |  |
 | `\relax` | `x \relax y` | ![](renders/relax.png) |  |
 | `\renewcommand` | `\def\hail{Hi!}\n\renewcommand\hail{\text{Ahoy!}}\n\hail` | ![](renders/renewcommand.png) |  |
 | `\renewenvironment` | — | — | goldens: rej-unsup-renewenvironment |
@@ -943,8 +943,8 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\searrow` | `\searrow` | ![](renders/searrow.png) |  |
 | `\sec` | `\sec` | ![](renders/sec.png) |  |
 | `\sect` | `\text{\sect}` | ![](renders/sect.png) |  |
-| `\set` | `\set{x}` | ![](renders/set.png) |  |
-| `\Set` | `\Set{ x \VERT x<\frac 1 2 }` | *no render (engine)* | set notation missing; KaTeX accepts |
+| `\set` | `\set{x&#124;x<5}` | ![](renders/set.png) |  |
+| `\Set` | `\Set{ x &#124; x<\frac 1 2}` | ![](renders/set-2.png) |  |
 | `\setlength` | — | — | goldens: rej-unsup-setlength |
 | `\setminus` | `\setminus` | ![](renders/setminus.png) |  |
 | `\sf` | `\sf AaBb123` | ![](renders/sf.png) |  |
@@ -982,7 +982,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\spades` | `\spades` | ![](renders/spades.png) |  |
 | `\spadesuit` | `\spadesuit` | ![](renders/spadesuit.png) |  |
 | `\sphericalangle` | `\sphericalangle` | ![](renders/sphericalangle.png) |  |
-| `{split}` | `\begin{equation}\n\begin{split}\na &=b+c\\\n&=e+f\n\end{split}\n\end{equation}` | *no render (overclaim)* | pinned KaTeX rejects standalone split; table needs a reject row |
+| `{split}` | `\begin{equation}\n\begin{split}\na &=b+c\\\n&=e+f\n\end{split}\n\end{equation}` | ![](renders/split.png) |  |
 | `\sqcap` | `\sqcap` | ![](renders/sqcap.png) |  |
 | `\sqcup` | `\sqcup` | ![](renders/sqcup.png) |  |
 | `\square` | `\square` | ![](renders/square.png) |  |
@@ -1032,7 +1032,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 
 | Function | Example | Render | Note |
 | --- | --- | --- | --- |
-| `\tag` | `\tag{3.1c} a^2+b^2=c^2` | ![](renders/tag.png) |  |
+| `\tag` | `\tag{3.1c} a^2+b^2=c^2` | ![](renders/tag.png) | Hoists to the equation; a row-local tag keeps its number columns despite `\nonumber` |
 | `\tag*` | `\tag*{3.1c} a^2+b^2=c^2` | ![](renders/tagstar.png) |  |
 | `\tan` | `\tan` | ![](renders/tan.png) |  |
 | `\tanh` | `\tanh` | ![](renders/tanh.png) |  |

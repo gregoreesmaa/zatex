@@ -63,9 +63,14 @@ const Walker = struct {
             },
             .supsub => |s| try self.supsub(s),
             .frac => |f| {
-                if (f.kind.parens) {
+                if (f.kind.fence != .none) {
                     try self.node(f.num);
-                    try self.word("choose");
+                    try self.word(switch (f.kind.fence) {
+                        .none => unreachable,
+                        .parens => "choose",
+                        .braces => "brace",
+                        .brackets => "bracket",
+                    });
                     try self.node(f.den);
                 } else if (f.kind.bar) {
                     try self.word("fraction");
@@ -119,6 +124,7 @@ const Walker = struct {
             .size => |s| try self.node(s.body),
             .font => |f| try self.node(f.body),
             .pmb => |p| try self.node(p.body),
+            .reflect => |r| try self.node(r.body),
             .vcenter => |v| try self.node(v.body),
             .circled => |c| try self.node(c.body),
             .text => |t| {
@@ -191,11 +197,12 @@ const Walker = struct {
             .boxed => |b| try self.node(b),
             .fbox => |b| try self.node(b),
             .htmlmathml => |h| try self.node(h.html),
-            .cancel => |b| try self.node(b),
+            .cancel => |c| try self.node(c.body),
             .xcancel => |b| try self.node(b),
             .sout => |b| try self.node(b),
             .phase => |b| try self.node(b),
             .lap => |l| try self.node(l.body),
+            .cdlabel => |c| try self.node(c.body),
             // KaTeX a11y order ("not equals"): modifier first.
             .not => |nt| {
                 try self.word("not");
@@ -445,6 +452,22 @@ test "speech: scripts are compositional" {
     try std.testing.expectEqualStrings(
         "x, subscript, 1, end subscript",
         try speak("x_1", false, &out),
+    );
+}
+
+test "speech: fenced stacks speak their fence (issue #93)" {
+    var out: [256]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "n, choose, k",
+        try speak("\\binom{n}{k}", false, &out),
+    );
+    try std.testing.expectEqualStrings(
+        "n, brace, k",
+        try speak("{n\\brace k}", false, &out),
+    );
+    try std.testing.expectEqualStrings(
+        "n, bracket, k",
+        try speak("{n\\brack k}", false, &out),
     );
 }
 

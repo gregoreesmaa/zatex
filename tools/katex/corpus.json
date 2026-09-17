@@ -312,6 +312,12 @@
   "expect": "accept"
  },
  {
+  "id": "displaystyle-over-split",
+  "tex": "\\displaystyle a\\over b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "operatorname",
   "tex": "\\operatorname{sin} x",
   "display": false,
@@ -320,6 +326,48 @@
  {
   "id": "operatorname-star",
   "tex": "\\operatorname*{lim}_{n} x_n",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star-limits",
+  "tex": "\\operatorname*{lim}\\limits_{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star-limits-both",
+  "tex": "\\operatorname*{lim}\\limits_{x}^{n}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star-limits-sup",
+  "tex": "\\operatorname*{lim}\\limits^{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-star-limits-display",
+  "tex": "\\operatorname*{lim}\\limits_{x}^{n}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-withlimits-limits",
+  "tex": "\\operatornamewithlimits{lim}\\limits_{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "operatorname-plain-limits",
+  "tex": "\\operatorname{lim}\\limits_{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sum-limits-both-text",
+  "tex": "\\sum\\limits_{i}^{n}",
   "display": false,
   "expect": "accept"
  },
@@ -586,6 +634,12 @@
   "expect": "accept"
  },
  {
+  "id": "color-over-split",
+  "tex": "\\color{red}a\\over b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "href",
   "tex": "\\href{https://example.com}{link}",
   "display": false,
@@ -762,6 +816,36 @@
  {
   "id": "lap",
   "tex": "\\llap{x}y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-clap-sub",
+  "tex": "\\sum_{\\mathclap{x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-clap-sub-text",
+  "tex": "\\sum_{\\mathclap{1\\le i\\le n}} x_{i}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-clap-sup",
+  "tex": "\\sum^{\\mathclap{x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-llap-sub",
+  "tex": "\\sum_{\\llap{x}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-rlap-sub",
+  "tex": "\\sum_{\\rlap{x}}",
   "display": false,
   "expect": "accept"
  },
@@ -1037,17 +1121,51 @@
   "id": "text-math",
   "tex": "\\text{a$b$c}",
   "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-paren",
+  "tex": "\\text{a\\(\\frac12\\)b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-paren-multi",
+  "tex": "\\text{a\\(b\\)c\\(d\\)e}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-paren-nested-text",
+  "tex": "\\text{a\\(b\\text{c}d\\)e}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-paren-dollar",
+  "tex": "\\text{\\(a$b\\)}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "text-paren-stray",
+  "tex": "\\text{a\\)b}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "text-paren-unclosed",
+  "tex": "\\text{\\(x}",
+  "display": false,
   "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "katex_only": true,
+  "ours": "Invalid"
  },
  {
   "id": "text-nest",
   "tex": "\\text{\\text{a}}",
   "display": false,
-  "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "expect": "accept"
  },
  {
   "id": "definecolor",
@@ -5304,6 +5422,18 @@
   "expect": "accept"
  },
  {
+  "id": "infix-brace",
+  "tex": "{n\\brace k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "infix-brack",
+  "tex": "{n\\brack k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "sw-textsout",
   "tex": "\\text{\\sout{abc}}",
   "display": false,
@@ -7578,6 +7708,24 @@
   "expect": "accept"
  },
  {
+  "id": "boldsymbol-letters",
+  "tex": "\\boldsymbol{AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "decl-group",
+  "tex": "{\\bf Aa}Bb",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "decl-over",
+  "tex": "\\bf a\\over b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "biggl",
   "tex": "\\biggl(",
   "display": false,
@@ -8322,6 +8470,12 @@
   "expect": "accept"
  },
  {
+  "id": "above-0pt",
+  "tex": "a\\above0pt b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "begingroup",
   "tex": "\\begingroup x\\endgroup",
   "display": false,
@@ -8372,6 +8526,12 @@
  {
   "id": "reflectbox",
   "tex": "\\reflectbox{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "reflectbox-math",
+  "tex": "\\reflectbox{$x^2$}",
   "display": false,
   "expect": "accept"
  },
@@ -8460,6 +8620,51 @@
   "expect": "accept"
  },
  {
+  "id": "tag-nested",
+  "tex": "\\tag{a\\tag{b}}x",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "jmath",
+  "tex": "\\jmath",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "imath",
+  "tex": "\\imath",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathbf-jmath",
+  "tex": "\\mathbf{\\jmath}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-jmath-rej",
+  "tex": "\\text{\\jmath}",
+  "display": false,
+  "expect": "reject",
+  "ours": "Invalid",
+  "katex_only": true,
+  "note": "KaTeX rewrites text-mode jmath to undefined @jmath and reports end-of-input; ours reports the token (cf. rej-cmd-in-text convention)"
+ },
+ {
+  "id": "newline-array",
+  "tex": "\\begin{array}{c}a\\newline b\\end{array}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "newline-matrix",
+  "tex": "\\begin{matrix}a\\newline b\\end{matrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "tag-star",
   "tex": "\\tag*{a}x",
   "display": false,
@@ -8475,17 +8680,13 @@
   "id": "tag-in-text",
   "tex": "\\text{\\tag{1}}",
   "display": true,
-  "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "expect": "accept"
  },
  {
   "id": "tag-text-body",
   "tex": "\\tag{\\text{a}}x",
   "display": true,
-  "expect": "reject",
-  "ours": "Invalid",
-  "katex_only": true
+  "expect": "accept"
  },
  {
   "id": "tbinom",
@@ -8528,5 +8729,841 @@
   "tex": "\\pu{1 m}",
   "display": false,
   "expect": "reject"
+ },
+ {
+  "id": "disp-align",
+  "tex": "\\begin{align}x&=1\\\\y&=2\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-star",
+  "tex": "\\begin{align*}x&=1\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-alignat",
+  "tex": "\\begin{alignat}{2}x&=1&y&=2\\end{alignat}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-alignat-star",
+  "tex": "\\begin{alignat*}{2}x&=1\\end{alignat*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation",
+  "tex": "\\begin{equation}x=1\\end{equation}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation-star",
+  "tex": "\\begin{equation*}x=1\\end{equation*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-gather",
+  "tex": "\\begin{gather}x=1\\\\y=2\\end{gather}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-gather-star",
+  "tex": "\\begin{gather*}x=1\\end{gather*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-split-eq",
+  "tex": "\\begin{equation}\\begin{split}x&=1\\\\y&=2\\end{split}\\end{equation}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-split-alone",
+  "tex": "\\begin{split}x&=1\\\\y&=2\\end{split}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-h",
+  "tex": "\\begin{CD}A@>>>B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-hlabels",
+  "tex": "\\begin{CD}A@>a>b>B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-v",
+  "tex": "\\begin{CD}A\\\\@VVV\\\\C\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-eq",
+  "tex": "\\begin{CD}C@=D\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-vert",
+  "tex": "\\begin{CD}A@|B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-cd-dot",
+  "tex": "\\begin{CD}A@.B\\end{CD}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation-amp",
+  "tex": "\\begin{equation}x&=1\\end{equation}",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-align-inline",
+  "tex": "\\begin{align}x&=1\\end{align}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-split-alone-inline",
+  "tex": "\\begin{split}x&=1\\end{split}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-cd-h-inline",
+  "tex": "\\begin{CD}A@>>>B\\end{CD}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-alignat-noarg",
+  "tex": "\\begin{alignat}x&=1\\end{alignat}",
+  "display": true,
+  "expect": "reject"
+ },
+ {
+  "id": "disp-cd-badarrow",
+  "tex": "\\begin{CD}A@?B\\end{CD}",
+  "display": true,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "disp-cd-incomplete",
+  "tex": "\\begin{CD}A@>B\\end{CD}",
+  "display": true,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "disp-nonumber-align",
+  "tex": "\\begin{align}x&=1\\nonumber\\\\y&=2\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-notag-align",
+  "tex": "\\begin{align}x&=1\\notag\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-nonumber-same-row",
+  "tex": "\\begin{align}x&=1\\tag{a}\\nonumber\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-nonumber-tag",
+  "tex": "\\begin{align}x&=1\\nonumber\\tag{a}\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-equation-tag",
+  "tex": "\\begin{equation}x=1\\tag{a}\\end{equation}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-star-tag-row0",
+  "tex": "\\begin{align*}x&=1\\tag{a}\\\\y&=2\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-tag-leading-align-star",
+  "tex": "\\tag{a}\\begin{align*}x&=1\\\\y&=2\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-tag-trailing-align-star",
+  "tex": "\\begin{align*}x&=1\\\\y&=2\\end{align*}\\tag{a}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-tag-leading-align",
+  "tex": "\\tag{a}\\begin{align}x&=1\\\\y&=2\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-matrix-tag",
+  "tex": "\\tag{a}\\begin{matrix}x\\end{matrix}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-split-tag",
+  "tex": "\\begin{split}x=1\\tag{a}\\end{split}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "disp-align-star-matrix-tag",
+  "tex": "\\begin{align*}\\begin{matrix}\\tag{a}x\\end{matrix}&=1\\\\y&=2\\end{align*}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-row0-nonumber-row1",
+  "tex": "\\begin{align}x&=1\\tag{a}\\\\y&=2\\nonumber\\end{align}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "nonumber-out",
+  "tex": "x\\nonumber",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "Set-basic",
+  "tex": "\\Set{x|x<5}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Set-dbl",
+  "tex": "\\Set{a\\|b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Set-barefrac",
+  "tex": "\\Set{x|x\\frac12}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Braket-basic",
+  "tex": "\\Braket{\\phi|\\psi}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Braket-two",
+  "tex": "\\Braket{a|b|c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "Braket-dbl",
+  "tex": "\\Braket{a||b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "braket-basic",
+  "tex": "\\braket{\\phi|\\psi}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "braket-nobar",
+  "tex": "\\braket{ab}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "set-barefrac",
+  "tex": "\\set{x|x\\frac12}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "notag-out",
+  "tex": "x\\notag",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-text-body-d",
+  "tex": "\\tag{\\text{a}}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-text-mid",
+  "tex": "\\text{a\\tag{1}}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-text-bare",
+  "tex": "\\text{a\\tag 1x}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "tag-text-nested",
+  "tex": "\\text{a{\\tag{1}}b}x",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "text-nested-math",
+  "tex": "\\text{x\\text{a$b$}c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "text-merge",
+  "tex": "\\text{x\\text{ab}c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textb-dollar",
+  "tex": "\\textbf{a$b}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "hbox-dollar",
+  "tex": "\\hbox{a$b}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid"
+ },
+ {
+  "id": "rej-111-bf-sup",
+  "tex": "x^\\bf y",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-bf-sqrt",
+  "tex": "\\sqrt\\bf x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-bf-sumsup",
+  "tex": "\\sum^\\bf_2",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-sqrt",
+  "tex": "x_\\sqrt{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-sum",
+  "tex": "x_\\sum",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-smallint",
+  "tex": "x_\\smallint",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-bm",
+  "tex": "x_\\bm{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-boldsymbol",
+  "tex": "x_\\boldsymbol{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-color",
+  "tex": "x_\\color{red}x",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-href",
+  "tex": "x_\\href{http://x}{y}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-url",
+  "tex": "x_\\url{http://x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-rule",
+  "tex": "x_\\rule{1ex}{1ex}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-hbox",
+  "tex": "x_\\hbox{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-kern",
+  "tex": "x_\\kern1ex",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-vcenter",
+  "tex": "x_\\vcenter{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-mathchoice",
+  "tex": "x_\\mathchoice{a}{b}{c}{d}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-smash",
+  "tex": "x_\\smash{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-raisebox",
+  "tex": "x_\\raisebox{1ex}{y}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-fbox",
+  "tex": "x_\\fbox{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-phantom",
+  "tex": "x_\\phantom{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-mathllap",
+  "tex": "x_\\mathllap{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-cancel",
+  "tex": "x_\\cancel{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-sout",
+  "tex": "x_\\sout{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-textcircled",
+  "tex": "x_\\textcircled{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-html",
+  "tex": "x_\\htmlClass{a}{b}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-opnamewl",
+  "tex": "x_\\operatornamewithlimits{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-pmb",
+  "tex": "x_\\pmb{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-overline",
+  "tex": "x_\\overline{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-xrightarrow",
+  "tex": "x_\\xrightarrow{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-hat",
+  "tex": "x_\\hat{x}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-accentchar",
+  "tex": "x_\\'e",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-newline",
+  "tex": "x_\\\\",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-limits",
+  "tex": "x_\\limits",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-limits-sum",
+  "tex": "\\sum_\\limits",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-limits-sqrt",
+  "tex": "\\sqrt\\limits",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "rej-111-def",
+  "tex": "x_\\def\\a{b}y",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "quirk-111-frac-bf-num",
+  "tex": "\\frac\\bf{a}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "quirk-111-frac-bf-den",
+  "tex": "\\frac1\\bf",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "quirk-111-mathbf-bf",
+  "tex": "\\mathbf\\bf",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "quirk-111-relax-script",
+  "tex": "x_\\relax y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "ko-111-thin",
+  "tex": "x_\\,",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-thick",
+  "tex": "x_\\;",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-med",
+  "tex": "x_\\>",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-boxed",
+  "tex": "x_\\boxed{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-dotsi",
+  "tex": "x_\\dotsi",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-substack",
+  "tex": "x_\\substack{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-hphantom",
+  "tex": "x_\\hphantom{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-llap",
+  "tex": "x_\\llap{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-hspace",
+  "tex": "x_\\hspace{1ex}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-bmod",
+  "tex": "x_\\bmod{n}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-operatorname",
+  "tex": "x_\\operatorname{a}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-minuso",
+  "tex": "x_\\minuso",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-tag",
+  "tex": "x_\\tag{1}",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "ko-111-nonumber",
+  "tex": "x_\\nonumber y",
+  "display": false,
+  "expect": "reject",
+  "katex_only": true,
+  "ours": "Invalid",
+  "note": "KaTeX rejects via macro expansion (position inside its expanded buffer, ungateable); ZaTeX rejects at the use-site token."
+ },
+ {
+  "id": "112-fenced-atop",
+  "tex": "\\left({a\\atop b}\\right)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-fenced-atop-display",
+  "tex": "\\left({a\\atop b}\\right)",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "112-fenced-choose",
+  "tex": "\\left[{n\\choose k}\\right]",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-fenced-brace-stack",
+  "tex": "\\left\\{{a\\atop b}\\right\\}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-brack",
+  "tex": "\\genfrac[]{0pt}{1}{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-brace",
+  "tex": "\\genfrac\\lbrace\\rbrace{0pt}{1}{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-zerobar",
+  "tex": "\\genfrac(){0pt}{0}{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-tall-binom",
+  "tex": "\\binom{a^2+b^2}{c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "112-tall-dbinom-display",
+  "tex": "\\dbinom{a^2+b^2}{c}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "112-genfrac-tall",
+  "tex": "\\genfrac(){0pt}{1}{a^2+b^2}{c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "109-char41",
+  "tex": "\\char\"41",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "109-char-smiley",
+  "tex": "\\char\"263A",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-circledS",
+  "tex": "\\circledS",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Finv",
+  "tex": "\\Finv",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-Game",
+  "tex": "\\Game",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-digamma",
+  "tex": "\\digamma",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-triangleleft",
+  "tex": "\\triangleleft",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sym-triangleright",
+  "tex": "\\triangleright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "verb",
+  "tex": "\\verb!\\frac a b!",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathbf-A",
+  "tex": "\\mathbf{A}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathit-A",
+  "tex": "\\mathit{A}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textit-x",
+  "tex": "\\textit{AaBb}",
+  "display": false,
+  "expect": "accept"
  }
 ]

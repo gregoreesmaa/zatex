@@ -36,18 +36,23 @@ pub const white = Color{ .r = 1, .g = 1, .b = 1, .a = 1 };
 /// (px per font unit) offset by (`ox`, `oy`), returning the used
 /// prefix of `out`. The split scales exist for run raster-stretch
 /// (wide accents, brace spans — issues #31/#37); uniform text passes
-/// `sx == sy`. Curves subdivide to 0.25px flatness, depth-capped.
-pub fn flatten(segs: []const Seg, sx: f64, sy: f64, ox: f64, oy: f64, out: []Line) []Line {
+/// `sx == sy`. `sh` shears ink right by `sh` device px per device px
+/// above the baseline at `oy` (faux math-italic for dotless i/j,
+/// issue #77); 0 disables. Device space is y-up, so height above the
+/// baseline is just `y*sy`. Shear applies at the segment level, before
+/// curve subdivision, which already runs in device space. Curves
+/// subdivide to 0.25px flatness, depth-capped.
+pub fn flatten(segs: []const Seg, sx: f64, sy: f64, ox: f64, oy: f64, sh: f64, out: []Line) []Line {
     var n: usize = 0;
     for (segs) |s| {
-        const ax = ox + s.x[0] * sx;
+        const ax = ox + s.x[0] * sx + sh * (s.y[0] * sy);
         const ay = oy + s.y[0] * sy;
         if (!s.is_curve) {
             if (n < out.len) {
                 out[n] = .{
                     .x0 = @floatCast(ax),
                     .y0 = @floatCast(ay),
-                    .x1 = @floatCast(ox + s.x[3] * sx),
+                    .x1 = @floatCast(ox + s.x[3] * sx + sh * (s.y[3] * sy)),
                     .y1 = @floatCast(oy + s.y[3] * sy),
                 };
                 n += 1;
@@ -56,11 +61,11 @@ pub fn flatten(segs: []const Seg, sx: f64, sy: f64, ox: f64, oy: f64, out: []Lin
             n = flattenCubic(
                 ax,
                 ay,
-                ox + s.x[1] * sx,
+                ox + s.x[1] * sx + sh * (s.y[1] * sy),
                 oy + s.y[1] * sy,
-                ox + s.x[2] * sx,
+                ox + s.x[2] * sx + sh * (s.y[2] * sy),
                 oy + s.y[2] * sy,
-                ox + s.x[3] * sx,
+                ox + s.x[3] * sx + sh * (s.y[3] * sy),
                 oy + s.y[3] * sy,
                 out,
                 n,
@@ -238,6 +243,157 @@ pub fn fillRect(pixels: []u8, cw: usize, ch: usize, x: f64, y: f64, w: f64, h: f
     }
 }
 
+/// Butt-cap thick segment in bottom-left float coords, source-over
+/// (diagonal strikes, issue #107). Coverage is analytic: each pixel
+/// square is clipped against the segment's edge half-planes and butt
+/// caps, so an axis-aligned stroke agrees with `fillRect` exactly
+/// (pinned by the test below) and diagonals antialias like KaTeX's
+/// SVG line. Zero-length segments draw nothing (butt caps meet).
+pub fn strokeLine(pixels: []u8, cw: usize, ch: usize, x0: f64, y0: f64, x1: f64, y1: f64, t: f64, col: Color) void {
+    if (!(t > 0) or col.a <= 0) return;
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len2 = dx * dx + dy * dy;
+    if (!(len2 > 0)) return;
+    const len = @sqrt(len2);
+    // Unit direction and left normal; half-planes: |n.p| <= hw caps
+    // the edges, 0 <= d.p <= len caps the butt ends (p from p0).
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy;
+    const ny = ux;
+    const hw = t / 2;
+    // Bounding box of the parallelogram, clamped into the canvas.
+    const px0 = @min(x0, x1) - @abs(nx) * hw;
+    const px1 = @max(x0, x1) + @abs(nx) * hw;
+    const py0 = @min(y0, y1) - @abs(ny) * hw;
+    const py1 = @max(y0, y1) + @abs(ny) * hw;
+    const iy0: usize = @min(ch, @as(usize, @intFromFloat(@max(0, @floor(py0)))));
+    const iy1: usize = @min(ch, @as(usize, @intFromFloat(@max(0, @ceil(py1)))));
+    const ix0: usize = @min(cw, @as(usize, @intFromFloat(@max(0, @floor(px0)))));
+    const ix1: usize = @min(cw, @as(usize, @intFromFloat(@max(0, @ceil(px1)))));
+    var iy = iy0;
+    while (iy < iy1) : (iy += 1) {
+        var ix = ix0;
+        while (ix < ix1) : (ix += 1) {
+            const fx: f64 = @floatFromInt(ix);
+            const fy: f64 = @floatFromInt(iy);
+            const cov = segCoverage(fx - x0, fy - y0, ux, uy, nx, ny, hw, len);
+            if (cov > 0) {
+                const prow = ch - 1 - iy;
+                blendPixel(pixels[prow * cw * 4 + ix * 4 ..][0..4], col, col.a * cov);
+            }
+        }
+    }
+}
+
+/// Coverage of the unit square `[ox, ox+1] x [oy, oy+1]` (offset from
+/// the segment start) by the butt-cap half-width-`hw` band: clip the
+/// square against the four half-planes, measure what survives.
+fn segCoverage(ox: f64, oy: f64, ux: f64, uy: f64, nx: f64, ny: f64, hw: f64, len: f64) f64 {
+    var xs: [10]f64 = .{ ox, ox + 1, ox + 1, ox, 0, 0, 0, 0, 0, 0 };
+    var ys: [10]f64 = .{ oy, oy, oy + 1, oy + 1, 0, 0, 0, 0, 0, 0 };
+    var n: usize = 4;
+    // Each half-plane keeps a*x + b*y <= c.
+    const planes = [4][3]f64{
+        .{ nx, ny, hw },
+        .{ -nx, -ny, hw },
+        .{ ux, uy, len },
+        .{ -ux, -uy, 0 },
+    };
+    for (planes) |pl| {
+        var oxs: [10]f64 = undefined;
+        var oys: [10]f64 = undefined;
+        var m: usize = 0;
+        if (n == 0) return 0;
+        var i: usize = 0;
+        while (i < n) : (i += 1) {
+            const j = (i + 1) % n;
+            const di = pl[0] * xs[i] + pl[1] * ys[i] - pl[2];
+            const dj = pl[0] * xs[j] + pl[1] * ys[j] - pl[2];
+            if (di <= 0) {
+                oxs[m] = xs[i];
+                oys[m] = ys[i];
+                m += 1;
+            }
+            if ((di <= 0) != (dj <= 0)) {
+                const f = di / (di - dj);
+                oxs[m] = xs[i] + (xs[j] - xs[i]) * f;
+                oys[m] = ys[i] + (ys[j] - ys[i]) * f;
+                m += 1;
+            }
+        }
+        @memcpy(xs[0..m], oxs[0..m]);
+        @memcpy(ys[0..m], oys[0..m]);
+        n = m;
+    }
+    if (n < 3) return 0;
+    var area: f64 = 0;
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        const j = (i + 1) % n;
+        area += xs[i] * ys[j] - xs[j] * ys[i];
+    }
+    const cov = @abs(area) / 2;
+    return @min(1, @max(0, cov));
+}
+
+test "strokeLine horizontal matches fillRect exactly" {
+    // A horizontal butt-cap stroke is the same ink as the equivalent
+    // fill (issue #107): byte-identical pixels, not just coverage.
+    var a: [12 * 8 * 4]u8 = @splat(255);
+    var b: [12 * 8 * 4]u8 = @splat(255);
+    strokeLine(&a, 12, 8, 1, 4, 10, 4, 3, black);
+    fillRect(&b, 12, 8, 1, 2.5, 9, 3, black);
+    try std.testing.expectEqualSlices(u8, &b, &a);
+}
+
+test "strokeLine vertical matches fillRect exactly" {
+    var a: [8 * 12 * 4]u8 = @splat(255);
+    var b: [8 * 12 * 4]u8 = @splat(255);
+    strokeLine(&a, 8, 12, 4, 1, 4, 10, 3, black);
+    fillRect(&b, 8, 12, 2.5, 1, 3, 9, black);
+    try std.testing.expectEqualSlices(u8, &b, &a);
+}
+
+test "strokeLine zero-length draws nothing, diagonals mirror" {
+    var a: [10 * 10 * 4]u8 = @splat(255);
+    strokeLine(&a, 10, 10, 5, 5, 5, 5, 3, black);
+    for (a) |v| try std.testing.expectEqual(@as(u8, 255), v);
+    // Up vs down diagonals are vertical mirrors of each other (up
+    // to float rounding in the coverage: one byte of slack).
+    var u: [11 * 11 * 4]u8 = @splat(255);
+    var d: [11 * 11 * 4]u8 = @splat(255);
+    strokeLine(&u, 11, 11, 1, 1, 9, 9, 2, black);
+    strokeLine(&d, 11, 11, 1, 9, 9, 1, 2, black);
+    var y: usize = 0;
+    // Row pairs (10-y, y+1); the outer rows pair off-canvas (both
+    // segments stay clear of them — asserted empty below).
+    while (y < 10) : (y += 1) {
+        var x: usize = 0;
+        while (x < 11) : (x += 1) {
+            // Canvas rows mirror about y=5: pixel [iy,iy+1] pairs
+            // with [9-iy,10-iy], i.e. buffer rows (10-iy) and (iy+1).
+            const pu = u[(10 - y) * 11 * 4 + x * 4 ..][0..4];
+            const pd = d[(y + 1) * 11 * 4 + x * 4 ..][0..4];
+            for (pu, pd) |va, vb| {
+                const diff = if (va > vb) va - vb else vb - va;
+                try std.testing.expect(diff <= 1);
+            }
+        }
+    }
+    for (u[0 .. 11 * 4]) |v| try std.testing.expectEqual(@as(u8, 255), v);
+    for (d[0 .. 11 * 4]) |v| try std.testing.expectEqual(@as(u8, 255), v);
+    // Butt caps: a fractional endpoint half-covers the cap pixel,
+    // while a pixel well inside the band is fully covered.
+    var c: [8 * 8 * 4]u8 = @splat(255);
+    strokeLine(&c, 8, 8, 0.5, 3, 7, 3, 2, black);
+    const cap = c[(8 - 1 - 3) * 8 * 4 + 0 * 4];
+    try std.testing.expect(cap > 0 and cap < 255);
+    const mid = c[(8 - 1 - 3) * 8 * 4 + 4 * 4];
+    try std.testing.expectEqual(@as(u8, 0), mid);
+}
+
 test "fillRect covers exactly and blends edges" {
     const alloc = std.testing.allocator;
     const cw: usize = 6;
@@ -275,3 +431,4 @@ test "fillLines fills a triangle with nonzero winding" {
     try std.testing.expect(px[(ch - 1 - 3) * cw * 4 + 4 * 4] < 32);
     try std.testing.expectEqual([4]u8{ 255, 255, 255, 255 }, px[(ch - 1 - 7) * cw * 4 + 0 * 4 ..][0..4].*);
 }
+

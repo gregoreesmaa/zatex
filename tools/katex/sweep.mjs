@@ -13,6 +13,7 @@ for (const c of cases) {
     display: !!c.display,
     ours: c.ours || null,
     katex_only: !!c.katex_only,
+    note: c.note || null,
   };
   try {
     const mathml = katex.renderToString(c.tex, {

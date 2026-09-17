@@ -121,12 +121,23 @@ pub const Canvas = struct {
         self.fill = .{ .r = r, .g = g, .b = b, .a = a };
     }
 
+    /// The software canvas keeps one paint state: strokes use the
+    /// fill color (backends with split state, like Quartz, override
+    /// this with a real stroke paint — see `cg_backend`).
+    pub fn setStroke(self: *Canvas, r: f64, g: f64, b: f64, a: f64) void {
+        self.setFill(r, g, b, a);
+    }
+
     pub fn fillRect(self: *Canvas, x: f64, y: f64, w: f64, h: f64) void {
         sw_raster.fillRect(self.pixels, self.w, self.h, x, y, w, h, self.fill);
     }
 
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64) error{RenderInit}!Run {
-        return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale };
+    pub fn strokeLine(self: *Canvas, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) void {
+        sw_raster.strokeLine(self.pixels, self.w, self.h, x0, y0, x1, y1, t, self.fill);
+    }
+
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!Run {
+        return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
     }
 
     /// Write the canvas as 8-bit RGBA PNG to `out_path`.
@@ -142,6 +153,13 @@ pub const Run = struct {
     /// Horizontal raster stretch (1 = identity): wide accents and
     /// brace spans (issues #31/#37).
     x_scale: f64,
+    /// Faux-italic slant (0 = upright): dotless i/j lean (issue #77).
+    x_shear: f64,
+    /// Horizontally mirrored ink about the glyph origin
+    /// (`\reflectbox`, issue #97): negated x-scale and slant flatten
+    /// the outline into its mirror image (nonzero winding is
+    /// sign-blind, so counters survive the flip).
+    mirrored: bool,
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
         const c = self.canvas;
@@ -149,7 +167,10 @@ pub const Run = struct {
         if (scale <= 0) return;
         const segs = sw_font.outline(&self.font.cff, glyph, c.segs) catch return;
         if (segs.len == 0) return;
-        const lines = sw_raster.flatten(segs, scale * self.x_scale, scale, x, y, c.lines);
+        // Shear is a dimensionless ratio (device px shift per device
+        // px above the baseline), so it passes through unscaled.
+        const mx: f64 = if (self.mirrored) -1 else 1;
+        const lines = sw_raster.flatten(segs, mx * scale * self.x_scale, scale, x, y, mx * self.x_shear, c.lines);
         sw_raster.fillLines(c.pixels, c.w, c.h, lines, c.fill, c.row_cov);
     }
 
@@ -166,6 +187,45 @@ pub fn fixtureBytes(alloc: std.mem.Allocator) ![]u8 {
     var threaded = std.Io.Threaded.init(alloc, .{});
     defer threaded.deinit();
     return std.Io.Dir.cwd().readFileAlloc(threaded.io(), path, alloc, .limited(32 * 1024 * 1024));
+}
+
+// Lives here (not in sw_raster.zig) because only this file's tests
+// execute under `zig build test` (issue #106: sw_raster/sw_png test
+// blocks are compiled but never run).
+test "flatten shears ink right with height above baseline (issue #77)" {
+    // Vertical stroke x=10 from the baseline (y=0) to y=100, drawn
+    // with the baseline at oy=50: shear 0.25 leaves the base at
+    // x=10 and moves the top to 10+0.25*100=35. Shear 0 is the
+    // old path exactly.
+    const seg = [_]sw_font.Seg{
+        .{ .x = .{ 10, 0, 0, 10 }, .y = .{ 0, 0, 0, 100 }, .is_curve = false },
+    };
+    var out: [4]sw_raster.Line = undefined;
+    const sheared = sw_raster.flatten(&seg, 1, 1, 0, 50, 0.25, &out);
+    try std.testing.expectEqual(@as(usize, 1), sheared.len);
+    try std.testing.expectEqual(@as(f32, 10), sheared[0].x0);
+    try std.testing.expectEqual(@as(f32, 50), sheared[0].y0);
+    try std.testing.expectEqual(@as(f32, 35), sheared[0].x1);
+    try std.testing.expectEqual(@as(f32, 150), sheared[0].y1);
+    const plain = sw_raster.flatten(&seg, 1, 1, 0, 50, 0, &out);
+    try std.testing.expectEqual(@as(f32, 10), plain[0].x1);
+    try std.testing.expectEqual(@as(f32, 150), plain[0].y1);
+}
+
+test "mirrored runs negate x-scale and slant about the origin (issue #97)" {
+    // Asymmetric stroke (10,0)-(30,100), baseline at oy=50: negated
+    // x-scale mirrors about ox (100-10=90, 100-30=70), and the
+    // negated slant leans the top left (70-0.25*100=45).
+    const seg = [_]sw_font.Seg{
+        .{ .x = .{ 10, 0, 0, 30 }, .y = .{ 0, 0, 0, 100 }, .is_curve = false },
+    };
+    var out: [4]sw_raster.Line = undefined;
+    const mir = sw_raster.flatten(&seg, -1, 1, 100, 50, -0.25, &out);
+    try std.testing.expectEqual(@as(usize, 1), mir.len);
+    try std.testing.expectEqual(@as(f32, 90), mir[0].x0);
+    try std.testing.expectEqual(@as(f32, 50), mir[0].y0);
+    try std.testing.expectEqual(@as(f32, 45), mir[0].x1);
+    try std.testing.expectEqual(@as(f32, 150), mir[0].y1);
 }
 
 // extents1000 uses a 512-segment stack scratch: assert every fixture
@@ -192,8 +252,12 @@ test "software extents agree with CoreText ink boxes" {
     // any systematic disagreement here shifts LAYOUT, not just pixels,
     // so investigate rather than tolerate. Skipped off-mac; the
     // dimension-equality corpus re-render covers determinism there.
-    // The cg import lives inside the comptime branch so foreign test
-    // binaries never reference CoreText symbols.
+    // The cg import lives inside the comptime branch so this test
+    // compiles off-Apple, but on Apple hosts the branch IS taken: the
+    // body is emitted in every test binary whose import chain reaches
+    // this file, so every such binary must link the Apple frameworks
+    // (see build.zig: the mod/sw/nmod test modules link them on Apple
+    // whatever -Dbackend selects).
     if (comptime @import("builtin").os.tag != .macos) return error.SkipZigTest;
     if (comptime @import("builtin").os.tag == .macos) {
         const cg = @import("cg_backend.zig");
@@ -223,4 +287,15 @@ test "software extents agree with CoreText ink boxes" {
         std.debug.print("sw-vs-coretext extents: worst={d} (glyph {d}), rows>2: {d}/{d}\n", .{ worst, worst_glyph, over2, sw.cff.num_glyphs });
         try std.testing.expect(over2 == 0);
     }
+}
+
+test {
+    // Issue #106: an imported file's tests never execute on their own
+    // (the sw binary ran 8 = backend 4 + font 2 + raster 2, with the
+    // `sw_png` round-trip absent). Reference every software-stack
+    // module so this suite root runs their tests; the four tests
+    // above run as the root file itself.
+    std.testing.refAllDecls(@import("sw_font.zig"));
+    std.testing.refAllDecls(@import("sw_raster.zig"));
+    std.testing.refAllDecls(@import("sw_png.zig"));
 }

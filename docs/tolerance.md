@@ -39,6 +39,15 @@ MathML text, never rendered pixels.
   (e.g. `\phase{30}` yields `menclose` + `mn` directly); our emitter
   wraps every multi-leaf group. One child in a row groups nothing, so
   the shell carries identical layout meaning on both sides.
+  Effective children count through dropped wrappers (issue #94): a
+  lone `mstyle mathvariant` / `mrow href` shell does not single the
+  row — our sole-font splice puts N leaves under one `mstyle`,
+  matching KaTeX's flat row leaf-for-leaf (`\bf AaBb12`).
+- A void `mi`-around-`mrow` shell drops (issue #94): KaTeX builds
+  `\boldsymbol` / `\bm` bodies as `<mi><mrow>…</mrow></mi>`
+  (pinned 0.18.7) — an `mi` around non-text carries no layout
+  meaning, so dropping it equates KaTeX's quirk with our flat
+  `mstyle`-wrapped row. Text-only `mi` leaves never match.
 
 Adding a normalization requires a comment here explaining why the two
 shapes carry identical layout meaning. Normalizations never hide an

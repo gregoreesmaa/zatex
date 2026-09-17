@@ -33,6 +33,10 @@ pub const OpDesc = struct {
     func: bool,
     limits: LimitsMode,
     lim_def: bool,
+    /// Explicit `\limits` on a star-armed `\operatorname` forces
+    /// stacking in every style — even text style with both scripts,
+    /// where forced symbols stay side-set (KaTeX 0.18.7, issue #98).
+    force_stack: bool = false,
 };
 
 /// See through transparent wrappers to the operator beneath.
@@ -62,16 +66,29 @@ pub fn opBase(ctx: *const ParseCtx, id: Idx) ?OpDesc {
                 cur = c.body;
             },
             // A word operator stacks display scripts only for the
-            // star form (`\operatorname*`, `\operatornamewithlimits`):
-            // explicit `\limits` after `\operatorname` parses but is
-            // inert (KaTeX 0.18.7 placement matrix), so only the
-            // star-set flag feeds the default.
-            .opname => |o| return .{
-                .cp = 0,
-                .large = false,
-                .func = true,
-                .limits = .auto,
-                .lim_def = o.limits == .on,
+            // star form (`\operatorname*`, `\operatornamewithlimits`),
+            // and an explicit `\limits` on an armed name forces
+            // stacking in every style (KaTeX 0.18.7 placement matrix,
+            // issue #98). Explicit `\limits` after a PLAIN name stays
+            // inert (side-set in both styles), and armed stacking
+            // never leaks to symbols (`\sum\limits`, `\lim\limits`
+            // keep both scripts side-set in text style).
+            .opname => |o| {
+                if (o.forced) return .{
+                    .cp = 0,
+                    .large = false,
+                    .func = true,
+                    .limits = .on,
+                    .lim_def = true,
+                    .force_stack = true,
+                };
+                return .{
+                    .cp = 0,
+                    .large = false,
+                    .func = true,
+                    .limits = .auto,
+                    .lim_def = o.limits == .on,
+                };
             },
             // Built-limit operators stack like the star form (their
             // KaTeX source is `\operatorname*{...}`).
@@ -269,12 +286,27 @@ pub const Range = struct {
 pub const Row = struct {
     start: u16,
     len: u16,
+    /// `\nonumber`/`\notag` seen in this row: unstarred display
+    /// envs drop the row's number columns (KaTeX `\@eqnsw`
+    /// parity, issue #88). Defaults off; only `parseEnv` sets it.
+    nonumber: bool = false,
+    /// `\tag` seen in this row: a row-local tag wins over the row's
+    /// own `\nonumber` (KaTeX hoists the tag before `\@eqnsw` drops
+    /// the number columns — probed 0.18.7, issue #75). A tag in a
+    /// *different* row does not rescue this row. Defaults off; only
+    /// `parseEnv` sets it.
+    tagged: bool = false,
 };
+
+/// Fence pair around a barless stacked fraction (KaTeX parity:
+/// `\choose` wraps in parens, `\brace` in braces, `\brack` in
+/// brackets — issue #93; the old `parens` bool drew parens for all
+/// three). `.none` is a bare stack (`\atop`).
+pub const FracFence = enum(u8) { none, parens, braces, brackets };
 
 pub const FracKind = struct {
     bar: bool = true,
-    /// Parenthesized (`\binom`, `\choose`).
-    parens: bool = false,
+    fence: FracFence = .none,
     /// Rule thickness override in font units (0 = font default).
     thick: i32 = 0,
 };
@@ -345,6 +377,19 @@ pub const EnvKind = enum(u8) {
     rcases,
     gathered,
     subarray,
+    // Display-only top-level environments (KaTeX amsmath parity,
+    // issues #83/#85/#86/#87/#90): `align`/`alignat` lay out like
+    // `aligned`/`alignedat`, `gather` like `gathered`, `split` like
+    // `aligned` (display-gated), `equation` is a single centered
+    // column, `cd` is amscd arrow syntax over centered columns.
+    // Starred display forms share the kind; the `numbered` flag on
+    // the `.env` node records the unstarred (glue-column) shape.
+    alignenv,
+    alignat,
+    equation,
+    gather,
+    split,
+    cd,
 };
 
 pub const LapKind = enum(u8) { llap, rlap, clap };
@@ -354,6 +399,12 @@ pub const Node = union(enum) {
         class: symbols.AtomClass,
         font: FontFam,
         cp: u21,
+        /// KaTeX textord (issue #109): math-mode symbols from the
+        /// text table (`\%`, Greek capitals, ...) plus every
+        /// `\char` result. MathML renders these `mi` with an
+        /// explicit variant (KaTeX symbolsOrd); layout spacing
+        /// keeps `class` untouched.
+        textord: bool = false,
     },
     /// Upright or symbolic operator; `text` holds word operators
     /// (`sin`, user `\operatorname`); empty for single-glyph ops.
@@ -389,6 +440,10 @@ pub const Node = union(enum) {
         left: u21,
         right: u21,
         body: Idx,
+        /// Rule 15e fixed sizing (issue #112): `\genfrac` delimiters
+        /// target delim1/delim2, never grown to content. `\left` and
+        /// friends keep grown (`false`).
+        fixed: bool = false,
     },
     middle: struct {
         cp: u21,
@@ -451,6 +506,18 @@ pub const Node = union(enum) {
     vcenter: struct {
         body: Idx,
     },
+    /// Horizontally mirrored content (`\reflectbox` over an hbox,
+    /// `\mathreflectbox` over math, issue #97, pinned 0.18.7):
+    /// geometry-transparent like `.pmb` — layout mirrors the ink
+    /// about the box center (KaTeX's CSS flip), while MathML stays
+    /// the plain body (KaTeX's MathML carries no flip marker either).
+    reflect: struct {
+        /// True for `\mathreflectbox` (math body), false for
+        /// `\reflectbox` (hbox body): the serializer round-trips
+        /// the source command from this.
+        math: bool,
+        body: Idx,
+    },
     /// Token range (into the token arena) for `\text` bodies.
     text: struct {
         toks: Range,
@@ -462,12 +529,20 @@ pub const Node = union(enum) {
         rows_len: u16,
         spec_start: u16,
         spec_len: u16,
+        /// Unstarred top-level display env (`align`, `alignat`,
+        /// `equation`, `gather`): KaTeX keeps a leading number/glue
+        /// column (`mtr-glue`), which the MathML emitter reproduces.
+        /// Layout treats it as zero-width (no numbering engine).
+        numbered: bool,
     },
     substack: Range,
     mathchoice: [4]Idx,
     opname: struct {
         toks: Range,
         limits: LimitsMode,
+        /// Explicit `\limits` after a star-armed name (`*`,
+        /// `withlimits`): stacking in every style (issue #98).
+        forced: bool = false,
     },
     /// Limit operator with a built body (`\varinjlim` and family,
     /// KaTeX `macros.js`: `\operatorname*` over an under/over
@@ -537,7 +612,13 @@ pub const Node = union(enum) {
         html: Idx,
         math: Idx,
     },
-    cancel: Idx,
+    /// Single-diagonal strike: `down` is false for `\cancel`
+    /// (bottom-left to top-right) and true for `\bcancel`
+    /// (top-left to bottom-right, issue #107).
+    cancel: struct {
+        body: Idx,
+        down: bool = false,
+    },
     /// Both-diagonal strike (`\xcancel`), unlike `.cancel`.
     xcancel: Idx,
     sout: Idx,
@@ -545,6 +626,16 @@ pub const Node = union(enum) {
     lap: struct {
         body: Idx,
         kind: LapKind,
+    },
+    /// amscd vertical-arrow side label (`\cdleft`/`\cdright`,
+    /// KaTeX `cdlabel`, pinned 0.18.7): `left` selects the
+    /// left-side (overlapping) variant. Layout typesets the body
+    /// inline at script size (the bundle's zero-width overlap is a
+    /// geometry follow-up); MathML mirrors the bundle's
+    /// `mstyle`/`mpadded`/`mrow` shape exactly.
+    cdlabel: struct {
+        body: Idx,
+        left: bool,
     },
     /// Negation overlay (`\\not X`): the U+0338 slash struck over
     /// `base` (KaTeX `\\mathrel{\\mathrlap\\@not}`). Unlike `.lap`,
@@ -635,6 +726,20 @@ pub const ParseCtx = struct {
     /// skipped (text-mode captures). Math captures leave it false.
     keep_spaces: bool = false,
     in_env: u8 = 0,
+    /// `\nonumber`/`\notag` seen since the current row started
+    /// (row-scoped like KaTeX's per-row `\@eqnsw` reset).
+    row_nonumber: bool = false,
+    /// `\tag` seen since the current row started (row-scoped like
+    /// `row_nonumber`; a row-local tag keeps the row's number
+    /// columns despite `\nonumber`, issue #75).
+    row_tagged: bool = false,
+    /// A numbering env adopted the hoisted tag into one of its rows
+    /// (row-local tag, or a leading outside-tag defaulted to row 0).
+    /// Only then does the MathML emitter drop the tag text and keep
+    /// the env's own table; a tag that stayed pending (trailing the
+    /// env, or adopted by no numbering row) renders under the
+    /// full-width tag table instead (pinned 0.18.7, issue #75).
+    tag_adopted: bool = false,
     in_fence: u8 = 0,
     expansions: u32 = 0,
     err_pos: u32 = 0,
@@ -1171,6 +1276,7 @@ pub const full_only_ctrl_names: []const []const u8 = &.{
     "dotsi", "mod", "KaTeX", "LaTeX", "TeX", "substack",
     "mathchoice", "smash", "raisebox", "rule", "boxed", "fbox",
     "phantom", "hphantom", "vphantom", "bra", "ket", "Bra", "Ket",
+    "braket", "Braket", "Set",
     "mathstrut", "llap", "rlap", "clap", "mathllap", "mathrlap",
     "mathclap", "cancel", "bcancel", "sout", "phase", "textcircled",
     "nobreakspace", "space", "vspace", "overset", "underset", "stackrel", "not",
@@ -1202,7 +1308,7 @@ const CellTerm = enum { amp, newline, end, right };
 /// when `\tag` hoisted one).
 pub fn parse(ctx: *ParseCtx, display: bool) Error!Idx {
     ctx.display = display;
-    const root = try parseFormula(ctx, 0, .top);
+    const root = try parseFormula(ctx, 0, .top, null);
     const t = try ctx.next();
     if (t.kind != .end) return ctx.fail(t.pos, "unexpected input");
     if (ctx.tag_body == NONE) return root;
@@ -1226,14 +1332,35 @@ fn parseTag(ctx: *ParseCtx, t: Tok) Error!?Idx {
     if (!ctx.display) return ctx.fail(t.pos, "\\tag works only in display equations");
     if (ctx.tag_body != NONE) return ctx.fail(t.pos, "Multiple \\tag");
     const toks = try parseBracedToks(ctx, t, false);
-    try checkTextToks(ctx, toks);
-    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+    // A nested `\tag` is still "Multiple \tag" (it would parse as
+    // the builtin), not a text-mode error — unless the user shadowed
+    // `\tag` with a macro, which would expand first (issue #75).
+    if (ctx.findDef("tag") == null) {
+        var ni: u16 = 0;
+        while (ni < toks.len) : (ni += 1) {
+            const ntk = ctx.toks[toks.start + ni];
+            if (ntk.kind == .ctrl and tokNameEq(ntk.name, "tag"))
+                return ctx.fail(ntk.pos, "Multiple \\tag");
+        }
+    }
+    // Nested `\text{...}` renders flat inside tags (issue #75).
+    const flat = try spliceNestedText(ctx, toks);
+    try checkTextToks(ctx, flat);
+    ctx.tag_body = try ctx.allocNode(.{ .text = .{ .toks = flat, .fam = .rm } });
     ctx.tag_starred = starred;
+    ctx.row_tagged = true;
     return null;
 }
 
 /// Parse a row of atoms until the frame terminator. Returns a group.
-fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
+/// `infix_stop` (issue #94): when non-null, an `\over`-family token
+/// ends the loop WITHOUT being consumed (the flag reports it), so a
+/// declaration rest stops at the infix (`\bf a\over b` bolds the
+/// numerator only — pinned KaTeX 0.18.7 splits the parsed-so-far
+/// body). Null keeps the legacy consume-through split. Only the
+/// old-style font-declaration arm passes non-null; every other call
+/// site (including the infix denominator) passes null.
+fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame, infix_stop: ?*bool) Error!Idx {
     var buf: [512]u16 = undefined;
     var n: usize = 0;
     var bdepth: u8 = 0;
@@ -1310,6 +1437,14 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                 if (isInfix(t)) {
                     // `\over`-family splits the current row: kids so
                     // far are the numerator. `\above` is full-only.
+                    // A declaration rest (non-null `infix_stop`) stops
+                    // here unconsumed instead — the outer loop owns the
+                    // split, so the declaration covers the numerator
+                    // only (issue #94, pinned KaTeX 0.18.7).
+                    if (infix_stop) |st| {
+                        st.* = true;
+                        break;
+                    }
                     _ = try ctx.next();
                     if (tokNameEq(t.name, "above")) try subsetGate(false) else try subsetGate(true);
                     const num = try finishGroup(ctx, buf[0..n]);
@@ -1332,12 +1467,16 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                         .classwrap => |*c| if (c.class == .Op) {
                             c.limits = if (isName(t, "limits")) .on else .off;
                         } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
-                        // Explicit `\limits`/`\nolimits` after a word
-                        // operator parses but never moves scripts
-                        // (KaTeX 0.18.7: only the star stacks).
+                        // Explicit `\limits` after a star-armed word
+                        // operator arms forced stacking in every style
+                        // (KaTeX 0.18.7, issue #98); after a plain
+                        // name it stays inert (side-set in both
+                        // styles), as does `\nolimits` everywhere.
                         // Built-limit operators are already
                         // star-like (their `opBase` stacks).
-                        .opname => {},
+                        .opname => |*o| if (isName(t, "limits") and o.limits == .on) {
+                            o.forced = true;
+                        },
                         .varlim => {},
                         else => return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                     }
@@ -1360,24 +1499,44 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                         }));
                         continue;
                     }
-                    const rest = try parseFormula(ctx, depth, frame);
+                    // Issue #110 (pinned KaTeX 0.18.7): like the
+                    // old-style font rest, a color rest stops at an
+                    // infix (`\color{red}a\\over b` colors the
+                    // numerator only) — the #94 stop flag + put/continue.
+                    var stopped = false;
+                    const rest = try parseFormula(ctx, depth, frame, &stopped);
+                    const decl = try ctx.allocNode(.{
+                        .color = .{ .body = rest, .spec = spec },
+                    });
+                    if (stopped) {
+                        try put(&buf, &n, decl);
+                        continue;
+                    }
                     // parseFormula consumed the frame end; wrap rest.
                     if (n >= 512) return error.NoSpace;
                     var nb: [512]u16 = undefined;
                     @memcpy(nb[0..n], buf[0..n]);
-                    nb[n] = try ctx.allocNode(.{
-                        .color = .{ .body = rest, .spec = spec },
-                    });
+                    nb[n] = decl;
                     return finishGroup(ctx, nb[0 .. n + 1]);
                 }
                 if (full_only and (isStyleName(t.name))) {
                     _ = try ctx.next();
                     const st = styleFor(t.name);
-                    const rest = try parseFormula(ctx, depth, frame);
+                    // Issue #110: style rests stop at infixes too
+                    // (`\displaystyle a\\over b` styles the numerator
+                    // only) — same #94 mechanism as color above. (Size
+                    // declarations keep consuming through: KaTeX sizes
+                    // the whole frac.)
+                    var stopped = false;
+                    const rest = try parseFormula(ctx, depth, frame, &stopped);
+                    const styled = try ctx.allocNode(.{ .style = .{ .style = st, .body = rest } });
+                    if (stopped) {
+                        try put(&buf, &n, styled);
+                        continue;
+                    }
                     // parseFormula consumed the frame end; wrap rest.
                     const g = try finishGroup(ctx, buf[0..n]);
                     _ = g;
-                    const styled = try ctx.allocNode(.{ .style = .{ .style = st, .body = rest } });
                     // Rebuild: prefix + styled (rest already includes
                     // everything after the style command).
                     var nb: [512]u16 = undefined;
@@ -1392,13 +1551,41 @@ fn parseFormula(ctx: *ParseCtx, depth: u8, frame: Frame) Error!Idx {
                     // (KaTeX `havingSize` resets, never compounds).
                     _ = try ctx.next();
                     const mult = sizeMultFor(t.name).?;
-                    const rest = try parseFormula(ctx, depth, frame);
+                    const rest = try parseFormula(ctx, depth, frame, null);
                     const g = try finishGroup(ctx, buf[0..n]);
                     _ = g;
                     const sized = try ctx.allocNode(.{ .size = .{ .mult = mult, .body = rest } });
                     var nb: [512]u16 = undefined;
                     @memcpy(nb[0..n], buf[0..n]);
                     nb[n] = sized;
+                    return finishGroup(ctx, nb[0 .. n + 1]);
+                }
+                if (oldStyleDeclFam(t.name)) |fam| {
+                    // Old-style font declarations (KaTeX parity, pinned
+                    // 0.18.7, issue #94): `\bf` etc. take NO argument —
+                    // their body is the rest of the enclosing group
+                    // (braces around the next atom do NOT scope them).
+                    // New-style `\mathbf` etc. keep the single
+                    // group-or-atom body (parseCtrl below). Unlike
+                    // color/style/size above, the rest stops at an
+                    // infix (`\bf a\over b` bolds the numerator only),
+                    // so a stopped rest joins the row and the loop
+                    // continues into the split; otherwise the frame end
+                    // was consumed and the row rebuilds like above.
+                    // Ungated: the subset profile allows these commands
+                    // (same `.font` node, core machinery only).
+                    _ = try ctx.next();
+                    var stopped = false;
+                    const rest = try parseFormula(ctx, depth, frame, &stopped);
+                    const decl = try ctx.allocNode(.{ .font = .{ .fam = fam, .body = rest } });
+                    if (stopped) {
+                        try put(&buf, &n, decl);
+                        continue;
+                    }
+                    if (n >= 512) return error.NoSpace;
+                    var nb: [512]u16 = undefined;
+                    @memcpy(nb[0..n], buf[0..n]);
+                    nb[n] = decl;
                     return finishGroup(ctx, nb[0 .. n + 1]);
                 }
                 const maybe = try parseAtom(ctx, depth);
@@ -1473,9 +1660,19 @@ fn isInfix(t: Tok) bool {
 fn infixKind(t: Tok) FracKind {
     var kind = FracKind{ .bar = true };
     if (tokNameEq(t.name, "atop")) kind.bar = false;
-    if (tokNameEq(t.name, "choose") or tokNameEq(t.name, "brace") or tokNameEq(t.name, "brack")) {
+    if (tokNameEq(t.name, "choose")) {
         kind.bar = false;
-        kind.parens = true;
+        kind.fence = .parens;
+    }
+    // Issue #93: `\\brace`/`\\brack` are their own fences, not
+    // parens (KaTeX wraps `{n\\brace k}` in curly braces).
+    if (tokNameEq(t.name, "brace")) {
+        kind.bar = false;
+        kind.fence = .braces;
+    }
+    if (tokNameEq(t.name, "brack")) {
+        kind.bar = false;
+        kind.fence = .brackets;
     }
     return kind;
 }
@@ -1485,13 +1682,16 @@ fn infixKind(t: Tok) FracKind {
 fn parseInfix(ctx: *ParseCtx, depth: u8, frame: Frame, t: Tok, num: Idx) Error!Idx {
     var kind = infixKind(t);
     if (tokNameEq(t.name, "above")) kind.thick = try parseDimenArg(ctx, t);
-    const den = try parseFormula(ctx, depth, frame);
+    const den = try parseFormula(ctx, depth, frame, null);
     return finishInfix(ctx, t, num, den, kind.thick);
 }
 
 fn finishInfix(ctx: *ParseCtx, t: Tok, num: Idx, den: Idx, thick: i32) Error!Idx {
     var kind = infixKind(t);
     kind.thick = thick;
+    // `\above` with a non-positive bar means NO rule (issue #105,
+    // pinned 0.18.7 — `a\above0pt b` is barless like `\atop`).
+    if (tokNameEq(t.name, "above") and thick <= 0) kind.bar = false;
     return ctx.allocNode(.{ .frac = .{ .num = num, .den = den, .kind = kind } });
 }
 
@@ -1509,18 +1709,230 @@ fn parseSingleNoSuffix(ctx: *ParseCtx, depth: u8) Error!?Idx {
 }
 
 /// A braced group (full formula) or a single suffix-free atom.
+/// Argument-position flavor (issue #111, pinned KaTeX 0.18.7). KaTeX
+/// parses an isolated single token with `parseGroup("atom")`: a bare
+/// declaration takes an empty body there (the `\frac\bf{a}b` quirk —
+/// numerator `font` with an empty ordgroup, `{a}` the denominator, `b`
+/// trailing). Script arguments and the `\sqrt` radicand parse on the
+/// live stream with `parseGroup(name)`: a bare function without
+/// `allowedInArgument` throws at its token, and `\relax` (an
+/// `internal` node) is skipped.
+const ArgMode = enum { atom, sup, sub, sqrt };
+
+/// KaTeX functions WITHOUT `allowedInArgument` (pinned 0.18.7): bare
+/// in a `^`/`_`/`\sqrt` argument they throw `with no arguments as …`
+/// at their token. Direct functions fail at the token (corpus `rej-`
+/// rows pin the position); `macro` entries reject via their expansion,
+/// whose positions point inside KaTeX's expanded buffer and are
+/// ungateable (corpus `katex_only` rows pin accept/reject only).
+/// Everything absent here parses exactly as today — that fallthrough
+/// IS the allow-path (KaTeX's `allowedInArgument` owners: new-style
+/// fonts, the genfrac family, integrals, `\relax`, `\verb`, text-mode
+/// families, plus the symbol-only macro arms).
+fn bareFnInArg(name: []const u8) bool {
+    // Over/under/extensible constructs take the shared dispatch
+    // predicate (every spelling but the KaTeX-unknown `\angl`
+    // extension is a reject-class function there).
+    if (parseOverName(name)) |kind| return kind != .angl;
+    const bad = [_][]const u8{
+        // Old-style declarations (rest-of-group in formula position
+        // only — issue #94).
+        "rm", "sf", "tt", "bf", "it", "cal",
+        "boldsymbol", "bm", "pmb",
+        "sqrt",
+        "color", "textcolor", "href", "url", "rule", "hbox",
+        "kern", "mkern", "mskip", "hskip",
+        "vcenter", "mathchoice", "smash", "raisebox", "fbox",
+        "phantom", "vphantom", "mathllap", "mathrlap", "mathclap",
+        "cancel", "bcancel", "sout", "textcircled",
+        "htmlClass", "htmlId", "htmlStyle", "htmlData",
+        "operatornamewithlimits",
+        "mathinner", "mathop", "mathrel", "mathpunct",
+        "mathbin", "mathclose", "mathopen", "mathord",
+        // Definition/prefix primitives: KaTeX's entry check fires
+        // before any handler, so no side effect leaks.
+        "newcommand", "renewcommand", "providecommand",
+        "def", "gdef", "edef", "xdef",
+        "global", "long", "noexpand", "expandafter", "futurelet", "let",
+        "nonumber", "notag", "tag",
+        // Macro-class: KaTeX rejects via the expansion.
+        "boxed", "dotsi", "substack", "hphantom",
+        "llap", "rlap", "clap", "hspace", "bmod", "operatorname",
+        "minuso", "underbar",
+        // Spacing-emulation arms (KaTeX macros expanding to
+        // `\mskip`/`\hskip`).
+        "quad", "qquad", "enskip",
+        "thinspace", "medspace", "thickspace",
+        "negthinspace", "negmedspace", "negthickspace", "enspace",
+    };
+    for (bad) |b| if (tokNameEq(b, name)) return true;
+    return false;
+}
+
+/// The six integrals are KaTeX's only operator-class names with
+/// `allowedInArgument` (pinned 0.18.7 `op.ts`): `x_\int` accepts.
+fn isScriptIntegral(name: []const u8) bool {
+    const ints = [_][]const u8{ "int", "iint", "iiint", "oint", "oiint", "oiiint" };
+    for (ints) |o| if (tokNameEq(o, name)) return true;
+    return false;
+}
+
 fn parseGroupOrAtom(ctx: *ParseCtx, depth: u8) Error!Idx {
+    return parseGroupOrAtomMode(ctx, depth, .atom, 0);
+}
+
+/// `op_pos` is the `^`/`_` operator (script modes fail there when no
+/// group follows); unused by `.atom` and `.sqrt`, which fail at the
+/// offending token instead.
+fn parseGroupOrAtomMode(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!Idx {
     const t = try ctx.peek();
     if (t.kind == .lbrace) {
         _ = try ctx.next();
-        return parseFormula(ctx, depth + 1, .group);
+        return parseFormula(ctx, depth + 1, .group, null);
     }
     // Depth guard: every nesting level passes through here or a group.
     if (depth >= contract.max_nesting_depth) {
         return tooDeep(ctx, t.pos);
     }
-    const maybe = try parseSingle(ctx, depth + 1);
-    return maybe orelse ctx.fail(t.pos, "expected argument");
+    if (mode == .atom) {
+        // The `\frac\bf{a}b` quirk (issue #111): in an isolated
+        // argument a bare declaration takes an empty body and consumes
+        // nothing further (KaTeX `scanArgument` isolation + the
+        // zero-argument font handler). User macros still shadow.
+        if (t.kind == .ctrl) {
+            if (oldStyleDeclFam(t.name)) |fam| {
+                if (t.name.len > 0 and !t.noexpand and ctx.findDef(t.name) == null) {
+                    _ = try ctx.next();
+                    const empty = try ctx.allocNode(.{ .group = .{ .start = 0, .len = 0 } });
+                    return ctx.allocNode(.{ .font = .{ .fam = fam, .body = empty } });
+                }
+            }
+        }
+        const maybe = try parseSingle(ctx, depth + 1);
+        return maybe orelse ctx.fail(t.pos, "expected argument");
+    }
+    return parseScriptAtom(ctx, depth, mode, op_pos);
+}
+
+/// Parse one script/`\sqrt`-radicand argument on the live stream
+/// (KaTeX `parseGroup(name)` + the `internal`-skip loop, pinned
+/// 0.18.7, issue #111). `op_pos` is the `^`/`_` operator (script
+/// modes fail there when no group follows); `\sqrt` mode fails at the
+/// offending token instead.
+fn parseScriptAtom(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!Idx {
+    while (true) {
+        const t = try ctx.peek();
+        switch (t.kind) {
+            .lbrace => {
+                _ = try ctx.next();
+                return parseFormula(ctx, depth + 1, .group, null);
+            },
+            .ctrl => {
+                const name = t.name;
+                // User macros shadow everything (KaTeX gullet expands
+                // first); the expansion re-enters this loop, so a
+                // macro expanding to a bare function still throws.
+                if (name.len > 0 and !t.noexpand) {
+                    if (ctx.findDef(name)) |def| {
+                        _ = try ctx.next();
+                        try ctx.expandUse(def, t.pos);
+                        continue;
+                    }
+                }
+                // `\limits`/`\nolimits` are implicit (KaTeX
+                // `implicitCommands`): no group follows them.
+                if (tokNameEq(name, "limits") or tokNameEq(name, "nolimits")) {
+                    if (mode == .sqrt)
+                        return ctx.fail(t.pos, "expected group as argument to '\\sqrt'");
+                    if (mode == .sup)
+                        return ctx.fail(op_pos, "expected group after '^'");
+                    return ctx.fail(op_pos, "expected group after '_'");
+                }
+                if (isScriptIntegral(name)) {
+                    // The six integrals carry KaTeX
+                    // `allowedInArgument` — the only names the
+                    // fallthrough would misroute (operator class).
+                    const r = try parseSingle(ctx, depth + 1);
+                    if (r == null) continue;
+                    return r.?;
+                }
+                if (bareFnInArg(name)) return scriptFnFail(ctx, t.pos, mode);
+                // Accent names live in the symbol table too, but KaTeX
+                // parses the accent functions first — so does this.
+                if (symbols.lookupAccent(name) != null) return scriptFnFail(ctx, t.pos, mode);
+                if (symbols.lookup(name)) |sym| {
+                    // Every operator-class symbol is a KaTeX function
+                    // (integrals were allowed above); plain symbols
+                    // parse as atoms.
+                    if (sym.class == .Op) return scriptFnFail(ctx, t.pos, mode);
+                    const r = try parseSingle(ctx, depth + 1);
+                    if (r == null) continue;
+                    return r.?;
+                }
+                if (symbols.lookupDelim(name) != null) {
+                    const r = try parseSingle(ctx, depth + 1);
+                    if (r == null) continue;
+                    return r.?;
+                }
+                if (name.len == 1) {
+                    const c = name[0];
+                    switch (c) {
+                        '{', '}', '$', '%', '&', '#', '_', '|', ' ' => {
+                            const r = try parseSingle(ctx, depth + 1);
+                            if (r == null) continue;
+                            return r.?;
+                        },
+                        // Spacing/newline escapes are KaTeX macros or
+                        // the `\\` function — all reject in scripts.
+                        ',', ':', '>', ';', '!', '\\' => return scriptFnFail(ctx, t.pos, mode),
+                        else => {
+                            // Text accents are KaTeX functions;
+                            // single-letter symbols (`\S`) and unknown
+                            // names keep the existing path (symbol or
+                            // `undefined control sequence`).
+                            if (textAccentCp(c) != null) return scriptFnFail(ctx, t.pos, mode);
+                            const r = try parseSingle(ctx, depth + 1);
+                            if (r == null) continue;
+                            return r.?;
+                        },
+                    }
+                }
+                // Anything else parses exactly as today (unknown names
+                // keep `undefined control sequence` at the token).
+                const r = try parseSingle(ctx, depth + 1);
+                if (r == null) continue;
+                return r.?;
+            },
+            // Lone `^`/`_`/`&`/`}`, or end of input, start no group
+            // (KaTeX `parseGroup` returns null there): a script
+            // operator points at itself; `\sqrt` points at the token.
+            .sup, .sub, .amp, .rbrace, .end => {
+                if (mode == .sqrt)
+                    return ctx.fail(t.pos, "expected group as argument to '\\sqrt'");
+                if (mode == .sup)
+                    return ctx.fail(op_pos, "expected group after '^'");
+                return ctx.fail(op_pos, "expected group after '_'");
+            },
+            else => {
+                // Non-control tokens parse exactly as today.
+                const r = try parseSingle(ctx, depth + 1);
+                if (r == null) continue;
+                return r.?;
+            },
+        }
+    }
+}
+
+/// KaTeX `with no arguments as …` (issue #111): the message shape is
+/// KaTeX's minus the function name (house style keeps messages
+/// static, as with `undefined control sequence`); positions are exact.
+fn scriptFnFail(ctx: *ParseCtx, pos: u32, mode: ArgMode) Error {
+    return switch (mode) {
+        .sup => ctx.fail(pos, "function with no arguments as superscript"),
+        .sub => ctx.fail(pos, "function with no arguments as subscript"),
+        .sqrt => ctx.fail(pos, "function with no arguments as argument to '\\sqrt'"),
+        .atom => unreachable,
+    };
 }
 
 fn tooDeep(ctx: *ParseCtx, pos: u32) Error {
@@ -1562,6 +1974,7 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     .class = .Ord,
                     .font = .rm,
                     .cp = 0x2032,
+                    .textord = true,
                 } });
                 const base = try ctx.allocNode(.{ .group = .{ .start = 0, .len = 0 } });
                 return try ctx.allocNode(.{ .supsub = .{
@@ -1578,11 +1991,11 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                 .mathit
             else
                 .rm;
-            const id: ?Idx = try ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = t.cp } });
+            const id: ?Idx = try ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = t.cp, .textord = symbols.isTextordCp(t.cp) } });
             return id;
         },
         .lbrace => {
-            const id: ?Idx = try parseFormula(ctx, depth + 1, .group);
+            const id: ?Idx = try parseFormula(ctx, depth + 1, .group, null);
             return id;
         },
         .sup => return ctx.fail(t.pos, "expected base before '^'"),
@@ -1632,6 +2045,16 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                 }
                 if (tokNameEq(t.name, "relax")) {
                     // No-op primitive (KaTeX relax.ts, text+math): no node.
+                    return null;
+                }
+                if (tokNameEq(t.name, "nonumber") or tokNameEq(t.name, "notag")) {
+                    // KaTeX parity (`macros.js`, pinned 0.18.7):
+                    // `\nonumber` = `\gdef\@eqnsw{0}`, `\notag` an
+                    // alias. Numbered display envs drop the row's
+                    // number columns; elsewhere there is nothing to
+                    // suppress. Accepted in both modes, even outside
+                    // numbering contexts, like the bundle. Issue #88.
+                    ctx.row_nonumber = true;
                     return null;
                 }
                 if (tokNameEq(t.name, "allowbreak") or tokNameEq(t.name, "nobreak")) {
@@ -1739,7 +2162,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
             const q = try ctx.peek();
             if ((q.kind == .char and q.cp == '\'') or (q.kind == .ctrl and tokNameEq(q.name, "rq")))
                 return ctx.fail(p.pos, "expected group after '^'");
-            const s = try parseGroupOrAtom(ctx, depth);
+            const s = try parseGroupOrAtomMode(ctx, depth, .sup, p.pos);
             if (prime_made) {
                 if (nsup >= 9) return ctx.fail(p.pos, "superscript too complex");
                 sup_parts[nsup] = s;
@@ -1759,7 +2182,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
             const q2 = try ctx.peek();
             if ((q2.kind == .char and q2.cp == '\'') or (q2.kind == .ctrl and tokNameEq(q2.name, "rq")))
                 return ctx.fail(p.pos, "expected group after '_'");
-            sub = try parseGroupOrAtom(ctx, depth);
+            sub = try parseGroupOrAtomMode(ctx, depth, .sub, p.pos);
         } else if ((p.kind == .char and p.cp == '\'') or (p.kind == .ctrl and tokNameEq(p.name, "rq"))) {
             // KaTeX parity: `\rq` is the `'` macro — after a base it
             // runs this same suffix-prime path (pinned 0.18.7).
@@ -1776,6 +2199,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
                 .class = .Ord,
                 .font = .rm,
                 .cp = 0x2032,
+                .textord = true,
             } });
             nsup += 1;
             prime_made = true;
@@ -1801,7 +2225,7 @@ fn attachScripts(ctx: *ParseCtx, depth: u8, base: Idx) Error!?Idx {
 
 /// Parse one environment cell: a formula stopping at `&`, `\\`,
 /// `\cr`, `\end`, or `\right`. Returns the cell group and terminator.
-fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm } {
+fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm, term_pos: u32 } {
     var buf: [512]u16 = undefined;
     var n: usize = 0;
     while (true) {
@@ -1811,25 +2235,27 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
             .rbrace => return ctx.fail(t.pos, "unexpected '}'"),
             .amp => {
                 _ = try ctx.next();
-                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .amp };
+                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .amp, .term_pos = t.pos };
             },
             .newline => {
                 _ = try ctx.next();
-                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline };
+                return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .term_pos = t.pos };
             },
             .ctrl => {
-                if (isName(t, "end") or isName(t, "right") or isName(t, "cr")) {
-                    // `\cr` is a row separator like `\\`: consume it
-                    // (issue #51 robustness — the token must not reach
-                    // the next cell). `\end`/`\right` stay for the caller.
-                    if (isName(t, "cr")) _ = try ctx.next();
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "amp")) .amp else if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline };
+                if (isName(t, "end") or isName(t, "right") or isName(t, "cr") or isName(t, "newline")) {
+                    // `\cr` and `\newline` are row separators like `\\`:
+                    // consume them (issue #51 robustness — the token
+                    // must not reach the next cell; `\newline` breaks
+                    // env rows per pinned KaTeX, issue #79).
+                    // `\end`/`\right` stay for the caller.
+                    if (isName(t, "cr") or isName(t, "newline")) _ = try ctx.next();
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "amp")) .amp else if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline, .term_pos = t.pos };
                 }
                 // `\\` is the row separator inside environments (the
                 // lexer yields it as `.ctrl("\\")`, never `.newline`).
                 if (tokNameEq(t.name, "\\")) {
                     _ = try ctx.next();
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline };
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline, .term_pos = t.pos };
                 }
                 // Gap-position rule (KaTeX `getHLines` parity): a rule
                 // command opening a cell belongs to the row gap, not
@@ -1851,7 +2277,7 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                     const frac_id = try finishInfix(ctx, t, num, rest.cell, thick);
                     buf[0] = frac_id;
                     n = 1;
-                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = rest.term };
+                    return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = rest.term, .term_pos = t.pos };
                 }
                 if (isName(t, "limits") or isName(t, "nolimits")) {
                     _ = try ctx.next();
@@ -1866,12 +2292,16 @@ fn parseCell(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: CellTerm
                         .classwrap => |*c| if (c.class == .Op) {
                             c.limits = if (isName(t, "limits")) .on else .off;
                         } else return ctx.fail(t.pos, "'\\limits' must follow an operator"),
-                        // Explicit `\limits`/`\nolimits` after a word
-                        // operator parses but never moves scripts
-                        // (KaTeX 0.18.7: only the star stacks).
+                        // Explicit `\limits` after a star-armed word
+                        // operator arms forced stacking in every style
+                        // (KaTeX 0.18.7, issue #98); after a plain
+                        // name it stays inert (side-set in both
+                        // styles), as does `\nolimits` everywhere.
                         // Built-limit operators are already
                         // star-like (their `opBase` stacks).
-                        .opname => {},
+                        .opname => |*o| if (isName(t, "limits") and o.limits == .on) {
+                            o.forced = true;
+                        },
                         .varlim => {},
                         else => return ctx.fail(t.pos, "'\\limits' must follow an operator"),
                     }
@@ -1919,9 +2349,10 @@ fn parseCellRest(ctx: *ParseCtx, depth: u8) Error!struct { cell: Idx, term: Cell
                 return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = .newline };
             },
             .ctrl => {
-                if (isName(t, "end") or isName(t, "right") or isName(t, "cr")) {
-                    // Same `\cr` consume as the cell path (issue #51).
-                    if (isName(t, "cr")) _ = try ctx.next();
+                if (isName(t, "end") or isName(t, "right") or isName(t, "cr") or isName(t, "newline")) {
+                    // Same `\cr`/`\newline` consume as the cell path
+                    // (issues #51/#79).
+                    if (isName(t, "cr") or isName(t, "newline")) _ = try ctx.next();
                     return .{ .cell = try finishGroup(ctx, buf[0..n]), .term = if (isName(t, "end")) .end else if (isName(t, "right")) .right else .newline };
                 }
                 if (tokNameEq(t.name, "\\")) {
@@ -2024,6 +2455,121 @@ fn pushExpansionArg(ctx: *ParseCtx, use: Tok, prefix: []const u8, arg: Range, su
     try pushTemplateToks(ctx, use, prefix);
 }
 
+/// Push captured tokens last-first, dropping top-level whitespace
+/// (KaTeX's tokenizer skips spaces in math mode, but
+/// space-preserving captures keep them; a bare argument like
+/// `\frac 1 2` then chokes on the space — issue #89). Nested
+/// spaces survive (`\text{a b}` keeps its space).
+fn pushRangeClean(ctx: *ParseCtx, arg: Range, from: usize, to: usize) Error!void {
+    const n = to - from;
+    if (n > 1536) return error.NoSpace;
+    var skip: [24]u64 = .{0} ** 24;
+    var bdepth: usize = 0;
+    var j: usize = 0;
+    while (j < n) : (j += 1) {
+        const tk = ctx.toks[@as(usize, arg.start) + from + j];
+        if (tk.kind == .lbrace) {
+            bdepth += 1;
+        } else if (tk.kind == .rbrace) {
+            bdepth -|= 1;
+        } else if (tk.kind == .char and tk.cp == ' ' and bdepth == 0) {
+            skip[j / 64] |= (@as(u64, 1) << @intCast(j % 64));
+        }
+    }
+    var k: usize = n;
+    while (k > 0) {
+        k -= 1;
+        if ((skip[k / 64] & (@as(u64, 1) << @intCast(k % 64))) != 0) continue;
+        try ctx.push(ctx.toks[@as(usize, arg.start) + from + k]);
+    }
+}
+
+/// Scan a captured argument for top-level bars. Records at most 8
+/// split points (`at`) with their kinds (`dbl`); returns the split
+/// count. With `dbl` set, a `|` char followed by another `|` char
+/// collapses to one double split (KaTeX's `\@ifnextchar` mimic)
+/// and a `\|` command is a double split on its own; without it
+/// (lowercase `\set`, whose KaTeX `middleDouble` is empty) every
+/// `|` char is single and `\|` stays literal.
+fn scanBars(ctx: *ParseCtx, arg: Range, dbl: bool) struct { at: [8]usize, dbl: [8]bool, n: usize } {
+    var at: [8]usize = undefined;
+    var isdbl: [8]bool = undefined;
+    var n: usize = 0;
+    var bdepth: usize = 0;
+    var k: usize = 0;
+    while (k < arg.len) : (k += 1) {
+        const tk = ctx.toks[@as(usize, arg.start) + k];
+        if (tk.kind == .lbrace) {
+            bdepth += 1;
+        } else if (tk.kind == .rbrace) {
+            bdepth -|= 1;
+        } else if (bdepth == 0 and n < at.len) {
+            if (tk.kind == .char and tk.cp == '|') {
+                if (dbl and k + 1 < arg.len) {
+                    const nx = ctx.toks[@as(usize, arg.start) + k + 1];
+                    if (nx.kind == .char and nx.cp == '|') {
+                        at[n] = k;
+                        isdbl[n] = true;
+                        n += 1;
+                        k += 1;
+                        continue;
+                    }
+                }
+                at[n] = k;
+                isdbl[n] = false;
+                n += 1;
+            } else if (dbl and tk.kind == .ctrl and tokNameEq(tk.name, "|")) {
+                at[n] = k;
+                isdbl[n] = true;
+                n += 1;
+            }
+        }
+    }
+    return .{ .at = at, .dbl = isdbl, .n = n };
+}
+
+/// Expand a `\set`-family argument around its top-level bars
+/// (KaTeX `bra@ket`/`bra@set`): `prefix`, then segments joined by
+/// the bar templates, then `suffix`. `first_only` replaces just the
+/// first bar (lowercase `\set`, capital `\Set`); otherwise every
+/// bar is replaced (`\Braket`). Bar tokens span 1 (`|`) or 2
+/// (`||`) tokens; `\|` is one token.
+fn pushBarSplit(
+    ctx: *ParseCtx,
+    use: Tok,
+    arg: Range,
+    prefix: []const u8,
+    mid_single: []const u8,
+    mid_double: []const u8,
+    suffix: []const u8,
+    first_only: bool,
+    dbl: bool,
+) Error!void {
+    const bars = scanBars(ctx, arg, dbl);
+    // `first_only` replaces just the first bar; later bars ride
+    // along literally inside the tail segment.
+    const nsplit: usize = if (bars.n == 0) 0 else if (first_only) 1 else bars.n;
+    // Width of a bar in tokens: `||` spans 2, `|` and `\|` span 1.
+    const barWidth = struct {
+        fn w(c: *ParseCtx, a: Range, at: usize, is_dbl: bool) usize {
+            if (is_dbl and c.toks[@as(usize, a.start) + at].kind == .char) return 2;
+            return 1;
+        }
+    }.w;
+    try pushTemplateToks(ctx, use, suffix);
+    var s: usize = nsplit;
+    while (true) {
+        // Segment s spans (bar_s end)..(bar_{s+1} start).
+        const seg_from: usize = if (s == 0) 0 else bars.at[s - 1] + barWidth(ctx, arg, bars.at[s - 1], bars.dbl[s - 1]);
+        const seg_to: usize = if (s < nsplit) bars.at[s] else arg.len;
+        try pushRangeClean(ctx, arg, seg_from, seg_to);
+        if (s == 0) break;
+        try pushTemplateToks(ctx, use, if (bars.dbl[s - 1]) mid_double else mid_single);
+        s -= 1;
+    }
+    try pushTemplateToks(ctx, use, prefix);
+}
+
 /// One `\char`-base digit value (KaTeX `digitToNumber`: 0-9a-fA-F),
 /// or null when the token stops the scan. Only character tokens
 /// continue a number; anything else (control words included) ends it.
@@ -2053,7 +2599,7 @@ fn charAccum(num: u64, base: u32, d: u64) u64 {
 /// `\char` result: KaTeX `\@char` returns a `textord` node — an
 /// Ord-class roman atom, exactly like a symbol-table hit.
 fn charAtom(ctx: *ParseCtx, cp: u21) Error!Idx {
-    return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = cp } });
+    return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = cp, .textord = true } });
 }
 
 /// `\char` (KaTeX `macros.js` + `\@char` parity): decimal, `'octal`,
@@ -2123,14 +2669,14 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (tokNameEq(name, "dfrac")) return parseStyledFrac(ctx, depth, .D, .{ .bar = true });
     if (tokNameEq(name, "tfrac")) return parseStyledFrac(ctx, depth, .T, .{ .bar = true });
     if (tokNameEq(name, "cfrac")) return parseStyledFrac(ctx, depth, .D, .{ .bar = true });
-    if (tokNameEq(name, "binom")) return parseFracLike(ctx, depth, .{ .bar = false, .parens = true });
+    if (tokNameEq(name, "binom")) return parseFracLike(ctx, depth, .{ .bar = false, .fence = .parens });
     if (tokNameEq(name, "dbinom")) {
-        return parseStyledFrac(ctx, depth, .D, .{ .bar = false, .parens = true });
+        return parseStyledFrac(ctx, depth, .D, .{ .bar = false, .fence = .parens });
     }
     if (tokNameEq(name, "tbinom")) {
         // KaTeX parity: text-style binomial (the `\dbinom` shape in
         // text style — pinned 0.18.7).
-        return parseStyledFrac(ctx, depth, .T, .{ .bar = false, .parens = true });
+        return parseStyledFrac(ctx, depth, .T, .{ .bar = false, .fence = .parens });
     }
     if (full_only and (tokNameEq(name, "genfrac"))) {
         return parseGenfrac(ctx, depth, t);
@@ -2192,7 +2738,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // Scope opener like `{` (KaTeX parity, pinned 0.18.7 — `t`
         // is already consumed), but the frame closes only on
         // `\\endgroup` (strict pairing — see the formula-loop arms).
-        return parseFormula(ctx, depth + 1, .begingroup);
+        return parseFormula(ctx, depth + 1, .begingroup, null);
     }
     // Rule commands only open rows (consumed by the environment row
     // loop, KaTeX `getHLines` parity); anywhere else they are
@@ -2202,8 +2748,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (tokNameEq(name, "cr")) return ctx.fail(t.pos, "unexpected '\\cr'");
     if (tokNameEq(name, "text")) {
         const toks = try parseBracedToks(ctx, t, true);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        return parseTextBody(ctx, depth, toks, .rm);
     }
     if (tokNameEq(name, "hbox")) {
         // KaTeX parity: `\hbox` takes an hbox argument like `\text`
@@ -2211,21 +2756,22 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         // undefined in the bundle (math and text mode alike), so it
         // stays out (table `unsup`, `rej-unsup-mbox`).
         const toks = try parseBracedToks(ctx, t, false);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        return parseTextBody(ctx, depth, toks, .rm);
     }
     if (textFontFamFor(name)) |fam| {
         const toks = try parseBracedToks(ctx, t, true);
-        try checkTextToks(ctx, toks);
-        return ctx.allocNode(.{ .text = .{ .toks = toks, .fam = fam } });
+        return parseTextBody(ctx, depth, toks, fam);
     }
     if (fontFamFor(name)) |fam| {
         const body = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .font = .{ .fam = fam, .body = body } });
     }
     if (tokNameEq(name, "boldsymbol")) {
+        // `\boldsymbol` IS `\bm` (issue #94, pinned 0.18.7:
+        // bold-italic letters, bold digits — probed identical on
+        // letters, digits, Greek, and symbols alike).
         const body = try parseGroupOrAtom(ctx, depth);
-        return ctx.allocNode(.{ .font = .{ .fam = .bold, .body = body } });
+        return ctx.allocNode(.{ .font = .{ .fam = .bolditalic, .body = body } });
     }
     if (tokNameEq(name, "pmb")) {
         const body = try parseGroupOrAtom(ctx, depth);
@@ -2386,6 +2932,47 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     }
     if (full_only and (tokNameEq(name, "approxcoloncolon"))) {
         try pushExpansion(ctx, t, "\\mathrel{\\approx\\mathrel{\\mkern-1.2mu}\\dblcolon}");
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "nleqq") or tokNameEq(name, "nleqslant") or tokNameEq(name, "ngeqq") or tokNameEq(name, "ngeqslant"))) {
+        // KaTeX parity (pinned 0.18.7 `macros.js`): negated relations
+        // render AMS PUA precomposed glyphs in HTML (`\@nleqq` =
+        // U+E011, ...) while MathML carries the single precomposed
+        // codepoint (issue #73 arbiter, #96 shapes). The math branch
+        // reuses the alias static (`\nleq` = U+2270), so MathML is
+        // byte-identical to the old static path.
+        const html_at: []const u8 = if (tokNameEq(name, "nleqq")) "\\@nleqq" else if (tokNameEq(name, "nleqslant")) "\\@nleqslant" else if (tokNameEq(name, "ngeqq")) "\\@ngeqq" else "\\@ngeqslant";
+        const math_alias: []const u8 = if (t.name[1] == 'l') "\\nleq" else "\\ngeq";
+        var tpl: [64]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "lvertneqq") or tokNameEq(name, "gvertneqq"))) {
+        // Same dual-branch shape as above (issue #96).
+        const html_at: []const u8 = if (tokNameEq(name, "lvertneqq")) "\\@lvertneqq" else "\\@gvertneqq";
+        const math_alias: []const u8 = if (tokNameEq(name, "lvertneqq")) "\\lneqq" else "\\gneqq";
+        var tpl: [64]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "nshortmid") or tokNameEq(name, "nshortparallel") or tokNameEq(name, "nsubseteqq") or tokNameEq(name, "nsupseteqq"))) {
+        // Same dual-branch shape as above (issue #96).
+        const html_at: []const u8 = if (tokNameEq(name, "nshortmid")) "\\@nshortmid" else if (tokNameEq(name, "nshortparallel")) "\\@nshortparallel" else if (tokNameEq(name, "nsubseteqq")) "\\@nsubseteqq" else "\\@nsupseteqq";
+        const math_alias: []const u8 = if (tokNameEq(name, "nshortmid")) "\\nmid" else if (tokNameEq(name, "nshortparallel")) "\\nparallel" else if (tokNameEq(name, "nsubseteqq")) "\\nsubseteq" else "\\nsupseteq";
+        var tpl: [64]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "varsubsetneq") or tokNameEq(name, "varsubsetneqq") or tokNameEq(name, "varsupsetneq") or tokNameEq(name, "varsupsetneqq"))) {
+        // Same dual-branch shape as above (issue #96).
+        const html_at: []const u8 = if (tokNameEq(name, "varsubsetneq")) "\\@varsubsetneq" else if (tokNameEq(name, "varsubsetneqq")) "\\@varsubsetneqq" else if (tokNameEq(name, "varsupsetneq")) "\\@varsupsetneq" else "\\@varsupsetneqq";
+        const math_alias: []const u8 = if (tokNameEq(name, "varsubsetneq")) "\\subsetneq" else if (tokNameEq(name, "varsubsetneqq")) "\\subsetneqq" else if (tokNameEq(name, "varsupsetneq")) "\\supsetneq" else "\\supsetneqq";
+        var tpl: [80]u8 = undefined;
+        const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
+        try pushExpansion(ctx, t, text);
         return (try parseSingle(ctx, depth)).?;
     }
     if (full_only and (tokNameEq(name, "rq"))) {
@@ -2573,41 +3160,40 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (full_only and (tokNameEq(name, "set"))) {
         // KaTeX macro parity (`macros.js` `\bra@set`, pinned
         // 0.18.7): `\{\,#1\,\}` with the body split at the first
-        // top-level `|` into `\mid`-joined halves (`\set{x|y}`). A
-        // `\|` command lexes as `.ctrl`, never a split point, and
-        // later pipes stay literal (pinned bundle). Braced or bare
+        // top-level `|` into `\mid`-joined halves (`\set{x|y}`).
+        // Later pipes stay literal (pinned bundle). Braced or bare
         // argument alike.
         const arg = try parseBracedToks(ctx, t, false);
-        var bdepth: usize = 0;
-        var split: ?usize = null;
-        var k: usize = 0;
-        while (k < arg.len) : (k += 1) {
-            const tk = ctx.toks[@as(usize, arg.start) + k];
-            if (tk.kind == .lbrace) {
-                bdepth += 1;
-            } else if (tk.kind == .rbrace) {
-                bdepth -|= 1;
-            } else if (tk.kind == .char and tk.cp == '|' and bdepth == 0 and split == null) {
-                split = k;
-            }
-        }
-        if (split) |s| {
-            try pushTemplateToks(ctx, t, "\\,\\}");
-            var j: usize = arg.len;
-            while (j > s + 1) {
-                j -= 1;
-                try ctx.push(ctx.toks[@as(usize, arg.start) + j]);
-            }
-            try pushTemplateToks(ctx, t, "\\mid");
-            var m: usize = s;
-            while (m > 0) {
-                m -= 1;
-                try ctx.push(ctx.toks[@as(usize, arg.start) + m]);
-            }
-            try pushTemplateToks(ctx, t, "\\{\\,");
-        } else {
-            try pushExpansionArg(ctx, t, "\\{\\,", arg, "\\,\\}");
-        }
+        try pushBarSplit(ctx, t, arg, "\\{\\,", "\\mid", "\\mid", "\\,\\}", true, false);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "Set"))) {
+        // KaTeX macro parity (`macros.js` `\bra@set`, pinned
+        // 0.18.7): `\Set` = `\left\{\:` + body + `\:\right\}`
+        // with the FIRST top-level bar replaced — `|` becomes
+        // `\;\middle\vert\;`, `\|` (or `||`) becomes
+        // `\;\middle\Vert\;` — and later bars stay literal.
+        const arg = try parseBracedToks(ctx, t, false);
+        try pushBarSplit(ctx, t, arg, "\\left\\{\\:", "\\;\\middle\\vert\\;", "\\;\\middle\\Vert\\;", "\\:\\right\\}", true, true);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "Braket"))) {
+        // KaTeX macro parity (`macros.js` `\bra@ket`, pinned
+        // 0.18.7): `\Braket` = `\left\langle` + body +
+        // `\right\rangle` with EVERY top-level bar replaced by
+        // `\,\middle\vert\,` (`\|` and `||` fold to the same).
+        const arg = try parseBracedToks(ctx, t, false);
+        try pushBarSplit(ctx, t, arg, "\\left\\langle", "\\,\\middle\\vert\\,", "\\,\\middle\\vert\\,", "\\right\\rangle", false, true);
+        return (try parseSingle(ctx, depth)).?;
+    }
+    if (full_only and (tokNameEq(name, "braket"))) {
+        // KaTeX macro parity (`macros.js`, pinned 0.18.7):
+        // `\braket{#1}` = `\mathinner{\langle{#1}\rangle}` — one
+        // argument, no bar splitting (a `|` stays literal).
+        const arg = try parseBracedToks(ctx, t, false);
+        try pushTemplateToks(ctx, t, "}\\rangle}");
+        try pushRangeClean(ctx, arg, 0, arg.len);
+        try pushTemplateToks(ctx, t, "\\mathinner{\\langle{");
         return (try parseSingle(ctx, depth)).?;
     }
     if (full_only and (tokNameEq(name, "varinjlim") or tokNameEq(name, "varprojlim") or
@@ -2636,21 +3222,23 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         return ctx.allocNode(.{ .varlim = .{ .body = body } });
     }
     if (full_only and (tokNameEq(name, "reflectbox"))) {
-        // KaTeX parity (pinned 0.18.7): `\reflectbox` takes an hbox
-        // (text) argument; MathML is the text content under a
-        // textstyle reset. The visual mirror (KaTeX CSS) has no IR
-        // counterpart, so layout renders unmirrored (known gap).
+        // KaTeX parity (pinned 0.18.7, issue #97): `\reflectbox`
+        // takes an hbox argument — the same `parseTextBody` path as
+        // `\hbox`, so `$...$` math islands work — under a textstyle
+        // reset. The `.reflect` marker mirrors the ink about the box
+        // center at layout (KaTeX's CSS flip); MathML stays the
+        // plain content, as does KaTeX's.
         const toks = try parseBracedToks(ctx, t, false);
-        try checkTextToks(ctx, toks);
-        const body = try ctx.allocNode(.{ .text = .{ .toks = toks, .fam = .rm } });
+        const inner = try parseTextBody(ctx, depth, toks, .rm);
+        const body = try ctx.allocNode(.{ .reflect = .{ .math = false, .body = inner } });
         return ctx.allocNode(.{ .style = .{ .style = .T, .body = body } });
     }
     if (full_only and (tokNameEq(name, "mathreflectbox"))) {
-        // KaTeX parity (pinned 0.18.7): `\mathreflectbox` takes math
-        // content and mirrors it visually; MathML is the content
-        // alone, so the body parses straight through (same
-        // unmirrored-layout gap as `\reflectbox` above).
-        return parseGroupOrAtom(ctx, depth);
+        // KaTeX parity (pinned 0.18.7, issue #97): `\mathreflectbox`
+        // takes math content; same `.reflect` mirror marker as
+        // `\reflectbox` above, plain-content MathML like KaTeX's.
+        const inner = try parseGroupOrAtom(ctx, depth);
+        return ctx.allocNode(.{ .reflect = .{ .math = true, .body = inner } });
     }
     if (full_only and (tokNameEq(name, "KaTeX") or tokNameEq(name, "LaTeX") or tokNameEq(name, "TeX"))) {
         // Logo macros (KaTeX 0.18.7 `macros.js`, all `\textrm` +
@@ -2822,7 +3410,10 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     }
     if (full_only and (tokNameEq(name, "cancel") or tokNameEq(name, "bcancel"))) {
         const body = try parseGroupOrAtom(ctx, depth);
-        return ctx.allocNode(.{ .cancel = body });
+        // Issue #107: `\bcancel` strikes the other diagonal — it needs
+        // its own direction (it used to alias `.cancel`, so MathML and
+        // texser both said `\cancel` for it).
+        return ctx.allocNode(.{ .cancel = .{ .body = body, .down = tokNameEq(name, "bcancel") } });
     }
     if (full_only and (tokNameEq(name, "iff") or tokNameEq(name, "implies") or tokNameEq(name, "impliedby"))) {
         // KaTeX macro parity (macros.ts): `\\iff` expands to
@@ -2931,7 +3522,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
                 .text = text,
             } });
         }
-        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp } });
+        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextord(name) } });
     }
     if (symbols.lookupDelim(name)) |d| {
         // Bare delimiter (no `\left`): fixed-size atom in the
@@ -2950,12 +3541,12 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     switch (c) {
         '{' => return ctx.allocNode(.{ .atom = .{ .class = .Open, .font = .rm, .cp = '{' } }),
         '}' => return ctx.allocNode(.{ .atom = .{ .class = .Close, .font = .rm, .cp = '}' } }),
-        '$' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '$' } }),
-        '%' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '%' } }),
-        '&' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '&' } }),
-        '#' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '#' } }),
-        '_' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '_' } }),
-        '|' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x2016 } }),
+        '$' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '$', .textord = true } }),
+        '%' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '%', .textord = true } }),
+        '&' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '&', .textord = true } }),
+        '#' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '#', .textord = true } }),
+        '_' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '_', .textord = true } }),
+        '|' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x2016, .textord = true } }),
         ' ' => return ctx.allocNode(.{ .nbsp = {} }),
         ',' => return ctx.allocNode(.{ .space = space_thin }),
         ':' => return ctx.allocNode(.{ .space = space_med }),
@@ -2983,7 +3574,7 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     // table as multi-letter names (KaTeX parity, full profile only).
     if (comptime active_profile == .full) {
         if (symbols.lookup(t.name)) |sym| {
-            return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp } });
+            return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextord(t.name) } });
         }
     }
     return ctx.fail(t.pos, "undefined control sequence");
@@ -3136,6 +3727,22 @@ fn fontFamFor(name: []const u8) ?FontFam {
     return null;
 }
 
+/// Old-style declarations: the six names KaTeX parses with zero
+/// arguments (issue #94, pinned 0.18.7) — they scope over the rest of
+/// the enclosing group instead of taking one group-or-atom. Every
+/// other `fontFamFor` name (`\mathbf`, `\mathcal`, `\bm`, ...) keeps
+/// its single argument (parseCtrl arm above stays for those and for
+/// single-atom nests like scripts).
+fn oldStyleDeclFam(name: []const u8) ?FontFam {
+    if (tokNameEq(name, "rm")) return .rm;
+    if (tokNameEq(name, "it")) return .mathit;
+    if (tokNameEq(name, "bf")) return .bold;
+    if (tokNameEq(name, "sf")) return .sans;
+    if (tokNameEq(name, "tt")) return .tt;
+    if (tokNameEq(name, "cal")) return .cal;
+    return null;
+}
+
 /// Text-mode families take text arguments (`\textbf{a+b}` is an
 /// `mtext`, and `\textbf{\alpha}` is a KaTeX error). `\textsl` is
 /// absent: KaTeX rejects it as undefined.
@@ -3215,7 +3822,7 @@ fn parseOver(ctx: *ParseCtx, depth: u8, t: Tok, kind: OverKind) Error!Idx {
             const pk = try ctx.peek();
             if (pk.kind == .char and pk.cp == '[') {
                 _ = try ctx.next();
-                const r = try parseFormula(ctx, depth, .bracket);
+                const r = try parseFormula(ctx, depth, .bracket, null);
                 under = r;
             }
             const above = try parseGroupOrAtom(ctx, depth);
@@ -3255,7 +3862,7 @@ fn parseSqrt(ctx: *ParseCtx, depth: u8) Error!Idx {
     const pk = try ctx.peek();
     if (pk.kind == .char and pk.cp == '[') {
         _ = try ctx.next();
-        index = try parseFormula(ctx, depth, .bracket);
+        index = try parseFormula(ctx, depth, .bracket, null);
     }
     // KaTeX parity: without an index the radicand is a `primitive`
     // argument — a bare `'`/`\rq` starts no atom there
@@ -3273,7 +3880,13 @@ fn parseSqrt(ctx: *ParseCtx, depth: u8) Error!Idx {
             return ctx.fail(pos, "expected group");
         }
     }
-    const rad = try parseGroupOrAtom(ctx, depth);
+    // KaTeX parity: with an index the radicand is an isolated
+    // argument (the `\sqrt[3]\bf` quirk accepts); without one it is a
+    // `primitive` — bare functions throw `as argument to '\sqrt'`.
+    const rad = if (index == NONE)
+        try parseGroupOrAtomMode(ctx, depth, .sqrt, 0)
+    else
+        try parseGroupOrAtom(ctx, depth);
     return ctx.allocNode(.{ .sqrt = .{ .radicand = rad, .index = index } });
 }
 
@@ -3310,7 +3923,7 @@ fn parseDelimSpec(ctx: *ParseCtx) Error!u21 {
 fn parseLeftRight(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     const left = try parseDelimSpec(ctx);
     ctx.in_fence += 1;
-    const body = try parseFormula(ctx, depth, .leftright);
+    const body = try parseFormula(ctx, depth, .leftright, null);
     ctx.in_fence -= 1;
     // parseFormula stopped before `\right` (unconsumed).
     const r = try ctx.next();
@@ -4380,6 +4993,343 @@ fn checkTextToks(ctx: *ParseCtx, r: Range) Error!void {
     }
 }
 
+/// Copy a token slice into the toks arena.
+fn stashToks(ctx: *ParseCtx, toks: []const Tok) Error!Range {
+    if (toks.len > 0xFFFF) return error.NoSpace;
+    const s = try ctx.allocToks(toks.len);
+    const base: usize = s;
+    @memcpy(ctx.toks[base .. base + toks.len], toks);
+    return .{ .start = s, .len = @intCast(toks.len) };
+}
+
+/// Flatten complete nested `\text{...}` groups in a captured token
+/// range to their inner tokens (KaTeX renders nested text flat —
+/// pinned 0.18.7 probes, issue #75). Repeats until no complete
+/// group remains (each pass removes a wrapper, so passes are
+/// bounded by the range length). A bare `\text` without a braced
+/// group, or an unbalanced group, is left for the caller to reject.
+fn spliceNestedText(ctx: *ParseCtx, r: Range) Error!Range {
+    var work = r;
+    while (true) {
+        const base: usize = @as(usize, work.start);
+        var found: ?struct { at: usize, end: usize } = null;
+        var k: usize = 0;
+        while (k < work.len) : (k += 1) {
+            const tk = ctx.toks[base + k];
+            if (tk.kind == .ctrl and tokNameEq(tk.name, "text") and k + 1 < work.len and
+                ctx.toks[base + k + 1].kind == .lbrace)
+            {
+                var d: usize = 1;
+                var e = k + 2;
+                while (e < work.len and d > 0) : (e += 1) {
+                    const tk2 = ctx.toks[base + e];
+                    if (tk2.kind == .lbrace) d += 1 else if (tk2.kind == .rbrace) d -= 1;
+                }
+                if (d == 0) {
+                    found = .{ .at = k, .end = e };
+                    break;
+                }
+            }
+        }
+        const f = found orelse return work;
+        // The splice drops exactly the wrapper (`\text`, `{`, `}`)
+        // and keeps the inner tokens.
+        const inner_len = f.end - (f.at + 2) - 1;
+        const rest = work.len - 3;
+        const out = try ctx.allocToks(rest);
+        const ob: usize = out;
+        @memcpy(ctx.toks[ob .. ob + f.at], ctx.toks[base .. base + f.at]);
+        @memcpy(ctx.toks[ob + f.at .. ob + f.at + inner_len], ctx.toks[base + f.at + 2 .. base + f.end - 1]);
+        @memcpy(ctx.toks[ob + f.at + inner_len .. ob + rest], ctx.toks[base + f.end .. base + work.len]);
+        work = .{ .start = out, .len = @intCast(rest) };
+    }
+}
+
+/// Index of the first `\tag` control token in a captured text
+/// range, at any depth (KaTeX hoists `\tag` from text bodies even
+/// nested in braces — pinned 0.18.7 probes, issue #75).
+fn findTextTag(ctx: *ParseCtx, r: Range) ?usize {
+    var k: usize = 0;
+    while (k < r.len) : (k += 1) {
+        const tk = ctx.toks[@as(usize, r.start) + k];
+        if (tk.kind == .ctrl and tokNameEq(tk.name, "tag")) return k;
+    }
+    return null;
+}
+
+/// Hoist one `\tag` out of a captured text range: push its tokens
+/// back and run the real `parseTag` (identical star/bare/braced
+/// semantics, including "Multiple \tag"), returning the range with
+/// the construct excised. `ti` indexes the `\tag` token.
+fn hoistTextTag(ctx: *ParseCtx, r: Range, ti: usize) Error!Range {
+    const base: usize = @as(usize, r.start);
+    var j = ti + 1;
+    // Optional star immediately after (parseTag peeks, no skipping).
+    if (j < r.len and ctx.toks[base + j].kind == .char and ctx.toks[base + j].cp == '*') j += 1;
+    // Argument end by parseBracedToks(false) rules: a braced group
+    // or exactly one token (captureArg takes a single token, never
+    // skipping spaces).
+    var end: usize = undefined;
+    if (j < r.len and ctx.toks[base + j].kind == .lbrace) {
+        var depth: usize = 1;
+        end = j + 1;
+        while (end < r.len and depth > 0) : (end += 1) {
+            const tk = ctx.toks[base + end];
+            if (tk.kind == .lbrace) depth += 1 else if (tk.kind == .rbrace) depth -= 1;
+        }
+        // Captured ranges are brace-balanced by construction.
+        if (depth > 0) return ctx.fail(ctx.toks[base + j].pos, "expected '}'");
+    } else {
+        if (j >= r.len) return ctx.fail(ctx.toks[base + ti].pos, "expected argument");
+        end = j + 1;
+    }
+    // Push the construct back minus `\tag` itself (parseTag takes
+    // the consumed control token and reads star/argument live).
+    var k = end;
+    while (k > ti + 1) {
+        k -= 1;
+        try ctx.push(ctx.toks[base + k]);
+    }
+    _ = try parseTag(ctx, ctx.toks[base + ti]);
+    const rest = r.len - (end - ti);
+    const out = try ctx.allocToks(rest);
+    const obase: usize = out;
+    @memcpy(ctx.toks[obase .. obase + ti], ctx.toks[base .. base + ti]);
+    @memcpy(ctx.toks[obase + ti .. obase + rest], ctx.toks[base + end .. base + r.len]);
+    return .{ .start = out, .len = @intCast(rest) };
+}
+
+/// One collected text-body piece: a literal token span (merged
+/// with adjacent spans) or a parsed node (math segment, nested
+/// group — both break merging, matching KaTeX's flat `mtext`
+/// runs).
+const TextPiece = union(enum) { span: Range, node: Idx };
+
+/// Build a text node from captured body tokens (issues #75/#81):
+/// `\tag` hoists from anywhere in the range (display) or rejects
+/// (inline), nested `\text{...}` groups recurse with their own `$`
+/// pairing, and `$` toggles math segments (KaTeX text-parser
+/// parity, pinned 0.18.7). Adjacent literal spans merge into one
+/// `.text` node (KaTeX renders nested text flat); math pieces parse
+/// as textstyle formulas. Empty bodies become an empty group (the
+/// bundle's `<mrow></mrow>`), and a single piece returns directly.
+fn parseTextBody(ctx: *ParseCtx, depth: u8, toks: Range, fam: FontFam) Error!Idx {
+    var work = toks;
+    while (findTextTag(ctx, work)) |ti| {
+        // Subset profile: `\tag` is a full-only name (the math-mode
+        // call site gates it); fail bare `Unsupported` like the
+        // subset gate, at the same contract.
+        if (comptime active_profile == .subset) return error.Unsupported;
+        work = try hoistTextTag(ctx, work, ti);
+    }
+    var pieces: [64]TextPiece = undefined;
+    var np: usize = 0;
+    try collectTextPieces(ctx, depth, work, fam, &pieces, &np);
+    // Materialize: validate literal spans, keep nodes as-is.
+    var out: [64]u16 = undefined;
+    var no: usize = 0;
+    for (pieces[0..np]) |p| {
+        switch (p) {
+            .span => |r| {
+                try checkTextToks(ctx, r);
+                if (no >= out.len) return error.NoSpace;
+                out[no] = try ctx.allocNode(.{ .text = .{ .toks = r, .fam = fam } });
+                no += 1;
+            },
+            .node => |id| {
+                if (no >= out.len) return error.NoSpace;
+                out[no] = id;
+                no += 1;
+            },
+        }
+    }
+    if (no == 0) return finishGroup(ctx, &.{});
+    if (no == 1) return out[0];
+    const row = try ctx.allocKids(no);
+    @memcpy(ctx.kids[row .. row + no], out[0..no]);
+    return ctx.allocNode(.{ .group = .{ .start = row, .len = @intCast(no) } });
+}
+
+/// Append a literal span, merging into a trailing span piece
+/// (KaTeX's flat `mtext` runs, pinned 0.18.7).
+fn pushTextSpan(ctx: *ParseCtx, pieces: *[64]TextPiece, np: *usize, span: Range) Error!void {
+    if (span.len == 0) return;
+    if (np.* > 0) {
+        switch (pieces.*[np.* - 1]) {
+            .span => |prev| {
+                const base: usize = @as(usize, prev.start);
+                const add: usize = @as(usize, span.start);
+                const total = prev.len + span.len;
+                const out = try ctx.allocToks(total);
+                const ob: usize = out;
+                @memcpy(ctx.toks[ob .. ob + prev.len], ctx.toks[base .. base + prev.len]);
+                @memcpy(ctx.toks[ob + prev.len .. ob + total], ctx.toks[add .. add + span.len]);
+                pieces.*[np.* - 1] = .{ .span = .{ .start = out, .len = @intCast(total) } };
+                return;
+            },
+            .node => {},
+        }
+    }
+    if (np.* >= pieces.len) return error.NoSpace;
+    pieces.*[np.*] = .{ .span = span };
+    np.* += 1;
+}
+
+/// Collect the pieces of a tag-free text range: `$` pairs outside
+/// control-led groups become math nodes; nested `\text{...}` groups
+/// recurse into the same list (their inner `$` stays scoped —
+/// pinned probes — while pure-text innards merge across); plain
+/// groups pair `$` across. Ranges reference the arena; callers copy
+/// when filtering.
+fn collectTextPieces(
+    ctx: *ParseCtx,
+    depth: u8,
+    work: Range,
+    fam: FontFam,
+    pieces: *[64]TextPiece,
+    np: *usize,
+) Error!void {
+    const base: usize = @as(usize, work.start);
+    var k: usize = 0;
+    var start: usize = 0;
+    // Flush the pending literal span [start, k) as one piece.
+    const flush = struct {
+        fn f(c: *ParseCtx, w: Range, from: usize, to: usize, ps: *[64]TextPiece, n: *usize) Error!void {
+            if (from == to) return;
+            const span = try stashToks(c, c.toks[@as(usize, w.start) + from .. @as(usize, w.start) + to]);
+            try pushTextSpan(c, ps, n, span);
+        }
+    }.f;
+    while (k < work.len) {
+        const tk = ctx.toks[base + k];
+        // An empty group unbound to a control token is an empty row
+        // (KaTeX `<mrow></mrow>` parity, issue #75 — e.g. the residue
+        // of a hoisted `\tag`); it breaks text merging, while
+        // non-empty groups stay transparent.
+        if (tk.kind == .lbrace and k + 1 < work.len and
+            ctx.toks[base + k + 1].kind == .rbrace and
+            (k == 0 or ctx.toks[base + k - 1].kind != .ctrl))
+        {
+            try flush(ctx, work, start, k, pieces, np);
+            if (np.* >= pieces.len) return error.NoSpace;
+            pieces.*[np.*] = .{ .node = try finishGroup(ctx, &.{}) };
+            np.* += 1;
+            k += 2;
+            start = k;
+            continue;
+        }
+        // A braced group bound to a control token is atomic: nested
+        // `\text{...}` recurses (same list, so merging still
+        // applies); any other stays literal for `checkTextToks`.
+        if (tk.kind == .ctrl and k + 1 < work.len and ctx.toks[base + k + 1].kind == .lbrace) {
+            var d: usize = 1;
+            var e = k + 2;
+            while (e < work.len and d > 0) : (e += 1) {
+                const tk2 = ctx.toks[base + e];
+                if (tk2.kind == .lbrace) d += 1 else if (tk2.kind == .rbrace) d -= 1;
+            }
+            if (d > 0) return ctx.fail(tk.pos, "expected '}'");
+            if (tokNameEq(tk.name, "text")) {
+                // A nested `\text{...}` is its own unit: pure-text
+                // innards splice their tokens for cross-boundary
+                // merging (the bundle's flat `mtext`); anything with
+                // math stays an opaque node (pinned 0.18.7 probes).
+                try flush(ctx, work, start, k, pieces, np);
+                const inner = try stashToks(ctx, ctx.toks[base + k + 2 .. base + e - 1]);
+                const sub = try parseTextBody(ctx, depth, inner, fam);
+                switch (ctx.nodes[sub]) {
+                    .text => |st| try pushTextSpan(ctx, pieces, np, st.toks),
+                    else => {
+                        if (np.* >= pieces.len) return error.NoSpace;
+                        pieces.*[np.*] = .{ .node = sub };
+                        np.* += 1;
+                    },
+                }
+                k = e;
+                start = e;
+                continue;
+            }
+            k = e;
+            continue;
+        }
+        // `\(`...`\)` math islands (KaTeX parity, pinned 0.18.7,
+        // issue #81): the same shape as the `$` islands below — the
+        // inner range re-enters math at text style, so fractions and
+        // nested `\text` work inside. An unclosed `\(` rejects (KaTeX
+        // "Expected '\\)'"; the EOF-vs-opener position gap rides a
+        // `katex_only` row like unclosed `$`). A stray `\)` never
+        // opens an island, so it falls through to the span and
+        // `checkTextToks` rejects it (KaTeX "Mismatched \\)" carries
+        // no position, so the kind alone agrees).
+        if (tk.kind == .ctrl and tokNameEq(tk.name, "(")) {
+            var e = k + 1;
+            var found = false;
+            while (e < work.len) : (e += 1) {
+                const tk2 = ctx.toks[base + e];
+                if (tk2.kind == .ctrl and e + 1 < work.len and ctx.toks[base + e + 1].kind == .lbrace) {
+                    var d: usize = 1;
+                    e += 2;
+                    while (e < work.len and d > 0) : (e += 1) {
+                        const tk3 = ctx.toks[base + e];
+                        if (tk3.kind == .lbrace) d += 1 else if (tk3.kind == .rbrace) d -= 1;
+                    }
+                    e -= 1;
+                    continue;
+                }
+                if (tk2.kind == .ctrl and tokNameEq(tk2.name, ")")) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return ctx.fail(tk.pos, "expected '\\)'");
+            try flush(ctx, work, start, k, pieces, np);
+            const seg = try stashToks(ctx, ctx.toks[base + k + 1 .. base + e]);
+            const math = try parseTokenRange(ctx, depth, seg);
+            if (np.* >= pieces.len) return error.NoSpace;
+            pieces.*[np.*] = .{ .node = try ctx.allocNode(.{ .style = .{ .style = .T, .body = math } }) };
+            np.* += 1;
+            k = e + 1;
+            start = k;
+            continue;
+        }
+        if (tk.kind == .char and tk.cp == '$') {
+            var e = k + 1;
+            var found = false;
+            while (e < work.len) : (e += 1) {
+                const tk2 = ctx.toks[base + e];
+                if (tk2.kind == .ctrl and e + 1 < work.len and ctx.toks[base + e + 1].kind == .lbrace) {
+                    var d: usize = 1;
+                    e += 2;
+                    while (e < work.len and d > 0) : (e += 1) {
+                        const tk3 = ctx.toks[base + e];
+                        if (tk3.kind == .lbrace) d += 1 else if (tk3.kind == .rbrace) d -= 1;
+                    }
+                    e -= 1;
+                    continue;
+                }
+                if (tk2.kind == .char and tk2.cp == '$') {
+                    found = true;
+                    break;
+                }
+            }
+            // An unclosed `$` rejects (KaTeX "Expected '$'"; the
+            // position gap rides a `katex_only` row, issue #81).
+            if (!found) return ctx.fail(tk.pos, "expected '$'");
+            try flush(ctx, work, start, k, pieces, np);
+            const seg = try stashToks(ctx, ctx.toks[base + k + 1 .. base + e]);
+            const math = try parseTokenRange(ctx, depth, seg);
+            if (np.* >= pieces.len) return error.NoSpace;
+            pieces.*[np.*] = .{ .node = try ctx.allocNode(.{ .style = .{ .style = .T, .body = math } }) };
+            np.* += 1;
+            k = e + 1;
+            start = k;
+            continue;
+        }
+        k += 1;
+    }
+    try flush(ctx, work, start, work.len, pieces, np);
+}
+
 fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     const l = try ctx.captureArg();
     const r = try ctx.captureArg();
@@ -4389,8 +5339,15 @@ fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     const den_t = try ctx.captureArg();
     const left = try singleDelimArg(ctx, l, cmd.pos);
     const right = try singleDelimArg(ctx, r, cmd.pos);
+    // An explicit non-positive bar (`{0pt}`, `{-1pt}`) means NO rule
+    // (issue #105, pinned 0.18.7 — barless like `\binom`); an EMPTY
+    // bar keeps the default rule.
+    var bar = true;
     var thick: i32 = 0;
-    if (thick_t.len > 0) thick = try dimenFromToks(ctx, thick_t, cmd.pos);
+    if (thick_t.len > 0) {
+        thick = try dimenFromToks(ctx, thick_t, cmd.pos);
+        if (thick <= 0) bar = false;
+    }
     var fstyle: ?Style = null;
     if (style_t.len > 0) {
         if (style_t.len != 1) return ctx.fail(cmd.pos, "expected style number");
@@ -4409,10 +5366,10 @@ fn parseGenfrac(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     var body = try ctx.allocNode(.{ .frac = .{
         .num = num,
         .den = den,
-        .kind = .{ .bar = true, .parens = false, .thick = thick },
+        .kind = .{ .bar = bar, .thick = thick },
     } });
     if (left != 0 or right != 0) {
-        body = try ctx.allocNode(.{ .delim = .{ .left = left, .right = right, .body = body } });
+        body = try ctx.allocNode(.{ .delim = .{ .left = left, .right = right, .body = body, .fixed = true } });
     }
     // The style `mstyle` sits outside delimiters (KaTeX parity).
     if (fstyle) |st| {
@@ -4466,7 +5423,7 @@ fn parseTokenRange(ctx: *ParseCtx, depth: u8, r: Range) Error!Idx {
         i -= 1;
         try ctx.push(ctx.toks[r.start + i]);
     }
-    return parseFormula(ctx, depth, .top);
+    return parseFormula(ctx, depth, .top, null);
 }
 
 fn parseSmash(ctx: *ParseCtx, depth: u8) Error!Idx {
@@ -4553,7 +5510,7 @@ fn parseRule(ctx: *ParseCtx, depth: u8) Error!Idx {
     const pk = try ctx.peek();
     if (pk.kind == .char and pk.cp == '[') {
         _ = try ctx.next();
-        const r = try parseFormula(ctx, depth, .bracket);
+        const r = try parseFormula(ctx, depth, .bracket, null);
         // The bracket frame yields a group; interpret a bare dimension
         // from its single atom when possible.
         raise = try ruleDimenFromGroup(ctx, r, pk.pos);
@@ -4874,7 +5831,8 @@ fn isBuiltin(name: []const u8) bool {
         "htmlId", "htmlStyle", "htmlData", "operatorname", "substack",
         "mathchoice", "smash", "raisebox", "rule", "boxed", "fbox",
         "KaTeX", "LaTeX", "TeX", "operatornamewithlimits", "mathstrut",
-        "bra", "ket", "Bra", "Ket",
+        "bra", "ket", "Bra", "Ket", "braket", "Braket",
+        "set", "Set", "nonumber", "notag",
         "phantom", "hphantom", "vphantom", "llap", "rlap", "clap",
         "cancel", "bcancel", "sout", "phase", "textcircled", "quad", "qquad", "enskip", "hspace", "vspace",
         "kern", "mkern", "mskip", "hskip", "newcommand", "renewcommand",
@@ -4889,6 +5847,7 @@ fn isBuiltin(name: []const u8) bool {
         "matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix",
         "smallmatrix", "array", "aligned", "alignedat", "cases", "dcases",
         "drcases", "rcases", "gathered", "subarray",
+        "align", "alignat", "equation", "gather", "split", "CD",
     };
     for (envs) |e| if (tokNameEq(e, name)) return true;
     return false;
@@ -4897,6 +5856,17 @@ fn isBuiltin(name: []const u8) bool {
 // ---------------------------------------------------------------------------
 // Environments
 // ---------------------------------------------------------------------------
+
+/// Envs whose MathML table owns equation-number columns (shared
+/// with `mathml.zig` and the `.numbered` computation below): only
+/// these adopt a pending tag into a row. `split`, `CD`, and the
+/// matrix family leave it pending (pinned 0.18.7, issue #75).
+pub fn numEnvKind(kind: EnvKind) bool {
+    return switch (kind) {
+        .alignenv, .alignat, .equation, .gather => true,
+        else => false,
+    };
+}
 
 fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     // Environment name: `{matrix}` — letter chars.
@@ -4954,14 +5924,46 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         .gathered
     else if (tokNameEq(base, "subarray"))
         .subarray
+    else if (tokNameEq(base, "align"))
+        .alignenv
+    else if (tokNameEq(base, "alignat"))
+        .alignat
+    else if (tokNameEq(base, "equation"))
+        .equation
+    else if (tokNameEq(base, "gather"))
+        .gather
+    else if (tokNameEq(base, "split"))
+        .split
+    else if (tokNameEq(base, "CD"))
+        .cd
     else
         // KaTeX parity: reported at the `{name}` group opener.
         return ctx.fail(lb.pos, "unknown environment");
+    // Display-only top-level environments (KaTeX amsmath parity,
+    // issues #83/#85/#86/#87/#90): `align`, `alignat`, `equation`,
+    // `gather`, `split`, `CD` reject inline with KaTeX's message,
+    // reported at `\begin` (matches the pinned-bundle position).
+    const display_only = switch (kind) {
+        .alignenv, .alignat, .equation, .gather, .split, .cd => true,
+        else => false,
+    };
+    if (display_only and !ctx.display) {
+        ctx.err_pos = cmd.pos;
+        ctx.err_msg = "can be used only in display mode";
+        return error.Invalid;
+    }
     const matrix_star = starred and switch (kind) {
         .matrix, .pmatrix, .bmatrix, .Bmatrix, .vmatrix, .Vmatrix => true,
         else => false,
     };
-    if (starred and !matrix_star) return ctx.fail(lb.pos, "unknown environment");
+    // KaTeX parity: starred matrix envs share rendering; starred
+    // display envs (`align*`, `alignat*`, `equation*`, `gather*`)
+    // drop the number column. A star anywhere else is unknown.
+    const display_star = starred and switch (kind) {
+        .alignenv, .alignat, .equation, .gather => true,
+        else => false,
+    };
+    if (starred and !matrix_star and !display_star) return ctx.fail(lb.pos, "unknown environment");
 
     // Column spec for `{array}` / `{alignedat}`.
     var spec: [16]u16 = undefined;
@@ -4985,7 +5987,7 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
             nspec += 1;
         }
         if (nspec == 0) return ctx.fail(cmd.pos, "empty column spec");
-    } else if (kind == .alignedat) {
+    } else if (kind == .alignedat or kind == .alignat) {
         const sl = try ctx.next();
         if (sl.kind != .lbrace) return ctx.fail(sl.pos, "expected column count");
         var count: usize = 0;
@@ -5053,6 +6055,12 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
     }
 
     ctx.in_env += 1;
+    // `\nonumber` is row-scoped (KaTeX resets `\@eqnsw` per row):
+    // a nested env neither inherits nor leaks the outer row's flag.
+    const saved_nonumber = ctx.row_nonumber;
+    ctx.row_nonumber = false;
+    const saved_tagged = ctx.row_tagged;
+    ctx.row_tagged = false;
     // Row spans are stashed locally and materialized densely at the
     // end: nested environments allocate pool rows while cells parse,
     // so the pool is not contiguous mid-parse.
@@ -5100,18 +6108,37 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
             // amsmath parity (`\start@aligned`): every second cell of
             // an aligned row opens with an empty group so a leading
             // operator keeps binary spacing (and its MathML row).
+            // Applies to the top-level `align`/`alignat`/`split`
+            // twins, which share the rl-pair layout.
             var cell = c.cell;
-            if ((kind == .aligned or kind == .alignedat) and nrowbuf % 2 == 1) {
+            if ((kind == .aligned or kind == .alignedat or kind == .alignenv or
+                kind == .alignat or kind == .split) and nrowbuf % 2 == 1)
+            {
                 cell = try prependEmptyGroup(ctx, cell);
             }
             rowbuf[nrowbuf] = cell;
             nrowbuf += 1;
         }
         switch (c.term) {
-            .amp => {},
+            .amp => {
+                // KaTeX parity (issue #86): `equation` is a single
+                // column — `&` rejects ("Too many tab characters").
+                if (kind == .equation) {
+                    ctx.err_pos = c.term_pos;
+                    ctx.err_msg = "too many tab characters";
+                    return error.Invalid;
+                }
+            },
             .newline => {
                 if (nspans >= 64) return error.NoSpace;
                 spans[nspans] = try stashRow(ctx, rowbuf[0..nrowbuf]);
+                spans[nspans].nonumber = ctx.row_nonumber;
+                spans[nspans].tagged = ctx.row_tagged;
+                if (ctx.row_tagged and numEnvKind(kind)) ctx.tag_adopted = true;
+                ctx.row_nonumber = false;
+                // Numbering rows consume a pending tag; other envs
+                // let it leak to the enclosing row (issue #75).
+                if (numEnvKind(kind)) ctx.row_tagged = false;
                 nspans += 1;
                 nrowbuf = 0;
             },
@@ -5137,6 +6164,12 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
                 if (nrowbuf > 0 or nspans == 0) {
                     if (nspans >= 64) return error.NoSpace;
                     spans[nspans] = try stashRow(ctx, rowbuf[0..nrowbuf]);
+                    spans[nspans].nonumber = ctx.row_nonumber;
+                    spans[nspans].tagged = ctx.row_tagged;
+                    if (ctx.row_tagged and numEnvKind(kind)) ctx.tag_adopted = true;
+                    ctx.row_nonumber = false;
+                    // Numbering rows consume a pending tag (see above).
+                    if (numEnvKind(kind)) ctx.row_tagged = false;
                     nspans += 1;
                     nrowbuf = 0;
                 }
@@ -5144,7 +6177,39 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
             },
         }
     }
+    // A tag seen before begin (a leading outside-tag) belongs to
+    // row 0 when no row inside claimed one; a trailing outside-tag
+    // arrives after this point and marks nothing (pinned 0.18.7,
+    // issue #75).
+    if (saved_tagged) {
+        var any_tagged = false;
+        for (spans[0..nspans]) |s| any_tagged = any_tagged or s.tagged;
+        if (!any_tagged and nspans > 0) {
+            spans[0].tagged = true;
+            if (numEnvKind(kind)) ctx.tag_adopted = true;
+        }
+    }
     ctx.in_env -= 1;
+    ctx.row_nonumber = saved_nonumber;
+    // A tag seen inside a non-numbering env stays pending for the
+    // enclosing row (textual containment, issue #75); numbering rows
+    // consume it when they close, so OR (never clear) here.
+    ctx.row_tagged = saved_tagged or ctx.row_tagged;
+    if (kind == .cd) {
+        // amscd assembly (KaTeX `parseCD` parity, issue #85):
+        // `&` never separates CD columns (the generic loop above
+        // may have split some), so each row's cell groups flatten
+        // into one item list and re-split at `@` arrows.
+        var r: usize = 0;
+        while (r < nspans) : (r += 1) {
+            spans[r] = try assembleCDRow(ctx, spans[r], r % 2 == 1, cmd.pos);
+        }
+        // KaTeX unconditionally pushes a final empty row after the
+        // loop (every CD table ends in `<mtr></mtr>`).
+        if (nspans >= 64) return error.NoSpace;
+        spans[nspans] = try stashRow(ctx, &.{});
+        nspans += 1;
+    }
     // Materialize rows densely now that nested parsing is done.
     const rows_start = ctx.nrows;
     for (spans[0..nspans]) |sp| _ = try ctx.allocRow(sp);
@@ -5156,6 +6221,9 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         .rows_len = @intCast(nspans),
         .spec_start = spec_start,
         .spec_len = @intCast(nspec),
+        // Unstarred top-level display envs keep KaTeX's leading
+        // number/glue column (issues #83/#86/#87).
+        .numbered = numEnvKind(kind) and !display_star,
     } });
     // Delimiter pairing for matrix variants. `cases` is a leftright
     // with a null right delimiter (KaTeX parity: no trailing mo).
@@ -5175,6 +6243,199 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         return ctx.allocNode(.{ .delim = .{ .left = f.l, .right = f.r, .body = env_id } });
     }
     return env_id;
+}
+
+/// Codepoint of an `.atom` node, else null (CD arrow scan).
+fn cdAtomCp(ctx: *ParseCtx, id: Idx) ?u21 {
+    return switch (ctx.nodes[id]) {
+        .atom => |a| a.cp,
+        else => null,
+    };
+}
+
+/// True for a bare `@` atom starting a CD arrow (KaTeX
+/// `isStartOfArrow`: a textord `@`, i.e. top-level, never nested).
+fn cdIsAt(ctx: *ParseCtx, id: Idx) bool {
+    return cdAtomCp(ctx, id) == '@';
+}
+
+/// Parse one CD arrow; `i` points at `@` on entry and past the last
+/// consumed item on exit. Labels collect parsed nodes (issue #85).
+fn parseCDArrow(ctx: *ParseCtx, items: []const u16, i: *usize, pos: u32) Error!Idx {
+    i.* += 1;
+    if (i.* >= items.len) return ctx.fail(pos, "expected arrow after '@'");
+    const ac = cdAtomCp(ctx, items[i.*]) orelse {
+        return ctx.fail(pos, "expected one of \"<>AV=|.\" after @");
+    };
+    const arrow_pos = pos;
+    switch (ac) {
+        '>', '<', 'A', 'V' => {
+            // Two labels, each terminated by the arrow character
+            // (KaTeX `parseCD`: `@>{over}>{under}>`). A nested `@`
+            // or a missing terminator fails like the bundle.
+            var labs: [2]Idx = undefined;
+            var li: usize = 0;
+            while (li < 2) : (li += 1) {
+                var lbuf: [256]u16 = undefined;
+                var nlab: usize = 0;
+                while (true) {
+                    i.* += 1;
+                    if (i.* >= items.len) return ctx.fail(arrow_pos, "missing arrow character to complete a CD arrow");
+                    if (cdIsAt(ctx, items[i.*])) return ctx.fail(arrow_pos, "missing arrow character to complete a CD arrow");
+                    if (cdAtomCp(ctx, items[i.*]) == ac) break;
+                    if (nlab >= lbuf.len) return error.NoSpace;
+                    lbuf[nlab] = items[i.*];
+                    nlab += 1;
+                }
+                labs[li] = try finishGroup(ctx, lbuf[0..nlab]);
+            }
+            i.* += 1;
+            if (ac == '>' or ac == '<') {
+                // Horizontal arrows are extensible with over/under
+                // labels (the `\xrightarrow`/`\xleftarrow` shape).
+                // KaTeX always passes both labels (possibly empty),
+                // so its MathML is always `munderover` — mirror that
+                // exactly rather than dropping empty labels.
+                return ctx.allocNode(.{ .over = .{
+                    .kind = if (ac == '>') .xright else .xleft,
+                    .nucleus = NONE,
+                    .extra = labs[0],
+                    .under = labs[1],
+                } });
+            }
+            // Vertical arrows (`\Big\uparrow`/`\Big\downarrow` with
+            // `\cdleft`/`\cdright` side labels and a `\cdparent`
+            // row, KaTeX `cdArrow`): the cell groups left label,
+            // arrow, right label in order.
+            const big = try ctx.allocNode(.{ .big = .{
+                .cp = if (ac == 'A') @as(u21, 0x2191) else @as(u21, 0x2193),
+                .level = 1,
+                .class = .Ord,
+            } });
+            const left = try ctx.allocNode(.{ .cdlabel = .{ .body = labs[0], .left = true } });
+            const right = try ctx.allocNode(.{ .cdlabel = .{ .body = labs[1], .left = false } });
+            const inner = [_]u16{ left, big, right };
+            const frag = try finishGroup(ctx, &inner);
+            const outer = [_]u16{frag};
+            return finishGroup(ctx, &outer);
+        },
+        '=' => {
+            // KaTeX `cdArrow` calls `\cdlongequal` with no labels:
+            // the MathML is `mover` plus one bare `mpadded` (the
+            // xarrow emitter's both-missing arm), never an `mrow`.
+            i.* += 1;
+            return ctx.allocNode(.{ .over = .{
+                .kind = .xlongequal,
+                .nucleus = NONE,
+                .extra = NONE,
+                .under = NONE,
+            } });
+        },
+        '|' => {
+            i.* += 1;
+            // KaTeX `cdArrow`: `\Big\Vert` (same node as the
+            // `\Big\Vert` spelling: level 1, Ord).
+            return ctx.allocNode(.{ .big = .{ .cp = 0x2016, .level = 1, .class = .Ord } });
+        },
+        '.' => {
+            // KaTeX `cdArrow`: a textord space (its MathML is an
+            // `mi` holding U+0020, matched here by a space atom).
+            i.* += 1;
+            return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = ' ' } });
+        },
+        else => return ctx.fail(arrow_pos, "expected one of \"<>AV=|.\" after @"),
+    }
+}
+
+/// amscd row assembly (KaTeX `parseCD` parity, issue #85): flatten
+/// the row's cell groups into one item list, split at `@` arrows
+/// into alternating cells and arrows. Even rows keep every cell;
+/// odd (vertical-arrow) rows keep arrows plus middle cells only.
+fn assembleCDRow(ctx: *ParseCtx, span: Row, odd: bool, pos: u32) Error!Row {
+    const cells = ctx.kids[span.start .. span.start + span.len];
+    // Rule-gap rows pass through untouched.
+    if (cells.len == 1) {
+        if (ctx.nodes[cells[0]] == .hline) return span;
+    }
+    var items: [512]u16 = undefined;
+    var nitems: usize = 0;
+    for (cells) |cell| {
+        switch (ctx.nodes[cell]) {
+            .group => |g| {
+                const kids = ctx.kids[g.start .. g.start + g.len];
+                for (kids) |k| {
+                    if (nitems >= items.len) return error.NoSpace;
+                    items[nitems] = k;
+                    nitems += 1;
+                }
+            },
+            else => {
+                if (nitems >= items.len) return error.NoSpace;
+                items[nitems] = cell;
+                nitems += 1;
+            },
+        }
+    }
+    var segs: [64]u16 = undefined; // cells
+    var nsegs: usize = 0;
+    var arrows: [64]u16 = undefined;
+    var narrows: usize = 0;
+    var cur: [512]u16 = undefined;
+    var ncur: usize = 0;
+    var i: usize = 0;
+    while (i < nitems) {
+        if (cdIsAt(ctx, items[i])) {
+            if (nsegs >= segs.len or narrows >= arrows.len) return error.NoSpace;
+            segs[nsegs] = try finishGroup(ctx, cur[0..ncur]);
+            nsegs += 1;
+            ncur = 0;
+            arrows[narrows] = try parseCDArrow(ctx, items[0..nitems], &i, pos);
+            narrows += 1;
+        } else {
+            if (ncur >= cur.len) return error.NoSpace;
+            cur[ncur] = items[i];
+            ncur += 1;
+            i += 1;
+        }
+    }
+    if (nsegs >= segs.len) return error.NoSpace;
+    segs[nsegs] = try finishGroup(ctx, cur[0..ncur]);
+    nsegs += 1;
+    var out: [128]u16 = undefined;
+    var nout: usize = 0;
+    if (!odd) {
+        var k: usize = 0;
+        while (k < narrows) : (k += 1) {
+            out[nout] = segs[k];
+            nout += 1;
+            out[nout] = arrows[k];
+            nout += 1;
+        }
+        out[nout] = segs[narrows];
+        nout += 1;
+    } else {
+        // Odd rows drop the leading cell (KaTeX `row.shift()`)
+        // and the trailing cell (never pushed).
+        var k: usize = 0;
+        while (k < narrows) : (k += 1) {
+            out[nout] = arrows[k];
+            nout += 1;
+            if (k < narrows - 1) {
+                out[nout] = segs[k + 1];
+                nout += 1;
+            }
+        }
+        // An arrow-less odd row is empty (its cell is dropped).
+        if (narrows == 0) {
+            const empty = try finishGroup(ctx, &.{});
+            out[nout] = empty;
+            nout += 1;
+        }
+    }
+    var row = try stashRow(ctx, out[0..nout]);
+    row.nonumber = span.nonumber;
+    row.tagged = span.tagged;
+    return row;
 }
 
 /// Whether a parsed cell is an empty group (a row trailer with no
@@ -5301,6 +6562,11 @@ test "tag hoists to the equation root in display mode" {
     var ctx6 = ParseCtx.init("\\tag{1}\\tag{2}x");
     try std.testing.expectError(error.Invalid, parse(&ctx6, true));
     try std.testing.expectEqualStrings("Multiple \\tag", ctx6.err_msg);
+    // A nested tag reports "Multiple \tag" too (never a text-mode
+    // error), at the inner tag (issue #75).
+    var ctx6b = ParseCtx.init("\\tag{a\\tag{b}}x");
+    try std.testing.expectError(error.Invalid, parse(&ctx6b, true));
+    try std.testing.expectEqualStrings("Multiple \\tag", ctx6b.err_msg);
     // A user `\tag` macro shadows the builtin (expansion precedes
     // the tag arm, like every other builtin).
     var ctx7 = ParseCtx.init("\\renewcommand{\\tag}{X}\\tag");
@@ -5442,6 +6708,32 @@ test "matrix ampersands and newlines split cells" {
         },
         else => return error.TestUnexpectedResult,
     }
+}
+
+test "newline breaks env rows, stays mspace in running math (issue #79)" {
+    // Pinned KaTeX 0.18.7: `\newline` is a row separator inside env
+    // cells (like `\\`), but a content node (mspace) in running math.
+    var ctx = ParseCtx.init("\\begin{matrix}a\\newline b\\end{matrix}");
+    const root = try parse(&ctx, false);
+    const env_id = switch (ctx.nodes[root]) {
+        .group => |g| ctx.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx.nodes[env_id]) {
+        .env => |e| try std.testing.expectEqual(@as(u16, 2), e.rows_len),
+        else => return error.TestUnexpectedResult,
+    }
+    var ctx2 = ParseCtx.init("a\\newline b");
+    const root2 = try parse(&ctx2, false);
+    const g2 = switch (ctx2.nodes[root2]) {
+        .group => |g| g,
+        else => return error.TestUnexpectedResult,
+    };
+    var saw_newline = false;
+    for (ctx2.kids[g2.start .. g2.start + g2.len]) |k| {
+        if (ctx2.nodes[k] == .newline) saw_newline = true;
+    }
+    try std.testing.expect(saw_newline);
 }
 
 test "verb scans to delimiter as monospace text" {
@@ -5688,4 +6980,320 @@ test "color specs follow the KaTeX validity rule" {
     _ = parse(&ctx, false) catch {};
     try std.testing.expectEqual(@as(u32, 6), ctx.err_pos);
 }
+
+
+test "display-only envs accept in display, reject inline (issues #83/#85/#86/#87/#90)" {
+    // Pinned KaTeX 0.18.7: align/alignat/equation/gather/split/CD
+    // accept in display mode and reject inline with "{name} can be
+    // used only in display mode."
+    const EnvCase = struct { src: []const u8, kind: EnvKind, numbered: bool };
+    const ok_cases = [_]EnvCase{
+        .{ .src = "\\begin{align}x&=1\\\\y&=2\\end{align}", .kind = .alignenv, .numbered = true },
+        .{ .src = "\\begin{align*}x&=1\\end{align*}", .kind = .alignenv, .numbered = false },
+        .{ .src = "\\begin{alignat}{2}x&=1&y&=2\\end{alignat}", .kind = .alignat, .numbered = true },
+        .{ .src = "\\begin{alignat*}{2}x&=1\\end{alignat*}", .kind = .alignat, .numbered = false },
+        .{ .src = "\\begin{equation}x=1\\end{equation}", .kind = .equation, .numbered = true },
+        .{ .src = "\\begin{equation*}x=1\\end{equation*}", .kind = .equation, .numbered = false },
+        .{ .src = "\\begin{gather}x=1\\\\y=2\\end{gather}", .kind = .gather, .numbered = true },
+        .{ .src = "\\begin{gather*}x=1\\end{gather*}", .kind = .gather, .numbered = false },
+        .{ .src = "\\begin{split}x&=1\\\\y&=2\\end{split}", .kind = .split, .numbered = false },
+        .{ .src = "\\begin{CD}A@>>>B\\end{CD}", .kind = .cd, .numbered = false },
+    };
+    for (ok_cases) |c| {
+        var ctx = ParseCtx.init(c.src);
+        const root = try parse(&ctx, true);
+        const env_id = switch (ctx.nodes[root]) {
+            .group => |g| ctx.kids[g.start],
+            else => return error.TestUnexpectedResult,
+        };
+        switch (ctx.nodes[env_id]) {
+            .env => |e| {
+                try std.testing.expectEqual(c.kind, e.kind);
+                try std.testing.expectEqual(c.numbered, e.numbered);
+            },
+            else => return error.TestUnexpectedResult,
+        }
+        // Inline rejects with KaTeX's message at `\begin`.
+        var ctxi = ParseCtx.init(c.src);
+        try std.testing.expectError(error.Invalid, parse(&ctxi, false));
+        try std.testing.expectEqualStrings("can be used only in display mode", ctxi.err_msg);
+        try std.testing.expectEqual(@as(u32, 0), ctxi.err_pos);
+    }
+    // `equation` is a single column: `&` rejects at the tab.
+    var ctx_amp = ParseCtx.init("\\begin{equation}x&=1\\end{equation}");
+    try std.testing.expectError(error.Invalid, parse(&ctx_amp, true));
+    try std.testing.expectEqual(@as(u32, 17), ctx_amp.err_pos);
+    // `split` nests inside `equation` like the bundle.
+    var ctx_nest = ParseCtx.init("\\begin{equation}\\begin{split}x&=1\\end{split}\\end{equation}");
+    const nest_root = try parse(&ctx_nest, true);
+    const nest_env = switch (ctx_nest.nodes[nest_root]) {
+        .group => |g| ctx_nest.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx_nest.nodes[nest_env]) {
+        .env => |e| try std.testing.expectEqual(EnvKind.equation, e.kind),
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "CD arrows assemble cells and arrows (issue #85)" {
+    // Even row: cell, arrow, cell. The horizontal arrow carries its
+    // labels as an extensible over-node.
+    var ctx = ParseCtx.init("\\begin{CD}A@>a>b>B\\end{CD}");
+    const root = try parse(&ctx, true);
+    const cd_env = switch (ctx.nodes[root]) {
+        .group => |g| ctx.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx.nodes[cd_env]) {
+        .env => |e| {
+            try std.testing.expectEqual(EnvKind.cd, e.kind);
+            // One content row plus KaTeX's trailing empty row.
+            try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+            const rows = rowsOf(&ctx, e.rows_start, e.rows_len);
+            const kids = kidsOf(&ctx, .{ .start = rows[0].start, .len = rows[0].len });
+            try std.testing.expectEqual(@as(u16, 3), @as(u16, @intCast(kids.len)));
+            switch (ctx.nodes[kids[1]]) {
+                .over => |o| {
+                    try std.testing.expectEqual(OverKind.xright, o.kind);
+                    // Both labels ride along (possibly empty groups —
+                    // KaTeX always passes both, yielding `munderover`).
+                    switch (ctx.nodes[o.extra]) {
+                        .group => {},
+                        else => return error.TestUnexpectedResult,
+                    }
+                    switch (ctx.nodes[o.under]) {
+                        .group => {},
+                        else => return error.TestUnexpectedResult,
+                    }
+                },
+                else => return error.TestUnexpectedResult,
+            }
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // Bad arrow characters and incomplete arrows reject.
+    const bad_cases = [_][]const u8{
+        "\\begin{CD}A@?B\\end{CD}",
+        "\\begin{CD}A@>B\\end{CD}",
+        "\\begin{CD}A@\\end{CD}",
+    };
+    for (bad_cases) |src| {
+        var c = ParseCtx.init(src);
+        try std.testing.expectError(error.Invalid, parse(&c, true));
+    }
+}
+
+test "nonumber and notag are inert no-ops (issue #88)" {
+    const ok_cases = [_][]const u8{
+        "x\\nonumber",
+        "x\\notag",
+        "\\begin{align}x&=1\\nonumber\\\\y&=2\\end{align}",
+        "\\begin{align}x&=1\\notag\\end{align}",
+        "\\begin{equation}x=1\\nonumber\\end{equation}",
+    };
+    // Standalone commands accept in both modes; env cases need display.
+    for (ok_cases) |src| {
+        var ctxd = ParseCtx.init(src);
+        _ = try parse(&ctxd, true);
+    }
+    for (ok_cases[0..2]) |src| {
+        var ctxt = ParseCtx.init(src);
+        _ = try parse(&ctxt, false);
+    }
+    // `\nonumber` marks its own row only (KaTeX `\@eqnsw` parity):
+    // row 0 bare, row 1 numbered.
+    var ctxr = ParseCtx.init("\\begin{align}x&=1\\nonumber\\\\y&=2\\end{align}");
+    const rr = try parse(&ctxr, true);
+    const re = switch (ctxr.nodes[rr]) {
+        .group => |g| ctxr.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctxr.nodes[re]) {
+        .env => |e| {
+            const rows = rowsOf(&ctxr, e.rows_start, e.rows_len);
+            try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+            try std.testing.expect(rows[0].nonumber);
+            try std.testing.expect(!rows[1].nonumber);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "row-local tag wins over nonumber, cross-row tag does not (issue #75)" {
+    // Same row `\tag` + `\nonumber` (either order): KaTeX keeps the
+    // row's number columns — the tag hoists before `\@eqnsw` drops
+    // them (probed 0.18.7). A tag in a *different* row is no rescue.
+    for ([_][]const u8{
+        "\\begin{align}x&=1\\tag{a}\\nonumber\\end{align}",
+        "\\begin{align}x&=1\\nonumber\\tag{a}\\end{align}",
+    }) |src| {
+        var ctx = ParseCtx.init(src);
+        const root = try parse(&ctx, true);
+        // `\tag` wraps the root: unwrap `.tag` → group → env.
+        const inner = switch (ctx.nodes[root]) {
+            .tag => |t| t.formula,
+            else => return error.TestUnexpectedResult,
+        };
+        const re = switch (ctx.nodes[inner]) {
+            .group => |g| ctx.kids[g.start],
+            else => return error.TestUnexpectedResult,
+        };
+        switch (ctx.nodes[re]) {
+            .env => |e| {
+                const rows = rowsOf(&ctx, e.rows_start, e.rows_len);
+                try std.testing.expectEqual(@as(u16, 1), e.rows_len);
+                try std.testing.expect(rows[0].nonumber);
+                try std.testing.expect(rows[0].tagged);
+            },
+            else => return error.TestUnexpectedResult,
+        }
+    }
+    // Leading outside-tag lands on row 0 (even starred), a
+    // trailing outside-tag marks nothing (pinned 0.18.7).
+    const lead_cases = [_]struct { src: []const u8, r0: bool, r1: bool }{
+        .{ .src = "\\tag{a}\\begin{align*}x&=1\\\\y&=2\\end{align*}", .r0 = true, .r1 = false },
+        .{ .src = "\\begin{align*}x&=1\\\\y&=2\\end{align*}\\tag{a}", .r0 = false, .r1 = false },
+        .{ .src = "\\tag{a}\\begin{align*}x&=1\\nonumber\\\\y&=2\\end{align*}", .r0 = true, .r1 = false },
+        .{ .src = "\\begin{align*}x&=1\\tag{a}\\\\y&=2\\end{align*}", .r0 = true, .r1 = false },
+        .{ .src = "\\begin{align*}x&=1\\\\y&=2\\tag{a}\\end{align*}", .r0 = false, .r1 = true },
+    };
+    for (lead_cases) |lc| {
+        var ctx = ParseCtx.init(lc.src);
+        const root = try parse(&ctx, true);
+        const inner = switch (ctx.nodes[root]) {
+            .tag => |t| t.formula,
+            else => return error.TestUnexpectedResult,
+        };
+        const re = switch (ctx.nodes[inner]) {
+            .group => |g| ctx.kids[g.start],
+            else => return error.TestUnexpectedResult,
+        };
+        switch (ctx.nodes[re]) {
+            .env => |e| {
+                const rows = rowsOf(&ctx, e.rows_start, e.rows_len);
+                try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+                try std.testing.expectEqual(lc.r0, rows[0].tagged);
+                try std.testing.expectEqual(lc.r1, rows[1].tagged);
+            },
+            else => return error.TestUnexpectedResult,
+        }
+    }
+    // A tag nested in a matrix cell still belongs to the enclosing
+    // numbering row (textual containment, pinned 0.18.7), and the
+    // env adopts it (tag text dropped, number columns kept).
+    var ctxn = ParseCtx.init("\\begin{align*}\\begin{matrix}\\tag{a}x\\end{matrix}&=1\\\\y&=2\\end{align*}");
+    const rn = try parse(&ctxn, true);
+    try std.testing.expect(ctxn.tag_adopted);
+    const innern = switch (ctxn.nodes[rn]) {
+        .tag => |t| t.formula,
+        else => return error.TestUnexpectedResult,
+    };
+    const en = switch (ctxn.nodes[innern]) {
+        .group => |g| ctxn.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctxn.nodes[en]) {
+        .env => |e| {
+            const rows = rowsOf(&ctxn, e.rows_start, e.rows_len);
+            try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+            try std.testing.expect(rows[0].tagged);
+            try std.testing.expect(!rows[1].tagged);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    // A trailing outside-tag is never adopted.
+    var ctxt = ParseCtx.init("\\begin{align*}x&=1\\\\y&=2\\end{align*}\\tag{a}");
+    _ = try parse(&ctxt, true);
+    try std.testing.expect(!ctxt.tag_adopted);
+    // Tag in row 0, `\nonumber` in row 1: row 1 stays bare.
+    var ctx2 = ParseCtx.init("\\begin{align}x&=1\\tag{a}\\\\y&=2\\nonumber\\end{align}");
+    const r2 = try parse(&ctx2, true);
+    const inner2 = switch (ctx2.nodes[r2]) {
+        .tag => |t| t.formula,
+        else => return error.TestUnexpectedResult,
+    };
+    const e2 = switch (ctx2.nodes[inner2]) {
+        .group => |g| ctx2.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx2.nodes[e2]) {
+        .env => |e| {
+            const rows = rowsOf(&ctx2, e.rows_start, e.rows_len);
+            try std.testing.expectEqual(@as(u16, 2), e.rows_len);
+            try std.testing.expect(rows[0].tagged);
+            try std.testing.expect(!rows[0].nonumber);
+            try std.testing.expect(rows[1].nonumber);
+            try std.testing.expect(!rows[1].tagged);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "Set Braket braket expand per KaTeX (issues #84/#89)" {
+    const ok_cases = [_][]const u8{
+        "\\braket{\\phi|\\psi}",
+        "\\braket{ab}",
+        "\\Braket{\\phi|\\psi}",
+        "\\Braket{a|b|c}",
+        "\\Braket{a||b}",
+        "\\Set{x|x<5}",
+        "\\Set{a\\|b}",
+        "\\set{x|x<5}",
+        // Bare frac args survive the split-path re-push (#89).
+        "\\set{x|x\\frac12}",
+        "\\set{x\\frac12}",
+        "\\Set{x|x\\frac12}",
+    };
+    for (ok_cases) |src| {
+        var ctx = ParseCtx.init(src);
+        _ = try parse(&ctx, true);
+    }
+    // `\\braket` keeps the pipe literal inside fixed fences: one
+    // Inner-wrapped group with three kids (fence, body, fence).
+    var ctx = ParseCtx.init("\\braket{ab}");
+    const root = try parse(&ctx, true);
+    const bk_id = switch (ctx.nodes[root]) {
+        .group => |g| ctx.kids[g.start],
+        else => return error.TestUnexpectedResult,
+    };
+    switch (ctx.nodes[bk_id]) {
+        .classwrap => {},
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "text bodies hoist tag, nest, and shift math (issues #75/#81)" {
+    // Pinned KaTeX 0.18.7: `\tag` hoists from text bodies (even
+    // nested in braces), nested `\text` merges flat, and `$`
+    // toggles math segments.
+    const ok_cases = [_][]const u8{
+        "\\text{\\tag{1}}x",
+        "\\tag{\\text{a}}x",
+        "\\text{a\\tag{1}}x",
+        "\\text{a\\tag 1x}",
+        "\\text{a{\\tag{1}}b}x",
+        "\\text{a$b$c}",
+        "\\text{\\text{a}}",
+        "\\text{x\\text{ab}c}",
+        "\\text{x\\text{a$b$}c}",
+        "\\textbf{a\\tag{1}}x",
+    };
+    for (ok_cases) |src| {
+        var ctx = ParseCtx.init(src);
+        _ = try parse(&ctx, true);
+    }
+    // `\tag` hoisted means set (and the text keeps the rest).
+    var ctx = ParseCtx.init("\\text{a\\tag{1}}x");
+    _ = try parse(&ctx, true);
+    try std.testing.expect(ctx.tag_body != NONE);
+    // Inline `\tag`-in-text still rejects like the bundle.
+    var ctxi = ParseCtx.init("\\text{a\\tag{1}}x");
+    try std.testing.expectError(error.Invalid, parse(&ctxi, false));
+    try std.testing.expectEqualStrings("\\tag works only in display equations", ctxi.err_msg);
+    // Unclosed `$` rejects (position gap rides `katex_only`).
+    var ctxu = ParseCtx.init("\\text{a$b}");
+    try std.testing.expectError(error.Invalid, parse(&ctxu, false));
+}
+
 

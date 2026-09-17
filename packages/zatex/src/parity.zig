@@ -13,7 +13,11 @@
 //! - `\href` emits an `mrow href` wrapper while KaTeX puts `href` on
 //!   the child; the wrapper is dropped.
 //! - single-child `mrow` shells drop: KaTeX merges runs before
-//!   row-wrapping, so one-leaf groups pass through bare.
+//!   row-wrapping, so one-leaf groups pass through bare. Effective
+//!   children count through dropped wrappers (issue #94): a lone
+//!   `mstyle mathvariant` / `mrow href` shell does not single the row.
+//! - void `mi`-around-`mrow` shells drop (issue #94): KaTeX builds
+//!   `\boldsymbol`/`\bm` bodies as `<mi><mrow>…</mrow></mi>`.
 //! Attribute *values* (spacing widths, exact variants) are out of
 //! scope: this test compares structure, not metrics.
 
@@ -49,11 +53,21 @@ fn stubProvider() zatex.MetricsProvider {
 /// then `makeRow`), so single-leaf groups pass through bare; an
 /// `mrow` around one child is grouping-transparent per MathML
 /// semantics, so the shell drops like the other wrappers below.
+/// Wrapper-transparent (issue #94): a lone `mstyle mathvariant` or
+/// `mrow href` child — both dropped as wrappers themselves — does not
+/// make the row single: effective children count through such shells
+/// (our sole-font splice puts N leaves under one `mstyle`, matching
+/// KaTeX's flat row leaf-for-leaf).
 fn singleChildMrow(src: []const u8, lt: usize) bool {
     var i = lt;
     var level: u32 = 0;
     var kids: u32 = 0;
     var started = false;
+    // Transparent-shell stack: names (`mstyle`/`mrow`) of dropped
+    // wrappers skipped at level 1, innermost last. Bounded (MathML
+    // nests wrappers shallowly); overflow fails closed (no drop).
+    var tstack: [8][]const u8 = undefined;
+    var ntrans: usize = 0;
     while (i < src.len) {
         const l = std.mem.indexOfScalarPos(u8, src, i, '<') orelse return false;
         const g = std.mem.indexOfScalarPos(u8, src, l, '>') orelse return false;
@@ -76,11 +90,76 @@ fn singleChildMrow(src: []const u8, lt: usize) bool {
         }
         if (closing) {
             if (level == 0) return false;
+            // A transparent shell's close vanishes like its open.
+            if (ntrans > 0 and level == 1 and std.mem.eql(u8, name, tstack[ntrans - 1])) {
+                ntrans -= 1;
+                continue;
+            }
             level -= 1;
             if (level == 0) return kids == 1;
             continue;
         }
+        // Dropped wrappers (same predicate as `normTags` below, minus
+        // the recursive single-row clause) are transparent at level 1:
+        // their children count as this row's children.
+        const transparent = level == 1 and !self_close and
+            ((std.mem.eql(u8, name, "mstyle") and std.mem.indexOf(u8, raw, "mathvariant") != null) or
+            (std.mem.eql(u8, name, "mrow") and std.mem.indexOf(u8, raw, "href") != null));
+        if (transparent) {
+            if (ntrans >= tstack.len) return false;
+            tstack[ntrans] = name;
+            ntrans += 1;
+            continue;
+        }
         if (level == 1) kids += 1;
+        if (!self_close) level += 1;
+    }
+    return false;
+}
+
+/// True when the `<mi>` opening at `lt` wraps exactly one child
+/// element and it is an `mrow` (issue #94): KaTeX builds
+/// `\boldsymbol`/`\bm` bodies as `<mi><mrow>…</mrow></mi>` (pinned
+/// 0.18.7) — a void shell around the row, dropped like the wrappers
+/// below. Text-only `mi` leaves and `mi`-around-`mover` (our dot
+/// fallback) never match: the single child must be an element mrow.
+fn miWrapsSingleMrow(src: []const u8, lt: usize) bool {
+    var i = lt;
+    var level: u32 = 0;
+    var kids: u32 = 0;
+    var kid_is_mrow = false;
+    var started = false;
+    while (i < src.len) {
+        const l = std.mem.indexOfScalarPos(u8, src, i, '<') orelse return false;
+        const g = std.mem.indexOfScalarPos(u8, src, l, '>') orelse return false;
+        const raw = src[l + 1 .. g];
+        i = g + 1;
+        if (raw.len == 0) continue;
+        const closing = raw[0] == '/';
+        const body = if (closing) raw[1..] else raw;
+        var e: usize = 0;
+        while (e < body.len and body[e] != ' ' and
+            body[e] != '\t' and body[e] != '\n' and
+            body[e] != '\r' and body[e] != '/') : (e += 1) {}
+        const name = body[0..e];
+        if (name.len == 0 or name[0] == '!' or name[0] == '?') continue;
+        const self_close = !closing and raw[raw.len - 1] == '/';
+        if (!started) {
+            if (closing) return false;
+            started = true;
+            level = 1;
+            continue;
+        }
+        if (closing) {
+            if (level == 0) return false;
+            level -= 1;
+            if (level == 0) return kids == 1 and kid_is_mrow;
+            continue;
+        }
+        if (level == 1) {
+            kids += 1;
+            if (kids == 1) kid_is_mrow = std.mem.eql(u8, name, "mrow");
+        }
         if (!self_close) level += 1;
     }
     return false;
@@ -117,7 +196,8 @@ fn normTags(src: []const u8, out: []u8) usize {
         const is_wrapper = !closing and !self_close and
             ((std.mem.eql(u8, name, "mstyle") and std.mem.indexOf(u8, raw, "mathvariant") != null) or
             (std.mem.eql(u8, name, "mrow") and std.mem.indexOf(u8, raw, "href") != null) or
-            (std.mem.eql(u8, name, "mrow") and singleChildMrow(src, lt)));
+            (std.mem.eql(u8, name, "mrow") and singleChildMrow(src, lt)) or
+            (std.mem.eql(u8, name, "mi") and miWrapsSingleMrow(src, lt)));
         if (is_wrapper) {
             // Drop the shell; children pass through. Nesting deeper
             // than the table fails loudly below (tags won't match).

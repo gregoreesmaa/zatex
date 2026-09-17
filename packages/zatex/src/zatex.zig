@@ -724,7 +724,9 @@ test "issue34: alphabet commands request distinct provider fonts" {
         .{ .src = "\\mathtt{A}", .font = 4, .cp = 0xD670 },
         .{ .src = "\\mathbb{A}", .font = 7, .cp = 0xD538 },
         .{ .src = "\\Bbb{A}", .font = 7, .cp = 0xD538 },
-        .{ .src = "\\boldsymbol{A}", .font = 2, .cp = 0xD400 },
+        // `\boldsymbol` is `\bm` (issue #94, pinned 0.18.7):
+        // bold-italic A -> U+1D468 -> 0xD468 on font 9.
+        .{ .src = "\\boldsymbol{A}", .font = 9, .cp = 0xD468 },
         // Nested alphabets: the innermost command wins (KaTeX).
         .{ .src = "\\mathbf{\\mathcal{R}}", .font = 8, .cp = 0x211B },
         .{ .src = "\\mathcal{\\mathbf{R}}", .font = 2, .cp = 0xD411 },
@@ -825,7 +827,7 @@ test "issue32: fraction shifts follow TeX rules 15b-e per style" {
     // Atop `\binom{n}{k}`: num3/denom2 (444/345), 3θ clearance met
     // exactly (no bump). Fence ink overflows the content box by
     // design when the provider offers no bigger variant
-    // (`wrapParens`: instruments are promises, not extents).
+    // (`wrapFence`: instruments are promises, not extents).
     const b = try layoutOk("\\binom{n}{k}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(u32, 444 + 490), b.height_above);
     try std.testing.expectEqual(@as(u32, 345 + 175), b.depth_below);

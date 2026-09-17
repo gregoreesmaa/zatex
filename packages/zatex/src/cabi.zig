@@ -165,7 +165,13 @@ export fn zatex_layout_utf8(
         out.err_offset = diag.offset;
         return out.status;
     };
-    if (l.runs.len > runs_z.len or l.rules.len > rules_z.len) {
+    // Diagonal strikes never reach this surface (skipped below), so
+    // only filled rects count against the caller's rule budget.
+    var nrects: usize = 0;
+    for (l.rules) |r| if (r.diag == .none) {
+        nrects += 1;
+    };
+    if (l.runs.len > runs_z.len or nrects > rules_z.len) {
         out.status = STATUS_NO_SPACE;
         out.err_offset = 0;
         return out.status;
@@ -181,15 +187,22 @@ export fn zatex_layout_utf8(
             .glyph_count = @intCast(r.glyphs.len),
         };
     }
-    for (l.rules, 0..) |r, i| {
-        rules_z[i] = .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
+    // The frozen narrow surface projects filled rects only: diagonal
+    // strikes (issue #107 `Rule.diag`) have no rect form, so they are
+    // skipped rather than misdrawn (like color, which this surface
+    // already drops — see `CRule`).
+    var nrules: u32 = 0;
+    for (l.rules) |r| {
+        if (r.diag != .none) continue;
+        rules_z[nrules] = .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
+        nrules += 1;
     }
     out.* = .{
         .width = l.width,
         .height_above = l.height_above,
         .depth_below = l.depth_below,
         .nruns = @intCast(l.runs.len),
-        .nrules = @intCast(l.rules.len),
+        .nrules = nrules,
         .status = STATUS_OK,
         .err_offset = 0,
     };

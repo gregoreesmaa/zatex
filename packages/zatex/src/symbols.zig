@@ -592,7 +592,10 @@ const operators_full = if (active_profile == .full) [_]Entry{
     .{ .name = "impliedby", .sym = S(0x27F8, .Rel) },
     // Negated relations (issue #73): KaTeX renders PUA glyphs from
     // its own font in HTML but single precomposed codepoints in
-    // MathML (the parity arbiter), which is what these carry.
+    // MathML (the parity arbiter), which is what these carry. The
+    // user macros below expand to `\html@mathml` dual branches
+    // (issue #96); these entries stay for the subset profile (whose
+    // macro arms are pruned) and as the math-branch atoms.
     .{ .name = "gvertneqq", .sym = S(0x2269, .Rel) },
     .{ .name = "lvertneqq", .sym = S(0x2268, .Rel) },
     .{ .name = "ngeqq", .sym = S(0x2271, .Rel) },
@@ -607,6 +610,25 @@ const operators_full = if (active_profile == .full) [_]Entry{
     .{ .name = "varsubsetneqq", .sym = S(0x2ACB, .Rel) },
     .{ .name = "varsupsetneq", .sym = S(0x228B, .Rel) },
     .{ .name = "varsupsetneqq", .sym = S(0x2ACC, .Rel) },
+    // AMS PUA precomposed negations (issue #96): KaTeX's HTML-side
+    // glyphs for the `\@`-symbols (pinned 0.18.7 `symbols.js`),
+    // resolved through the AMS fallback. The user-level macros
+    // pair each with its MathML codepoint on an `\html@mathml`
+    // math branch, so MathML keeps the #73 arbiter codepoints.
+    .{ .name = "@nleqslant", .sym = S(0xE010, .Rel) },
+    .{ .name = "@nleqq", .sym = S(0xE011, .Rel) },
+    .{ .name = "@lvertneqq", .sym = S(0xE00C, .Rel) },
+    .{ .name = "@nshortmid", .sym = S(0xE006, .Rel) },
+    .{ .name = "@varsubsetneq", .sym = S(0xE01A, .Rel) },
+    .{ .name = "@varsubsetneqq", .sym = S(0xE017, .Rel) },
+    .{ .name = "@ngeqslant", .sym = S(0xE00F, .Rel) },
+    .{ .name = "@ngeqq", .sym = S(0xE00E, .Rel) },
+    .{ .name = "@gvertneqq", .sym = S(0xE00D, .Rel) },
+    .{ .name = "@nshortparallel", .sym = S(0xE007, .Rel) },
+    .{ .name = "@nsupseteqq", .sym = S(0xE018, .Rel) },
+    .{ .name = "@varsupsetneq", .sym = S(0xE01B, .Rel) },
+    .{ .name = "@varsupsetneqq", .sym = S(0xE019, .Rel) },
+    .{ .name = "@nsubseteqq", .sym = S(0xE016, .Rel) },
     // Membership negations and mirror (issue #73): single MathML
     // codepoints (`\\notin` renders `\\not\\ni` in KaTeX HTML, but
     // the parity arbiter is the single `\\u2209`).
@@ -745,6 +767,57 @@ pub fn lookup(name: []const u8) ?Sym {
 
 /// Every named symbol, for coverage probes and documentation sweeps.
 pub const all_symbols = greek_lower ++ greek_upper ++ operators;
+
+/// KaTeX math-mode textords (issue #109, pinned 0.18.7
+/// `symbols.ts`): symbol-table names whose ParseNodes are `textord`,
+/// rendered `mi` with an explicit variant (single-char escapes like
+/// `\%` and literal textord codepoints are marked at their own
+/// construction sites, not here). Audit: `textord_audit.py` output
+/// in the issue — every supported name below, every other KaTeX
+/// textord rejected or accent-pathed.
+pub fn isTextord(name: []const u8) bool {
+    for ([_][]const u8{
+        "Box",          "Delta",        "Diamond",      "Finv",
+        "Game",         "Gamma",        "Im",           "Lambda",
+        "Omega",        "P",            "Phi",          "Pi",
+        "Psi",          "Re",           "S",            "Sigma",
+        "Theta",        "Upsilon",      "Vert",         "Xi",
+        "aleph",        "angle",        "backprime",    "backslash",
+        "beth",         "bigstar",      "blacklozenge", "blacksquare",
+        "blacktriangle", "blacktriangledown", "bot",    "checkmark",
+        "circledR",     "circledS",     "clubsuit",     "complement",
+        "dag",          "daleth",       "ddag",         "degree",
+        "diagdown",     "diagup",       "diamondsuit",  "digamma",
+        "ell",          "emptyset",     "eth",          "exists",
+        "flat",         "forall",       "gimel",        "hbar",
+        "heartsuit",    "hslash",       "infty",        "lnot",
+        "lozenge",      "maltese",      "mathsterling", "measuredangle",
+        "mho",          "nabla",        "natural",      "neg",
+        "nexists",      "partial",      "pounds",       "prime",
+        "sharp",        "spadesuit",    "sphericalangle", "square",
+        "surd",         "top",          "triangle",     "triangledown",
+        "varkappa",     "varnothing",   "vert",         "wp",
+        "yen",
+    }) |n| if (eq(n, name)) return true;
+    return false;
+}
+
+/// Literal codepoints that are KaTeX math-mode textords (issue #109):
+/// `|` plus the Greek-capital and doublestruck letters KaTeX lists
+/// under their literal names (it replaces them with ASCII homoglyphs;
+/// codepoint replacement is out of scope — only the variant is
+/// pinned here). Dotless ı/ȷ keep their dedicated MathML arm and the
+/// backtick lexes as an accent, so neither is listed.
+pub fn isTextordCp(cp: u21) bool {
+    if (cp == '|') return true;
+    return switch (cp) {
+        0x0391, 0x0392, 0x0395, 0x0396, 0x0397, 0x0399, 0x039A,
+        0x039C, 0x039D, 0x039F, 0x03A1, 0x03A4, 0x03A7,
+        0x2102, 0x210D, 0x2115, 0x2119, 0x211A, 0x211D, 0x2124,
+        => true,
+        else => false,
+    };
+}
 
 /// Text-mode commands (`\text{\i}`, `\textdollar`, ...): name →
 /// codepoint. KaTeX accepts these inside `\text` (pinned-proven) while
