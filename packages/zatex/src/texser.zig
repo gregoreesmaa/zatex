@@ -355,7 +355,16 @@ const Walker = struct {
                 }
                 const rows = parse.rowsOf(self.ctx, e.rows_start, e.rows_len);
                 for (rows, 0..) |row, ri| {
-                    if (ri > 0) try self.put("\\\\");
+                    if (ri > 0) {
+                        try self.put("\\\\");
+                        // `[size]` after the break round-trips the
+                        // row gap (issues #140/#144).
+                        if (rows[ri - 1].gap_after != 0) {
+                            try self.put("[");
+                            try self.dimen(rows[ri - 1].gap_after);
+                            try self.put("]");
+                        }
+                    }
                     // Cells are implicitly grouped by position: bracing
                     // them would add spurious mrows on re-parse.
                     const kids = parse.kidsOf(self.ctx, .{ .start = row.start, .len = row.len });
@@ -418,7 +427,16 @@ const Walker = struct {
             // Interword space round-trips as the control space.
             .nbsp => try self.cmd(" "),
             .vspace => return error.Unsupported,
-            .newline => try self.put("\\\\"),
+            .newline => |nl| {
+                try self.put("\\\\");
+                // `[size]` after the break round-trips the sized
+                // break (issues #140/#144).
+                if (nl.size != 0) {
+                    try self.put("[");
+                    try self.dimen(nl.size);
+                    try self.put("]");
+                }
+            },
             .hline => |h| try self.cmd(if (h.dashed) "hdashline" else "hline"),
             .color => |c| {
                 try self.cmd("color");
@@ -1053,6 +1071,8 @@ test "serializer: exact canonical spellings" {
         .{ "\\xcancel{AB}", "\\xcancel{AB}" },
         .{ "\\sum x", "\\sum x" },
         .{ "\\fbox{Hi}", "\\fbox{Hi}" },
+        .{ "\\begin{matrix}a\\\\[6pt]b\\end{matrix}", "\\begin{matrix}a\\\\[0.600em]b\\end{matrix}" },
+        .{ "a\\\\[6pt]b", "a\\\\[0.600em]b" },
     };
     for (cases) |c| {
         const got = try serialize(c[0], false, &out);
@@ -1081,6 +1101,8 @@ test "serializer: round-trip keeps MathML identical" {
         "\\overline{AB}",
         "\\hat{x}",
         "\\begin{matrix}a&b\\\\c&d\\end{matrix}",
+        "\\begin{matrix}a\\\\[6pt]b\\end{matrix}",
+        "a\\\\[6pt]b",
         "\\begin{cases}x&x\\ge 0\\\\-x&x<0\\end{cases}",
         "\\vec{v}",
         "\\boxed{x+1}",
