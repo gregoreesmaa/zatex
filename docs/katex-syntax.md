@@ -18,7 +18,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\'` | `\text{\'{a}}` | ![](renders/prime-2.png) |  |
 | `(` | `(` | ![](renders/lp.png) |  |
 | `)` | `)` | ![](renders/rp.png) |  |
-| `\(…\)` | `\text{\(\frac a b\)}` | *no render (overclaim)* | inline-math delimiters, not math-mode input; pinned KaTeX rejects inside math |
+| `\(…\)` | `\text{\(\frac a b\)}` | ![](renders/lpdotsrp.png) | Delimiters for math islands inside `\text`; top-level `\(x\)` rejects like pinned KaTeX |
 | `\ ` | `a\ b` | ![](renders/ctrlspace.png) |  |
 | `\"` | `\text{\"{a}}` | ![](renders/quot.png) |  |
 | `\$` | `\$` | ![](renders/dollar.png) | KaTeX shows `\text{\textdollar}`; this form exercises `\$` |
@@ -466,7 +466,7 @@ A render of every accepted function, generated from `docs/support-table.md` by `
 | `\hookleftarrow` | `\hookleftarrow` | ![](renders/hookleftarrow.png) |  |
 | `\hookrightarrow` | `\hookrightarrow` | ![](renders/hookrightarrow.png) |  |
 | `\hphantom` | `a\hphantom{bc}d` | ![](renders/hphantom.png) |  |
-| `\href` | `\href{https://github.com/gregoreesmaa/zatex}{\mathrm{Z\!^aT\!_EX}}` | ![](renders/href.png) |  |
+| `\href` | `\href{https://github.com/gregoreesmaa/zatex}{\mathrm{Z\!^AT\!_EX}}` | ![](renders/href.png) |  |
 | `\hskip` | `w\hskip1em i\hskip2em d` | ![](renders/hskip.png) |  |
 | `\hslash` | `\hslash` | ![](renders/hslash.png) |  |
 | `\hspace` | `s\hspace7ex k` | ![](renders/hspace.png) |  |

@@ -273,21 +273,19 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             });
         },
         .circled => |c| {
-            // Ring-ABOVE accent (issue #80, pinned 0.18.7
-            // `accent.ts`): KaTeX lays `\\textcircled` out as an
-            // accent, not an overlay — clearance is the FULL body
-            // height (accent-full skips the x-height clamp), the
-            // U+25EF baseline lands on the body top shifted down
-            // 0.2em (KaTeX's CSS `top:.2em` visual fudge to match
-            // LaTeX, baked into our geometry since layout IS paint
-            // here), the accent sits at body-left + skew with NO
-            // centering (unlike `\\hat`), and the construction is
-            // as wide as the wider of body and ring. Decoded from
-            // the pinned DOM: the vlist stays 0.8889em tall across
-            // bodies a/A/g (clearance cancels body height), and the
-            // ring metrics are Main-Regular U+25EF [d 0.19444, h
-            // 0.69444, w 1]. Skew mirrors our accents (single-symbol
-            // nuclei only), minus centering and italic correction.
+            // Enclosing ring (issue #80, pinned 0.18.7 browser
+            // pixels): KaTeX pins the U+25EF baseline to the body
+            // baseline, so the body sits INSIDE the ring — a tall
+            // body overflows the ring top while the ring stays put.
+            // Body and ring center in the construction (`text-align:
+            // center` on KaTeX's accent vlist; the ring then shifts
+            // right by the nucleus skew), which is as wide as the
+            // wider of body and ring. Decoded from the pinned DOM
+            // and pixels: the vlist is exactly the ring (0.8889em
+            // across bodies a/A/g), and the ring metrics are
+            // Main-Regular U+25EF [d 0.19444, h 0.69444, w 1].
+            // Skew mirrors our accents (single-symbol nuclei only),
+            // minus italic correction.
             const body = try layoutNode(lc, style, c.body);
             const bb = lc.boxes[body];
             const size = lc.effSize(style);
@@ -311,16 +309,19 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
                 @divTrunc(symbols.mathItalicSkew(ncp) * @as(i32, size), 1000)
             else
                 0;
-            const shift200 = @divTrunc(@as(i32, 200) * size, 1000);
-            // Accent baseline height above the body baseline.
-            const abase = bb.ha - shift200;
-            const cdy = abase;
-            const w = if (bb.w > askew + caw) bb.w else askew + caw;
+            // Ring baseline height above the body baseline: zero.
+            // KaTeX's vlist stacks the ring one ring-depth above the
+            // body baseline and its relative `top: .2em` drops it
+            // back (`accent.ts`); net zero to subpixel rounding
+            // (pinned Chromium pixels: the glyph baselines coincide
+            // within 0.2px), so the body sits inside the ring.
+            const cdy: i32 = 0;
+            const w = if (bb.w > caw) bb.w else caw;
             const s = try lc.allocKids(2);
-            lc.bkids[s] = .{ .box = body, .dx = 0, .dy = 0 };
-            lc.bkids[s + 1] = .{ .box = cb, .dx = askew, .dy = cdy };
+            lc.bkids[s] = .{ .box = body, .dx = @divTrunc(w - bb.w, 2), .dy = 0 };
+            lc.bkids[s + 1] = .{ .box = cb, .dx = @divTrunc(w - caw, 2) + askew, .dy = cdy };
             var ha = bb.ha;
-            const catop = abase + caha;
+            const catop = cdy + caha;
             if (catop > ha) ha = catop;
             var db = bb.db;
             const cabot = cadb - cdy;
@@ -2456,21 +2457,19 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
 // rule (shared by the in-loop check and the end flush).
 // Returns how much wider the span became (a wider-than-span circle
 // pushes following text right); the caller adds it to the cursor.
-fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circle: bool,
-    x: i32, ha: *i32, db: *i32, parts: *[256]BKid, nparts: *usize) Error!i32 {
+fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, is_circle: bool,
+    x: i32, ha: *i32, db: *i32, parts: *[256]BKid, nparts: *usize, p0: usize) Error!i32 {
     if (is_circle) {
-        // Ring-ABOVE accent (issue #80, pinned 0.18.7 `accent.ts`):
-        // same model as the math-mode `.circled` arm — clearance is
-        // the full span top, the U+25EF baseline lands 0.2em below
-        // it, and the span widens to the ring when wider. Text
-        // glyphs carry no KaTeX skew, so the ring sits exactly at
-        // the span left.
-        var stop: i32 = 0;
-        for (parts.*[pp0..nparts.*]) |pt| {
-            const pbx = lc.boxes[pt.box];
-            const pt_top = pt.dy + pbx.ha;
-            if (pt_top > stop) stop = pt_top;
-        }
+        // Enclosing ring (issue #80, pinned 0.18.7 browser pixels):
+        // same model as the math-mode `.circled` arm — the U+25EF
+        // baseline coincides with the span baseline, so the body
+        // sits INSIDE the ring and a tall body overflows the ring
+        // top while the ring stays put. Body and ring center in
+        // the max-width construction (`text-align: center` on
+        // KaTeX's accent vlist; pixel proof: symmetric 33/31px
+        // side pads). The span widens to the ring when narrower.
+        // Text glyphs carry no KaTeX skew, so the ring centers
+        // with no shift.
         const cg = lc.glyphId(font, 0x25EF);
         const cadv = lc.advance(font, cg);
         const caw = @divTrunc(cadv * size, 1000);
@@ -2486,16 +2485,21 @@ fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, pp0: usize, is_circ
         });
         const span_w = x - px0;
         const box_w = if (span_w > caw) span_w else caw;
-        const shift200 = @divTrunc(@as(i32, 200) * size, 1000);
-        // Ring baseline height above the span baseline (accent-full:
-        // no centering — the body stays left-aligned, the ring sits
-        // at the span left like KaTeX's vlist).
-        const abase = stop - shift200;
-        const cady = abase;
+        // Center the already-emitted body parts (indices p0..)
+        // under the ring; the ring centers too. Nested span parts
+        // shift along, keeping their relative layout.
+        const shift = @divTrunc(box_w - span_w, 2);
+        if (shift > 0) {
+            var k: usize = p0;
+            while (k < nparts.*) : (k += 1) parts.*[k].dx += shift;
+        }
+        // Ring baseline height above the span baseline: zero (body
+        // baseline), centered like KaTeX's vlist.
+        const cady: i32 = 0;
         if (nparts.* >= 256) return error.NoSpace;
-        parts.*[nparts.*] = .{ .box = cb, .dx = px0, .dy = cady };
+        parts.*[nparts.*] = .{ .box = cb, .dx = px0 + @divTrunc(box_w - caw, 2), .dy = cady };
         nparts.* += 1;
-        const catop = abase + caha;
+        const catop = cady + caha;
         if (catop > ha.*) ha.* = catop;
         const cabot = cadb - cady;
         if (cabot > db.*) db.* = cabot;
@@ -2534,17 +2538,17 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     // decorates the slice [x0, current x) once the argument end index
     // is reached. Bounded depth; deeper nesting is NoSpace.
     var pend_x0: [4]i32 = undefined;
-    var pend_p0: [4]usize = undefined;
     var pend_end: [4]usize = undefined;
     var pend_circle: [4]bool = undefined;
+    var pend_p0: [4]usize = undefined;
     var npend: u8 = 0;
     const toks = parse.toksOf(lc.pctx, t.toks);
     var i: usize = 0;
     while (i < toks.len) : (i += 1) {
         while (npend > 0 and pend_end[npend - 1] <= i) {
             npend -= 1;
-            x += try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
-                x, &ha, &db, &parts, &nparts);
+            x += try emitTextSpan(lc, font, size, pend_x0[npend], pend_circle[npend],
+                x, &ha, &db, &parts, &nparts, pend_p0[npend]);
         }
         const tk = toks[i];
         var cp: u21 = 0;
@@ -2593,18 +2597,18 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
                             if (j >= toks.len) return error.Invalid;
                             if (npend >= pend_x0.len) return error.NoSpace;
                             pend_x0[npend] = x;
-                            pend_p0[npend] = nparts;
                             pend_end[npend] = j + 1;
                             pend_circle[npend] = ta == .circled;
+                            pend_p0[npend] = nparts;
                             npend += 1;
                             i = j - 1;
                             continue;
                         }
                         if (npend >= pend_x0.len) return error.NoSpace;
                         pend_x0[npend] = x;
-                        pend_p0[npend] = nparts;
                         pend_end[npend] = j;
                         pend_circle[npend] = ta == .circled;
+                        pend_p0[npend] = nparts;
                         npend += 1;
                         continue;
                     }
@@ -2763,8 +2767,8 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     // check only runs for live indices).
     while (npend > 0) {
         npend -= 1;
-        x += try emitTextSpan(lc, font, size, pend_x0[npend], pend_p0[npend], pend_circle[npend],
-            x, &ha, &db, &parts, &nparts);
+        x += try emitTextSpan(lc, font, size, pend_x0[npend], pend_circle[npend],
+            x, &ha, &db, &parts, &nparts, pend_p0[npend]);
     }
 
     const s = try lc.allocKids(nparts);

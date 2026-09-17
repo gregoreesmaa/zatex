@@ -534,11 +534,16 @@ def kx_covers(fn, tex):
 # Local overrides that beat KaTeX's own examples (issue #72): the mirror
 # documents ZaTeX, so brand examples must read ZaTeX, not KaTeX.
 OVERRIDES = {
-    # Fancy ZaTeX wordmark, logo-style (raised `a`, lowered `E`, tight
-    # `\!` kerns in the spirit of `\LaTeX`/`\KaTeX`): subset-safe
-    # construction — scripts and kerns only, no `\raisebox`, no new
-    # command (issue #76).
-    "\\href": ("\\href{https://github.com/gregoreesmaa/zatex}{\\mathrm{Z\\!^aT\\!_EX}}", False),
+    # ZaTeX wordmark, logo-style (all caps with smaller raised `A`
+    # and lowered `E`, tight `\!` kerns in the spirit of
+    # `\LaTeX`/`\KaTeX`): subset-safe construction — scripts and
+    # kerns only, no `\raisebox`, no new command (issue #76).
+    "\\href": ("\\href{https://github.com/gregoreesmaa/zatex}{\\mathrm{Z\\!^AT\\!_EX}}", False),
+    # The canonical `\mathclap` use is a wide limit under a display
+    # sum; rendered inline the zero-width content collides with its
+    # neighbors in BOTH engines (pinned KaTeX centers the same way),
+    # so the mirror shows the display form.
+    "\\mathclap": ("\\sum_{\\mathclap{1\\le i\\le n}} x_{i}", True),
     # No KaTeX-table cell yields an example for these accept rows, so
     # pin local ones (both render; the `\\ ` one mirrors EXACT's
     # matrix linebreak, the subarray one mirrors sweep `subarray-l`).
@@ -590,6 +595,10 @@ OVERRIDES = {
 # support-table fn cells; values must avoid literal pipes in code
 # spans (`check_row` enforces it on the emitted line).
 ROW_NOTES = {
+    # Math islands for text mode (issue #81 covers `$`, this row
+    # `\(...\)`): a top-level `\(` still rejects, exactly like
+    # pinned KaTeX ("Can't use function `\(` in math mode").
+    "\\(\u2026\\)": "Delimiters for math islands inside `\\text`; top-level `\\(x\\)` rejects like pinned KaTeX",
     # The tag hoists to the whole equation from any position —
     # even `\text` bodies — and a row-local tag keeps its number
     # columns despite `\nonumber` (ordering pinned 0.18.7).

@@ -1785,6 +1785,15 @@ fn parseGroupOrAtom(ctx: *ParseCtx, depth: u8) Error!Idx {
 /// group follows); unused by `.atom` and `.sqrt`, which fail at the
 /// offending token instead.
 fn parseGroupOrAtomMode(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!Idx {
+    // Island bodies re-enter math with text-lexed tokens (issue
+    // #81): math lexing drops whitespace runs, so argument scanning
+    // skips the surviving `char(' ')` tokens too. Math-lexed input
+    // never carries them, so plain math parses bit-identically.
+    while (true) {
+        const s = try ctx.peek();
+        if (s.kind != .char or s.cp != ' ') break;
+        _ = try ctx.next();
+    }
     const t = try ctx.peek();
     if (t.kind == .lbrace) {
         _ = try ctx.next();

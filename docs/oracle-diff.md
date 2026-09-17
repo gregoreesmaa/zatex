@@ -85,16 +85,19 @@ Two documented approximations (triage-grade, not proof-grade):
 
 Per case: tight-crop each render to its ink bbox (luminance threshold),
 pad with a uniform white margin (10px), uniform-rescale (aspect kept)
-to height 128, center on the union canvas, compare grayscale with block
-SSIM (tolerant to antialiasing, sensitive to structural shifts like
-misaligned fraction bars or drifting accents).
+to height 128, translation-align by ink centroid on the union canvas,
+compare grayscale with block SSIM (tolerant to antialiasing and pure
+offsets; sensitive to structural differences like wrong glyphs or
+missing strokes — a low score means genuinely different shapes).
 
 - `score(c) = max_i sim(ZaTeX_c, Oracle_i_c)` — low max ⇒ solo outlier
   ⇒ investigate first. Rows sort by score ascending.
 - `spread(c) = min` oracle↔oracle similarity; `spread < 0.90` tags the
   row `spec-ambiguous`.
+- `shift(c)` = largest ZaTeX↔oracle alignment offset in rescaled px:
+  big shift + high score reads "same shape, offset somewhere".
 - Each row shows the LaTeX source, the score, all 3 per-oracle
-  similarities, the spread, and the 4 normalized renders.
+  similarities, the spread, the shift, and the 4 normalized renders.
 
 ## Sanity check
 

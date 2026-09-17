@@ -513,5 +513,21 @@
  {"id": "or51-vcenter", "tex": "a+\\left(\\vcenter{\\frac{a}{b}}\\right)", "display": false, "issue": 51},
  {"id": "or51-phase", "tex": "\\phase{30}", "display": false, "issue": 51},
  {"id": "or51-cr-matrix", "tex": "\\begin{matrix}a&b\\cr c&d\\end{matrix}", "display": false, "issue": 51},
- {"id": "or51-cr-substack", "tex": "\\sum_{\\substack{a\\cr b}}", "display": false, "issue": 51}
+ {"id": "or51-cr-substack", "tex": "\\sum_{\\substack{a\\cr b}}", "display": false, "issue": 51},
+ {"id": "demo-euler", "tex": "e^{i\\pi} + 1 = 0", "display": true, "issue": null},
+ {"id": "demo-quadratic", "tex": "x = {-b \\pm \\sqrt{b^2 - 4ac} \\over 2a}", "display": true, "issue": null},
+ {"id": "demo-binomial", "tex": "(x+y)^n = \\sum_{k=0}^n {n\\choose k}x^ky^{n-k}", "display": true, "issue": null},
+ {"id": "demo-basel", "tex": "\\sum_{n=1}^\\infty {1\\over n^2} = {\\pi^2\\over 6}", "display": true, "issue": null},
+ {"id": "demo-taylor", "tex": "e^x = \\sum_{n=0}^\\infty {x^n\\over n!}", "display": true, "issue": null},
+ {"id": "demo-fourier-fwd", "tex": "\\hat f(\\xi) = \\int_{-\\infty}^\\infty f(x)e^{-2\\pi ix\\xi}\\,dx", "display": true, "issue": null},
+ {"id": "demo-schrodinger", "tex": "i\\hbar{\\partial\\psi\\over\\partial t} = -{\\hbar^2\\over2m}\\nabla^2\\psi + V\\psi", "display": true, "issue": null},
+ {"id": "demo-maxwell", "tex": "\\nabla\\cdot\\mathbf{E} = {\\rho\\over\\varepsilon_0}", "display": true, "issue": null},
+ {"id": "demo-pythagoras", "tex": "a^2 + b^2 = c^2", "display": true, "issue": null},
+ {"id": "demo-emc2", "tex": "E = mc^2", "display": true, "issue": null},
+ {"id": "demo-contfrac-phi", "tex": "\\phi = 1 + {1\\over 1 + {1\\over 1 + \\cdots}}", "display": true, "issue": null},
+ {"id": "demo-stirling", "tex": "n! \\sim \\sqrt{2\\pi n}\\left({n\\over e}\\right)^n", "display": true, "issue": null},
+ {"id": "demo-zeta", "tex": "\\zeta(s) = \\sum_{n=1}^\\infty {1\\over n^s}", "display": true, "issue": null},
+ {"id": "demo-cauchy-integral", "tex": "f(a) = {1\\over2\\pi i}\\oint_\\gamma {f(z)\\over z-a}\\,dz", "display": true, "issue": null},
+ {"id": "demo-derivative", "tex": "f'(x) = \\lim_{h\\to0}{f(x+h)-f(x)\\over h}", "display": true, "issue": null},
+ {"id": "demo-rotation", "tex": "I(\\lambda,\\mu) = \\begin{pmatrix}\\alpha&\\beta\\\\\\gamma&\\delta\\end{pmatrix}", "display": true, "issue": null}
 ]
