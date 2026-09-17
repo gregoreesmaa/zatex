@@ -22,9 +22,21 @@ pub fn build(b: *std.Build) void {
     });
     mod.addOptions("build_options", options);
 
+    // The installed distribution libraries ship ReleaseSmall to keep
+    // the shipped package small (~364 KB static, ~245 KB dynamic vs
+    // ~4.5 MB static at the `optimize` default). `dist_mod` compiles
+    // the engine once in a size-tuned mode; tests keep the user's
+    // chosen `optimize` via the unshrunk `mod` above.
+    const dist_mod = b.addModule("zetex_dist", .{
+        .root_source_file = b.path("src/zatex.zig"),
+        .target = target,
+        .optimize = .ReleaseSmall,
+    });
+    dist_mod.addOptions("build_options", options);
+
     const lib = b.addLibrary(.{
         .name = "zatex",
-        .root_module = mod,
+        .root_module = dist_mod,
         .linkage = .static,
     });
     b.installArtifact(lib);
@@ -35,7 +47,7 @@ pub fn build(b: *std.Build) void {
     // host size budgets, and an absent dylib is a clean fallback.
     const dylib = b.addLibrary(.{
         .name = "zatex",
-        .root_module = mod,
+        .root_module = dist_mod,
         .linkage = .dynamic,
     });
     b.installArtifact(dylib);
