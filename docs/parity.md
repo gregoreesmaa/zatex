@@ -28,7 +28,7 @@ behaviors. KaTeX 0.18.7 is the reference throughout.
 | KaTeX option | ZaTeX status |
 | --- | --- |
 | `displayMode` | Parity: `LayoutOptions.display_mode` (inline `\textstyle` vs display `\displaystyle`, same operator-size rules). |
-| `output` (`html`/`mathml`/`htmlAndMathml`) | Partial by design: MathML emitter exists (`zatex.mathml`, structural walk per AGENTS.md §2); there is no HTML emitter — a native library has no DOM to feed, hosts compose their own views from the layout IR (`docs/ir.md`). |
+| `output` (`html`/`mathml`/`htmlAndMathml`) | Partial by design: MathML emitter exists (`zatex.mathml`, structural walk per AGENTS.md §2, including the `<semantics>` / `application/x-tex` source annotation KaTeX emits — the raw source is available at `render(source, …)`, so no metrics cross the walker); there is no HTML emitter — a native library has no DOM to feed, hosts compose their own views from the layout IR (`docs/ir.md`). |
 | `leqno`, `fleqn` | Gap: no tag/equation-number support, no flush-left mode (no owner issue yet — file one when `\tag` is scoped). |
 | `throwOnError` | Native difference, intentional: the engine always throws (`LayoutError.Invalid` + `Diag`); there is no render-source-with-hover fallback because there is no HTML sink. Callers implement fallback from the error. |
 | `errorColor` | N/A: follows from `throwOnError` above (no non-throwing render path). |
@@ -106,6 +106,20 @@ strings a host's sink may act on. Allowlist and filter at the sink.
 - Font-alphabet commands (`\mathbb`, `\mathbf`, …) map to core font
   families (`FontId`) for the host to resolve — coverage of each
   command is per-function table scope (issue #34), not this note.
+
+## Host troubleshooting (issue #142)
+
+- Boxes/tofu on screen mean the provider returned glyph id 0
+  (= missing, see `glyphId` in `contract.zig` / `glyph_id` in
+  `zatex.h`): the core lays the run out anyway, so nothing errors —
+  log which (`font`, codepoint) pairs come back 0 to enumerate
+  coverage. The reference host (`refhost.zig`) resolves vendored
+  Latin Modern Math first, system STIX Two Math second; a pair that
+  is 0 in both is genuinely uncovered (the refhost coverage-test
+  pattern shows how to sweep a corpus for misses).
+- Math-island detection is host-side: the core takes raw TeX and
+  `parse.zig` rejects `$` inside math input — there is no
+  auto-render in the core; hosts own delimiter scanning.
 
 ## Remaining gaps (exact)
 
