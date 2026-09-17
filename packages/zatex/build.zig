@@ -179,7 +179,7 @@ pub fn build(b: *std.Build) void {
     // engine (full profile), whose suite runs in its own targets.
     const qa_tests = b.addTest(.{
         .root_module = qa_mod,
-        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa81", "qa82", "qa83", "qa84", "qa85", "qa86", "qa87", "qa88", "qa dump", "qa101", "qa104", "qa96", "qa107", "qa108", "qa113", "qa114", "qa115" },
+        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa81", "qa82", "qa83", "qa84", "qa85", "qa86", "qa87", "qa88", "qa139", "qa140", "qa141", "qa144", "qa dump", "qa101", "qa104", "qa96", "qa107", "qa108", "qa113", "qa114", "qa115", "oracle-geometry" },
     });
     const run_qa_tests = b.addRunArtifact(qa_tests);
     run_qa_tests.setCwd(b.path("."));
@@ -203,4 +203,26 @@ pub fn build(b: *std.Build) void {
     run_qa_subset_tests.setCwd(b.path("."));
     test_step.dependOn(&run_qa_subset_tests.step);
     // ---- end QA coverage module ----
+
+    // ---- Energy budget module (issue #160; test-only, appended) ----
+    // Non-functional regression budgets for the #145-#159 energy work:
+    // hook-call counts, pool high-water marks, MathML byte budgets,
+    // struct-size ratchets. Deterministic counts only, never timings.
+    const energy_options = b.addOptions();
+    energy_options.addOption([]const u8, "profile", profile);
+    const energy_mod = b.addModule("energy", .{
+        .root_source_file = b.path("src/energy.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    energy_mod.addOptions("build_options", energy_options);
+    energy_mod.addImport("zatex", mod);
+    const energy_tests = b.addTest(.{
+        .root_module = energy_mod,
+        .filters = &.{"energy"},
+    });
+    const run_energy_tests = b.addRunArtifact(energy_tests);
+    run_energy_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_energy_tests.step);
+    // ---- end energy budget module ----
 }

@@ -16,7 +16,108 @@ pub const max_expand: u32 = 1000; // KaTeX `maxExpand` default parity.
 /// Layout knobs. Fields gain defaults, never lose them.
 pub const LayoutOptions = struct {
     display_mode: bool = false,
+    /// KaTeX `leqno`: display `\tag`s render left of the formula
+    /// instead of right. Default false (right).
+    leqno: bool = false,
+    /// KaTeX `fleqn`: display math renders flush left with a 2em
+    /// left margin (the whole construction shifts right by 2em in
+    /// font units; the host still positions the block). Default
+    /// false (no margin shift).
+    fleqn: bool = false,
+    /// KaTeX `minRuleThickness` in thousandths of an em (40 = the
+    /// usual 0.04): floors every rule thickness the core requests
+    /// (fraction bars, radicals, over/underlines, array and `\fbox`
+    /// rules). 0 disables the floor (previous behavior); the type
+    /// is unsigned because KaTeX ignores negative values.
+    min_rule_thickness_milli_em: u16 = 0,
+    /// KaTeX `strict`: `warn` (the KaTeX default) records
+    /// non-LaTeX conveniences into `strict_log` (dropped when null
+    /// — a native library has no console sink); `err` turns them
+    /// into positioned `Invalid` failures; `ignore` takes the
+    /// engine default silently. Custom handler functions have no
+    /// native analog (no JS engine); hosts approximate them by
+    /// inspecting `strict_log` per code.
+    strict: StrictMode = .warn,
+    /// Warn-mode sink for `strict` reports (caller-owned). Null
+    /// drops warn reports; `count` still totals them when present.
+    strict_log: ?*StrictLog = null,
+    /// KaTeX `macros`: host-provided preset macros seeded into the
+    /// definition table before parsing (bounded: at most
+    /// `max_presets`). String bodies carry `#1..#9` params like
+    /// in-source `\def` bodies; single-codepoint names are active
+    /// characters; the alias form mirrors `\let` (with `noexpand`).
+    /// Function-valued macros have no native analog (documented in
+    /// `docs/parity.md`). Presets are per-call seeds: unlike KaTeX,
+    /// `\gdef` never mutates this list (zero-alloc, reentrant) —
+    /// hosts needing cross-call sharing pass the same slice again.
+    macros: []const PresetMacro = &.{},
+    /// KaTeX `globalGroup`: when true every definition escapes its
+    /// group like `\gdef` (KaTeX parity for the opt-in). Default
+    /// false (KaTeX default scoping: local groups, `\gdef` escapes).
+    global_group: bool = false,
 };
+
+/// KaTeX `strict` modes (`boolean|string` subset; function handlers
+/// have no native analog — see `LayoutOptions.strict`).
+pub const StrictMode = enum {
+    ignore,
+    warn,
+    /// KaTeX `"error"` (spelled `err`: `error` is a keyword).
+    err,
+};
+
+/// Non-LaTeX conveniences the `strict` knob reports. KaTeX 0.18.7
+/// codes mappable to this engine; the remainder
+/// (`mathVsTextUnits`, `unicodeTextInMathMode`, `unknownSymbol`,
+/// `commentAtEnd`) is documented in `docs/parity.md`, not emitted.
+pub const StrictCode = enum {
+    /// `\htmlClass`/`\htmlId`/`\htmlStyle`/`\htmlData` (KaTeX
+    /// `htmlExtension`).
+    html_extension,
+    /// `\\` (or `\newline`) in display mode (KaTeX
+    /// `newLineInDisplayMode`): behavioral, never throws — error
+    /// mode renders no break (already the engine shape: a zero
+    /// box), warn/ignore keep it.
+    new_line_in_display_mode,
+    /// `&` past the `{array}` column spec (KaTeX `textEnv`).
+    text_env,
+    /// Text-mode accents (`\'`, `\"`, …) in math mode (KaTeX
+    /// `mathVsTextAccents`).
+    math_vs_text_accents,
+    /// `\sout` in math mode (KaTeX `mathVsSout`).
+    math_vs_sout,
+};
+
+/// One `strict` warn-mode report: what and where (byte offset).
+pub const StrictWarning = struct {
+    code: StrictCode,
+    pos: u32,
+};
+
+/// Caller-owned warn-mode sink: `buf` keeps the first reports,
+/// `count` totals all reports (extras past the buffer drop but
+/// still count).
+pub const StrictLog = struct {
+    buf: []StrictWarning,
+    count: usize = 0,
+};
+
+/// One host-provided preset macro (KaTeX `macros` option entry).
+/// `name` is `"foo"` for `\foo` (leading backslash stripped) or
+/// the UTF-8 bytes of one codepoint for an active character.
+/// Exactly one of `body` / `alias` selects the form: a LaTeX string
+/// with `#1..#9` params (arg count inferred sequentially like
+/// KaTeX), or a `\let`-style alias of `target` (`"\int"` or one
+/// codepoint; `noexpand` mirrors the `MacroExpansion` object form).
+pub const PresetMacro = struct {
+    name: []const u8,
+    body: []const u8 = "",
+    alias: ?[]const u8 = null,
+    noexpand: bool = false,
+};
+
+/// Hard cap on preset macros per call (part of the contract).
+pub const max_presets: usize = 16;
 
 /// Rule kinds the core may ask a thickness for.
 pub const RuleKind = enum { fraction_bar, radical, overline, underline };
@@ -51,6 +152,15 @@ pub const KernCorner = enum(u32) {
 pub const provider_version: u32 = 4;
 pub const MetricsProvider = struct {
     ctx: *const anyopaque,
+    /// Glyph id for (`font`, `codepoint`) in the host's namespace.
+    /// Id 0 means missing (issue #142): the core lays out the run
+    /// with the provider's advance/extents for 0 anyway, so hosts
+    /// seeing boxes/tofu should check which (font, codepoint) pairs
+    /// come back 0 — that is the whole coverage diagnostic. The
+    /// reference host (`refhost.zig`) resolves vendored Latin Modern
+    /// Math first, system STIX Two Math second; anything 0 in both
+    /// is genuinely uncovered (see the font troubleshooting note in
+    /// `docs/parity.md`).
     glyphId: *const fn (ctx: *const anyopaque, font: u16, codepoint: u21) u16,
     advance: *const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32,
     ruleThickness: *const fn (ctx: *const anyopaque, font: u16, kind: RuleKind) i32,
@@ -116,4 +226,8 @@ pub const FontId = enum(u16) {
     /// need 2x). Appended, never renumbered.
     size1 = 11,
     size2 = 12,
+    /// `\mathsfit` sans-serif italic (issue #137): KaTeX's
+    /// SansSerif-Italic face (`mathvariant="sans-serif-italic"`).
+    /// Appended, never renumbered.
+    sans_italic = 13,
 };

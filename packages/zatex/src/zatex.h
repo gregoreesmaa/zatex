@@ -18,6 +18,10 @@ extern "C" {
 
 typedef struct zatex_metrics {
     const void *ctx;
+    // Glyph id for (font, codepoint). Id 0 means missing (issue
+    // #142): the core still lays the run out, so boxes/tofu on screen
+    // mean this callback returned 0 — log the (font, cp) pairs to
+    // enumerate coverage (see docs/parity.md font troubleshooting).
     uint16_t (*glyph_id)(const void *ctx, uint16_t font, uint32_t cp);
     int32_t (*advance)(const void *ctx, uint16_t font, uint16_t glyph);
     // kind: 0 fraction_bar, 1 radical, 2 overline, 3 underline
@@ -51,6 +55,15 @@ typedef struct zatex_layout {
                     // 4 too_long, 5 expansion_limit, 6 no_space,
                     // 7 limit (request exceeds engine ceilings below)
     uint32_t err_offset; // byte offset on invalid
+    // ParseError message on failure (issues #126/#136): err_msg
+    // points at err_msg_len bytes of static storage (always valid,
+    // never freed; NOT null-terminated — use the length). NULL/0 on
+    // success or when no message applies. Appended — old readers
+    // ignore the tail. Hosts building the throwOnError:false-style
+    // fallback render the source plus these bytes as real text (see
+    // docs/parity.md "Error fallback (host recipe)").
+    const char *err_msg;
+    size_t err_msg_len;
 } zatex_layout_t;
 
 // Caps: at most 256 runs / 64 rules per call; larger requests fail

@@ -1,9 +1,12 @@
 //! Canonical LaTeX serializer: AST back to tex (issue #27, copy-
 //! as-LaTeX). Thin text walker: no layout math, no fonts. The fidelity
 //! contract is a round-trip property — `mathml(serialize(x))` equals
-//! `mathml(x)` — pinned per formula below, plus exact spellings for
-//! the common cases. Unrepresentable nodes (rule-thickness-overridden
-//! genfrac fractions, exotic lengths) return `Unsupported` instead of
+//! `mathml(x)` outside the source annotation (issue #119: the
+//! serializer normalizes the source, so the two `application/x-tex`
+//! bytes differ by design; `expectSameBody` below pins the rest) —
+//! pinned per formula below, plus exact spellings for the common
+//! cases. Unrepresentable nodes (rule-thickness-overridden genfrac
+//! fractions, exotic lengths) return `Unsupported` instead of
 //! silently changing meaning.
 const std = @import("std");
 const zatex = @import("zatex");
@@ -320,6 +323,7 @@ const Walker = struct {
                     .bb => "mathbb",
                     .cal => "mathcal",
                     .bolditalic => "bm",
+                    .sansitalic => "mathsfit",
                 });
                 try self.arg(f.body);
             },
@@ -355,7 +359,16 @@ const Walker = struct {
                 }
                 const rows = parse.rowsOf(self.ctx, e.rows_start, e.rows_len);
                 for (rows, 0..) |row, ri| {
-                    if (ri > 0) try self.put("\\\\");
+                    if (ri > 0) {
+                        try self.put("\\\\");
+                        // `[size]` after the break round-trips the
+                        // row gap (issues #140/#144).
+                        if (rows[ri - 1].gap_after != 0) {
+                            try self.put("[");
+                            try self.dimen(rows[ri - 1].gap_after);
+                            try self.put("]");
+                        }
+                    }
                     // Cells are implicitly grouped by position: bracing
                     // them would add spurious mrows on re-parse.
                     const kids = parse.kidsOf(self.ctx, .{ .start = row.start, .len = row.len });
@@ -418,7 +431,16 @@ const Walker = struct {
             // Interword space round-trips as the control space.
             .nbsp => try self.cmd(" "),
             .vspace => return error.Unsupported,
-            .newline => try self.put("\\\\"),
+            .newline => |nl| {
+                try self.put("\\\\");
+                // `[size]` after the break round-trips the sized
+                // break (issues #140/#144).
+                if (nl.size != 0) {
+                    try self.put("[");
+                    try self.dimen(nl.size);
+                    try self.put("]");
+                }
+            },
             .hline => |h| try self.cmd(if (h.dashed) "hdashline" else "hline"),
             .color => |c| {
                 try self.cmd("color");
@@ -661,6 +683,7 @@ const Walker = struct {
                 .bb => "mathbb",
                 .cal => "mathcal",
                 .bolditalic => "bm",
+                .sansitalic => "mathsfit",
             });
             try self.put("{");
             try self.putCp(cp);
@@ -1053,10 +1076,31 @@ test "serializer: exact canonical spellings" {
         .{ "\\xcancel{AB}", "\\xcancel{AB}" },
         .{ "\\sum x", "\\sum x" },
         .{ "\\fbox{Hi}", "\\fbox{Hi}" },
+        .{ "\\begin{matrix}a\\\\[6pt]b\\end{matrix}", "\\begin{matrix}a\\\\[0.600em]b\\end{matrix}" },
+        .{ "a\\\\[6pt]b", "a\\\\[0.600em]b" },
     };
     for (cases) |c| {
         const got = try serialize(c[0], false, &out);
         try std.testing.expectEqualStrings(c[1], got);
+    }
+}
+
+/// Round-trip body comparison (issue #119): `serialize` normalizes
+/// the source, so the two `application/x-tex` annotations differ by
+/// design — everything outside them must be byte-identical, and each
+/// side must carry exactly one annotation.
+fn expectSameBody(src: []const u8, tex: []const u8, a: []const u8, b: []const u8) !void {
+    const open = "<annotation encoding=\"application/x-tex\">";
+    const close = "</annotation>";
+    const a0 = std.mem.indexOf(u8, a, open) orelse return error.TestUnexpectedResult;
+    const b0 = std.mem.indexOf(u8, b, open) orelse return error.TestUnexpectedResult;
+    const a1 = std.mem.indexOf(u8, a, close) orelse return error.TestUnexpectedResult;
+    const b1 = std.mem.indexOf(u8, b, close) orelse return error.TestUnexpectedResult;
+    if (std.mem.indexOf(u8, a[a1 + close.len ..], open) != null) return error.TestUnexpectedResult;
+    if (std.mem.indexOf(u8, b[b1 + close.len ..], open) != null) return error.TestUnexpectedResult;
+    if (!std.mem.eql(u8, a[0..a0], b[0..b0]) or !std.mem.eql(u8, a[a1..], b[b1..])) {
+        std.debug.print("\nround-trip drift [{s}] -> [{s}]\n  was: {s}\n  now: {s}\n", .{ src, tex, a, b });
+        return error.TestUnexpectedResult;
     }
 }
 
@@ -1081,6 +1125,8 @@ test "serializer: round-trip keeps MathML identical" {
         "\\overline{AB}",
         "\\hat{x}",
         "\\begin{matrix}a&b\\\\c&d\\end{matrix}",
+        "\\begin{matrix}a\\\\[6pt]b\\end{matrix}",
+        "a\\\\[6pt]b",
         "\\begin{cases}x&x\\ge 0\\\\-x&x<0\\end{cases}",
         "\\vec{v}",
         "\\boxed{x+1}",
@@ -1128,10 +1174,9 @@ test "serializer: round-trip keeps MathML identical" {
             var m2: [8192]u8 = undefined;
             const a = try zatex.mathml(src, opts, &m1);
             const b = try zatex.mathml(tex, opts, &m2);
-            if (!std.mem.eql(u8, a, b)) {
-                std.debug.print("\nround-trip drift [{s}] -> [{s}]\n  was: {s}\n  now: {s}\n", .{ src, tex, a, b });
-                return error.TestUnexpectedResult;
-            }
+            // The normalized source re-annotates by design (issue
+            // #119); the body must still be byte-identical.
+            try expectSameBody(src, tex, a, b);
         }
     }
 }
@@ -1152,7 +1197,7 @@ test "serializer: equation tag round-trips in display mode" {
         const opts: zatex.LayoutOptions = .{ .display_mode = true };
         const a = try zatex.mathml(c[0], opts, &m1);
         const b = try zatex.mathml(tex, opts, &m2);
-        try std.testing.expectEqualStrings(a, b);
+        try expectSameBody(c[0], tex, a, b);
     }
 }
 

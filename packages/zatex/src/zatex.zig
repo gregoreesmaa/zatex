@@ -10,6 +10,11 @@ pub const ir = @import("ir.zig");
 pub const parse = @import("parse.zig");
 pub const symbols = @import("symbols.zig");
 const engine = @import("layout.zig");
+/// Layout core namespace (box tree, `LayCtx` pools). Public so
+/// test-only modules (energy budgets, issue #160) can read pool
+/// high-water marks without duplicating the engine wiring; the
+/// stable embedding surface stays `layoutFull`/`layoutDiag`/C ABI.
+pub const layout_core = engine;
 const mathml_mod = @import("mathml.zig");
 pub const contract = @import("contract.zig");
 
@@ -31,6 +36,12 @@ pub const max_input_len = contract.max_input_len;
 pub const max_nesting_depth = contract.max_nesting_depth;
 pub const max_expand = contract.max_expand;
 pub const LayoutOptions = contract.LayoutOptions;
+pub const StrictMode = contract.StrictMode;
+pub const StrictCode = contract.StrictCode;
+pub const StrictWarning = contract.StrictWarning;
+pub const StrictLog = contract.StrictLog;
+pub const PresetMacro = contract.PresetMacro;
+pub const max_presets = contract.max_presets;
 pub const RuleKind = contract.RuleKind;
 pub const provider_version = contract.provider_version;
 pub const MetricsProvider = contract.MetricsProvider;
@@ -82,7 +93,7 @@ pub fn layoutInner(
 ) LayoutError!ir.Layout {
     if (source.len > max_input_len) return error.TooLong;
     var pc = parse.ParseCtx.init(source);
-    const root = parse.parse(&pc, options.display_mode) catch |e| {
+    const root = parse.parseWith(&pc, options) catch |e| {
         // Offsets match KaTeX `ParseError.position` exactly: the
         // 0-based byte offset of the offending token (KaTeX's message
         // text adds 1 for humans; the property is the API contract).
@@ -102,9 +113,15 @@ pub fn mathml(source: []const u8, options: LayoutOptions, out: []u8) LayoutError
 }
 
 /// Lay out one formula into caller-owned buffers (zero allocations).
-/// `Run.glyphs` slices borrow a shared 8K-glyph ring that stays valid
-/// until the next `layout` call (documented ctime-style borrow);
-/// prefer `layoutFull` for reentrant use.
+///
+/// Deprecated in favor of `layoutFull` (energy, issue #154): `Run.glyphs`
+/// slices borrow a shared process-wide 8K-glyph (16 KiB `.bss`) ring with
+/// ctime-style borrow semantics — every `layout` call, from any caller,
+/// may overwrite it, so a previous result's glyph slices are valid only
+/// until the next `layout` call returns, and two live results can never
+/// coexist (not reentrant, not thread-safe). New hosts must pass their
+/// own glyph buffer to `layoutFull`; this wrapper stays only for
+/// source compatibility and carries the 16 KiB resident cost.
 pub fn layout(
     source: []const u8,
     options: LayoutOptions,
@@ -754,7 +771,7 @@ test "issue33: matrix column gaps match KaTeX separation" {
     var rules_buf: [8]ir.Rule = undefined;
     var glyphs_buf: [128]u16 = undefined;
     const m = try layoutOk("\\begin{matrix}a&b\\end{matrix}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
-    try std.testing.expectEqual(@as(u32, 1500 + 1500), m.width);
+    try std.testing.expectEqual(@as(u32, 500 + 1000 + 500), m.width);
     const a = try layoutOk("\\begin{array}{cc}a&b\\end{array}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(u32, 500 + 1500 + 1500 + 500), a.width);
     // `aligned` rl pairs touch (the `=` cell keeps its own Rel glue;
@@ -981,4 +998,201 @@ fn testProvider() MetricsProvider {
         .advance = S.advance,
         .ruleThickness = S.ruleThickness,
     };
+}
+
+fn thinProvider() MetricsProvider {
+    const S = struct {
+        fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
+            return 500;
+        }
+        // Sub-floor weight: the floor knob must lift it.
+        fn ruleThickness(_: *const anyopaque, _: u16, _: RuleKind) i32 {
+            return 10;
+        }
+    };
+    return .{
+        .ctx = &.{},
+        .glyphId = S.glyphId,
+        .advance = S.advance,
+        .ruleThickness = S.ruleThickness,
+    };
+}
+
+fn runWithGlyph(source: []const u8, glyph: u16, options: LayoutOptions) !?i32 {
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const l = try layoutFull(source, options, testProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == glyph) return r.x;
+        }
+    }
+    return null;
+}
+
+test "options: leqno puts the tag left, default right (issue #120)" {
+    // Pinned KaTeX 0.18.7 DOM order: tag cell first under `leqno`,
+    // formula first by default (`\qquad` gap between). Widths agree
+    // both ways; only the placement swaps.
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const right = try layoutFull("\\tag{1}x", .{ .display_mode = true }, testProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    const right_w = right.width;
+    const left = try layoutFull("\\tag{1}x", .{ .display_mode = true, .leqno = true }, testProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    const left_w = left.width;
+    try std.testing.expectEqual(right_w, left_w);
+    // Formula ink (mathit `x` = U+1D465) starts at 0 by default and
+    // ends the row under leqno; the paren (glyph 40) does the
+    // opposite. (`runWithGlyph` re-lays out with fresh buffers.)
+    const mathx: u16 = 0xD465;
+    try std.testing.expectEqual(@as(i32, 0), (try runWithGlyph("\\tag{1}x", mathx, .{ .display_mode = true })).?);
+    try std.testing.expectEqual(@as(i32, 0), (try runWithGlyph("\\tag{1}x", 40, .{ .display_mode = true, .leqno = true })).?);
+    try std.testing.expectEqual(
+        @as(i32, @intCast(left_w)) - 500,
+        (try runWithGlyph("\\tag{1}x", mathx, .{ .display_mode = true, .leqno = true })).?,
+    );
+    // Inline equations never tag (rejects), so leqno is display-only
+    // by construction — and a no-op without a tag.
+    const plain = try layoutFull("x", .{ .display_mode = true, .leqno = true }, testProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 500), plain.width);
+}
+
+test "options: fleqn shifts display math by 2em (issue #120)" {
+    // NOTE: each layout gets its own buffers — `Layout` slices
+    // borrow the caller buffers, so reuse would alias.
+    var a_runs: [32]ir.Run = undefined;
+    var a_rules: [8]ir.Rule = undefined;
+    var a_glyphs: [128]u16 = undefined;
+    var b_runs: [32]ir.Run = undefined;
+    var b_rules: [8]ir.Rule = undefined;
+    var b_glyphs: [128]u16 = undefined;
+    const plain = try layoutFull("x", .{ .display_mode = true }, testProvider(), &a_runs, &a_rules, &a_glyphs);
+    const flush = try layoutFull("x", .{ .display_mode = true, .fleqn = true }, testProvider(), &b_runs, &b_rules, &b_glyphs);
+    try std.testing.expectEqual(plain.width + 2000, flush.width);
+    try std.testing.expectEqual(@as(i32, 2000), flush.runs[0].x);
+    // Rules shift with the runs (fraction bar included).
+    const pf = try layoutFull("\\frac{a}{b}", .{ .display_mode = true }, testProvider(), &a_runs, &a_rules, &a_glyphs);
+    const ff = try layoutFull("\\frac{a}{b}", .{ .display_mode = true, .fleqn = true }, testProvider(), &b_runs, &b_rules, &b_glyphs);
+    try std.testing.expectEqual(pf.rules[0].x + 2000, ff.rules[0].x);
+    try std.testing.expectEqual(pf.rules[0].w, ff.rules[0].w);
+    // Inline math is untouched by fleqn.
+    const inl = try layoutFull("x", .{ .fleqn = true }, testProvider(), &a_runs, &a_rules, &a_glyphs);
+    try std.testing.expectEqual(@as(u32, 500), inl.width);
+}
+
+test "options: min rule thickness floors every rule (issue #118)" {
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    // Provider weight (10) passes through unfloored...
+    const bare = try layoutFull("\\frac{a}{b}", .{}, thinProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 10), bare.rules[0].h);
+    // ...lifts to the floor (40 = KaTeX's usual 0.04)...
+    const floored = try layoutFull("\\frac{a}{b}", .{ .min_rule_thickness_milli_em = 40 }, thinProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 40), floored.rules[0].h);
+    // ...and a higher floor wins outright.
+    const high = try layoutFull("\\frac{a}{b}", .{ .min_rule_thickness_milli_em = 100 }, thinProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 100), high.rules[0].h);
+    // Provider values above the floor pass through unchanged.
+    const above = try layoutFull("\\frac{a}{b}", .{ .min_rule_thickness_milli_em = 40 }, testProvider(), &runs_buf, &rules_buf, &glyphs_buf);
+    try std.testing.expectEqual(@as(u32, 40), above.rules[0].h);
+    // Hardcoded 0.04em weights (array vlines, `\fbox` frames) floor
+    // the same way, independent of the provider (separate buffers:
+    // rule slices borrow them).
+    var c_runs: [32]ir.Run = undefined;
+    var c_rules: [8]ir.Rule = undefined;
+    var c_glyphs: [128]u16 = undefined;
+    var d_runs: [32]ir.Run = undefined;
+    var d_rules: [8]ir.Rule = undefined;
+    var d_glyphs: [128]u16 = undefined;
+    const box_bare = try layoutFull("\\fbox{x}", .{}, thinProvider(), &c_runs, &c_rules, &c_glyphs);
+    const box_floor = try layoutFull("\\fbox{x}", .{ .min_rule_thickness_milli_em = 100 }, thinProvider(), &d_runs, &d_rules, &d_glyphs);
+    var saw40 = false;
+    var saw100 = false;
+    for (box_bare.rules) |r| {
+        if (r.h == 40 or r.w == 40) saw40 = true;
+    }
+    for (box_floor.rules) |r| {
+        if (r.h == 100 or r.w == 100) saw100 = true;
+    }
+    try std.testing.expect(saw40);
+    try std.testing.expect(saw100);
+    const vline_bare = try layoutFull("\\begin{array}{|c|}x\\end{array}", .{}, thinProvider(), &c_runs, &c_rules, &c_glyphs);
+    const vline_floor = try layoutFull("\\begin{array}{|c|}x\\end{array}", .{ .min_rule_thickness_milli_em = 100 }, thinProvider(), &d_runs, &d_rules, &d_glyphs);
+    var vb40 = false;
+    var vb100 = false;
+    for (vline_bare.rules) |r| {
+        if (r.w == 40) vb40 = true;
+    }
+    for (vline_floor.rules) |r| {
+        if (r.w == 100) vb100 = true;
+    }
+    try std.testing.expect(vb40);
+    try std.testing.expect(vb100);
+    // The unsigned type ignores negatives by construction (KaTeX
+    // parity: negative `minRuleThickness` is ignored).
+}
+
+test "preset alias lays out exactly like its target (issue #117)" {
+    // Pinned KaTeX 0.18.7 MathML: `\realint` via the alias object
+    // renders `<mo>∫</mo>`, identical to `\int` (modulo the source
+    // echo annotation, which has no native analog). Geometry must
+    // agree bit-for-bit here too.
+    const presets = [_]PresetMacro{.{ .name = "\\realint", .alias = "\\int", .noexpand = true }};
+    const opts = LayoutOptions{ .macros = &presets };
+    var a_runs: [16]ir.Run = undefined;
+    var a_rules: [4]ir.Rule = undefined;
+    var a_glyphs: [64]u16 = undefined;
+    var b_runs: [16]ir.Run = undefined;
+    var b_rules: [4]ir.Rule = undefined;
+    var b_glyphs: [64]u16 = undefined;
+    const a = try layoutFull("\\realint", opts, testProvider(), &a_runs, &a_rules, &a_glyphs);
+    const b = try layoutFull("\\int", .{}, testProvider(), &b_runs, &b_rules, &b_glyphs);
+    try std.testing.expectEqual(b.width, a.width);
+    try std.testing.expectEqual(b.runs.len, a.runs.len);
+    try std.testing.expectEqual(b.runs[0].glyphs[0], a.runs[0].glyphs[0]);
+    // Consecutive renders share via the caller's slice (the
+    // documented cross-call story): same presets, same result.
+    const a2 = try layoutFull("\\realint", opts, testProvider(), &b_runs, &b_rules, &b_glyphs);
+    try std.testing.expectEqual(a.width, a2.width);
+}
+
+test "Diag.message wording is pinned (issue #135)" {
+    // The static-message rule: every failure carries a fixed,
+    // allocation-free string — never KaTeX's dynamic echoes
+    // (function names, source snippets, 1-based positions). This
+    // pins the wording for a sample across the failure taxonomy;
+    // positions stay sweep-gated per `docs/tolerance.md`.
+    const cases = [_]struct {
+        src: []const u8,
+        opts: LayoutOptions,
+        want: anyerror,
+        pos: u32,
+        msg: []const u8,
+    }{
+        .{ .src = "\\nope", .opts = .{}, .want = error.Invalid, .pos = 0, .msg = "undefined control sequence" },
+        .{ .src = "x^2^3", .opts = .{}, .want = error.Invalid, .pos = 3, .msg = "double superscript" },
+        .{ .src = "x_2_3", .opts = .{}, .want = error.Invalid, .pos = 3, .msg = "double subscript" },
+        .{ .src = "\\tag{1}x", .opts = .{}, .want = error.Invalid, .pos = 0, .msg = "\\tag works only in display equations" },
+        .{ .src = "\\tag{1}\\tag{2}x", .opts = .{ .display_mode = true }, .want = error.Invalid, .pos = 7, .msg = "Multiple \\tag" },
+        .{ .src = "{x", .opts = .{}, .want = error.Invalid, .pos = 2, .msg = "unexpected end of input" },
+        .{ .src = "x_\\hbox{x}", .opts = .{}, .want = error.Invalid, .pos = 2, .msg = "function with no arguments as subscript" },
+        .{ .src = "\\htmlClass{x}{y}", .opts = .{ .strict = .err }, .want = error.Invalid, .pos = 0, .msg = "strict mode forbids HTML extension" },
+        .{ .src = "\\def\\a{\\a}\\a", .opts = .{}, .want = error.ExpansionLimit, .pos = 10, .msg = "macro expansion limit exceeded" },
+    };
+    for (cases) |c| {
+        var runs_buf: [16]ir.Run = undefined;
+        var rules_buf: [4]ir.Rule = undefined;
+        var glyphs_buf: [64]u16 = undefined;
+        var diag = Diag.empty();
+        const r = layoutDiag(c.src, c.opts, testProvider(), &runs_buf, &rules_buf, &glyphs_buf, &diag);
+        try std.testing.expectError(c.want, r);
+        try std.testing.expectEqual(c.pos, diag.offset);
+        try std.testing.expectEqualStrings(c.msg, diag.message);
+    }
 }

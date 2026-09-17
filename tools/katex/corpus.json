@@ -594,6 +594,72 @@
   "expect": "accept"
  },
  {
+  "id": "def-group-local",
+  "tex": "{\\def\\foo{X}}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "edef-group-local",
+  "tex": "{\\edef\\foo{X}}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "newcommand-group-local",
+  "tex": "{\\newcommand{\\f}{x}}\\f",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "let-group-local",
+  "tex": "{\\let\\a=\\alpha}\\a",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "gdef-group-global",
+  "tex": "{\\gdef\\foo{X}}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "xdef-group-global",
+  "tex": "{\\xdef\\foo{X}}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "global-def-group",
+  "tex": "{\\global\\def\\foo{X}}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "def-shadow-group",
+  "tex": "\\def\\foo{O}{\\def\\foo{I}\\foo}\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "frac-arg-local",
+  "tex": "\\frac{\\def\\foo{X}}{2}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "envcell-def-local",
+  "tex": "\\begin{matrix}\\def\\foo{X}\\foo&y\\end{matrix}\\foo",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "fence-def-nogroup",
+  "tex": "\\left(\\def\\foo{X}\\right.\\foo",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "maxexpand-loop",
   "tex": "\\def\\a{\\a}\\a",
   "display": false,
@@ -822,6 +888,12 @@
  {
   "id": "lap",
   "tex": "\\llap{x}y",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lap-clap",
+  "tex": "\\clap{abc}",
   "display": false,
   "expect": "accept"
  },
@@ -7726,6 +7798,12 @@
   "expect": "accept"
  },
  {
+  "id": "enskip",
+  "tex": "a\\enskip b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
   "id": "newline",
   "tex": "a\\newline b",
   "display": false,
@@ -9631,6 +9709,210 @@
  {
   "id": "textit-x",
   "tex": "\\textit{AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textcopyright",
+  "tex": "\\textcopyright",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "unit-px",
+  "tex": "a\\hspace{10px}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textcopyright-text",
+  "tex": "\\text{\\textcopyright}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "array-row-size",
+  "tex": "\\begin{matrix}a\\\\[6pt]b\\end{matrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bgroup",
+  "tex": "\\bgroup a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "array-stretch",
+  "tex": "\\def\\arraystretch{1.5}\\begin{array}{c}a\\\\b\\end{array}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bgroup-egroup",
+  "tex": "\\bgroup a\\egroup",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "egroup-stray",
+  "tex": "\\egroup",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "bgroup-unclosed",
+  "tex": "\\bgroup",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "bgroup-extra-close",
+  "tex": "{a\\egroup}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "bgroup-endgroup-mismatch",
+  "tex": "\\bgroup a\\endgroup}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "font-mathsfit",
+  "tex": "\\mathsfit{AaBb}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "mathsfit-alpha",
+  "tex": "\\mathsfit\\alpha",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-firstoftwo",
+  "tex": "\\@firstoftwo{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-secondoftwo",
+  "tex": "\\@secondoftwo{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-firstoftwo-nested",
+  "tex": "\\@secondoftwo{a}{{b}c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-firstoftwo-drop",
+  "tex": "\\@firstoftwo{a}{\\undefinedcommand}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-firstoftwo-text",
+  "tex": "\\text{\\@firstoftwo{a}{b}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-firstoftwo-missing",
+  "tex": "\\@firstoftwo{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "at-ifnextchar-match",
+  "tex": "\\@ifnextchar{a}{T}{E}a",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-ifnextchar-nomatch",
+  "tex": "\\@ifnextchar{a}{T}{E}b",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-ifnextchar-space",
+  "tex": "\\@ifnextchar{a}{T}{E} a",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-ifnextchar-ctrl",
+  "tex": "\\@ifnextchar\\alpha{T}{E}\\alpha",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-ifnextchar-eof",
+  "tex": "x\\@ifnextchar{a}{T}{E}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-ifnextchar-missing",
+  "tex": "\\@ifnextchar{a}{T}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "at-ifstar-match",
+  "tex": "\\@ifstar{T}{E}*",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-ifstar-nomatch",
+  "tex": "\\@ifstar{T}{E}x",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "at-ifstar-eof",
+  "tex": "\\@ifstar{T}{E}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textormath-math",
+  "tex": "\\TextOrMath{a}{b}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textormath-text",
+  "tex": "\\text{\\TextOrMath{a}{b}}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textormath-nested-text",
+  "tex": "\\text{x\\TextOrMath{a}{b}y}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textormath-frac",
+  "tex": "\\frac{\\TextOrMath{a}{b}}{c}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textormath-missing",
+  "tex": "\\TextOrMath{a}",
+  "display": false,
+  "expect": "reject"
+ },
+ {
+  "id": "newline-size",
+  "tex": "a\\\\[6pt]b",
   "display": false,
   "expect": "accept"
  }

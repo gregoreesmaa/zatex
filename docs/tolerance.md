@@ -53,16 +53,61 @@ Adding a normalization requires a comment here explaining why the two
 shapes carry identical layout meaning. Normalizations never hide an
 accept/reject or position difference.
 
+## Static messages
+
+`Diag.message` is static by contract: a fixed string per failure
+kind, chosen at the failure site from comptime-known literals — no
+heap, no formatting, no source echo. KaTeX's `ParseError` messages
+carry dynamic content we deliberately omit:
+
+- function names (`Got function \hbox with no arguments as
+  subscript` → ours is `function with no arguments as subscript`;
+  the `rej-111-*` rows pin the offsets, the wording is ours);
+- the offending source snippet and 1-based human position
+  (`Undefined control sequence: \foo at position 14: …` → ours is
+  `undefined control sequence` at the 0-based token offset);
+- strict-mode echoes (`… [htmlExtension]` suffixes and
+  `LaTeX-incompatible input …` prefixes → ours are short static
+  strings like `strict mode forbids HTML extension`).
+
+Rationale: the messages cross caller-owned buffers (including the C
+ABI as pointer + length into static storage) and must stay valid
+without allocation or lifetime tracking. Positions carry the
+precision; messages name the kind. Wording is pinned by unit test
+(`zatex.zig` "Diag.message wording is pinned"); positions are
+sweep-gated above.
+
 ## Declared divergences
 
 Rows with `katex_only: true` document behavior where we intentionally
 differ. Each such row records our error in `ours`, and the test asserts
-exactly that error. A divergence that stops diverging (KaTeX changes,
-or we close the gap) fails loudly: unexpected acceptance of a
-`katex_only` row is an error, forcing the row back to full agreement.
+exactly that error variant (positions are intentionally uncompared on
+these rows). A divergence that stops diverging (KaTeX changes, or we
+close the gap) fails loudly: unexpected acceptance of a `katex_only`
+row is an error, forcing the row back to full agreement. This section
+is the catalog: 24 rows, grouped by cause.
 
-- `rej-hbox-to` (issue #73): KaTeX accepts `\hbox to <dimen>` only by
-  misparsing it — the `to` form is unsupported, so `to 10pt{A}` falls
-  through as math (`t` becomes `<mtext>t</mtext>`). We reject instead;
-  implementing spread-box layout with no KaTeX target to agree against
-  would invent behavior, so the rejection is declared.
+- Expanded-buffer positions (`ko-111-*`, 14 rows: `ko-111-thin`,
+  `ko-111-thick`, `ko-111-med`, `ko-111-boxed`, `ko-111-dotsi`,
+  `ko-111-substack`, `ko-111-hphantom`, `ko-111-llap`,
+  `ko-111-hspace`, `ko-111-bmod`, `ko-111-operatorname`,
+  `ko-111-minuso`, `ko-111-tag`, `ko-111-nonumber`): KaTeX rejects
+  via macro expansion and reports a position inside its expanded
+  buffer (e.g. 23 for a 4-character input) — no source offset can
+  equal it, so agreement is ungateable. We reject `Invalid` at the
+  use-site token.
+- End-of-input positions (5 rows: `text-dollar`, `textb-dollar`,
+  `hbox-dollar`, `text-paren-unclosed`, `text-jmath-rej`): KaTeX
+  reports end-of-input for these text/box `$`-and-delimiter errors;
+  ours reports the offending token. We reject `Invalid` either way.
+- `maxexpand-loop`: KaTeX surfaces a position-less `ParseError`
+  ("Too many expansions..."); we surface the distinct
+  `ExpansionLimit` variant, matching the `maxExpand` contract.
+- `deep-nest`: pinned KaTeX accepts 200-deep nesting; we reject
+  `TooDeep` (bounded stack depth is a core tenet).
+- `verb-in-macro`: pinned KaTeX accepts `\verb` fed from macro
+  expansion; we reject `Invalid` (verbatim reads source bytes
+  directly and cannot arrive via expansion).
+- CD-arrow positions (2 rows: `disp-cd-badarrow`,
+  `disp-cd-incomplete`): KaTeX reports position 12 from its CD
+  parser; we reject `Invalid` at our own CD-parse position.

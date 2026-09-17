@@ -721,3 +721,42 @@ test "determinism: IR text is stable across re-layouts" {
         }
     }
 }
+
+test "oracle-165: blackboard-bold alphabet resolves, no gid-0 fallback" {
+    // Pinned KaTeX renders `\mathbb` from real double-struck glyphs;
+    // every ASCII letter/digit must resolve through the vendored
+    // stack (Latin Modern Math carries the whole double-struck
+    // alphabet, so no system font is involved either way).
+    var ref = try Ref.load();
+    defer ref.free();
+    var runs: [64]zatex.ir.Run = undefined;
+    var rules: [16]zatex.ir.Rule = undefined;
+    var glyphs: [256]u16 = undefined;
+    const lay = try layoutCase(&ref, "\\mathbb{ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789}", false, &runs, &rules, &glyphs);
+    var n: usize = 0;
+    for (lay.runs) |r| {
+        for (r.glyphs) |g| {
+            // gid 0 is the missing-glyph fallback (issue #142);
+            // every bb letter must be a real LM glyph (face 0).
+            try std.testing.expect(g != 0);
+            const fr = ref.stack.faceOf(g) orelse return error.TestUnexpectedResult;
+            try std.testing.expectEqual(@as(usize, 0), fr.index);
+            n += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 62), n);
+}
+
+test "oracle-167: gathered cells are displaystyle" {
+    // KaTeX's `gathered` handler styles cells `"display"` (like the
+    // MathML walker already records): a display `\sum` draws from
+    // the Size2 face (font id 12), never Size1 (11).
+    var ref = try Ref.load();
+    defer ref.free();
+    var runs: [64]zatex.ir.Run = undefined;
+    var rules: [16]zatex.ir.Rule = undefined;
+    var glyphs: [256]u16 = undefined;
+    const lay = try layoutCase(&ref, "\\begin{gathered}\\sum\\end{gathered}", false, &runs, &rules, &glyphs);
+    try std.testing.expectEqual(@as(usize, 1), lay.runs.len);
+    try std.testing.expectEqual(@as(u16, 12), lay.runs[0].font_id);
+}
