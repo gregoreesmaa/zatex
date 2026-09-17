@@ -362,12 +362,14 @@ test "energy color sentinel survives white" {
 }
 
 // ---------------------------------------------------------------------------
-// Macro swap-with-previous (#147): redefine overwrites, order kept
+// Macro lookup (#147 with group-scope shadowing #125): definitions
+// append and lookup reads innermost-first, so redefine wins;
+// swap-with-previous applies only to global pairs (scope-safe).
 // ---------------------------------------------------------------------------
 
 test "energy macro redefine renders the latest body" {
-    // `\def\a{1}\def\a{2}\a` must render "2": `storeDef` overwrites
-    // through the pointer `findDef` returns after swapping.
+    // `\def\a{1}\def\a{2}\a` must render "2": back-to-front lookup
+    // returns the innermost definition.
     counters = .{};
     var runs_buf: [8]ir.Run = undefined;
     var rules_buf: [4]ir.Rule = undefined;

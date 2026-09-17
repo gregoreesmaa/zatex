@@ -992,6 +992,122 @@
    "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>y</mi></mrow><annotation encoding=\"application/x-tex\">\\gdef\\g{y}\\g</annotation></semantics></math>"
   },
   {
+   "id": "def-group-local",
+   "tex": "{\\def\\foo{X}}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 13,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\foo at position 14: {\\def\\foo{X}}\\̲f̲o̲o̲"
+  },
+  {
+   "id": "edef-group-local",
+   "tex": "{\\edef\\foo{X}}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 14,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\foo at position 15: {\\edef\\foo{X}}\\̲f̲o̲o̲"
+  },
+  {
+   "id": "newcommand-group-local",
+   "tex": "{\\newcommand{\\f}{x}}\\f",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 20,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\f at position 21: …command{\\f}{x}}\\̲f̲"
+  },
+  {
+   "id": "let-group-local",
+   "tex": "{\\let\\a=\\alpha}\\a",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 15,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\a at position 16: {\\let\\a=\\alpha}\\̲a̲"
+  },
+  {
+   "id": "gdef-group-global",
+   "tex": "{\\gdef\\foo{X}}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mrow></mrow><mi>X</mi></mrow><annotation encoding=\"application/x-tex\">{\\gdef\\foo{X}}\\foo</annotation></semantics></math>"
+  },
+  {
+   "id": "xdef-group-global",
+   "tex": "{\\xdef\\foo{X}}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mrow></mrow><mi>X</mi></mrow><annotation encoding=\"application/x-tex\">{\\xdef\\foo{X}}\\foo</annotation></semantics></math>"
+  },
+  {
+   "id": "global-def-group",
+   "tex": "{\\global\\def\\foo{X}}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mrow></mrow><mi>X</mi></mrow><annotation encoding=\"application/x-tex\">{\\global\\def\\foo{X}}\\foo</annotation></semantics></math>"
+  },
+  {
+   "id": "def-shadow-group",
+   "tex": "\\def\\foo{O}{\\def\\foo{I}\\foo}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>I</mi><mi>O</mi></mrow><annotation encoding=\"application/x-tex\">\\def\\foo{O}{\\def\\foo{I}\\foo}\\foo</annotation></semantics></math>"
+  },
+  {
+   "id": "frac-arg-local",
+   "tex": "\\frac{\\def\\foo{X}}{2}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 21,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\foo at position 22: …\\def\\foo{X}}{2}\\̲f̲o̲o̲"
+  },
+  {
+   "id": "envcell-def-local",
+   "tex": "\\begin{matrix}\\def\\foo{X}\\foo&y\\end{matrix}\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": false,
+   "katex_pos": 43,
+   "katex_error": "KaTeX parse error: Undefined control sequence: \\foo at position 44: …o&y\\end{matrix}\\̲f̲o̲o̲"
+  },
+  {
+   "id": "fence-def-nogroup",
+   "tex": "\\left(\\def\\foo{X}\\right.\\foo",
+   "display": false,
+   "ours": null,
+   "katex_only": false,
+   "note": null,
+   "katex_ok": true,
+   "katex_mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo fence=\"true\">(</mo><mi>X</mi></mrow><annotation encoding=\"application/x-tex\">\\left(\\def\\foo{X}\\right.\\foo</annotation></semantics></math>"
+  },
+  {
    "id": "maxexpand-loop",
    "tex": "\\def\\a{\\a}\\a",
    "display": false,

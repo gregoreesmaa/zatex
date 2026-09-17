@@ -211,8 +211,25 @@ pub const LayCtx = struct {
         return .{ .adv = adv, .ext = ext };
     }
     fn ruleTh(self: *LayCtx, font: u16, kind: contract.RuleKind) i32 {
+        // KaTeX `minRuleThickness` parity: the caller floor (in
+        // thousandths of an em, like provider weights) applies to
+        // every requested thickness; 0 disables it bit-identically.
+        // The floor is full-profile surface (subset entry points
+        // always pass the 0 default): subset keeps the bare weight
+        // so the extra max vanishes from its binary (size ratchet).
         const v = self.provider.ruleThickness(self.provider.ctx, font, kind);
-        return if (v <= 0) 40 else v;
+        const base = if (v <= 0) 40 else v;
+        if (comptime active_profile == .subset) return base;
+        return @max(base, self.pctx.min_rule_floor);
+    }
+    /// Hardcoded 0.04em rule weights (array vlines, `\fbox` frames)
+    /// under the same floor: the constant stands in for a provider
+    /// weight KaTeX would floor too.
+    fn constRule(self: *LayCtx, size: i32) i32 {
+        // Subset keeps the bare constant (floor always 0 there);
+        // see `ruleTh`.
+        const w: i32 = if (comptime active_profile == .subset) 40 else @max(@as(i32, 40), self.pctx.min_rule_floor);
+        return @divTrunc(w * size, 1000);
     }
     fn variant(self: *LayCtx, font: u16, glyph: u16, need: i32) u16 {
         if (self.provider.glyphVariant) |f| return f(self.provider.ctx, font, glyph, need);
@@ -255,11 +272,19 @@ pub fn layout(
     const box = try layoutNode(lc, style, root);
     const b = lc.boxes[box];
     var ec = EmitCtx{ .runs = runs, .rules = rules, .glyphs = glyphs };
+    // `fleqn` (KaTeX: display flush-left with a 2em margin): the
+    // whole construction shifts right 2em and the width grows with
+    // it, so hosts positioning the block keep the margin. Display
+    // only; inline math is untouched.
+    // `fleqn` is full-profile surface (subset entry points always
+    // pass false): the margin folds to zero in subset binaries.
+    const margin: i32 = if (active_profile == .full and lc.pctx.fleqn and style.isDisplay()) 2 * @as(i32, lc.effSize(style)) else 0;
     // Origin top-left; the root baseline sits at height_above.
-    try emitBox(lc, &ec, box, 0, b.ha);
+    try emitBox(lc, &ec, box, margin, b.ha);
     ec.closeRun();
+    const w: i32 = b.w + margin;
     return .{
-        .width = if (b.w < 0) 0 else @intCast(b.w),
+        .width = if (w < 0) 0 else @intCast(w),
         .height_above = if (b.ha < 0) 0 else @intCast(b.ha),
         .depth_below = if (b.db < 0) 0 else @intCast(b.db),
         .runs = ec.runs[0..ec.nr],
@@ -2807,10 +2832,17 @@ fn layoutTag(lc: *LayCtx, style: parse.Style, tg: anytype) Error!u16 {
     const tb = try layoutNode(lc, style, tg.body);
     const fam: parse.FontFam = lc.fam_subst orelse .rm;
     // Formula, `\qquad` gap, then the parenthesized tag (`\tag*`
-    // skips the parens). Order: `(`, body, `)`.
+    // skips the parens). Order: `(`, body, `)`. Under `leqno` the
+    // tag block leads instead (KaTeX left-tags, issue #120).
     var ids: [4]u16 = undefined;
-    ids[0] = fb;
-    var nids: usize = 1;
+    var nids: usize = 0;
+    // `leqno` is full-profile surface (subset entry points always
+    // pass false): the tag always trails in subset binaries.
+    const left: bool = if (comptime active_profile == .full) lc.pctx.leqno else false;
+    if (!left) {
+        ids[0] = fb;
+        nids = 1;
+    }
     if (!tg.starred) {
         ids[nids] = try layoutAtom(lc, style, .Ord, fam, '(');
         nids += 1;
@@ -2821,13 +2853,21 @@ fn layoutTag(lc: *LayCtx, style: parse.Style, tg: anytype) Error!u16 {
         ids[nids] = try layoutAtom(lc, style, .Ord, fam, ')');
         nids += 1;
     }
+    const fb_pos: usize = if (left) blk: {
+        ids[nids] = fb;
+        nids += 1;
+        break :blk nids - 1;
+    } else 0;
+    // The gap sits between the formula and the tag block, on the
+    // formula's outer side (after it by default, before it left).
+    const gap_before: usize = if (left) fb_pos else 1;
     var parts: [4]BKid = undefined;
     var nparts: usize = 0;
     var x: i32 = 0;
     var ha: i32 = 0;
     var db: i32 = 0;
     for (ids[0..nids], 0..) |id, k| {
-        if (k == 1) x += scale(lc, 2000, style); // gap after the formula
+        if (k == gap_before) x += scale(lc, 2000, style);
         const b = lc.boxes[id];
         parts[nparts] = .{ .box = id, .dx = x, .dy = 0 };
         nparts += 1;
@@ -2983,7 +3023,10 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
         const g: i64 = @divTrunc(@as(i64, 280) * @as(i64, size) * @as(i64, e.stretch), 1000000);
         break :blk if (g > std.math.maxInt(i32)) std.math.maxInt(i32) else @intCast(g);
     };
-    const vline_w: i32 = @divTrunc((@as(i32, 40) * size), 1000);
+    // Hardcoded 0.04em vline weight under the `minRuleThickness`
+    // floor (issue #118): identical to the bare constant when the
+    // floor is 0 (the default).
+    const vline_w: i32 = lc.constRule(size);
     // KaTeX column separation (pinned 0.18.7 `array.ts`, issue #33):
     // each column carries a pre/post gap; `array` additionally pads
     // the outer edges. Defaults are 0.5em each side (1em between
@@ -3273,7 +3316,7 @@ fn layoutBoxed(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     const b = try layoutNode(lc, style, id);
     const bb = lc.boxes[b];
     const pad: i32 = @divTrunc((@as(i32, 300) * size), 1000);
-    const th: i32 = @divTrunc((@as(i32, 40) * size), 1000);
+    const th: i32 = lc.constRule(size);
     const w = bb.w + 2 * pad;
     const ha = bb.ha + pad;
     const db = bb.db + pad;

@@ -53,6 +53,30 @@ Adding a normalization requires a comment here explaining why the two
 shapes carry identical layout meaning. Normalizations never hide an
 accept/reject or position difference.
 
+## Static messages
+
+`Diag.message` is static by contract: a fixed string per failure
+kind, chosen at the failure site from comptime-known literals — no
+heap, no formatting, no source echo. KaTeX's `ParseError` messages
+carry dynamic content we deliberately omit:
+
+- function names (`Got function \hbox with no arguments as
+  subscript` → ours is `function with no arguments as subscript`;
+  the `rej-111-*` rows pin the offsets, the wording is ours);
+- the offending source snippet and 1-based human position
+  (`Undefined control sequence: \foo at position 14: …` → ours is
+  `undefined control sequence` at the 0-based token offset);
+- strict-mode echoes (`… [htmlExtension]` suffixes and
+  `LaTeX-incompatible input …` prefixes → ours are short static
+  strings like `strict mode forbids HTML extension`).
+
+Rationale: the messages cross caller-owned buffers (including the C
+ABI as pointer + length into static storage) and must stay valid
+without allocation or lifetime tracking. Positions carry the
+precision; messages name the kind. Wording is pinned by unit test
+(`zatex.zig` "Diag.message wording is pinned"); positions are
+sweep-gated above.
+
 ## Declared divergences
 
 Rows with `katex_only: true` document behavior where we intentionally

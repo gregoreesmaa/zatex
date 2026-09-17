@@ -35,6 +35,19 @@ defaults; `LayoutError` variants are added, never removed;
 Hard caps are named constants (`max_input_len`, `max_nesting_depth`,
 `max_expand`). Call-site shape is frozen; only additive growth.
 
+## Errors across the C ABI
+
+Zig callers read `Diag{offset, message}` from `layoutDiag`. C
+callers read the same two facts from `zatex_layout_t`: `err_offset`
+plus `err_msg`/`err_msg_len` (pointer + length into static storage —
+always valid, never freed, NOT null-terminated; NULL/0 on success).
+The message is what the host renders in its error fallback: source
+text plus message bytes as real text (never hover/tooltip alone),
+conventionally painted `#cc0000` — the full recipe lives in
+`docs/parity.md` ("Error fallback (host recipe)"). `zatex_mathml_utf8`
+returns only a status (bytes written or `-status`); hosts needing the
+message call the layout entry for the same input.
+
 ## Reference rendering
 
 Latin Modern Math is the reference font (Computer Modern look is part of

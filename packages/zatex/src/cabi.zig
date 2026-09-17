@@ -43,6 +43,12 @@ pub const CLayout = extern struct {
     nrules: u32,
     status: i32,
     err_offset: u32,
+    /// `Diag.message` bytes on failure (issues #126/#136): pointer
+    /// into static storage, always valid (never freed); length in
+    /// `err_msg_len`. Null/0 on success. Appended, never reordered —
+    /// old readers ignore the tail.
+    err_msg: ?[*]const u8 = null,
+    err_msg_len: usize = 0,
 };
 
 pub const STATUS_OK: i32 = 0;
@@ -126,6 +132,8 @@ export fn zatex_layout_utf8(
         .nrules = 0,
         .status = STATUS_NO_SPACE,
         .err_offset = 0,
+        .err_msg = null,
+        .err_msg_len = 0,
     };
     const m = metrics orelse return STATUS_NO_SPACE;
     if (src_len > zatex.max_input_len) {
@@ -163,6 +171,16 @@ export fn zatex_layout_utf8(
     const l = zatex.layoutInner(src, .{ .display_mode = display_mode }, prov, runs_tmp[0..runs_cap], rules_tmp[0..rules_cap], glyphs, &diag) catch |e| {
         out.status = toStatus(e);
         out.err_offset = diag.offset;
+        // `Diag.message` crosses the ABI (issues #126/#136): static
+        // storage, so the pointer outlives the call unconditionally.
+        // Empty messages surface as null (no partial reads).
+        if (diag.message.len > 0) {
+            out.err_msg = diag.message.ptr;
+            out.err_msg_len = diag.message.len;
+        } else {
+            out.err_msg = null;
+            out.err_msg_len = 0;
+        }
         return out.status;
     };
     if (l.runs.len > runs_z.len) {
@@ -217,6 +235,8 @@ export fn zatex_layout_utf8(
         .nrules = nrules,
         .status = STATUS_OK,
         .err_offset = 0,
+        .err_msg = null,
+        .err_msg_len = 0,
     };
     return STATUS_OK;
 }
@@ -280,6 +300,73 @@ test "cabi reports Invalid with offset" {
     const st = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
     try std.testing.expectEqual(STATUS_INVALID, st);
     try std.testing.expectEqual(@as(u32, 0), out.err_offset);
+}
+
+test "cabi carries Diag.message bytes on failure (issues #126, #136)" {
+    // Every `Invalid` reachable through the C entry point yields a
+    // non-empty message identical to the Zig `layoutDiag` one; the
+    // pointer is static storage (re-readable after the call).
+    // Success clears both fields.
+    const m: CMetrics = .{ .ctx = null, .glyph_id = null, .advance = null, .rule_thickness = null };
+    const rejects = [_][]const u8{
+        "\\nope",
+        "x^2^3",
+        "{x",
+        "\\tag{1}x",
+        "x_\\hbox{x}",
+    };
+    for (rejects) |src| {
+        var runs: [16]CRun = undefined;
+        var rules: [8]CRule = undefined;
+        var glyphs: [64]u16 = undefined;
+        var out: CLayout = undefined;
+        const st = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+        try std.testing.expectEqual(STATUS_INVALID, st);
+        try std.testing.expect(out.err_msg_len > 0);
+        const cmsg = out.err_msg.?[0..out.err_msg_len];
+        // Same bytes the Zig surface reports (independent oracle:
+        // `layoutDiag` on the same input).
+        var zruns: [16]zatex.ir.Run = undefined;
+        var zrules: [8]zatex.ir.Rule = undefined;
+        var zglyphs: [64]u16 = undefined;
+        var diag = zatex.Diag.empty();
+        const S = struct {
+            var dummy: u8 = 0;
+            fn gid(_: *const anyopaque, _: u16, cp: u21) u16 {
+                return @intCast(cp & 0xFFFF);
+            }
+            fn adv(_: *const anyopaque, _: u16, _: u16) i32 {
+                return 500;
+            }
+            fn rt(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+                return 40;
+            }
+        };
+        const prov: zatex.MetricsProvider = .{
+            .ctx = &S.dummy,
+            .glyphId = S.gid,
+            .advance = S.adv,
+            .ruleThickness = S.rt,
+        };
+        try std.testing.expectError(
+            error.Invalid,
+            zatex.layoutDiag(src, .{}, prov, &zruns, &zrules, &zglyphs, &diag),
+        );
+        try std.testing.expectEqual(diag.offset, out.err_offset);
+        try std.testing.expectEqualStrings(diag.message, cmsg);
+    }
+    // Success: null message, zero length.
+    {
+        var runs: [16]CRun = undefined;
+        var rules: [8]CRule = undefined;
+        var glyphs: [64]u16 = undefined;
+        var out: CLayout = undefined;
+        const src = "x^2+\\frac12";
+        const st = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+        try std.testing.expectEqual(STATUS_OK, st);
+        try std.testing.expect(out.err_msg == null);
+        try std.testing.expectEqual(@as(usize, 0), out.err_msg_len);
+    }
 }
 
 test "cabi reports Limit above engine ceilings" {

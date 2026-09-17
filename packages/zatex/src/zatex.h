@@ -55,6 +55,15 @@ typedef struct zatex_layout {
                     // 4 too_long, 5 expansion_limit, 6 no_space,
                     // 7 limit (request exceeds engine ceilings below)
     uint32_t err_offset; // byte offset on invalid
+    // ParseError message on failure (issues #126/#136): err_msg
+    // points at err_msg_len bytes of static storage (always valid,
+    // never freed; NOT null-terminated — use the length). NULL/0 on
+    // success or when no message applies. Appended — old readers
+    // ignore the tail. Hosts building the throwOnError:false-style
+    // fallback render the source plus these bytes as real text (see
+    // docs/parity.md "Error fallback (host recipe)").
+    const char *err_msg;
+    size_t err_msg_len;
 } zatex_layout_t;
 
 // Caps: at most 256 runs / 64 rules per call; larger requests fail

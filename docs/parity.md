@@ -29,17 +29,17 @@ behaviors. KaTeX 0.18.7 is the reference throughout.
 | --- | --- |
 | `displayMode` | Parity: `LayoutOptions.display_mode` (inline `\textstyle` vs display `\displaystyle`, same operator-size rules). |
 | `output` (`html`/`mathml`/`htmlAndMathml`) | Partial by design: MathML emitter exists (`zatex.mathml`, structural walk per AGENTS.md §2, including the `<semantics>` / `application/x-tex` source annotation KaTeX emits — the raw source is available at `render(source, …)`, so no metrics cross the walker); there is no HTML emitter — a native library has no DOM to feed, hosts compose their own views from the layout IR (`docs/ir.md`). |
-| `leqno`, `fleqn` | Gap: no tag/equation-number support, no flush-left mode (no owner issue yet — file one when `\tag` is scoped). |
-| `throwOnError` | Native difference, intentional: the engine always throws (`LayoutError.Invalid` + `Diag`); there is no render-source-with-hover fallback because there is no HTML sink. Callers implement fallback from the error. |
-| `errorColor` | N/A: follows from `throwOnError` above (no non-throwing render path). |
-| `macros` (preset map) | Gap, minor: in-source `\def`/`\newcommand`/`\gdef`/`\providecommand` all work (sweep-proven); there is no options-level preset map — callers prepend a `\def` preamble to the source for the same effect. |
-| `minRuleThickness` | Gap, minor: rule weights come from the font MATH table via the provider (`RuleKind`); no caller floor override. |
+| `leqno`, `fleqn` | Parity (geometry): `LayoutOptions.leqno` puts display `\tag`s left of the formula (default right); `LayoutOptions.fleqn` shifts display math right 2em and grows the width with it (flush-left with KaTeX's 2em margin — the host positions the block). KaTeX implements both as pure CSS classes on identical DOM/MathML (probed 0.18.7: same node order, `leqno`/`fleqn` classes); the geometric translation is the native equivalent. Env-internal number columns remain MathML-only (layout emits no number columns). |
+| `throwOnError` | Native difference, intentional: the engine always throws (`LayoutError.Invalid` + `Diag`); there is no render-source-with-hover fallback because there is no HTML sink. Callers implement the fallback from the error — see "Error fallback (host recipe)" below. |
+| `errorColor` | Native difference: no non-throwing render path, so no error paint in the engine; hosts rendering the fallback use `#cc0000` (KaTeX's `errorColor` default) by convention. |
+| `macros` (preset map) | Partial: `LayoutOptions.macros` seeds a bounded (`max_presets` = 16) preset list — string bodies with `#1..#9` (arg counts inferred sequentially like KaTeX), single-codepoint active-character names, and `\let`-style alias + `noexpand` (the `MacroExpansion` object form). Remainder, named: function-valued macros have no native analog (no JS engine); `\gdef` never mutates the preset list (zero-alloc, reentrant — hosts share across calls by passing the same slice again); presets do not expand in `\text` bodies (in-source macros don't either — pre-existing). |
+| `minRuleThickness` | Parity: `LayoutOptions.min_rule_thickness_milli_em` (thousandths of an em; 40 = KaTeX's usual 0.04) floors every rule thickness the core requests — provider weights via `RuleKind` plus the hardcoded 0.04em array-vline and `\fbox` weights. Unsigned by construction (KaTeX ignores negatives); 0 disables (previous behavior). |
 | `colorIsTextColor` | Gap, minor: `\color` is the current KaTeX switch form (sweep: `color`, `color-hex`, `color-macro`); the pre-0.8 argument form is not offered. |
 | `maxSize` | Native difference: no em cap; oversized requests fail as `NoSpace` against caller buffers instead of clamping. Bounded either way. |
 | `maxExpand` | Parity: `contract.max_expand = 1000`, the KaTeX default; exceeding it is `ExpansionLimit`. |
-| `strict` | Gap: no strict/warn/ignore modes for non-LaTeX conveniences (e.g. `\\` in display mode follows the engine default; there is no faithfulness-mode switch). |
+| `strict` | Parity (subset): `LayoutOptions.strict` (`ignore`/`warn`/`err` = KaTeX `false`/`"warn"`/`"error"`, default `warn` like KaTeX) with `StrictLog` warn sink (caller-owned buffer; null drops warns — no console natively). Emitted codes: `html_extension`, `new_line_in_display_mode` (behavioral, never throws — error mode renders no break, already the zero-box shape), `text_env`, `math_vs_text_accents`, `math_vs_sout`. Error mode fails positioned `Invalid` (KaTeX's strict errors carry no position; ours names the offending token — documented). Remainder, named: function handlers (hosts branch on `StrictLog` codes instead); `mathVsTextUnits` (kern unit/mode checks unmodeled), `unicodeTextInMathMode`/`unknownSymbol` (non-ASCII math is `Ord` by design), `commentAtEnd` (trailing-`%` check absent). |
 | `trust` | Native difference, intentional: `\href`/`\url` content passes through as data; there is no URL/protocol gate in the engine — the host that turns strings into links owns trust (a native library cannot know the host's URL policy). Host duties are inventoried under "Host security guidance" below. |
-| `globalGroup` | No knob: definitions scope per KaTeX default (local groups; `\gdef` escapes, sweep: `gdef-basic`). |
+| `globalGroup` | Parity: KaTeX-default scoping is the engine rule (local groups; `\gdef`/`\xdef`/`\global`-prefixed escape; sweep locality rows `def-group-local` … `fence-def-nogroup`), plus the `global_group` opt-in for always-global definitions. |
 
 ## Error behaviors
 
@@ -49,10 +49,32 @@ behaviors. KaTeX 0.18.7 is the reference throughout.
   declared `katex_only` divergences, each asserted exactly: 22
   reject-position divergences plus `deep-nest` and `verb-in-macro`,
   which pinned KaTeX accepts).
+- Messages are static by contract (no allocation, no source echo):
+  fixed strings per failure kind — never KaTeX's dynamic echoes
+  (function names as in `Got function \hbox with no arguments as
+  subscript`, source snippets, 1-based positions). Wording is pinned
+  by unit test (`zatex.zig` "Diag.message wording is pinned"); see
+  `docs/tolerance.md` ("Static messages").
 - The `throwOnError: false` render-source mode does not exist (see
   above); the XSS-escaping guidance on KaTeX's error doc is N/A native
   (no HTML sink; the C ABI surfaces bytes, hosts escape for their own
   sinks).
+
+## Error fallback (host recipe)
+
+KaTeX's `throwOnError: false` renders invalid input as its source in
+`errorColor` with the error as hover text — and its accessibility
+guidance requires hosts to surface the `ParseError` message as real
+text (hover alone is unavailable to keyboard/screen-reader users).
+The native recipe, from `Diag` (Zig: `layoutDiag`; C:
+`zatex_layout_t.err_offset` + `err_msg`/`err_msg_len`, static storage
+— always valid, never freed, NOT null-terminated):
+
+1. On `Invalid`, render the source text and the `Diag.message` bytes
+   as real text (never hover/title-tooltip alone).
+2. Paint the fallback `#cc0000` (KaTeX's `errorColor` default).
+3. The host owns escaping for its own sink (the bytes are raw UTF-8;
+   an HTML host escapes them like any text).
 
 ## Host security guidance (embedding MathML)
 
@@ -127,8 +149,9 @@ strings a host's sink may act on. Allowlist and filter at the sink.
    KaTeX function is either `accept` with golden evidence or an
    intentional reject (`unsup`/`err-parity`) with reject-row
    evidence, tracked per function, not here.
-2. Options gaps: `leqno`/`fleqn`, preset `macros` map,
-   `minRuleThickness`, `colorIsTextColor`, `strict` — all minor,
-   none load-bearing for layout parity; file issues when scoped.
+2. Options gaps: `colorIsTextColor` (minor, not load-bearing
+   for layout parity). `leqno`/`fleqn`, preset `macros`,
+   `minRuleThickness`, `strict`, and `globalGroup` are closed (see
+   the table above).
 3. Intentional native differences (not gaps): always-throw errors, no
    HTML output, host-owned trust, caller-sized rendering.
