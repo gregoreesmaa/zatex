@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
     // ~4.5 MB static at the `optimize` default). `dist_mod` compiles
     // the engine once in a size-tuned mode; tests keep the user's
     // chosen `optimize` via the unshrunk `mod` above.
-    const dist_mod = b.addModule("zetex_dist", .{
+    const dist_mod = b.addModule("zatex_dist", .{
         .root_source_file = b.path("src/zatex.zig"),
         .target = target,
         .optimize = .ReleaseSmall,
