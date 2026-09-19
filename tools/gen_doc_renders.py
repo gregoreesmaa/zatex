@@ -546,7 +546,7 @@ def kx_covers(fn, tex):
 OVERRIDES = {
     # ZaTeX wordmark, logo-style (all caps with smaller raised `A`
     # and lowered `E`, tight `\!` kerns in the spirit of
-    # `\LaTeX`/`\KaTeX`): subset-safe construction — scripts and
+    # `\LaTeX`/`\KaTeX`): portable construction — scripts and
     # kerns only, no `\raisebox`, no new command (issue #76).
     "\\href": ("\\href{https://github.com/gregoreesmaa/zatex}{\\mathrm{Z\\!^AT\\!_EX}}", False),
     # The canonical `\mathclap` use is a wide limit under a display

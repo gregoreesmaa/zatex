@@ -110,7 +110,7 @@ fn supRaise(l: zatex.ir.Layout, base_glyph: u16, sup_glyph: u16) !i32 {
 }
 
 /// Generic canonical dump (mirrors `invariants.layoutText` field for
-/// field, so full-profile and subset-profile layouts compare as text).
+/// field, so layouts compare as text).
 /// Cross-checked against `inv.layoutText` for full layouts below.
 fn dumpAny(l: anytype, out: []u8) []u8 {
     var pos: usize = 0;
@@ -1248,17 +1248,14 @@ test "qa44 input length boundary is exact at max_input_len" {
 }
 
 // ---------------------------------------------------------------------------
-// Issue #45: subset-vs-full profile byte-identical IR over the sweep
+// Issue #45: render-identity IR over the sweep
 // ---------------------------------------------------------------------------
 
 test "qa45 full profile matches the cross-profile golden" {
-    // Cross-profile half owned by this (full) binary: every row of the
-    // checked-in `goldens/qa_profile_ir.json` (subset-renderable sweep
-    // accepts with canonical IR dumps) must render byte-identically
-    // under the full profile. The subset binary (`qa_subset`) asserts
-    // the same file under subset gates plus the allowlist half, so a
-    // green pair means byte-identical IR across profiles with every
-    // divergence allowlisted and reviewed.
+    // Render-identity probe: every row of the checked-in
+    // `goldens/qa_profile_ir.json` (sweep accepts with canonical IR
+    // dumps) must render byte-identically. A green run means the
+    // checked-in IR still matches the engine, row for row.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const alloc = arena.allocator();
@@ -1289,7 +1286,7 @@ test "qa45 full profile matches the cross-profile golden" {
         try expectGolden(id, want, dumpAny(l, &db));
         n += 1;
     }
-    std.debug.print("\nprofiles(full): {d} golden rows identical\n", .{n});
+    std.debug.print("\nqa45: {d} golden rows identical\n", .{n});
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 > **The fastest math typesetting library for anywhere but the web.**
 
-ZaTeX reads LaTeX math (the KaTeX-supported subset, working toward the full
+ZaTeX reads LaTeX math (working toward the full
 [KaTeX support table](https://katex.org/docs/support_table.html)) and lays it
 out natively in Zig: zero dependencies, zero heap allocations on the layout
 path, deterministic output. One layout core feeds every output — a native
@@ -68,8 +68,8 @@ and the KaTeX expectations are checked in as JSON goldens
   coordinate-mapping tests, plus the software-backend suite (CFF
   interpreter, rasterizer, PNG, CoreText cross-check); rendering
   itself is exercised via the CLI.
-* `./tools/size_gate.sh` — subset-profile host-cost gate (macOS-only:
-  it measures Mach-O `__TEXT` with the system `size` tool).
+* `./tools/size_gate.sh` — distribution-size gate (fails when the
+  shipped static artifact grows past the committed baseline).
 * `zatex-png` renders (`./zig-out/bin/zatex-png "x^2" out.png`,
   `./screenshots/render.sh`) — one backend per OS behind a small
   `Backend` interface (`-Dbackend=auto|cg|software`); the layout core
@@ -102,7 +102,7 @@ CI, so contributors never have to touch them:
 * **GPU**: output is positioned glyph runs + rects — drawn through the
   host's glyph cache, never re-rasterized per frame.
 * **Disk**: no bundled fonts in the core, no caches written by the library.
-  The `subset` profile adds ≤ 8 KB of `__TEXT` to its host.
+  The shipped static artifact is size-ratcheted (`tools/size_gate.sh`).
 * **Energy**: lay out once per content hash; hosts cache by hash.
 
 ## Layout
@@ -126,7 +126,7 @@ See [AGENTS.md](AGENTS.md) for the contributor contract.
 
 Coverage is tracked as GitHub issues, one per KaTeX functionality group,
 all verified against pinned KaTeX output. Direction of travel: `read`
-replaces its external math-plugin slot with the ZaTeX `subset` profile.
+replaces its external math-plugin slot with ZaTeX.
 
 ## License
 

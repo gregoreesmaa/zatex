@@ -8,10 +8,6 @@ const contract = @import("contract.zig");
 const parse = @import("parse.zig");
 const symbols = @import("symbols.zig");
 
-const build_options = @import("build_options");
-const active_profile: contract.Profile =
-    std.meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
-
 const Error = contract.LayoutError;
 const Idx = parse.Idx;
 const NONE = parse.NONE;
@@ -31,16 +27,8 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
     // KaTeX `buildMathML` (issue #119, pinned 0.18.7): the body lives
     // in `<semantics>` with the raw TeX source as the
     // `application/x-tex` annotation (copy-tex / AT consumers read
-    // the source back out of it). Full profile only: the subset
-    // profile keeps the bare envelope so its host-cost ratchet
-    // (`tools/size_gate.sh`) holds — subset MathML is already a
-    // reduced scope (full-only commands fail `Unsupported` before
-    // emitting anything).
-    if (comptime active_profile == .full) {
-        w.str("><semantics>");
-    } else {
-        w.str(">");
-    }
+    // the source back out of it).
+    w.str("><semantics>");
     // The root row wraps a lone child unless it already presents
     // as a row (KaTeX `buildMathML`: single rowlike passes through).
     // An equation tag is the table itself (never `mrow`-wrapped).
@@ -57,13 +45,9 @@ pub fn render(source: []const u8, options: contract.LayoutOptions, out: []u8) Er
         w.nodeSole(root, .{ .fam = null, .script = false }, true) catch |e| return e;
         w.str("</mrow>");
     } else w.node(root, .{ .fam = null, .script = false }) catch |e| return e;
-    if (comptime active_profile == .full) {
-        w.str("<annotation encoding=\"application/x-tex\">");
-        w.anno(source);
-        w.str("</annotation></semantics></math>");
-    } else {
-        w.str("</math>");
-    }
+    w.str("<annotation encoding=\"application/x-tex\">");
+    w.anno(source);
+    w.str("</annotation></semantics></math>");
     if (w.overflow) return error.NoSpace;
     const n = mergeNot(out[0..w.pos]);
     return out[0..mergeRuns(out[0..n])];
@@ -136,7 +120,10 @@ const Tag = struct {
     closing: bool,
     self_close: bool,
 
-    fn nameEqual(self: Tag, comptime nm: []const u8) bool {
+    /// `nm` is a runtime slice (never `comptime`): the merge pass
+    /// calls every helper with "mn"/"mtext", and comptime-binding
+    /// would monomorphize the whole chain twice (size ratchet).
+    fn nameEqual(self: Tag, nm: []const u8) bool {
         return std.mem.eql(u8, self.name, nm);
     }
 };
@@ -169,7 +156,7 @@ fn scanTag(buf: []const u8, at: usize) Tag {
 }
 
 /// True when `buf[at..]` opens `nm` (`>` or space follows).
-fn matchOpen(buf: []const u8, at: usize, comptime nm: []const u8) bool {
+fn matchOpen(buf: []const u8, at: usize, nm: []const u8) bool {
     const t = scanTag(buf, at);
     return t.len > 0 and !t.closing and !t.self_close and t.nameEqual(nm);
 }
@@ -205,12 +192,24 @@ fn hasGlue(text: []const u8) bool {
 
 /// Fold the run at `r` (`<nm>…</nm>` followers with equal open tags),
 /// advancing `n`/`r` past it. Returns false when nothing merges.
-fn tryRun(buf: []u8, n: *usize, r: *usize, comptime nm: []const u8) bool {
+/// Closing tag for a merge element on the stack: `nm` is "mn" or
+/// "mtext" at every call site (see `nameEqual`), so 8 bytes always
+/// fit; longer names trap on the slice (safe modes) rather than
+/// silently truncating.
+fn closeTag(nm: []const u8, buf: *[8]u8) []const u8 {
+    buf[0] = '<';
+    buf[1] = '/';
+    @memcpy(buf[2 .. 2 + nm.len], nm);
+    buf[2 + nm.len] = '>';
+    return buf[0 .. 3 + nm.len];
+}
+
+fn tryRun(buf: []u8, n: *usize, r: *usize, nm: []const u8) bool {
     const first = textSpan(buf, r.*, nm);
     if (first.close == 0) return false;
     // Kern-origin `mtext` runs never fold (see `hasGlue`). Only
     // `mtext` folds consult it; `mn` folds are unaffected.
-    const check_glue = comptime std.mem.eql(u8, nm, "mtext");
+    const check_glue = std.mem.eql(u8, nm, "mtext");
     var cur = first;
     var count: usize = 1;
     var glue = check_glue and hasGlue(buf[first.text .. first.text + first.text_len]);
@@ -234,7 +233,8 @@ fn tryRun(buf: []u8, n: *usize, r: *usize, comptime nm: []const u8) bool {
         if (c2.next == cur.next) break;
         c2 = textSpan(buf, c2.next, nm);
     }
-    const close_tag = "</" ++ nm ++ ">";
+    var cb: [8]u8 = undefined;
+    const close_tag = closeTag(nm, &cb);
     std.mem.copyForwards(u8, buf[w .. w + close_tag.len], close_tag);
     w += close_tag.len;
     n.* = w;
@@ -281,7 +281,7 @@ const TextSpan = struct {
 };
 
 /// Parse `<nm attrs>text</nm>` at `at` (must match matchOpen).
-fn textSpan(buf: []const u8, at: usize, comptime nm: []const u8) TextSpan {
+fn textSpan(buf: []const u8, at: usize, nm: []const u8) TextSpan {
     var s = TextSpan{
         .open = at,
         .open_len = 0,
@@ -295,7 +295,8 @@ fn textSpan(buf: []const u8, at: usize, comptime nm: []const u8) TextSpan {
     s.open_len = gt + 1 - at;
     s.attrs = buf[at + 3 .. gt];
     s.text = gt + 1;
-    const close_tag = "</" ++ nm ++ ">";
+    var cb: [8]u8 = undefined;
+    const close_tag = closeTag(nm, &cb);
     const cl = std.mem.indexOfPos(u8, buf, s.text, close_tag) orelse return s;
     s.text_len = cl - s.text;
     s.close = cl;

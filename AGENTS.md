@@ -18,9 +18,10 @@ principles (adapted from `read`: same discipline, new domain).
   through the provider callback (see `docs/ir.md`).
 * **Deterministic output.** Same input + same font metrics = byte-identical
   layout. Integer font units internally; no untracked float.
-* **Binary footprint.** The `subset` profile (what `read` will link) adds
-  at most 8 KB of `__TEXT` to its host. Full-profile and future CLI
-  budgets are set by measurement at M1, then frozen.
+* **Binary footprint.** One engine, one profile: hosts link the full
+  library. The shipped static artifact never grows past the committed
+  baseline (`tools/size_gate.sh` enforces it); future CLI budgets are
+  set by measurement at M1, then frozen.
 
 ## 2. Immutable Mechanics
 
@@ -56,8 +57,8 @@ Before pushing any code:
 
 1. `zig build test` — 100% pass, including differential tests against
    pinned KaTeX output where the harness exists.
-2. Size check for the touched profile (subset-profile growth accounted
-   against the 8 KB host budget).
+2. Size check via `./tools/size_gate.sh` — the shipped static artifact
+   must not grow past the committed baseline.
 3. No golden changes without the KaTeX-side proof attached.
 
 Screenshot-style pixel tests are banned from required gates (same rule as

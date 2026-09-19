@@ -41,7 +41,6 @@ pub fn build(b: *std.Build) void {
     const zatex_dep = b.dependency("zatex", .{
         .target = target,
         .optimize = optimize,
-        .profile = @as([]const u8, "full"),
     });
 
     const opts = b.addOptions();
