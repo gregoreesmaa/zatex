@@ -1,0 +1,22 @@
+.{
+    .name = .zatex_mathml,
+    .version = "0.0.0",
+    // Changing this has security and trust implications.
+    .fingerprint = 0x417ac3c32fad9b69,
+    .minimum_zig_version = "0.16.0",
+    // One direction only: MathML renders the core's parse tree, so this
+    // package depends on `zatex` — the core never depends back (its
+    // distribution library stays MathML-free; only its test modules
+    // import this package).
+    .dependencies = .{
+        .zatex = .{
+            .path = "../zatex",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}

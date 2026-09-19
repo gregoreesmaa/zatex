@@ -18,7 +18,8 @@ apps like [read](../read) that budget kilobytes, not megabytes.
 
 | Package | What | Path |
 | --- | --- | --- |
-| `zatex` (core) | Parser, macro expander, layout, MathML, C ABI. Portable Zig. | `packages/zatex/` |
+| `zatex` (core) | Parser, macro expander, layout, C ABI. Portable Zig. | `packages/zatex/` |
+| `zatex-mathml` | MathML emitter over the core parse tree (thin structural walker, no layout math). Depends on the core, never the reverse. | `packages/zatex-mathml/` |
 | `zatex-png` | LaTeX → PNG CLI + visual regression set. One backend per OS (CoreGraphics on Apple, portable software rasterizer elsewhere). Depends on the core, never the reverse. | `packages/zatex-png/` |
 
 Shared at the root: `docs/` (contracts, policies, the syntax mirror),
@@ -64,6 +65,9 @@ and the KaTeX expectations are checked in as JSON goldens
 
 * `zig build test` in `packages/zatex` — core suite, including the
   pinned-KaTeX differential sweep against the checked-in goldens.
+* `zig build test` in `packages/zatex-mathml` — MathML emitter suite
+  (moved + new coverage); the differential sweep above keeps pinning
+  it against KaTeX through the core's `parity` module.
 * `zig build test` in `packages/zatex-png` — CLI logic, backend
   coordinate-mapping tests, plus the software-backend suite (CFF
   interpreter, rasterizer, PNG, CoreText cross-check); rendering
@@ -108,7 +112,9 @@ CI, so contributors never have to touch them:
 ## Layout
 
 * `packages/zatex/src/` — library core (`zatex.zig` root, `ir.zig`
-  output types, `mathml.zig`, `cabi.zig` + `zatex.h`).
+  output types, `cabi.zig` + `zatex.h`).
+* `packages/zatex-mathml/src/` — MathML emitter (`zatex_mathml.zig`
+  root, `mathml.zig`, `cabi.zig` + `zatex_mathml.h`).
 * `packages/zatex/fixtures/` — test-only font fixture (never linked
   into the core). `packages/zatex/goldens/` — pinned-KaTeX sweep.
 * `packages/zatex-png/src/` — CLI, CoreGraphics backend, font loader.

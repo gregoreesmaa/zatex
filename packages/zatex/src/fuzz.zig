@@ -12,6 +12,7 @@
 //! `max_nesting_depth`, `max_expand`).
 const std = @import("std");
 const zatex = @import("zatex");
+const zatex_mathml = @import("zatex_mathml");
 const inv = @import("invariants");
 
 /// Fixed seed: the same corpus every run, on every machine.
@@ -266,8 +267,8 @@ test "grammar fuzz: totality and invariants over nested constructs" {
                 // The MathML emitter is total on the same input too.
                 var ma: [4096]u8 = undefined;
                 var mb: [4096]u8 = undefined;
-                const m1 = try zatex.mathml(src, opts, &ma);
-                const m2 = try zatex.mathml(src, opts, &mb);
+                const m1 = try zatex_mathml.render(src, opts, &ma);
+                const m2 = try zatex_mathml.render(src, opts, &mb);
                 try std.testing.expectEqualStrings(m1, m2);
                 n_ok += 1;
             } else |e1| {

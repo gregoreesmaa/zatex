@@ -12,8 +12,19 @@ pub fn build(b: *std.Build) void {
         "Build profile: subset (embeddable) or full (default)",
     ) orelse "full";
 
+    // The C ABI rides along by default. Downstream packages with
+    // their own C surface (currently `zatex-mathml`) disable it: Zig
+    // emits the full closure into every static lib, so two libs
+    // exporting the same symbol would not link together.
+    const include_cabi = b.option(
+        bool,
+        "cabi",
+        "Include the C ABI exports and conformance tests (default true)",
+    ) orelse true;
+
     const options = b.addOptions();
     options.addOption([]const u8, "profile", profile);
+    options.addOption(bool, "cabi", include_cabi);
 
     const mod = b.addModule("zatex", .{
         .root_source_file = b.path("src/zatex.zig"),
@@ -56,6 +67,26 @@ pub fn build(b: *std.Build) void {
     const run_mod_tests = b.addRunArtifact(mod_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
+
+    // MathML emitter (lives in packages/zatex-mathml): test and
+    // support modules render through it. Wired by source path, not by
+    // package dependency — zatex-mathml depends on the zatex package,
+    // so a package edge back would evaluate the same build.zig twice
+    // in one graph (hard error). The dist lib never imports it, so
+    // the shipped core stays MathML-free.
+    const mathml_options = b.addOptions();
+    mathml_options.addOption([]const u8, "profile", profile);
+    // Marker: the core options step carries exactly `{profile}`, so
+    // sharing it here would put a byte-identical file in two modules
+    // of one test binary (hard error). Profiles still agree.
+    mathml_options.addOption(bool, "zatex_mathml_emitter", true);
+    const mathml_mod = b.addModule("zatex_mathml", .{
+        .root_source_file = b.path("../zatex-mathml/src/zatex_mathml.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    mathml_mod.addOptions("build_options", mathml_options);
+    mathml_mod.addImport("zatex", mod);
 
     // Host-side OpenType reader tests (metrics tooling, not the core).
     const otmath_mod = b.addModule("otmath", .{
@@ -128,6 +159,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     texser_mod.addImport("zatex", mod);
+    texser_mod.addImport("zatex_mathml", mathml_mod);
     const texser_tests = b.addTest(.{ .root_module = texser_mod });
     const run_texser_tests = b.addRunArtifact(texser_tests);
     test_step.dependOn(&run_texser_tests.step);
@@ -139,6 +171,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     fuzz_mod.addImport("zatex", mod);
+    fuzz_mod.addImport("zatex_mathml", mathml_mod);
     fuzz_mod.addImport("invariants", invariants_mod);
     const fuzz_tests = b.addTest(.{ .root_module = fuzz_mod });
     const run_fuzz_tests = b.addRunArtifact(fuzz_tests);
@@ -151,6 +184,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     parity_mod.addImport("zatex", mod);
+    parity_mod.addImport("zatex_mathml", mathml_mod);
     const parity_tests = b.addTest(.{ .root_module = parity_mod });
     const run_parity_tests = b.addRunArtifact(parity_tests);
     run_parity_tests.setCwd(b.path("."));
@@ -165,6 +199,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     gallery_mod.addImport("zatex", mod);
+    gallery_mod.addImport("zatex_mathml", mathml_mod);
     const gallery_exe = b.addExecutable(.{
         .name = "gallery",
         .root_module = gallery_mod,
@@ -187,6 +222,7 @@ pub fn build(b: *std.Build) void {
     qa_mod.addImport("invariants", invariants_mod);
     qa_mod.addImport("speech", speech_mod);
     qa_mod.addImport("texser", texser_mod);
+    qa_mod.addImport("zatex_mathml", mathml_mod);
     // Filtered to this module's own tests: the binary also links the
     // engine (full profile), whose suite runs in its own targets.
     const qa_tests = b.addTest(.{
@@ -229,6 +265,7 @@ pub fn build(b: *std.Build) void {
     });
     energy_mod.addOptions("build_options", energy_options);
     energy_mod.addImport("zatex", mod);
+    energy_mod.addImport("zatex_mathml", mathml_mod);
     const energy_tests = b.addTest(.{
         .root_module = energy_mod,
         .filters = &.{"energy"},

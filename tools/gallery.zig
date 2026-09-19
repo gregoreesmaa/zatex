@@ -16,6 +16,7 @@
 //! file-free surface this tool needs.)
 const std = @import("std");
 const zatex = @import("zatex");
+const zatex_mathml = @import("zatex_mathml");
 
 const corpus = @embedFile("katex/corpus.json");
 
@@ -46,7 +47,7 @@ pub fn main() !void {
         p("</pre><p>display={} expect={s}</p>\n", .{ row.display, row.expect });
         p("<!-- row:", .{});
         htmlEsc(row.id);
-        if (zatex.mathml(tex, .{ .display_mode = row.display }, &mbuf)) |math| {
+        if (zatex_mathml.render(tex, .{ .display_mode = row.display }, &mbuf)) |math| {
             p("-->\n{s}\n", .{math});
         } else |e| {
             p("--><p class=\"err\">error.{s}</p>", .{@errorName(e)});

@@ -23,6 +23,7 @@
 
 const std = @import("std");
 const zatex = @import("zatex");
+const zatex_mathml = @import("zatex_mathml");
 
 /// The single pinned KaTeX version (issue #143): `tools/katex` pins
 /// `katex` exact in `package.json` + lock, `sweep.mjs` stamps
@@ -326,7 +327,7 @@ test "sweep agreement with pinned KaTeX" {
                 std.debug.print("\n[{s}] zatex accepts, katex rejects\n", .{id});
                 return error.TestUnexpectedResult;
             }
-            const mine = try zatex.mathml(tex, opts, &mbuf);
+            const mine = try zatex_mathml.render(tex, opts, &mbuf);
             const kmath = o.get("katex_mathml").?.string;
             const kn = normTags(kmath, &kbuf);
             const an = normTags(mine, &abuf);

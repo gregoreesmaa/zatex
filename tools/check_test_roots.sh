@@ -6,10 +6,11 @@
 # into analysis silently never runs (sw_png.zig proved it: a false
 # expectation stayed green). This gate fails loudly on that shape.
 #
-# Rule (sound, static): every packages/zatex-png/src/*.zig containing
-# a `test` block must either be a test root in
-# packages/zatex-png/build.zig (root_source_file of an addTest call)
-# or be named in a refAllDecls(@import("...")) line inside a root.
+# Rule (sound, static): every packages/zatex-png/src/*.zig and
+# packages/zatex-mathml/src/*.zig containing a `test` block must
+# either be a test root in its package build.zig (root_source_file of
+# an addTest call) or be named in a refAllDecls(@import("...")) line
+# inside a root.
 # Raw test-count comparison is NOT sound here: suites honestly execute
 # shared tests under several binaries (sw + linux), and core uses
 # name filters — so this checks file coverage, never totals.
@@ -18,7 +19,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-PKG=packages/zatex-png
+fail=0
+for PKG in packages/zatex-png packages/zatex-mathml; do
 BUILD=$PKG/build.zig
 SRC=$PKG/src
 
@@ -27,7 +29,6 @@ SRC=$PKG/src
 roots=$(sed -n -e 's/.*root_source_file = b.path("\([^"]*\)").*/\1/p' -e 's/.*\.file = "\([^"]*\)".*/\1/p' "$BUILD" | sed 's|^|'"$PKG"'/|')
 [ -n "$roots" ] || { echo "FAIL: no test roots found in $BUILD"; exit 1; }
 
-fail=0
 for f in "$SRC"/*.zig; do
   base=$(basename "$f")
   if ! grep -q '^test [{\"]' "$f"; then continue; fi
@@ -44,5 +45,6 @@ for f in "$SRC"/*.zig; do
     fail=1
   fi
 done
+done
 if [ "$fail" = "1" ]; then exit 1; fi
-echo "test roots OK: every test-bearing png source is root- or refAllDecls-covered"
+echo "test roots OK: every test-bearing png/mathml source is root- or refAllDecls-covered"

@@ -30,6 +30,7 @@
 //!   swapped pointer; `layout`/`layoutFull` agreement + reentrancy).
 const std = @import("std");
 const zatex = @import("zatex");
+const zatex_mathml = @import("zatex_mathml");
 const engine = zatex.layout_core;
 const parse = zatex.parse;
 const ir = zatex.ir;
@@ -137,7 +138,7 @@ fn layoutCounted(source: []const u8, display: bool) !Outcome {
 
 fn mathmlLen(source: []const u8) !usize {
     var buf: [32768]u8 = undefined;
-    const s = try zatex.mathml(source, .{}, &buf);
+    const s = try zatex_mathml.render(source, .{}, &buf);
     return s.len;
 }
 

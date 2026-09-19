@@ -78,10 +78,6 @@ int32_t zatex_layout_utf8(const char *src, size_t src_len, bool display_mode,
                           uint16_t *glyphs, size_t glyphs_cap,
                           zatex_layout_t *out);
 
-// MathML Core serialization. Returns bytes written, or -status.
-ptrdiff_t zatex_mathml_utf8(const char *src, size_t src_len, bool display_mode,
-                            char *out, size_t out_cap);
-
 // Packed semantic version: major << 16 | minor << 8 | patch.
 uint32_t zatex_version(void);
 
