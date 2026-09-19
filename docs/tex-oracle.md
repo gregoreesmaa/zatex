@@ -30,10 +30,11 @@ This oracle is **triage-grade, never a gate** — the same standing as
 
 - `tools/tex-geometry/Dockerfile` — the container: pinned
   `debian:bookworm-slim` digest (same base pin as the oracle-diff
-  images), stock Debian TeX Live (`latex` in DVI mode + `dvitype` from
-  `texlive-base`, amsmath from `-latex-recommended`, rsfs metrics from
-  `-fonts-recommended`), stdlib-only `python3` glue. No network at run
-  time.
+  images), stock Debian TeX Live (`latex` in DVI mode + `dvitype` /
+  `dvipdfmx` from `texlive-base`, amsmath from `-latex-recommended`,
+  rsfs metrics from `-fonts-recommended`, `pdftoppm` from
+  `poppler-utils` for the DVI-route renders the sweep scores),
+  stdlib-only `python3` glue. No network at run time.
 - `tools/tex-geometry/extract.sh` — the driver: `extract <texfile>
   <display:0|1> <out.json>` (plus a `batch <workdir>` mode mirroring
   `render-one.sh`, so one container covers the whole narrow corpus
@@ -44,15 +45,6 @@ This oracle is **triage-grade, never a gate** — the same standing as
   is a raw TeX *render* (`<id>.tex.png`, DVI route: `dvipdfmx` +
   `pdftoppm -png -r 300`, the same raster the luatex oracle uses) so
   the row can go through the shared pixel math below.
-- `tools/tex-geometry/tex_score.py` — TeX pixel sims through
-  `report.py`'s own `normalize_case` + `sim_pair` (crop+pad+rescale-128
-  + centroid-align, block SSIM): raw `<id>.zatex.png` (zatex-png,
-  always fresh) vs raw `<id>.tex.png`, writing normalized
-  `norm/<id>.tex.png` plus `texsim.json`. Same math and calibration
-  as the pixel table — relative triage numbers, never a gate.
-  Cross-font spread dominates (CM vs host fonts), so a TeX sim reads
-  against its row's LuaTeX sim (same font family, sibling route),
-  never against 1.0. `tex_score.py --selfcheck` runs anywhere.
 - `tools/tex-geometry/geometry.py` — dump → JSON. Stdlib only;
   `geometry --selfcheck` validates the parser against a canned dvitype
   fixture and runs anywhere (no daemon, no TeX).
@@ -114,22 +106,19 @@ This oracle is **triage-grade, never a gate** — the same standing as
   `docker run --rm --network none -v $PWD/work:/work
   zatex-tex-geometry /work/x.tex 0 /work/x.tex.json`.
 
-## Published results
+## In the results table
 
-The committed triage report (`zig-out/oracle-diff/report.md`, the same
-file the pixel sweep owns) carries a `Pure-TeX geometry oracle` section
-with the narrow-corpus verdicts, so the TeX results are visible next to
-the pixel rows instead of living only in a workflow artifact.
-`tools/tex-geometry/append_report.py <report.md> <texgeo-dir>
-[pngdir]` writes it from real CI data (the `tex-oracle` artifact's
-`<id>.tex.json` + `<id>.zatex.json` + `texsim.json`): marker-delimited,
-idempotent, and loud on missing sides. It also embeds the normalized
-TeX renders (`![T](png/<id>.tex.png)`), which must be force-added next
-to the report like the other engines' renders — the script refuses to
-write the links unless the files already sit in `pngdir`, so a publish
-can never leave dead images. Re-run it after any sweep that force-adds
-a fresh pixel table, so the tex section is never stranded on a stale
-table.
+TeX is a first-class column of the pixel-sweep triage table
+(`zig-out/oracle-diff/report.md`): the sweep drives this same image as
+its `tex-shot` service in batch over the full corpus, and `report.py`
+scores the raw `<id>.tex.png` renders through the shared
+normalize+SSIM math — a TeX column and inline `![T]` renders per row,
+with `missing:tex` where TeX itself cannot render the row (engine gap,
+never ZaTeX signal). Cross-font spread dominates (CM vs host fonts),
+so a TeX sim reads against its row's LuaTeX sim (same font family,
+sibling route), never against 1.0; `spread` is the minimum over all
+six oracle pairs. The narrow CI job above stays the fast per-PR
+construction check; the table is the triage view.
 
 ## CI wiring (`.github/workflows/tex-oracle.yml`)
 

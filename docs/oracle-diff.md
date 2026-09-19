@@ -38,7 +38,7 @@ same functions per file/case, so parallel output is byte-identical.
 2. **Never an oracle over pinned KaTeX.** KaTeX 0.18.7 remains the sole
    truth for accept/reject and geometry disputes. `score(c) = max`
    similarity exists so that closeness to *at least one* engine clears a
-   row; a 2-vs-1 oracle vote settles nothing.
+   row; no oracle majority settles anything.
 3. **Oracle disagreement is data, not a verdict.** Rows whose oracles
    disagree among themselves are tagged `spec-ambiguous` — that marks
    spec ambiguity (each engine chose differently), never a ZaTeX bug,
@@ -52,8 +52,9 @@ same functions per file/case, so parallel output is byte-identical.
 | `mathjax-shot` | MathJax v3 | headless Chromium screenshot (same image, other entrypoint) |
 | `luatex-shot` | TeX Live `pdflatex` → `pdftoppm -png -r 300` | Knuth-lineage opinion (`tools/oracle-diff/texlive/`). Two oracle-side adaptations: KaTeX `#RRGGBB` colors are rewritten to xcolor `[HTML]` (same rendered color; ZaTeX still gets the raw string), and constructs amsmath/amssymb lack (e.g. `\widecheck`, a mathabx symbol) stay missing renders rather than warped substitutes. |
 | `zatex-shot` | This checkout | `zatex-png --px 48` built from the `/repo` mount (`tools/oracle-diff/zatex/`); rebuilt once per sweep against a warm Zig cache that persists on a named volume (content-addressed, outputs stay deterministic) |
+| `tex-shot` | TeX Live DVI route: `latex` → `dvipdfmx` → `pdftoppm -png -r 300` | Second Knuth-lineage opinion through the DVI box path (issue #178; same image the tex-oracle workflow builds, `tools/tex-geometry/`). Sibling route to LuaTeX (same Computer Modern family) with independent box construction — judge TeX sims against their row's LuaTeX sim, never against 1.0. Rows TeX itself cannot render (engine gap, e.g. KaTeX-only constructs) stay `missing:tex`, never ZaTeX signal. |
 
-`docker compose -f tools/oracle-diff/compose.yml` builds all 4 services;
+`docker compose -f tools/oracle-diff/compose.yml` builds all 5 services;
 every service runs with `network_mode: none`. Base-image digests are
 pinned in the Dockerfiles (resolved 2026-09-13; refresh recipe in
 `webshot/Dockerfile`). The `zatex` image bakes only the pinned Zig
@@ -96,8 +97,9 @@ missing strokes — a low score means genuinely different shapes).
   row `spec-ambiguous`.
 - `shift(c)` = largest ZaTeX↔oracle alignment offset in rescaled px:
   big shift + high score reads "same shape, offset somewhere".
-- Each row shows the LaTeX source, the score, all 3 per-oracle
-  similarities, the spread, the shift, and the 4 normalized renders.
+- Each row shows the LaTeX source, the score, all 4 per-oracle
+  similarities (KaTeX, LuaTeX, TeX, MathJax), the spread (minimum over
+  all six oracle↔oracle pairs), the shift, and the 5 normalized renders.
 
 ## Sanity check
 

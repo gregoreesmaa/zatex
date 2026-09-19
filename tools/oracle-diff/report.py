@@ -27,10 +27,11 @@ import struct
 import sys
 import zlib
 
-ENGINES = ("zatex", "katex", "luatex", "mathjax")
+ENGINES = ("zatex", "katex", "luatex", "tex", "mathjax")
 # Oracle order (issue #59): MathJax renders last — it is the most
-# different engine, so its column closes the row.
-ORACLES = ("katex", "luatex", "mathjax")
+# different engine, so its column closes the row. The DVI-route TeX
+# oracle (issue #178) sits with its TeX family beside LuaTeX.
+ORACLES = ("katex", "luatex", "tex", "mathjax")
 PAD_PX = 10
 NORM_H = 128
 INK_THRESH = 240  # channel value below this counts as ink on white
@@ -412,7 +413,7 @@ def build_report(rawdir, outdir, corpus, jobs=1):
     lines = []
     lines.append("# Oracle diff report (triage only — not a gate, not truth)")
     lines.append("")
-    lines.append("ZaTeX vs 3 independent oracle engines per case. "
+    lines.append("ZaTeX vs 4 independent oracle engines per case. "
                  "`score(c) = max` oracle similarity: closeness to *at "
                  "least one* oracle means low attention; a low max means "
                  "ZaTeX is the solo outlier. `spread` is the minimum "
@@ -438,12 +439,13 @@ def build_report(rawdir, outdir, corpus, jobs=1):
                  "px. Absolute-size divergences are out of scope "
                  "here (covered by layout-IR tests)." % (PAD_PX, NORM_H))
     lines.append("")
-    header = ("| case | source | score | KaTeX | LuaTeX | MathJax | spread | "
-              "shift | tag | renders |")
+    header = ("| case | source | score | KaTeX | LuaTeX | TeX | MathJax | "
+              "spread | shift | tag | renders |")
     lines.append(header)
     # The delimiter must carry exactly as many cells as the header: GFM
     # drops a table whose counts disagree (it renders as raw pipes),
-    # which is how a 9-cell delimiter broke this 10-column report.
+    # which is how a 9-cell delimiter broke this report (now 11 columns
+    # with the TeX oracle, still computed from the header).
     lines.append("|" + " --- |" * (header.count("|") - 1))
     for r in rows:
         c = r["case"]
@@ -463,9 +465,9 @@ def build_report(rawdir, outdir, corpus, jobs=1):
             "![%s](png/%s.%s.png)" % (e[0].upper(), c["id"], e)
             for e in r["engines"])
         miss = (" missing:" + ",".join(r["missing"])) if r["missing"] else ""
-        lines.append("| %s %s | %s | %s | %s | %s | %s | %.3f | %d | %s%s | %s |" % (
-            c["id"], iss, src, sc, f("katex"), f("luatex"), f("mathjax"),
-            r["spread"], r["shift"], r["tag"], miss, imgs))
+        lines.append("| %s %s | %s | %s | %s | %s | %s | %s | %.3f | %d | %s%s | %s |" % (
+            c["id"], iss, src, sc, f("katex"), f("luatex"), f("tex"),
+            f("mathjax"), r["spread"], r["shift"], r["tag"], miss, imgs))
     lines.append("")
     with open(os.path.join(outdir, "report.md"), "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -572,8 +574,9 @@ def selfcheck():
         kind = "dot" if eng == "zatex" else "bar"
         img = synth_image(48, 32, kind)
         write_png(os.path.join(raw, "solo.%s.png" % eng), 48, 32, img[2])
-    # ambig: zatex=bar, oracles disagree among themselves (bar/dot/bar).
-    oracle_kinds = {"zatex": "bar", "katex": "bar",
+    # ambig: zatex=bar, oracles disagree among themselves
+    # (bar/dot/bar, tex with its TeX family).
+    oracle_kinds = {"zatex": "bar", "katex": "bar", "tex": "bar",
                     "mathjax": "dot", "luatex": "bar"}
     for eng, kind in oracle_kinds.items():
         img = synth_image(48, 32, kind)
@@ -641,7 +644,8 @@ def selfcheck():
     check("missing-engine row omits unrendered engines",
           len(part_md) == 1 and "part.luatex.png" not in part_md[0]
           and "part.mathjax.png" not in part_md[0]
-          and "missing:luatex,mathjax" in part_md[0])
+          and "part.tex.png" not in part_md[0]
+          and "missing:luatex,tex,mathjax" in part_md[0])
     # Corpus fixture sanity: known #30-#38 divergences are represented.
     issues = set()
     for path in (os.path.join(os.path.dirname(os.path.abspath(__file__)),
