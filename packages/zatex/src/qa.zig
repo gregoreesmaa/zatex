@@ -816,6 +816,19 @@ test "qa96 negations render AMS PUA glyphs, MathML keeps the arbiter" {
         "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>≰</mo></mrow><annotation encoding=\"application/x-tex\">\\nleqq</annotation></semantics></math>",
         try zatex.mathml("\\nleqq", .{}, &out),
     );
+    // Byte-discriminated alias arms must select exactly (the sweep only
+    // compares tag shapes, so a sub/sup or neq/neqq cross here is invisible
+    // to it — pin the full MathML bytes per arm).
+    const varcases = [_]struct { tex: []const u8, want: []const u8 }{
+        .{ .tex = "\\varsubsetneq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⊊</mo></mrow><annotation encoding=\"application/x-tex\">\\varsubsetneq</annotation></semantics></math>" },
+        .{ .tex = "\\varsubsetneqq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⫋</mo></mrow><annotation encoding=\"application/x-tex\">\\varsubsetneqq</annotation></semantics></math>" },
+        .{ .tex = "\\varsupsetneq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⊋</mo></mrow><annotation encoding=\"application/x-tex\">\\varsupsetneq</annotation></semantics></math>" },
+        .{ .tex = "\\varsupsetneqq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⫌</mo></mrow><annotation encoding=\"application/x-tex\">\\varsupsetneqq</annotation></semantics></math>" },
+    };
+    for (varcases) |c| {
+        var ob: [512]u8 = undefined;
+        try std.testing.expectEqualStrings(c.want, try zatex.mathml(c.tex, .{}, &ob));
+    }
 }
 
 test "qa96 groups stack contiguously by ink" {

@@ -3868,14 +3868,14 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
                     // reuses the alias static (`\nleq` = U+2270), so MathML is
                     // byte-identical to the old static path.
                     const l_side = t.name[1] == 'l'; // Guard admits only nleqq/nleqslant/ngeqq/ngeqslant: [1] is l vs g.
-                    const slant = t.name.len > 5; // "*slant" (len 10) vs short form (len 5); no other lengths possible.
+                    const slant = t.name.len > 5; // "*slant" (len 9) vs short form (len 5); no other lengths possible.
                     const html_at: []const u8 = if (l_side) (if (slant) "\\@nleqslant" else "\\@nleqq") else (if (slant) "\\@ngeqslant" else "\\@ngeqq");
                     const math_alias: []const u8 = if (t.name[1] == 'l') "\\nleq" else "\\ngeq";
                     return try aliasNode(ctx, depth, t, html_at, math_alias);
                 }
                 if (tokNameEq(name, "nshortmid") or tokNameEq(name, "nshortparallel") or tokNameEq(name, "nsubseteqq") or tokNameEq(name, "nsupseteqq")) {
                     // Same dual-branch shape as above (issue #96).
-                    const is_mid = t.name[6] == 'm'; // Guard admits only nshortmid/nshortparallel/nsubseteqq/nsupseteq ([6]: m/p/e/e).
+                    const is_mid = t.name[6] == 'm'; // Guard admits only nshortmid/nshortparallel/nsubseteqq/nsupseteq ([6]: m/p/t; the t pair falls through to [3]).
                     const is_par = t.name[6] == 'p';
                     const is_subq = t.name[3] == 'b'; // nsubseteqq vs nsupseteq ([3]: b vs p).
                     const html_at: []const u8 = if (is_mid) "\\@nshortmid" else if (is_par) "\\@nshortparallel" else if (is_subq) "\\@nsubseteqq" else "\\@nsupseteqq";
@@ -4189,8 +4189,8 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
                 }
                 if (tokNameEq(name, "varsubsetneq") or tokNameEq(name, "varsubsetneqq") or tokNameEq(name, "varsupsetneq") or tokNameEq(name, "varsupsetneqq")) {
                     // Same dual-branch shape as above (issue #96).
-                    const is_sub = t.name[4] == 'u'; // Guard admits only varsub*/varsup*: [4] is u vs p.
-                    const is_qq = t.name.len == 12; // "*neqq" (len 12) vs "*neq" (len 11).
+                    const is_sub = t.name[5] == 'b'; // Guard admits only varsubsetneq/varsubsetneqq/varsupsetneq/varsupsetneqq ([5]: b vs p; all length >= 12).
+                    const is_qq = t.name.len == 13; // "*neqq" (len 13) vs "*neq" (len 12).
                     const html_at: []const u8 = if (is_sub) (if (is_qq) "\\@varsubsetneqq" else "\\@varsubsetneq") else (if (is_qq) "\\@varsupsetneqq" else "\\@varsupsetneq");
                     const math_alias: []const u8 = if (is_sub) (if (is_qq) "\\subsetneqq" else "\\subsetneq") else (if (is_qq) "\\supsetneqq" else "\\supsetneq");
                     return try aliasNode(ctx, depth, t, html_at, math_alias);
