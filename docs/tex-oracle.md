@@ -63,10 +63,10 @@ This oracle is **triage-grade, never a gate** — the same standing as
 {
   "tex": "x^2",
   "display": false,
-  "tex_version": "TeX 3.141592653 (TeX Live 2022)",
+  "tex_version": "TeX 3.141592653 (TeX Live 2022/Debian)",
   "dvi_units": {"num": 25400000, "den": 473628672, "mag": 1000},
-  "fonts": {"1": "cmr10"},
-  "glyphs": [{"font": null, "code": 120}],
+  "fonts": {"22": "cmr7", "26": "cmmi10"},
+  "glyphs": [{"font": 26, "code": 120}],
   "rules": [{"height": 262144, "width": 524288}],
   "counts": {"glyphs": 1, "rules": 1}
 }
@@ -80,9 +80,12 @@ This oracle is **triage-grade, never a gate** — the same standing as
   positioning ops (`right`/`down`/kern) are ignored — construction,
   not metrics. `rules` counts `setrule`/`putrule` (height × width in
   DVI units; at mag 1000 one DVI unit is one sp).
-- `font` is currently null (dvitype `fntnum` tracking is a
-  straight-line addition when a row needs per-font attribution);
-  `fonts` maps the `fntdef` numbers to names for that day.
+- `font` is the `fntnum`-selected DVI font number at the placement
+  (codes are font-slot codes, e.g. display-∑ is cmex slot 88);
+  `fonts` maps those numbers to names from the `fntdef` lines
+  (`fntdef` carries the opcode length class before the number —
+  grounded against real TeX Live 2022 output, see
+  `geometry --selfcheck`).
 - Empty parse (zero glyphs) fails loudly instead of emitting zeros.
 
 ## Reproducibility

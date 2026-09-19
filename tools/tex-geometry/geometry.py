@@ -29,8 +29,14 @@ PUTN = re.compile(r"^(\d+): put(\d) (-?\d+)\b")
 PUTCHAR = re.compile(r"\bputchar(\d+)\b")
 SETRULE = re.compile(r"\bsetrule height (-?\d+), width (-?\d+)")
 PUTRULE = re.compile(r"\bputrule height (-?\d+), width (-?\d+)")
-FNTDEF = re.compile(r"\bfntdef(\d+):\s*(\S+)")
-PREAMBLE = re.compile(r"\bnum=(\d+), den=(\d+), mag=(\d+)")
+# Real dvitype shapes (grounded against TeX Live 2022/Debian output,
+# see the agree-quad dump in CI artifact `tex-oracle`): `fntdef`
+# carries the opcode length class before the font number
+# (`144: fntdef1 26: cmmi10`), and `fntnum` selects the current font.
+FNTDEF = re.compile(r"\bfntdef\d+ (\d+): (\S+)")
+FNTNUM = re.compile(r"\bfntnum(\d+)\b")
+NUMDEN = re.compile(r"numerator/denominator=(\d+)/(\d+)")
+MAG = re.compile(r"magnification=(\d+)")
 
 
 def parse_dump(text):
@@ -38,29 +44,40 @@ def parse_dump(text):
     rules = []
     fonts = {}
     units = {"num": 25400000, "den": 473628672, "mag": 1000}
+    current_font = None
     for line in text.splitlines():
-        m = PREAMBLE.search(line)
+        m = NUMDEN.search(line)
         if m:
-            units = {"num": int(m.group(1)), "den": int(m.group(2)),
-                     "mag": int(m.group(3))}
+            units["num"] = int(m.group(1))
+            units["den"] = int(m.group(2))
+        m = MAG.search(line)
+        if m:
+            units["mag"] = int(m.group(1))
         m = FNTDEF.search(line)
         if m:
             fonts[m.group(1)] = m.group(2)
+        m = FNTNUM.search(line)
+        if m:
+            current_font = int(m.group(1))
         m = SETCHAR.search(line)
         if m:
-            glyphs.append({"font": None, "code": int(m.group(1))})
+            glyphs.append({"font": current_font,
+                           "code": int(m.group(1))})
             continue
         m = PUTCHAR.search(line)
         if m:
-            glyphs.append({"font": None, "code": int(m.group(1))})
+            glyphs.append({"font": current_font,
+                           "code": int(m.group(1))})
             continue
         m = SETN.match(line)
         if m:
-            glyphs.append({"font": None, "code": int(m.group(3))})
+            glyphs.append({"font": current_font,
+                           "code": int(m.group(3))})
             continue
         m = PUTN.match(line)
         if m:
-            glyphs.append({"font": None, "code": int(m.group(3))})
+            glyphs.append({"font": current_font,
+                           "code": int(m.group(3))})
             continue
         m = SETRULE.search(line)
         if m:
@@ -114,20 +131,30 @@ def main(argv):
     return 0
 
 
-# Canned dvitype-shaped fixture: exercises every counted op form
-# (setchar, set1, putchar, setrule, putrule, fntdef, preamble) plus
-# ignored lines (push/pop/positioning/page brackets).
+# Canned fixture in the real dvitype shapes (grounded against the
+# agree-quad dump from TeX Live 2022/Debian): exercises every counted
+# op form (setchar, set1, putchar, setrule, putrule, fntdef with the
+# opcode length class, fntnum selection, numerator/denominator and
+# magnification lines) plus ignored lines (push/pop/positioning/page
+# brackets, xxx specials).
 FIXTURE = """\
-0: preamble, i=2, num=25400000, den=473628672, mag=1000, stack max = 10
+This is DVItype, Version 3.6 (TeX Live 2022/Debian)
+numerator/denominator=25400000/473628672
+magnification=1000;       0.00006334 pixels per DVI unit
+Font 26: cmmi10---loaded at size 655360 DVI units
+Font 22: cmr7---loaded at size 458752 DVI units
 42: beginning of page 1
 87: down4 24760517 v:=24760517
+88: xxx 'header=l3backend-dvips.pro'
 95: push
 96: right4 655360 h:=0+655360, hh:=10
-101: fntdef1: cmr10 --- design size follows
-120: fntnum1
+144: fntdef1 26: cmmi10
+166: fntnum26 current font is cmmi10
 121: setchar120 h:=655360+327680, hh:=15
 130: push
 131: down4 200000 v:=24960517
+173: fntdef1 22: cmr7
+193: fntnum22 current font is cmr7
 132: set1 50 h:=983040+100000, hh:=18
 133: pop
 140: putchar51
@@ -142,12 +169,20 @@ def selfcheck():
     doc = to_json("x^2", False, "TeX 3.141592653 (TeX Live 2022)",
                   FIXTURE)
     assert doc["counts"] == {"glyphs": 3, "rules": 2}, doc["counts"]
-    assert [g["code"] for g in doc["glyphs"]] == [120, 50, 51]
+    assert [(g["font"], g["code"]) for g in doc["glyphs"]] == [
+        (26, 120), (22, 50), (22, 51)], doc["glyphs"]
     assert doc["rules"][0] == {"height": 262144, "width": 524288}
     assert doc["rules"][1] == {"height": 100, "width": 200}
-    assert doc["fonts"] == {"1": "cmr10"}, doc["fonts"]
+    assert doc["fonts"] == {"26": "cmmi10", "22": "cmr7"}, doc["fonts"]
     assert doc["dvi_units"] == {"num": 25400000, "den": 473628672,
                                 "mag": 1000}
+    # Units come from the dump, not the defaults: a custom preamble
+    # parses through.
+    g2, _, _, u2 = parse_dump("numerator/denominator=1/2\n"
+                              "magnification=2000\n"
+                              "1: setchar65\n")
+    assert u2 == {"num": 1, "den": 2, "mag": 2000}, u2
+    assert g2 == [{"font": None, "code": 65}], g2
     # Canonical bytes: same dump serializes byte-identical JSON.
     once = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     twice = json.dumps(to_json("x^2", False,
