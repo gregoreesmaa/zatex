@@ -40,7 +40,19 @@ This oracle is **triage-grade, never a gate** — the same standing as
   while a TeX error still sinks only its own row). The page style is
   `empty`: the compared property is the formula, and a folio would
   add a spurious glyph to every row. The raw `dvitype` dump is kept
-  beside the JSON (`<id>.tex.dump`) for position-level diagnosis.
+  beside the JSON (`<id>.tex.dump`) for position-level diagnosis, as
+  is a raw TeX *render* (`<id>.tex.png`, DVI route: `dvipdfmx` +
+  `pdftoppm -png -r 300`, the same raster the luatex oracle uses) so
+  the row can go through the shared pixel math below.
+- `tools/tex-geometry/tex_score.py` — TeX pixel sims through
+  `report.py`'s own `normalize_case` + `sim_pair` (crop+pad+rescale-128
+  + centroid-align, block SSIM): raw `<id>.zatex.png` (zatex-png,
+  always fresh) vs raw `<id>.tex.png`, writing normalized
+  `norm/<id>.tex.png` plus `texsim.json`. Same math and calibration
+  as the pixel table — relative triage numbers, never a gate.
+  Cross-font spread dominates (CM vs host fonts), so a TeX sim reads
+  against its row's LuaTeX sim (same font family, sibling route),
+  never against 1.0. `tex_score.py --selfcheck` runs anywhere.
 - `tools/tex-geometry/geometry.py` — dump → JSON. Stdlib only;
   `geometry --selfcheck` validates the parser against a canned dvitype
   fixture and runs anywhere (no daemon, no TeX).
@@ -108,11 +120,16 @@ The committed triage report (`zig-out/oracle-diff/report.md`, the same
 file the pixel sweep owns) carries a `Pure-TeX geometry oracle` section
 with the narrow-corpus verdicts, so the TeX results are visible next to
 the pixel rows instead of living only in a workflow artifact.
-`tools/tex-geometry/append_report.py <report.md> <texgeo-dir>` writes
-it from real CI data (the `tex-oracle` artifact's `<id>.tex.json` +
-`<id>.zatex.json`): marker-delimited, idempotent, and loud on missing
-sides. Re-run it after any sweep that force-adds a fresh pixel table,
-so the tex section is never stranded on a stale table.
+`tools/tex-geometry/append_report.py <report.md> <texgeo-dir>
+[pngdir]` writes it from real CI data (the `tex-oracle` artifact's
+`<id>.tex.json` + `<id>.zatex.json` + `texsim.json`): marker-delimited,
+idempotent, and loud on missing sides. It also embeds the normalized
+TeX renders (`![T](png/<id>.tex.png)`), which must be force-added next
+to the report like the other engines' renders — the script refuses to
+write the links unless the files already sit in `pngdir`, so a publish
+can never leave dead images. Re-run it after any sweep that force-adds
+a fresh pixel table, so the tex section is never stranded on a stale
+table.
 
 ## CI wiring (`.github/workflows/tex-oracle.yml`)
 
