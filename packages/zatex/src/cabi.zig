@@ -7,8 +7,25 @@
 const std = @import("std");
 const zatex = @import("zatex.zig");
 
+/// [height_above, depth_below] of one glyph at 1000 units (v4 C
+/// surface, issue: sqrt junction; blank glyphs report [0, 0]).
+pub const CExtents = extern struct {
+    ha: i32,
+    db: i32,
+};
+
+/// True ink box at 1000 units, y up from the baseline, unclipped
+/// (v4 C surface; blank glyphs report all zeros).
+pub const CInkBox = extern struct {
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+};
+
 /// Must match `zatex.h`. Nullable hooks map to the optional provider
-/// hooks (null = deterministic fallback).
+/// hooks (null = deterministic fallback). New hooks append at the end:
+/// old hosts (shorter struct) keep exact v3 behavior.
 pub const CMetrics = extern struct {
     ctx: ?*const anyopaque,
     glyph_id: ?*const fn (ctx: ?*const anyopaque, font: u16, cp: u32) callconv(.c) u16,
@@ -17,6 +34,8 @@ pub const CMetrics = extern struct {
     glyph_variant: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16, min_height: i32) callconv(.c) u16 = null,
     italic_correction: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) i32 = null,
     kern_correction: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16, height: i32, corner: u32) callconv(.c) i32 = null,
+    extents: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) CExtents = null,
+    ink_bounds: ?*const fn (ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) CInkBox = null,
 };
 
 pub const CRun = extern struct {
@@ -105,6 +124,18 @@ const Host = struct {
         const f = h.m.kern_correction orelse return 0;
         return f(h.m.ctx, font, glyph, height, @intFromEnum(corner));
     }
+    fn ext(ctx: *const anyopaque, font: u16, glyph: u16) [2]i32 {
+        const h: *const Host = @ptrCast(@alignCast(ctx));
+        const f = h.m.extents orelse return .{ 700, 250 };
+        const e = f(h.m.ctx, font, glyph);
+        return .{ e.ha, e.db };
+    }
+    fn ink(ctx: *const anyopaque, font: u16, glyph: u16) [4]i32 {
+        const h: *const Host = @ptrCast(@alignCast(ctx));
+        const f = h.m.ink_bounds orelse return .{ 0, 0, 0, 0 };
+        const b = f(h.m.ctx, font, glyph);
+        return .{ b.x0, b.y0, b.x1, b.y1 };
+    }
 };
 
 /// Lay out one UTF-8 formula. All buffers are caller-owned. `src_len`
@@ -150,6 +181,10 @@ export fn zatex_layout_utf8(
         .glyphVariant = Host.variant,
         .italicCorrection = Host.italic,
         .kernCorrection = Host.kern,
+        // Null C hooks stay null natively: the core keeps its own
+        // fallbacks bit-identically (no duplicated constants here).
+        .extents = if (m.extents != null) Host.ext else null,
+        .inkBounds = if (m.ink_bounds != null) Host.ink else null,
     };
     // Reinterpret caller buffers as Zig slices.
     const runs_z = (runs_ptr orelse return STATUS_NO_SPACE)[0..runs_cap];
@@ -272,6 +307,46 @@ test "cabi lays out through C function pointers" {
     for (runs[0..out.nruns]) |r| {
         try std.testing.expect(r.glyph_start + r.glyph_count <= glyphs.len);
     }
+}
+
+test "cabi v4 extents+ink flow into layout, null keeps v3" {
+    // The sqrt junction is the coverage: with null v4 hooks the
+    // vinculum starts at the radical advance edge (exact v3); with
+    // real extents+ink it reshapes the box and pulls into the hook.
+    const S = struct {
+        fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return 500;
+        }
+        fn rt(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) i32 {
+            return 40;
+        }
+        fn ext(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) CExtents {
+            return .{ .ha = 900, .db = 300 };
+        }
+        fn ink(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) CInkBox {
+            return .{ .x0 = 10, .y0 = -50, .x1 = 480, .y1 = 950 };
+        }
+    };
+    const src = "\\sqrt{x}";
+    const m_null: CMetrics = .{ .ctx = null, .glyph_id = S.gid, .advance = S.adv, .rule_thickness = S.rt };
+    var runs0: [16]CRun = undefined;
+    var rules0: [4]CRule = undefined;
+    var glyphs0: [64]u16 = undefined;
+    var out0: CLayout = undefined;
+    try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8(src.ptr, src.len, false, &m_null, &runs0, runs0.len, &rules0, rules0.len, &glyphs0, glyphs0.len, &out0));
+    try std.testing.expectEqual(@as(u32, 1), out0.nrules);
+    const m_v4: CMetrics = .{ .ctx = null, .glyph_id = S.gid, .advance = S.adv, .rule_thickness = S.rt, .extents = S.ext, .ink_bounds = S.ink };
+    var runs1: [16]CRun = undefined;
+    var rules1: [4]CRule = undefined;
+    var glyphs1: [64]u16 = undefined;
+    var out1: CLayout = undefined;
+    try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8(src.ptr, src.len, false, &m_v4, &runs1, runs1.len, &rules1, rules1.len, &glyphs1, glyphs1.len, &out1));
+    try std.testing.expectEqual(@as(u32, 1), out1.nrules);
+    try std.testing.expect(rules1[0].x < rules0[0].x);
+    try std.testing.expect(out1.height_above != out0.height_above);
 }
 
 test "cabi reports Invalid with offset" {
