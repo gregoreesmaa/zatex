@@ -82,39 +82,6 @@ Two documented approximations (triage-grade, not proof-grade):
   Absolute-size divergences are out of scope here — layout-IR tests own
   those.
 
-## Render reuse
-
-Oracle renders are stable references: while their inputs are unchanged,
-re-rendering them every sweep only burns runner minutes. ZaTeX is the
-live signal and always re-renders; the four oracle engines skip rows
-whose output PNG already exists (`ORACLE_REUSE=1`, passed by the sweep
-only — off by default, so other batch consumers such as the tex-oracle
-workflow's force-refresh always re-extract).
-
-Trust is content-keyed, never mtime-keyed. `tools/diff-oracles.sh`
-fingerprints every input that can change an oracle PNG byte (corpus,
-drivers, Dockerfiles, harness, `crop.py`, the sweep script itself, the
-staged fonts incl. STIX presence) into `work/.inputs.sha`. A stamp
-match keeps the existing PNGs; any mismatch — or a first run — deletes the
-oracle renders and starts over, so a failed engine reports missing,
-never last run's PNG. Three properties make kept files whole: drivers
-publish PNGs atomically (tmp + rename), so a killed run leaves no
-partial PNG behind; `crop.py` deletes undecodable files so they surface
-as missing and retry next run; and the stamp is written only after
-render+crop+copy complete, so a killed sweep re-renders fully.
-
-A fresh workdir primes from the latest successful sweep artifact (same
-branch, else main): the artifact's `raw/` holds the cropped finals and
-`oracle-inputs.sha` carries its fingerprint, so the usual case —
-ZaTeX iterating with oracle inputs fixed — skips render and crop for
-all ~531 oracle rows and the sweep costs one ZaTeX pass plus the
-report. Editing the corpus or any driver invalidates everything
-(all-or-nothing by design: simpler than per-row hashes, and the common
-invalidation — ZaTeX changing — never touches oracle renders). Only
-rows the run actually rendered (the `== <id>` lines in each fresh
-engine log) are cropped; the report copies exactly the selected rows,
-so `--cases` runs cannot leak renders from outside the filter.
-
 ## Normalization and scoring (`tools/oracle-diff/report.py`, stdlib only)
 
 Per case: tight-crop each render to its ink bbox (luminance threshold),
