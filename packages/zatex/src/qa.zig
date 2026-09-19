@@ -3225,3 +3225,207 @@ test "qa112 binom fences use Rule 15e sizing" {
         try std.testing.expectEqual(@as(i32, 1590), l.width);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Issue #177: Knuth's TRIP test, math-core subset (see `docs/trip.md`).
+//
+// TRIP tests TeX-the-program; the section map in `docs/trip.md` sorts
+// every TRIP region into in-scope (KaTeX-parity behavior with a
+// regression test here) or out-of-scope (page builder, line breaker,
+// hyphenation, file I/O, TFM — KaTeX rejects or has no analog, so
+// ZaTeX has nothing to pin). Test-only module conventions hold:
+// stub providers, integer IR asserts, shared `invariants` helpers.
+// ---------------------------------------------------------------------------
+
+test "trip01 expandafter edef noexpand chains resolve" {
+    // TRIP ll.85-99 (expansion loop), ll.355-370 (`\expandafter`
+    // chains): eager `\edef` captures the body now, `\expandafter`
+    // threads one expansion step ahead, `\noexpand` freezes one step
+    // inside `\edef`. All three spell the same `X` (500 stub units).
+    // TeX conditionals (`\ifnum`) and `\csname` stay rejected both
+    // sides (KaTeX has neither) — see `docs/trip.md`, not asserted
+    // here beyond the sweep's `rej-unsup-ifx` parity.
+    var b: B = .{};
+    const l0 = try lay("\\def\\b{X}\\edef\\a{\\b}\\a", false, &b);
+    try std.testing.expectEqual(@as(u32, 500), l0.width);
+    var b1: B = .{};
+    const l1 = try lay("\\def\\b{X}\\expandafter\\def\\expandafter\\a\\expandafter{\\b}\\a", false, &b1);
+    try std.testing.expectEqual(@as(u32, 500), l1.width);
+    var b2: B = .{};
+    const l2 = try lay("\\def\\b{X}\\edef\\a{\\noexpand\\b}\\a", false, &b2);
+    try std.testing.expectEqual(@as(u32, 500), l2.width);
+    try inv.expectNonNegative(l2);
+    try inv.expectContained(l2);
+}
+
+test "trip02 over atop above match frac geometry class" {
+    // TRIP ll.273-274 (`A\atop…`, `{A\hfil\over B}`): the infix
+    // fraction spellings build the same genfrac stack as `\frac`.
+    // `\over`/`\above` carry the bar (one rule) and `\over` spans
+    // `\frac` exactly; `\atop` is the barless twin (no rules).
+    var b: B = .{};
+    const frac = try lay("\\frac{A}{B}", false, &b);
+    var b0: B = .{};
+    const over = try lay("{A\\over B}", false, &b0);
+    try std.testing.expectEqual(@as(usize, 1), over.rules.len);
+    try std.testing.expectEqual(frac.width, over.width);
+    try std.testing.expectEqual(frac.height_above, over.height_above);
+    try std.testing.expectEqual(frac.depth_below, over.depth_below);
+    var b1: B = .{};
+    const atop = try lay("{A\\atop B}", false, &b1);
+    try std.testing.expectEqual(@as(usize, 0), atop.rules.len);
+    try std.testing.expectEqual(over.width, atop.width);
+    var b2: B = .{};
+    const above = try lay("{A\\above1pt B}", false, &b2);
+    try std.testing.expectEqual(@as(usize, 1), above.rules.len);
+    try inv.expectNonNegative(above);
+    try inv.expectContained(above);
+}
+
+test "trip03 left right delimiters grow monotonically" {
+    // TRIP ll.240-242 (`\delcode`, active-char delimiters), l.417
+    // (`\left(Aa\right\delimiter`): `\left…\right` fences grow to
+    // content (TeX `make_left_right`, delimiterFactor 901/500 in the
+    // core) instead of sitting at a fixed size.
+    var b: B = .{};
+    const small = try lay("\\left(x\\right)", false, &b);
+    var b0: B = .{};
+    const tall = try lay("\\left(\\frac{a}{b}\\right)", false, &b0);
+    try inv.expectNonNegative(tall);
+    try inv.expectContained(tall);
+    const small_total = small.height_above + small.depth_below;
+    const tall_total = tall.height_above + tall.depth_below;
+    try std.testing.expect(tall_total > small_total);
+    try std.testing.expect(tall.width >= small.width);
+}
+
+test "trip04 mathop forced limits stack in both modes" {
+    // TRIP ll.270-271 (`\mathop b\nolimits\limits`): limit placement
+    // is a core-owned style decision (`parse.useLimits`), not the
+    // emitter's. Forced `\limits` stacks in EVERY style (TeX-correct:
+    // explicit `\limits` overrides style); `\nolimits` always sits
+    // aside. The display/text contrast for default-limit operators
+    // (`\sum`, `\lim`) lives in `qa43`.
+    var b: B = .{};
+    const lim_d = try lay("\\mathop{A}\\limits_{b}^{c}", true, &b);
+    var b0: B = .{};
+    const lim_t = try lay("\\mathop{A}\\limits_{b}^{c}", false, &b0);
+    try inv.expectNonNegative(lim_d);
+    try inv.expectNonNegative(lim_t);
+    try std.testing.expectEqual(lim_d.width, lim_t.width);
+    try std.testing.expectEqual(lim_d.height_above, lim_t.height_above);
+    try std.testing.expectEqual(lim_d.depth_below, lim_t.depth_below);
+    var b1: B = .{};
+    const no_d = try lay("\\mathop{A}\\nolimits_{b}^{c}", true, &b1);
+    var b2: B = .{};
+    const no_t = try lay("\\mathop{A}\\nolimits_{b}^{c}", false, &b2);
+    try std.testing.expectEqual(no_d.width, no_t.width);
+    // Stacking grows vertically, sitting aside grows horizontally.
+    try std.testing.expect(lim_d.height_above + lim_d.depth_below > no_d.height_above + no_d.depth_below);
+    try std.testing.expect(no_d.width > lim_d.width);
+}
+
+test "trip05 overline underline emit one rule" {
+    // TRIP l.265 (`\overline{…}`, `\underline{…}`): the bar is one
+    // rule spanning the nucleus ink — geometry, not a glyph.
+    var b: B = .{};
+    const over = try lay("\\overline{x}", false, &b);
+    try std.testing.expectEqual(@as(usize, 1), over.rules.len);
+    var b0: B = .{};
+    const bare = try lay("x", false, &b0);
+    try std.testing.expectEqual(bare.width, over.width);
+    try std.testing.expect(over.height_above > bare.height_above);
+    var b1: B = .{};
+    const under = try lay("\\underline{x}", false, &b1);
+    try std.testing.expectEqual(@as(usize, 1), under.rules.len);
+    try std.testing.expectEqual(bare.width, under.width);
+    try std.testing.expect(under.depth_below > bare.depth_below);
+}
+
+test "trip06 giant dimensions stay total" {
+    // TRIP ll.346-350 (the `-'40000pt` overflow edge): Knuth TeX
+    // *traps* dimension overflow; the native contract is totality
+    // (AGENTS.md §1), so oversized lengths saturate at ±2e9
+    // (`parse.zig:sizeToEm5`) — never wrap, never trap.
+    var b: B = .{};
+    const small = try lay("x\\kern1pt y", false, &b);
+    var b0: B = .{};
+    const giant = try lay("x\\kern100000pt y", false, &b0);
+    try inv.expectNonNegative(giant);
+    try inv.expectContained(giant);
+    try std.testing.expect(giant.width > small.width);
+    var b1: B = .{};
+    const mu_small = try lay("x\\mskip1mu y", false, &b1);
+    var b2: B = .{};
+    const mu_giant = try lay("x\\mskip100000mu y", false, &b2);
+    try inv.expectNonNegative(mu_giant);
+    try std.testing.expect(mu_giant.width > mu_small.width);
+    // Negative giants stay total too (no wrap into a huge positive);
+    // only acceptance is pinned — the overlap sinks runs left, which
+    // the non-negative ink invariant does not cover.
+    var b3: B = .{};
+    _ = try lay("x\\kern-100000pt y", false, &b3);
+}
+
+test "trip07 runaway and double scripts fail positioned" {
+    // TRIP ll.348-355 (runaway arguments), l.402 (mode errors):
+    // truncated input is `Invalid` with KaTeX's 0-based byte offset,
+    // never a truncation or a panic.
+    var b: B = .{};
+    var diag = zatex.Diag.empty();
+    const r0 = zatex.layoutDiag("\\def\\a#1{#1}\\a{xy", .{}, stubProvider(), &b.runs, &b.rules, &b.glyphs, &diag);
+    try std.testing.expectError(error.Invalid, r0);
+    // The runaway reports the opening-brace site (`{` at byte 14),
+    // the engine-wide `captureToBrace` EOF convention — KaTeX names
+    // end-of-input instead, but both sides reject (see `docs/trip.md`).
+    try std.testing.expectEqual(@as(u32, 14), diag.offset);
+    var b1: B = .{};
+    var diag1 = zatex.Diag.empty();
+    const r1 = zatex.layoutDiag("x^2^3", .{}, stubProvider(), &b1.runs, &b1.rules, &b1.glyphs, &diag1);
+    try std.testing.expectError(error.Invalid, r1);
+    try std.testing.expectEqual(@as(u32, 3), diag1.offset);
+}
+
+test "trip08 errmessage message show vanish" {
+    // TRIP ll.29, 326, 375-390 (`\show…`, `\errmessage`): console
+    // primitives consume their input and emit no node — a native
+    // library has no console sink (parse-level pin: `parse.zig`
+    // "message, errmessage and show are console no-ops").
+    var b: B = .{};
+    const l0 = try lay("\\errmessage{boom}x", false, &b);
+    try std.testing.expectEqual(@as(u32, 500), l0.width);
+    var b1: B = .{};
+    const l1 = try lay("\\message{hi}x", false, &b1);
+    try std.testing.expectEqual(@as(u32, 500), l1.width);
+    var b2: B = .{};
+    // `\show` pops exactly one raw token (`y` vanishes), so only `x`
+    // survives — 500, not 1000.
+    const l2 = try lay("x\\show y", false, &b2);
+    try std.testing.expectEqual(@as(u32, 500), l2.width);
+}
+
+test "trip09 tag is the eqno analog" {
+    // TRIP ll.206, 254, 280, 298 (`\eqno`, `\leqno`): TeX equation
+    // numbers are out of scope (KaTeX has no `\eqno` primitive); the
+    // KaTeX analog `\tag` hoists to the display root, display only.
+    var b: B = .{};
+    const l = try lay("x\\tag{1}", true, &b);
+    try inv.expectNonNegative(l);
+    try inv.expectContained(l);
+    var b0: B = .{};
+    var diag = zatex.Diag.empty();
+    const r = zatex.layoutDiag("x\\tag{1}", .{}, stubProvider(), &b0.runs, &b0.rules, &b0.glyphs, &diag);
+    try std.testing.expectError(error.Invalid, r);
+}
+
+test "trip10 mathchoice picks the style branch" {
+    // TRIP l.442 (`\mathchoice{}a}{A|}{…}`): the four-way branch is
+    // Appendix-G style dispatch under KaTeX spelling — display takes
+    // the display branch, text takes the text branch.
+    var b: B = .{};
+    const disp = try lay("\\mathchoice{xy}{x}{x}{x}", true, &b);
+    try std.testing.expectEqual(@as(u32, 1000), disp.width);
+    var b0: B = .{};
+    const text = try lay("\\mathchoice{xy}{x}{x}{x}", false, &b0);
+    try std.testing.expectEqual(@as(u32, 500), text.width);
+}

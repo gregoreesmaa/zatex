@@ -2549,19 +2549,15 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                     return parseSingle(ctx, depth);
                 }
                 if (tokNameEq(t.name, "expandafter")) {
-                    // KaTeX parity (macros.ts): hold the next token raw,
-                    // expand the one after it a single level, then parse
-                    // the held token first.
+                    // KaTeX parity (macros.ts `\\expandafter`): hold the
+                    // next token raw, expand the one after it a single
+                    // level, then parse the held token first. The level
+                    // is re-entrant (TRIP ll.355-370; issue #177): a
+                    // nested `\\expandafter` composes inside-out, so
+                    // `\\expandafter\\def\\expandafter\\a\\expandafter{\\b}`
+                    // resolves to `\\def\\a{X}` exactly like the bundle.
                     const held = try ctx.next();
-                    const nxt = try ctx.next();
-                    if (nxt.kind == .ctrl) {
-                        if (ctx.findDef(nxt.name)) |def| {
-                            try ctx.expandUse(def, nxt.pos);
-                            try ctx.push(held);
-                            return parseSingle(ctx, depth);
-                        }
-                    }
-                    try ctx.push(nxt);
+                    try expandAfterOnce(ctx);
                     try ctx.push(held);
                     return parseSingle(ctx, depth);
                 }
@@ -6786,6 +6782,36 @@ fn storeDef(ctx: *ParseCtx, name: []const u8, nargs: u3, body: Range, global: bo
 // edef/xdef (`\xdef` global like `\gdef`; `\edef` local like
 // `\def`). The body expands now against current definitions;
 // parameters stay symbolic for use time (KaTeX parity).
+/// One re-entrant expansion step for `\\expandafter` (KaTeX parity,
+/// `macros.ts`; TRIP chain idiom, issue #177): expand the stream-top
+/// token a single level. A nested `\\expandafter` runs first
+/// (inside-out, like the bundle's recursive `expandOnce`), so chained
+/// uses compose instead of stranding raw tokens. Each nesting level
+/// spends one `maxExpand` unit, so a hostile chain trips the expansion
+/// budget instead of the Zig stack.
+fn expandAfterOnce(ctx: *ParseCtx) Error!void {
+    const u = try ctx.next();
+    if (u.kind == .ctrl and tokNameEq(u.name, "expandafter")) {
+        ctx.expansions += 1;
+        if (ctx.expansions > contract.max_expand) {
+            ctx.err_pos = u.pos;
+            ctx.err_msg = "macro expansion limit exceeded";
+            return error.ExpansionLimit;
+        }
+        const inner_held = try ctx.next();
+        try expandAfterOnce(ctx);
+        try ctx.push(inner_held);
+        return;
+    }
+    if (u.kind == .ctrl) {
+        if (ctx.findDef(u.name)) |def| {
+            try ctx.expandUse(def, u.pos);
+            return;
+        }
+    }
+    try ctx.push(u);
+}
+
 fn parseEdef(ctx: *ParseCtx, cmd: Tok) Error!void {
     const nt = try ctx.next();
     if (nt.kind != .ctrl or nt.name.len == 0) return ctx.fail(nt.pos, "expected control sequence");
