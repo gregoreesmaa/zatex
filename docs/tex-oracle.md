@@ -37,7 +37,10 @@ This oracle is **triage-grade, never a gate** — the same standing as
 - `tools/tex-geometry/extract.sh` — the driver: `extract <texfile>
   <display:0|1> <out.json>` (plus a `batch <workdir>` mode mirroring
   `render-one.sh`, so one container covers the whole narrow corpus
-  while a TeX error still sinks only its own row).
+  while a TeX error still sinks only its own row). The page style is
+  `empty`: the compared property is the formula, and a folio would
+  add a spurious glyph to every row. The raw `dvitype` dump is kept
+  beside the JSON (`<id>.tex.dump`) for position-level diagnosis.
 - `tools/tex-geometry/geometry.py` — dump → JSON. Stdlib only;
   `geometry --selfcheck` validates the parser against a canned dvitype
   fixture and runs anywhere (no daemon, no TeX).

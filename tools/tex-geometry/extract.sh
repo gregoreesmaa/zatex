@@ -18,6 +18,7 @@ if [ "$display" = "1" ]; then body="\\[ $tex \\]"; else body="\$$tex\$"; fi
 cat <<'EOF'
 \documentclass{article}
 \usepackage{amsmath,amssymb}
+\pagestyle{empty}
 \begin{document}
 EOF
 printf '%s\n' "$body"
@@ -34,6 +35,9 @@ dvitype "$cwork/case.dvi" > "$cwork/case.dump"
 version=$(tex --version | head -n 1)
 geometry --tex "$tex" --display "$display" --tex-version "$version" \
   --dump "$cwork/case.dump" --out "$out"
+# Keep the raw dump beside the JSON (diagnostic: absolute positions,
+# font selections) — the CI artifact carries both.
+cp "$cwork/case.dump" "${out%.json}.dump"
 rm -rf "$cwork"
 }
 
