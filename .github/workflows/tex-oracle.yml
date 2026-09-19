@@ -15,6 +15,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Bypass the TeX-render cache (rebuild image, re-extract)"
+        required: false
+        default: "false"
 
 jobs:
   geometry:
@@ -30,6 +35,18 @@ jobs:
 
       - name: Parser selfcheck (no daemon, no TeX)
         run: python3 tools/tex-geometry/geometry.py --selfcheck
+
+      # Stable-reference cache: the TeX side is keyed by every file
+      # that can change it (corpus, driver, parser, Dockerfile). On a
+      # hit the engines stay cold — existing renders are reused, never
+      # re-rendered. The ZaTeX side below always runs fresh (the live
+      # signal), and the diff always runs.
+      - name: Restore TeX-side renders
+        id: texcache
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/texgeo
+          key: texgeo-${{ hashFiles('tools/tex-geometry/**') }}
 
       - name: Build irdump (ZaTeX construction counts)
         working-directory: packages/zatex
@@ -55,9 +72,12 @@ jobs:
           EOF
 
       - name: Build the TeX geometry image (reproducibility proof)
+        if: steps.texcache.outputs.cache-hit != 'true' || github.event.inputs.force_refresh == 'true'
         run: docker build -t zatex-tex-geometry:1.0.0 tools/tex-geometry
 
       - name: Extract the TeX side of the narrow corpus
+        id: extract
+        if: steps.texcache.outputs.cache-hit != 'true' || github.event.inputs.force_refresh == 'true'
         run: |
           python3 - <<'EOF'
           import json, subprocess
@@ -72,6 +92,15 @@ jobs:
             -v /tmp/texgeo:/work \
             zatex-tex-geometry:1.0.0 batch /work
           for f in /tmp/texgeo/*.tex.json; do echo "== $f"; cat "$f"; done
+
+      # Save fresh renders for later runs (skipped on a hit, and on
+      # any failure so a partial row can never poison the cache).
+      - name: Save TeX-side renders
+        if: success() && (steps.texcache.outputs.cache-hit != 'true' || github.event.inputs.force_refresh == 'true')
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/texgeo
+          key: texgeo-${{ hashFiles('tools/tex-geometry/**') }}
 
       - name: Diff construction counts (report only, never fails)
         run: python3 tools/tex-geometry/diff_geometry.py tools/tex-geometry/corpus.json /tmp/texgeo /tmp/texgeo/report.md

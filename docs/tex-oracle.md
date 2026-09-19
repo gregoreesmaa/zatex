@@ -106,7 +106,12 @@ This oracle is **triage-grade, never a gate** — the same standing as
 
 Runs on push to `main`, pull requests, and `workflow_dispatch`, on
 `ubuntu-latest` (the daemon runner), `continue-on-error: true` —
-informational, never required:
+informational, never required. The TeX side is a stable reference:
+renders restore from cache keyed by `hashFiles('tools/tex-geometry/**')`
+and the docker build + extraction are skipped on a hit — engines stay
+cold where a render already exists. The ZaTeX side (`irdump`) and the
+diff always run fresh; saves are all-or-nothing after a successful
+extract, and `workflow_dispatch` takes `force_refresh` to bypass:
 
 1. `geometry.py --selfcheck` (no daemon needed).
 2. `zig build irdump` (setup-zig 0.16.0) and dump the ZaTeX side of
