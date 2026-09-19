@@ -541,13 +541,13 @@ Normalization per case: tight-crop ink bbox + 10px white pad, uniform rescale to
 <!-- tex-geometry:start -->
 ## Pure-TeX geometry oracle (issue #178)
 
-Box *construction* per row from stock Knuth TeX (DVI glyph/rule counts) against ZaTeX (`irdump` counts) — counts compare, metrics never do (Computer Modern vs host fonts). Triage attention like the pixel table above, never a gate; pinned KaTeX remains truth. Driver and schema: `docs/tex-oracle.md`.
+Box *construction* per row from stock Knuth TeX (DVI glyph/rule counts) against ZaTeX (`irdump` counts) — counts compare, metrics never do (Computer Modern vs host fonts) — plus the TeX *pixel* sim: the DVI-route render against the ZaTeX render through the shared normalize+SSIM math (`tex_score.py`). Judge TeX sims against their row's LuaTeX sim (same font family, sibling route), never against 1.0: cross-font spread dominates by design. Triage attention like the pixel table above, never a gate; pinned KaTeX remains truth. Driver and schema: `docs/tex-oracle.md`.
 
-| row | TeX | ZaTeX | verdict |
-| --- | --- | --- | --- |
-| `agree-quad` | 2 glyphs/0 rules | 2 glyphs/0 rules | MATCH |
-| `frac-basic` | 2 glyphs/1 rules | 2 glyphs/1 rules | MATCH |
-| `agree-sum` | 21 glyphs/1 rules | 21 glyphs/1 rules | MATCH |
+| row | TeX | ZaTeX | verdict | TeX sim | TeX render |
+| --- | --- | --- | --- | --- | --- |
+| `agree-quad` | 2 glyphs/0 rules | 2 glyphs/0 rules | MATCH | 0.769 | ![T](png/agree-quad.tex.png) |
+| `frac-basic` | 2 glyphs/1 rules | 2 glyphs/1 rules | MATCH | 0.446 | ![T](png/frac-basic.tex.png) |
+| `agree-sum` | 21 glyphs/1 rules | 21 glyphs/1 rules | MATCH | 0.488 | ![T](png/agree-sum.tex.png) |
 
 Engine: TeX 3.141592653 (TeX Live 2022/Debian).
 <!-- tex-geometry:end -->

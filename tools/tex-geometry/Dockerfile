@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       texlive-latex-base \
       texlive-latex-recommended \
       texlive-fonts-recommended \
+      poppler-utils \
       python3 \
  && rm -rf /var/lib/apt/lists/*
 # texlive-base carries `latex` (DVI mode) and `dvitype`; -recommended

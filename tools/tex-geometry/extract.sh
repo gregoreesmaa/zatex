@@ -35,6 +35,19 @@ dvitype "$cwork/case.dvi" > "$cwork/case.dump"
 version=$(tex --version | head -n 1)
 geometry --tex "$tex" --display "$display" --tex-version "$version" \
   --dump "$cwork/case.dump" --out "$out"
+# Raw TeX render through the DVI route (dvipdfmx + pdftoppm at the same
+# -r 300 the luatex oracle uses), so the row can go through the shared
+# normalize+SSIM math like every other engine. Saved beside the JSON.
+if ! (cd "$cwork" && dvipdfmx -o case.pdf case.dvi >/dev/null 2>&1); then
+  echo "extract: dvipdfmx failed for $texfile" >&2
+  rm -rf "$cwork"
+  return 1
+fi
+if ! pdftoppm -png -r 300 -singlefile "$cwork/case.pdf" "${out%.json}" >/dev/null 2>&1; then
+  echo "extract: pdftoppm failed for $texfile" >&2
+  rm -rf "$cwork"
+  return 1
+fi
 # Keep the raw dump beside the JSON (diagnostic: absolute positions,
 # font selections) — the CI artifact carries both.
 cp "$cwork/case.dump" "${out%.json}.dump"
