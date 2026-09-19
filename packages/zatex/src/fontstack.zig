@@ -25,7 +25,7 @@
 //!   before (identity / zero). Extensible assembly stays where it
 //!   was (issues #102/#104 own that story).
 //! - This is HOST/TOOL code (like `refhost`), never linked into the
-//!   subset library: no heap allocation, files read by the caller.
+//!   companion library: no heap allocation, files read by the caller.
 const std = @import("std");
 const zatex = @import("zatex");
 const contract = zatex.contract;

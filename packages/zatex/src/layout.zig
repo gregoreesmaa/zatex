@@ -9,22 +9,10 @@
 //! size; shifts and clearances are fixed thousandths-of-em constants
 //! documented at each site (TeX-derived, simplified micro-typography).
 const std = @import("std");
-const build_options = @import("build_options");
 const contract = @import("contract.zig");
 const ir = @import("ir.zig");
 const parse = @import("parse.zig");
 const symbols = @import("symbols.zig");
-
-const active_profile: contract.Profile =
-    std.meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
-
-/// Environment row/column geometry (arstruts, jot, fence-hugging)
-/// is full-profile-only (issue #167): subset parse rejects `\begin`
-/// as a full-only command, so no `.env` node can ever reach
-/// `layoutEnv` there and the legacy row rule + padding below stay
-/// byte-identical to baseline (subset __TEXT gate, issue #12).
-/// Comptime-folded, so the dead path emits zero code.
-const full_env_geometry = active_profile == .full;
 
 const Error = contract.LayoutError;
 const Idx = parse.Idx;
@@ -222,21 +210,16 @@ pub const LayCtx = struct {
         // KaTeX `minRuleThickness` parity: the caller floor (in
         // thousandths of an em, like provider weights) applies to
         // every requested thickness; 0 disables it bit-identically.
-        // The floor is full-profile surface (subset entry points
-        // always pass the 0 default): subset keeps the bare weight
-        // so the extra max vanishes from its binary (size ratchet).
         const v = self.provider.ruleThickness(self.provider.ctx, font, kind);
         const base = if (v <= 0) 40 else v;
-        if (comptime active_profile == .subset) return base;
         return @max(base, self.pctx.min_rule_floor);
     }
     /// Hardcoded 0.04em rule weights (array vlines, `\fbox` frames)
     /// under the same floor: the constant stands in for a provider
     /// weight KaTeX would floor too.
     fn constRule(self: *LayCtx, size: i32) i32 {
-        // Subset keeps the bare constant (floor always 0 there);
         // see `ruleTh`.
-        const w: i32 = if (comptime active_profile == .subset) 40 else @max(@as(i32, 40), self.pctx.min_rule_floor);
+        const w: i32 = @max(@as(i32, 40), self.pctx.min_rule_floor);
         return @divTrunc(w * size, 1000);
     }
     fn variant(self: *LayCtx, font: u16, glyph: u16, need: i32) u16 {
@@ -284,9 +267,7 @@ pub fn layout(
     // whole construction shifts right 2em and the width grows with
     // it, so hosts positioning the block keep the margin. Display
     // only; inline math is untouched.
-    // `fleqn` is full-profile surface (subset entry points always
-    // pass false): the margin folds to zero in subset binaries.
-    const margin: i32 = if (active_profile == .full and lc.pctx.fleqn and style.isDisplay()) 2 * @as(i32, lc.effSize(style)) else 0;
+    const margin: i32 = if (lc.pctx.fleqn and style.isDisplay()) 2 * @as(i32, lc.effSize(style)) else 0;
     // Origin top-left; the root baseline sits at height_above.
     try emitBox(lc, &ec, box, margin, b.ha);
     ec.closeRun();
@@ -436,7 +417,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
                 .kind = .{ .list = .{ .start = s, .len = 1 } },
             });
         },
-        .text => |t| return layoutText(lc, style, t),
+        .text => |t| return layoutText(lc, style, t.toks, t.fam),
         .env => |e| return layoutEnv(lc, style, e),
         .substack => |r| return layoutSubstack(lc, style, r),
         .mathchoice => |c| {
@@ -649,8 +630,8 @@ fn mathAlpha(fam: parse.FontFam, cp: u21) ?u21 {
 /// Block base per family for columns A-Z/a-z/0-9 (0 = no block —
 /// digits under mathit, fraktur digits and script digits: KaTeX
 /// renders those upright, and the blocks have none). Kept as data,
-/// not switch arms, so the subset profile pays __const bytes (free)
-/// instead of __TEXT jump tables (gated).
+/// not switch arms, so the table lives in __const data rather
+/// than __TEXT jump tables.
 fn alphaBase(fam: parse.FontFam, col: u2) ?u21 {
     const row: [3]u21 = switch (fam) {
         .rm => .{ 0, 0, 0 },
@@ -902,7 +883,7 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
 /// (the host renders ambient).
 fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
     const size = lc.effSize(style);
-    const tb = try layoutText(lc, style, .{ .toks = c.body, .fam = parse.FontFam.rm });
+    const tb = try layoutText(lc, style, c.body, parse.FontFam.rm);
     const t = lc.boxes[tb];
     const pad = @divTrunc(@as(i32, 300) * size, 1000);
     const bg = parse.resolveColorSpec(lc.pctx, c.bg);
@@ -2580,10 +2561,13 @@ fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, is_circle: bool,
     }
 }
 
-fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
+/// Token range + family as scalars, never `anytype`: the two callers
+/// (`.text` nodes, `\colorbox` bodies) pass different struct types
+/// with identical shapes, and a generic would monomorphize the whole
+/// body twice (size ratchet — one instantiation, shared).
+fn layoutText(lc: *LayCtx, style: parse.Style, rng: parse.Range, fam: parse.FontFam) Error!u16 {
     const size = lc.effSize(style);
-    const fam = lc.fam_subst orelse t.fam;
-    const font = fam.id();
+    const font = (lc.fam_subst orelse fam).id();
     var parts: [256]BKid = undefined;
     var nparts: usize = 0;
     var x: i32 = 0;
@@ -2597,7 +2581,7 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
     var pend_circle: [4]bool = undefined;
     var pend_p0: [4]usize = undefined;
     var npend: u8 = 0;
-    const toks = parse.toksOf(lc.pctx, t.toks);
+    const toks = parse.toksOf(lc.pctx, rng);
     var i: usize = 0;
     while (i < toks.len) : (i += 1) {
         while (npend > 0 and pend_end[npend - 1] <= i) {
@@ -2623,55 +2607,49 @@ fn layoutText(lc: *LayCtx, style: parse.Style, t: anytype) Error!u16 {
             .lbrace, .rbrace => continue,
             .newline => is_space = true,
             .ctrl => {
-                // Text-mode command (`\i`, `\textdollar`, ...; full
-                // profile only).
-                if (comptime active_profile == .full) {
-                    // Argument-taking text commands: circled overlay
-                    // and strikeout queue a pending span over a char
-                    // or braced group argument (KaTeX parity: a missing
-                    // argument rejects, an empty group is fine).
-                    if (symbols.lookupTextArg(tk.name)) |ta| {
-                        var j = i + 1;
-                        if (j < toks.len and toks[j].kind == .lbrace) {
-                            var depth: usize = 1;
-                            j += 1;
-                            while (j < toks.len and depth > 0) : (j += 1) {
-                                if (toks[j].kind == .lbrace) depth += 1;
-                                if (toks[j].kind == .rbrace) depth -= 1;
-                            }
-                            if (depth > 0) return error.Invalid;
-                        } else {
-                            // Skip interword space (TeX control-word
-                            // space skipping): the argument is the next
-                            // real token. The skipped spaces vanish —
-                            // resume iteration at the argument so no
-                            // phantom space is typeset inside the span
-                            // (issue #70: it offset `\textcircled b`).
-                            while (j < toks.len and (toks[j].kind == .newline or
-                                (toks[j].kind == .char and toks[j].cp == ' '))) j += 1;
-                            if (j >= toks.len) return error.Invalid;
-                            if (npend >= pend_x0.len) return error.NoSpace;
-                            pend_x0[npend] = x;
-                            pend_end[npend] = j + 1;
-                            pend_circle[npend] = ta == .circled;
-                            pend_p0[npend] = nparts;
-                            npend += 1;
-                            i = j - 1;
-                            continue;
+                // Text-mode command (`\i`, `\textdollar`, ...).
+                // Argument-taking text commands: circled overlay
+                // and strikeout queue a pending span over a char
+                // or braced group argument (KaTeX parity: a missing
+                // argument rejects, an empty group is fine).
+                if (symbols.lookupTextArg(tk.name)) |ta| {
+                    var j = i + 1;
+                    if (j < toks.len and toks[j].kind == .lbrace) {
+                        var depth: usize = 1;
+                        j += 1;
+                        while (j < toks.len and depth > 0) : (j += 1) {
+                            if (toks[j].kind == .lbrace) depth += 1;
+                            if (toks[j].kind == .rbrace) depth -= 1;
                         }
+                        if (depth > 0) return error.Invalid;
+                    } else {
+                        // Skip interword space (TeX control-word
+                        // space skipping): the argument is the next
+                        // real token. The skipped spaces vanish —
+                        // resume iteration at the argument so no
+                        // phantom space is typeset inside the span
+                        // (issue #70: it offset `\textcircled b`).
+                        while (j < toks.len and (toks[j].kind == .newline or
+                            (toks[j].kind == .char and toks[j].cp == ' '))) j += 1;
+                        if (j >= toks.len) return error.Invalid;
                         if (npend >= pend_x0.len) return error.NoSpace;
                         pend_x0[npend] = x;
-                        pend_end[npend] = j;
+                        pend_end[npend] = j + 1;
                         pend_circle[npend] = ta == .circled;
                         pend_p0[npend] = nparts;
                         npend += 1;
+                        i = j - 1;
                         continue;
                     }
+                    if (npend >= pend_x0.len) return error.NoSpace;
+                    pend_x0[npend] = x;
+                    pend_end[npend] = j;
+                    pend_circle[npend] = ta == .circled;
+                    pend_p0[npend] = nparts;
+                    npend += 1;
+                    continue;
                 }
-                const tcp = if (comptime active_profile == .full)
-                    symbols.lookupText(tk.name)
-                else
-                    null;
+                const tcp = symbols.lookupText(tk.name);
                 if (tcp) |c2| {
                     cp = c2;
                 } else {
@@ -2849,9 +2827,7 @@ fn layoutTag(lc: *LayCtx, style: parse.Style, tg: anytype) Error!u16 {
     // tag block leads instead (KaTeX left-tags, issue #120).
     var ids: [4]u16 = undefined;
     var nids: usize = 0;
-    // `leqno` is full-profile surface (subset entry points always
-    // pass false): the tag always trails in subset binaries.
-    const left: bool = if (comptime active_profile == .full) lc.pctx.leqno else false;
+    const left: bool = lc.pctx.leqno;
     if (!left) {
         ids[0] = fb;
         nids = 1;
@@ -2986,13 +2962,12 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
             row_ha[nrows] = 100;
             row_db[nrows] = 100;
         }
-        // Arstrut floors + jot closeout (full profile only — subset
-        // rejects `\begin`, so the legacy zeros stand there): seed
+        // Arstrut floors + jot closeout: seed
         // this content row with the strut, and close out the
         // previous row's jot. Jot flows only between content rows
         // (KaTeX splits row groups at hlines); rule rows and CD
         // keep legacy extents.
-        if (full_env_geometry and e.kind != .cd and !row_rule[nrows]) {
+        if (e.kind != .cd and !row_rule[nrows]) {
             if (strut_h > row_ha[nrows]) row_ha[nrows] = strut_h;
             if (strut_d > row_db[nrows]) row_db[nrows] = strut_d;
             if (add_jot and nrows > 0 and !row_rule[nrows - 1]) row_db[nrows - 1] += jot;
@@ -3132,10 +3107,8 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     // KaTeX parity (issue #167): `hskipBeforeAndAfter` is false for
     // every env but `array`, so column separation lives BETWEEN
     // columns only (`c > 0` / `c < nc - 1` guards) — the outer edges
-    // hug the fences instead of standing 0.5em off. Full profile
-    // only (see `full_env_geometry`): subset rejects `\begin` at
-    // parse, so this dead path costs zero __TEXT there.
-    if (full_env_geometry and e.kind != .array) {
+    // hug the fences instead of standing 0.5em off.
+    if (e.kind != .array) {
         pre[0] = 0;
         if (ncols > 0) post[ncols - 1] = 0;
     }
