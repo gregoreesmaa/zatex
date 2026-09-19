@@ -12,7 +12,7 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
-      - name: Run core tests (full profile, incl. pinned-KaTeX sweep)
+      - name: Run core tests (incl. pinned-KaTeX sweep)
         working-directory: packages/zatex
         run: zig build test --summary all
       - name: Run zatex-mathml tests
@@ -23,7 +23,7 @@ jobs:
         run: zig build test --summary all
       - name: Every png source test executes (issue #106)
         run: tools/check_test_roots.sh
-      - name: Subset-profile size gate (no host-cost growth)
+      - name: Distribution size gate (no artifact growth)
         run: tools/size_gate.sh
 
   sweep-freshness:

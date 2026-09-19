@@ -5,14 +5,7 @@
 //! atoms with `glueBetween`; hosts resolve glyphs via the provider, so
 //! these tables carry no font data.
 
-const build_options = @import("build_options");
 const contract = @import("contract.zig");
-
-/// Active build profile: `full` compiles the complete engine, `subset`
-/// the embeddable core. Full-only coverage below keys off this so the
-/// subset closure (and its size ratchet) stays untouched.
-const active_profile: contract.Profile =
-    @import("std").meta.stringToEnum(contract.Profile, build_options.profile) orelse .full;
 
 /// TeX atom classes. Spacing between adjacent atoms derives from the
 /// pair of classes (see `glueBetween`), matching TeX Book p.170 with
@@ -389,10 +382,9 @@ const operators_base = [_]Entry{
     .{ .name = "ldotp", .sym = S(0x002E, .Punct) },
     .{ .name = "cdotp", .sym = S(0x22C5, .Punct) },
 };
-
-/// Full-profile symbol coverage: nationals KaTeX accepts in math mode
-/// (pinned-proven). Empty in `subset` so its closure stays untouched.
-const operators_full = if (active_profile == .full) [_]Entry{
+/// Symbol coverage: nationals KaTeX accepts in math mode
+/// (pinned-proven).
+const operators_full = [_]Entry{
     .{ .name = "sect", .sym = S(0x00A7, .Ord) },
     .{ .name = "aa", .sym = S(0x00E5, .Ord) },
     .{ .name = "AA", .sym = S(0x00C5, .Ord) },
@@ -594,8 +586,7 @@ const operators_full = if (active_profile == .full) [_]Entry{
     // its own font in HTML but single precomposed codepoints in
     // MathML (the parity arbiter), which is what these carry. The
     // user macros below expand to `\html@mathml` dual branches
-    // (issue #96); these entries stay for the subset profile (whose
-    // macro arms are pruned) and as the math-branch atoms.
+    // (issue #96); these entries serve as the math-branch atoms.
     .{ .name = "gvertneqq", .sym = S(0x2269, .Rel) },
     .{ .name = "lvertneqq", .sym = S(0x2268, .Rel) },
     .{ .name = "ngeqq", .sym = S(0x2271, .Rel) },
@@ -727,9 +718,8 @@ const operators_full = if (active_profile == .full) [_]Entry{
     .{ .name = "oiiint", .sym = I(0x2230) },
     .{ .name = "oiint", .sym = I(0x222F) },
     .{ .name = "smallint", .sym = .{ .cp = 0x222B, .class = .Op, .large_op = false, .limits_default = true } },
-} else [_]Entry{};
+};
 
-const operators = operators_base ++ operators_full;
 
 /// ASCII characters with fixed atom classes.
 pub fn asciiClass(cp: u21) ?AtomClass {
@@ -758,10 +748,12 @@ pub fn asciiClass(cp: u21) ?AtomClass {
 
 /// Look up a control-sequence name. Returns null for unknown names
 /// (callers report KaTeX-parity `Invalid`).
+const operators = operators_base ++ operators_full;
+
 pub fn lookup(name: []const u8) ?Sym {
-    for (greek_lower) |e| if (eq(e.name, name)) return e.sym;
-    for (greek_upper) |e| if (eq(e.name, name)) return e.sym;
-    for (operators) |e| if (eq(e.name, name)) return e.sym;
+    // `all_symbols` is exactly greek_lower ++ greek_upper ++ operators, so one
+    // scan preserves first-match order over the same data (no extra copies).
+    for (all_symbols) |e| if (eq(e.name, name)) return e.sym;
     return null;
 }
 
@@ -827,7 +819,7 @@ const TextCmd = struct {
     name: []const u8,
     cp: u21,
 };
-const text_cmds = if (active_profile == .full) [_]TextCmd{
+const text_cmds = [_]TextCmd{
     .{ .name = "i", .cp = 0x0131 },
     .{ .name = "j", .cp = 0x0237 },
     .{ .name = "o", .cp = 0x00F8 },
@@ -866,7 +858,7 @@ const text_cmds = if (active_profile == .full) [_]TextCmd{
     .{ .name = "textunderscore", .cp = 0x005F },
     .{ .name = "textcopyright", .cp = 0x00A9 },
     .{ .name = "textregistered", .cp = 0x00AE },
-} else [_]TextCmd{};
+};
 
 /// Look up a text-mode command. Returns null for math-only names
 /// (callers report KaTeX-parity `Invalid`).
@@ -879,7 +871,6 @@ pub fn lookupText(name: []const u8) ?u21 {
 // codepoint table): circled overlay and strikeout.
 pub const TextArg = enum { circled, sout };
 pub fn lookupTextArg(name: []const u8) ?TextArg {
-    if (comptime active_profile != .full) return null;
     if (eq(name, "textcircled")) return .circled;
     if (eq(name, "sout")) return .sout;
     return null;
@@ -908,8 +899,8 @@ pub fn glueBetween(left: AtomClass, right: AtomClass) u16 {
 /// beside Open/Rel/Punct/Op/Bin never reaches this table.
 ///
 /// Kept as packed 2-bit data, not switch arms or u16 tables, so the
-/// subset profile pays ~40 __const bytes instead of __TEXT jump
-/// tables (gated): each cell stores an index into `glue_mu`
+/// table costs ~40 __const bytes instead of __TEXT jump tables: each
+/// cell stores an index into `glue_mu`
 /// (0 = none, 1 = thin, 2 = med, 3 = thick). Rows and columns track
 /// `AtomClass` declaration order
 /// (Ord, Op, Bin, Rel, Open, Close, Punct, Inner); the exhaustive
@@ -1013,7 +1004,7 @@ const delims = [_]DelimEntry{
         .{ .name = "backslash", .cp = 0x005C, .cls = .Ord },
         .{ .name = "lang", .cp = 0x27E8, .cls = .Open },
         .{ .name = "rang", .cp = 0x27E9, .cls = .Close },
-        // Bare-fence aliases (KaTeX open/close groups; shared with subset
+        // Bare-fence aliases (KaTeX open/close groups,
         // like the lbrace precedent above, issue #73).
         .{ .name = "lbrack", .cp = 0x005B, .cls = .Open },
         .{ .name = "rbrack", .cp = 0x005D, .cls = .Close },
@@ -1101,8 +1092,7 @@ pub const all_accents = accents;
 /// KaTeX advances agree to the unit: M 970 vs 970.14, y 490 vs
 /// 490.28). Sorted by codepoint for binary search; unlisted
 /// codepoints (upright, digits, symbols) shift by 0, exactly as
-/// KaTeX's zero-skew metrics do. Packed `cp << 8 | mu` to keep the
-/// subset-profile tables small.
+/// KaTeX's zero-skew metrics do. Packed `cp << 8 | mu`.
 const math_italic_skews = [_]u32{
     0x418B,
     0x4253,

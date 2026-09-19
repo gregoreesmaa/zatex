@@ -111,7 +111,7 @@ fn supRaise(l: zatex.ir.Layout, base_glyph: u16, sup_glyph: u16) !i32 {
 }
 
 /// Generic canonical dump (mirrors `invariants.layoutText` field for
-/// field, so full-profile and subset-profile layouts compare as text).
+/// field, so layouts compare as text).
 /// Cross-checked against `inv.layoutText` for full layouts below.
 fn dumpAny(l: anytype, out: []u8) []u8 {
     var pos: usize = 0;
@@ -817,6 +817,19 @@ test "qa96 negations render AMS PUA glyphs, MathML keeps the arbiter" {
         "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>≰</mo></mrow><annotation encoding=\"application/x-tex\">\\nleqq</annotation></semantics></math>",
         try zatex_mathml.render("\\nleqq", .{}, &out),
     );
+    // Byte-discriminated alias arms must select exactly (the sweep only
+    // compares tag shapes, so a sub/sup or neq/neqq cross here is invisible
+    // to it — pin the full MathML bytes per arm).
+    const varcases = [_]struct { tex: []const u8, want: []const u8 }{
+        .{ .tex = "\\varsubsetneq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⊊</mo></mrow><annotation encoding=\"application/x-tex\">\\varsubsetneq</annotation></semantics></math>" },
+        .{ .tex = "\\varsubsetneqq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⫋</mo></mrow><annotation encoding=\"application/x-tex\">\\varsubsetneqq</annotation></semantics></math>" },
+        .{ .tex = "\\varsupsetneq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⊋</mo></mrow><annotation encoding=\"application/x-tex\">\\varsupsetneq</annotation></semantics></math>" },
+        .{ .tex = "\\varsupsetneqq", .want = "<math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo>⫌</mo></mrow><annotation encoding=\"application/x-tex\">\\varsupsetneqq</annotation></semantics></math>" },
+    };
+    for (varcases) |c| {
+        var ob: [512]u8 = undefined;
+        try std.testing.expectEqualStrings(c.want, try zatex_mathml.render(c.tex, .{}, &ob));
+    }
 }
 
 test "qa96 groups stack contiguously by ink" {
@@ -1249,17 +1262,14 @@ test "qa44 input length boundary is exact at max_input_len" {
 }
 
 // ---------------------------------------------------------------------------
-// Issue #45: subset-vs-full profile byte-identical IR over the sweep
+// Issue #45: render-identity IR over the sweep
 // ---------------------------------------------------------------------------
 
 test "qa45 full profile matches the cross-profile golden" {
-    // Cross-profile half owned by this (full) binary: every row of the
-    // checked-in `goldens/qa_profile_ir.json` (subset-renderable sweep
-    // accepts with canonical IR dumps) must render byte-identically
-    // under the full profile. The subset binary (`qa_subset`) asserts
-    // the same file under subset gates plus the allowlist half, so a
-    // green pair means byte-identical IR across profiles with every
-    // divergence allowlisted and reviewed.
+    // Render-identity probe: every row of the checked-in
+    // `goldens/qa_profile_ir.json` (sweep accepts with canonical IR
+    // dumps) must render byte-identically. A green run means the
+    // checked-in IR still matches the engine, row for row.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const alloc = arena.allocator();
@@ -1290,7 +1300,7 @@ test "qa45 full profile matches the cross-profile golden" {
         try expectGolden(id, want, dumpAny(l, &db));
         n += 1;
     }
-    std.debug.print("\nprofiles(full): {d} golden rows identical\n", .{n});
+    std.debug.print("\nqa45: {d} golden rows identical\n", .{n});
 }
 
 // ---------------------------------------------------------------------------

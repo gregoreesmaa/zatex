@@ -6,8 +6,6 @@ const std = @import("std");
 
 pub const version: std.SemanticVersion = .{ .major = 0, .minor = 0, .patch = 0 };
 
-pub const Profile = enum { subset, full };
-
 /// Hard caps. Part of the contract, not tunables.
 pub const max_input_len: usize = 64 * 1024;
 pub const max_nesting_depth: u8 = 32;
@@ -57,7 +55,7 @@ pub const LayoutOptions = struct {
     global_group: bool = false,
 };
 
-/// KaTeX `strict` modes (`boolean|string` subset; function handlers
+/// KaTeX `strict` modes (`boolean|string` values; function handlers
 /// have no native analog — see `LayoutOptions.strict`).
 pub const StrictMode = enum {
     ignore,
@@ -180,7 +178,7 @@ pub const MetricsProvider = struct {
 /// removed or repurposed; `OutOfMemory` is reserved (the core allocates
 /// nothing) so the set never reshapes under callers.
 pub const LayoutError = error{
-    Unsupported, // outside subset/profile scope → caller falls back
+    Unsupported, // outside engine scope → caller falls back
     Invalid, // malformed input (KaTeX ParseError parity)
     TooDeep, // max_nesting_depth exceeded
     TooLong, // max_input_len exceeded

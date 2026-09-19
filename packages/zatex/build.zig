@@ -3,15 +3,6 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    // Build profile: `subset` compiles the embeddable core only (what
-    // `read` will one day link — budgeted at <= 8 KB host __TEXT);
-    // `full` compiles the complete KaTeX-compatible engine.
-    const profile = b.option(
-        []const u8,
-        "profile",
-        "Build profile: subset (embeddable) or full (default)",
-    ) orelse "full";
-
     // The C ABI rides along by default. Downstream packages with
     // their own C surface (currently `zatex-mathml`) disable it: Zig
     // emits the full closure into every static lib, so two libs
@@ -22,16 +13,15 @@ pub fn build(b: *std.Build) void {
         "Include the C ABI exports and conformance tests (default true)",
     ) orelse true;
 
-    const options = b.addOptions();
-    options.addOption([]const u8, "profile", profile);
-    options.addOption(bool, "cabi", include_cabi);
+    const cabi_options = b.addOptions();
+    cabi_options.addOption(bool, "cabi", include_cabi);
 
     const mod = b.addModule("zatex", .{
         .root_source_file = b.path("src/zatex.zig"),
         .target = target,
         .optimize = optimize,
     });
-    mod.addOptions("build_options", options);
+    mod.addOptions("build_options", cabi_options);
 
     // The installed distribution libraries ship ReleaseSmall to keep
     // the shipped package small (~364 KB static, ~245 KB dynamic vs
@@ -43,7 +33,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = .ReleaseSmall,
     });
-    dist_mod.addOptions("build_options", options);
+    dist_mod.addOptions("build_options", cabi_options);
 
     const lib = b.addLibrary(.{
         .name = "zatex",
@@ -53,9 +43,8 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     // Dynamic plugin artifact (issue 12): hosts like `read` load the
-    // subset profile at RUNTIME via dlopen (`libzatex.dylib` built with
-    // `-Dprofile=subset`), never at link time — plugins live outside
-    // host size budgets, and an absent dylib is a clean fallback.
+    // engine at RUNTIME via dlopen, never at link time — plugins live
+    // outside host size budgets, and an absent dylib is a clean fallback.
     const dylib = b.addLibrary(.{
         .name = "zatex",
         .root_module = dist_mod,
@@ -74,18 +63,11 @@ pub fn build(b: *std.Build) void {
     // so a package edge back would evaluate the same build.zig twice
     // in one graph (hard error). The dist lib never imports it, so
     // the shipped core stays MathML-free.
-    const mathml_options = b.addOptions();
-    mathml_options.addOption([]const u8, "profile", profile);
-    // Marker: the core options step carries exactly `{profile}`, so
-    // sharing it here would put a byte-identical file in two modules
-    // of one test binary (hard error). Profiles still agree.
-    mathml_options.addOption(bool, "zatex_mathml_emitter", true);
     const mathml_mod = b.addModule("zatex_mathml", .{
         .root_source_file = b.path("../zatex-mathml/src/zatex_mathml.zig"),
         .target = target,
         .optimize = optimize,
     });
-    mathml_mod.addOptions("build_options", mathml_options);
     mathml_mod.addImport("zatex", mod);
 
     // Host-side OpenType reader tests (metrics tooling, not the core).
@@ -123,7 +105,7 @@ pub fn build(b: *std.Build) void {
     // through this same instance.
     refhost_mod.addImport("otmath", otmath_mod);
     // Multi-face host font stack (issue #92; host/tool code, never
-    // in the subset library). Exposed by name so `zatex-png` links it.
+    // in the core library). Exposed by name so `zatex-png` links it.
     const fontstack_mod = b.addModule("fontstack", .{
         .root_source_file = b.path("src/fontstack.zig"),
         .target = target,
@@ -209,10 +191,8 @@ pub fn build(b: *std.Build) void {
     gallery_step.dependOn(&install_gallery.step);
 
     // ---- QA coverage module (issues #40-48; test-only, appended) ----
-    // `qa` (full profile) owns issues #40-48 plus the full half of the
-    // #45 profile-equality probe; `qa_subset` (subset profile, separate
-    // binary — one source file per module per compilation) owns the
-    // subset half over the shared `goldens/qa_profile_ir.json`.
+    // `qa` owns issues #40-48 plus the #45 render-identity probe over
+    // the shared `goldens/qa_profile_ir.json`.
     const qa_mod = b.addModule("qa", .{
         .root_source_file = b.path("src/qa.zig"),
         .target = target,
@@ -232,38 +212,17 @@ pub fn build(b: *std.Build) void {
     const run_qa_tests = b.addRunArtifact(qa_tests);
     run_qa_tests.setCwd(b.path("."));
     test_step.dependOn(&run_qa_tests.step);
-    const qa_subset_options = b.addOptions();
-    qa_subset_options.addOption([]const u8, "profile", @as([]const u8, "subset"));
-    const qa_subset_mod = b.addModule("qa_subset", .{
-        .root_source_file = b.path("src/qa_subset.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    qa_subset_mod.addOptions("build_options", qa_subset_options);
-    // Filtered to the subset probes: the binary links the engine
-    // sources (subset profile), whose full-profile tests must NOT run
-    // here (full-only constructs honestly fail under subset gates).
-    const qa_subset_tests = b.addTest(.{
-        .root_module = qa_subset_mod,
-        .filters = &.{ "qa45s", "subset profile" },
-    });
-    const run_qa_subset_tests = b.addRunArtifact(qa_subset_tests);
-    run_qa_subset_tests.setCwd(b.path("."));
-    test_step.dependOn(&run_qa_subset_tests.step);
     // ---- end QA coverage module ----
 
     // ---- Energy budget module (issue #160; test-only, appended) ----
     // Non-functional regression budgets for the #145-#159 energy work:
     // hook-call counts, pool high-water marks, MathML byte budgets,
     // struct-size ratchets. Deterministic counts only, never timings.
-    const energy_options = b.addOptions();
-    energy_options.addOption([]const u8, "profile", profile);
     const energy_mod = b.addModule("energy", .{
         .root_source_file = b.path("src/energy.zig"),
         .target = target,
         .optimize = optimize,
     });
-    energy_mod.addOptions("build_options", energy_options);
     energy_mod.addImport("zatex", mod);
     energy_mod.addImport("zatex_mathml", mathml_mod);
     const energy_tests = b.addTest(.{

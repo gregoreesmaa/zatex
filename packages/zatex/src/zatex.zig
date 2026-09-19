@@ -34,7 +34,6 @@ comptime {
 // ---------------------------------------------------------------------------
 
 pub const version = contract.version;
-pub const Profile = contract.Profile;
 pub const max_input_len = contract.max_input_len;
 pub const max_nesting_depth = contract.max_nesting_depth;
 pub const max_expand = contract.max_expand;
@@ -51,9 +50,6 @@ pub const MetricsProvider = contract.MetricsProvider;
 pub const LayoutError = contract.LayoutError;
 pub const Diag = contract.Diag;
 pub const FontId = contract.FontId;
-
-pub const profile: Profile =
-    std.meta.stringToEnum(Profile, build_options.profile) orelse .full;
 
 /// Reentrant layout path: `glyphs` backs every `Run.glyphs` slice in
 /// the returned `Layout`. Zero heap allocations; `NoSpace` when any
@@ -130,10 +126,6 @@ pub fn layout(
         var ring: [8192]u16 = undefined;
     };
     return layoutFull(source, options, provider, runs, rules, &S.ring);
-}
-
-test "profile option resolves to a known profile" {
-    try std.testing.expect(@intFromEnum(profile) <= @intFromEnum(Profile.full));
 }
 
 test "empty input lays out empty" {

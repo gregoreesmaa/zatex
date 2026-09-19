@@ -1,5 +1,5 @@
 {
-  "note": "Issue #45 cross-profile golden: subset-renderable sweep accepts with canonical IR dumps (stub provider: advance 500, rule 40, extents 700/250). qa_subset asserts subset renders these bytes; qa asserts full renders these bytes. Regenerate only with engine-side review (this file pins engine-vs-engine identity, not KaTeX output).",
+  "note": "Issue #45 render-identity golden: sweep accepts with canonical IR dumps (stub provider: advance 500, rule 40, extents 700/250). qa asserts the engine renders these bytes. Regenerate only with engine-side review (this file pins engine-vs-engine identity, not KaTeX output).",
   "rows": [
     {
       "id": "demo-gauss",
