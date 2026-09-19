@@ -102,6 +102,18 @@ This oracle is **triage-grade, never a gate** — the same standing as
   `docker run --rm --network none -v $PWD/work:/work
   zatex-tex-geometry /work/x.tex 0 /work/x.tex.json`.
 
+## Published results
+
+The committed triage report (`zig-out/oracle-diff/report.md`, the same
+file the pixel sweep owns) carries a `Pure-TeX geometry oracle` section
+with the narrow-corpus verdicts, so the TeX results are visible next to
+the pixel rows instead of living only in a workflow artifact.
+`tools/tex-geometry/append_report.py <report.md> <texgeo-dir>` writes
+it from real CI data (the `tex-oracle` artifact's `<id>.tex.json` +
+`<id>.zatex.json`): marker-delimited, idempotent, and loud on missing
+sides. Re-run it after any sweep that force-adds a fresh pixel table,
+so the tex section is never stranded on a stale table.
+
 ## CI wiring (`.github/workflows/tex-oracle.yml`)
 
 Runs on push to `main`, pull requests, and `workflow_dispatch`, on

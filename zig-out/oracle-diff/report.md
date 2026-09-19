@@ -538,3 +538,16 @@ Normalization per case: tight-crop ink bbox + 10px white pad, uniform rescale to
 | fcolorbox-empty  | `\fcolorbox{r}{y}{}` | 1.000 | 0.284 | missing | 1.000 | 0.284 | 26 | spec-ambiguous missing:luatex | ![Z](png/fcolorbox-empty.zatex.png)<br>![K](png/fcolorbox-empty.katex.png)<br>![M](png/fcolorbox-empty.mathjax.png) |
 | rej-ctrl-slash  | `a\/b` | n/a (no zatex render) | missing | missing | missing | 0.000 | 0 | spec-ambiguous missing:zatex | ![L](png/rej-ctrl-slash.luatex.png)<br>![M](png/rej-ctrl-slash.mathjax.png) |
 
+<!-- tex-geometry:start -->
+## Pure-TeX geometry oracle (issue #178)
+
+Box *construction* per row from stock Knuth TeX (DVI glyph/rule counts) against ZaTeX (`irdump` counts) — counts compare, metrics never do (Computer Modern vs host fonts). Triage attention like the pixel table above, never a gate; pinned KaTeX remains truth. Driver and schema: `docs/tex-oracle.md`.
+
+| row | TeX | ZaTeX | verdict |
+| --- | --- | --- | --- |
+| `agree-quad` | 2 glyphs/0 rules | 2 glyphs/0 rules | MATCH |
+| `frac-basic` | 2 glyphs/1 rules | 2 glyphs/1 rules | MATCH |
+| `agree-sum` | 21 glyphs/1 rules | 21 glyphs/1 rules | MATCH |
+
+Engine: TeX 3.141592653 (TeX Live 2022/Debian).
+<!-- tex-geometry:end -->
