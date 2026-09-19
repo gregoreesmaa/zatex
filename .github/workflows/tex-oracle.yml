@@ -1,0 +1,85 @@
+# Pure-TeX geometry oracle (issue #178).
+#
+# INFORMATIONAL ONLY — this workflow is NEVER a required status check and
+# NEVER blocks a merge. AGENTS.md section 4 bans pixel tests from required
+# gates, and cross-font geometry comparison is approximate by
+# construction (TeX sets Computer Modern, ZaTeX measures host fonts),
+# so counts compare and metrics never do. Pinned KaTeX 0.18.7 remains
+# the sole truth for accept/reject and geometry disputes: a MISMATCH
+# means "ask why", never "change ZaTeX". Do NOT add this job to
+# required status checks. See docs/tex-oracle.md.
+name: tex-oracle
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  geometry:
+    runs-on: ubuntu-latest
+    # Informational only: a TeX-side wobble or daemon hiccup must never
+    # red a PR. The uploaded report + JSON sides carry the signal.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Parser selfcheck (no daemon, no TeX)
+        run: python3 tools/tex-geometry/geometry.py --selfcheck
+
+      - name: Build irdump (ZaTeX construction counts)
+        working-directory: packages/zatex
+        run: zig build irdump
+
+      - name: Dump the ZaTeX side of the narrow corpus
+        run: |
+          mkdir -p /tmp/texgeo
+          python3 - <<'EOF'
+          import json, subprocess
+          corpus = json.load(open("tools/tex-geometry/corpus.json"))
+          for row in corpus:
+              cmd = ["packages/zatex/zig-out/bin/irdump"]
+              if row["display"]:
+                  cmd.append("--display")
+              cmd.append(row["tex"])
+              p = subprocess.run(cmd, capture_output=True, text=True)
+              if p.returncode != 0:
+                  print(f"== {row['id']}: irdump failed:\n{p.stderr}")
+                  raise SystemExit(1)
+              open(f"/tmp/texgeo/{row['id']}.zatex.json", "w").write(p.stderr)
+              print(f"== {row['id']}: {p.stderr.strip()}")
+          EOF
+
+      - name: Build the TeX geometry image (reproducibility proof)
+        run: docker build -t zatex-tex-geometry:1.0.0 tools/tex-geometry
+
+      - name: Extract the TeX side of the narrow corpus
+        run: |
+          python3 - <<'EOF'
+          import json, subprocess
+          corpus = json.load(open("tools/tex-geometry/corpus.json"))
+          tsv = []
+          for row in corpus:
+              open(f"/tmp/texgeo/{row['id']}.tex", "w").write(row["tex"])
+              tsv.append(f"{row['id']} {1 if row['display'] else 0}")
+          open("/tmp/texgeo/cases.tsv", "w").write("\n".join(tsv) + "\n")
+          EOF
+          docker run --rm --network none \
+            -v /tmp/texgeo:/work \
+            zatex-tex-geometry:1.0.0 batch /work
+          for f in /tmp/texgeo/*.tex.json; do echo "== $f"; cat "$f"; done
+
+      - name: Diff construction counts (report only, never fails)
+        run: python3 tools/tex-geometry/diff_geometry.py tools/tex-geometry/corpus.json /tmp/texgeo /tmp/texgeo/report.md
+
+      - name: Upload geometry report + both JSON sides
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tex-oracle
+          path: /tmp/texgeo
+          retention-days: 14

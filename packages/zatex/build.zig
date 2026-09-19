@@ -190,6 +190,26 @@ pub fn build(b: *std.Build) void {
     const gallery_step = b.step("gallery", "Render the corpus gallery HTML (informational, never a gate)");
     gallery_step.dependOn(&install_gallery.step);
 
+    // IR dump helper for the pure-TeX geometry oracle (issue #178):
+    // one formula -> construction-count JSON on stdout. A host tool
+    // (no fonts, stub metrics); the shipped lib is untouched, so the
+    // size gate cannot see it.
+    const irdump_mod = b.addModule("irdump", .{
+        .root_source_file = b.path("../../tools/ir_dump.zig"),
+        .target = target,
+        .optimize = optimize,
+        // `c_allocator` for argv/escape scratch (same as `zatex-png`).
+        .link_libc = true,
+    });
+    irdump_mod.addImport("zatex", mod);
+    const irdump_exe = b.addExecutable(.{
+        .name = "irdump",
+        .root_module = irdump_mod,
+    });
+    const install_irdump = b.addInstallArtifact(irdump_exe, .{});
+    const irdump_step = b.step("irdump", "Dump layout construction counts for one formula (tex-oracle helper, never a gate)");
+    irdump_step.dependOn(&install_irdump.step);
+
     // ---- QA coverage module (issues #40-48; test-only, appended) ----
     // `qa` owns issues #40-48 plus the #45 render-identity probe over
     // the shared `goldens/qa_profile_ir.json`.
