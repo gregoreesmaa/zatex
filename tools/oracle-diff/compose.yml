@@ -1,4 +1,4 @@
-# Oracle-diff sweep (issue #39): 4 services, all from pinned digests.
+# Oracle-diff sweep (issues #39, #178): 5 services, all from pinned digests.
 # No service has any network at run time (`network_mode: none`): images
 # are fully baked at build time, cases and fonts enter via mounts, and
 # orchestration happens from the host (tools/diff-oracles.sh), never
@@ -44,6 +44,19 @@ services:
       - ./work:/work:rw
       - ./fonts:/fonts:ro
       - ../..:/repo:ro
+
+  # DVI-route TeX oracle (issue #178): the same image the tex-oracle
+  # workflow builds (one Dockerfile, two consumers), driven here in
+  # batch over the sweep's cases.tsv. Self-contained (TeX Live ships
+  # its fonts), so it mounts only the case/render workdir.
+  tex-shot:
+    build:
+      context: ../tex-geometry
+      dockerfile: Dockerfile
+    image: zatex-tex-geometry:1.0.0
+    network_mode: none
+    volumes:
+      - ./work:/work:rw
 
   zatex-shot:
     build:

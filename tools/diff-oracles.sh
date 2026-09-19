@@ -1,8 +1,8 @@
 #!/bin/sh
 # tools/diff-oracles.sh — on-demand multi-engine differential render report.
 #
-# Renders a corpus through ZaTeX + 3 oracle engines (KaTeX 0.18.7,
-# MathJax v3, TeX Live pdflatex), each in Docker from pinned images with
+# Renders a corpus through ZaTeX + 4 oracle engines (KaTeX 0.18.7,
+# MathJax v3, TeX Live pdflatex, TeX Live DVI route), each in Docker from pinned images with
 # no network at run time, then writes the worst-first triage report.
 #
 # INFORMATIONAL ONLY. This is never a CI gate (AGENTS.md section 4 bans
@@ -79,7 +79,8 @@ EOF
 # Drop stale renders first: a failed engine must report missing,
 # never silently compare last run's PNG.
 rm -f "$od"/work/*.zatex.png "$od"/work/*.katex.png \
-      "$od"/work/*.mathjax.png "$od"/work/*.luatex.png
+      "$od"/work/*.mathjax.png "$od"/work/*.luatex.png \
+      "$od"/work/*.tex.png
 # One container per engine for the whole cases.tsv (issue #69: ~4
 # container starts and ~2 browser launches instead of ~4 per case).
 # Engines run concurrently — each `compose run` is its own container
@@ -97,8 +98,10 @@ $compose run --rm mathjax-shot batch /work < /dev/null \
     >"$od/work/mathjax.log" 2>&1 || echo "$?" >"$od/work/mathjax.status" &
 $compose run --rm luatex-shot batch /work < /dev/null \
     >"$od/work/luatex.log" 2>&1 || echo "$?" >"$od/work/luatex.status" &
+$compose run --rm tex-shot batch /work < /dev/null \
+    >"$od/work/tex.log" 2>&1 || echo "$?" >"$od/work/tex.status" &
 wait
-for e in zatex katex mathjax luatex; do
+for e in zatex katex mathjax luatex tex; do
   if [ -f "$od/work/$e.status" ]; then
     echo "diff-oracles: $e batch failed (see $od/work/$e.log)" >&2
     fail=1
@@ -111,13 +114,16 @@ done
 # Unmatched globs are skipped quietly by crop.py.
 # shellcheck disable=SC2086
 if ls "$od/work"/*.zatex.png "$od/work"/*.katex.png \
-      "$od/work"/*.mathjax.png "$od/work"/*.luatex.png >/dev/null 2>&1; then
+      "$od/work"/*.mathjax.png "$od/work"/*.luatex.png \
+      "$od/work"/*.tex.png >/dev/null 2>&1; then
   python3 "$od/crop.py" "$od/work"/*.zatex.png "$od/work"/*.katex.png \
-      "$od/work"/*.mathjax.png "$od/work"/*.luatex.png || fail=1
+      "$od/work"/*.mathjax.png "$od/work"/*.luatex.png \
+      "$od/work"/*.tex.png || fail=1
 fi
 
 for f in "$od/work"/*.zatex.png "$od/work"/*.katex.png \
-         "$od/work"/*.mathjax.png "$od/work"/*.luatex.png; do
+         "$od/work"/*.mathjax.png "$od/work"/*.luatex.png \
+         "$od/work"/*.tex.png; do
   [ -f "$f" ] && cp "$f" "$raw/"
 done
 

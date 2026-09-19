@@ -16,6 +16,18 @@
 extern "C" {
 #endif
 
+// [height_above, depth_below] at 1000 units. Must match cabi.zig
+// `CExtents` field-for-field.
+typedef struct zatex_extents {
+    int32_t ha, db;
+} zatex_extents_t;
+
+// True ink box at 1000 units, y up from the baseline. Must match
+// cabi.zig `CInkBox` field-for-field.
+typedef struct zatex_inkbox {
+    int32_t x0, y0, x1, y1;
+} zatex_inkbox_t;
+
 typedef struct zatex_metrics {
     const void *ctx;
     // Glyph id for (font, codepoint). Id 0 means missing (issue
@@ -32,6 +44,14 @@ typedef struct zatex_metrics {
     // Optional (may be NULL, v3): MathKern cut-in for glyph at correction
     // height; corner: 0 top_right, 1 top_left, 2 bottom_right, 3 bottom_left.
     int32_t (*kern_correction)(const void *ctx, uint16_t font, uint16_t glyph, int32_t height, uint32_t corner);
+    // Optional (may be NULL, v4): [height_above, depth_below] of glyph
+    // at 1000 units (blank glyphs report [0, 0]). Null keeps the uniform
+    // 700/250 approximation, bit-identical to v3.
+    zatex_extents_t (*extents)(const void *ctx, uint16_t font, uint16_t glyph);
+    // Optional (may be NULL, v4): true ink box at 1000 units, y up from
+    // the baseline, unclipped (blank glyphs report all zeros). Null
+    // keeps exact v3 behavior (e.g. advance-edge vinculum starts).
+    zatex_inkbox_t (*ink_bounds)(const void *ctx, uint16_t font, uint16_t glyph);
 } zatex_metrics_t;
 
 typedef struct zatex_run {

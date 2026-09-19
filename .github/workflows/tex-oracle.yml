@@ -71,28 +71,6 @@ jobs:
               print(f"== {row['id']}: {p.stderr.strip()}")
           EOF
 
-      # Raw ZaTeX renders for the pixel sim (always fresh: the live
-      # side). zatex-png resolves the vendored Latin Modern fixture
-      # from its package dir, like the screenshots job.
-      - name: Build zatex-png and render the ZaTeX side
-        working-directory: packages/zatex-png
-        run: |
-          zig build
-          python3 - <<'EOF'
-          import json, subprocess
-          corpus = json.load(open("../../tools/tex-geometry/corpus.json"))
-          for row in corpus:
-              cmd = ["./zig-out/bin/zatex-png", "--px", "48"]
-              if row["display"]:
-                  cmd.append("--display")
-              cmd += [row["tex"], f"/tmp/texgeo/{row['id']}.zatex.png"]
-              p = subprocess.run(cmd, capture_output=True, text=True)
-              if p.returncode != 0:
-                  print(f"== {row['id']}: zatex-png failed:\n{p.stdout}\n{p.stderr}")
-                  raise SystemExit(1)
-              print(f"== {row['id']}: rendered")
-          EOF
-
       - name: Build the TeX geometry image (reproducibility proof)
         if: steps.texcache.outputs.cache-hit != 'true' || github.event.inputs.force_refresh == 'true'
         run: docker build -t zatex-tex-geometry:1.0.0 tools/tex-geometry
@@ -123,12 +101,6 @@ jobs:
         with:
           path: /tmp/texgeo
           key: texgeo-${{ hashFiles('tools/tex-geometry/**') }}
-
-      # TeX pixel sims through the shared normalize+SSIM math
-      # (report.py); needs no daemon. Normalized TeX renders land in
-      # /tmp/texgeo/norm for the committed report.
-      - name: Score ZaTeX-vs-TeX pixels (shared oracle math)
-        run: python3 tools/tex-geometry/tex_score.py tools/tex-geometry/corpus.json /tmp/texgeo
 
       - name: Diff construction counts (report only, never fails)
         run: python3 tools/tex-geometry/diff_geometry.py tools/tex-geometry/corpus.json /tmp/texgeo /tmp/texgeo/report.md
