@@ -4,9 +4,11 @@
 //! MathML elements without measuring anything. Positions, sizes, and
 //! spacing live only in `layout.zig`.
 const std = @import("std");
-const contract = @import("contract.zig");
-const parse = @import("parse.zig");
-const symbols = @import("symbols.zig");
+// Resolved through the core package (this package's only dependency;
+// the core never depends back).
+const contract = @import("zatex").contract;
+const parse = @import("zatex").parse;
+const symbols = @import("zatex").symbols;
 
 const Error = contract.LayoutError;
 const Idx = parse.Idx;
@@ -1587,7 +1589,7 @@ const Writer = struct {
         return face.fam orelse f;
     }
 
-    fn atom(self: *Writer, class: @import("symbols.zig").AtomClass, fam: parse.FontFam, c: u21, textord: bool, bare: bool) void {
+    fn atom(self: *Writer, class: @import("zatex").symbols.AtomClass, fam: parse.FontFam, c: u21, textord: bool, bare: bool) void {
         switch (class) {
             // KaTeX `atom` ParseNodes (every symbol group except
             // mathord/textord) render as mo — inner symbols included.
@@ -2542,4 +2544,164 @@ test "sized newline emits break height (issue #144)" {
     var w2 = Writer{ .pc = &pc2, .buf = &out2 };
     try w2.node(root2, .{ .fam = null, .script = false });
     try std.testing.expect(std.mem.indexOf(u8, out2[0..w2.pos], "height=") == null);
+}
+
+// ---- Moved from the core (packages/zatex/src/zatex.zig): these pin
+// the public render surface from this package's side. ----
+
+test "accept: mathml maps frac structurally" {
+    var out: [256]u8 = undefined;
+    const s = try render("\\frac12", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, s, "<mfrac>") != null);
+}
+
+test "mathml render is deterministic over hostile inputs" {
+    // Render half of the core determinism probe (same fixed-seed
+    // pieces): every input renders the same bytes twice and never
+    // hangs or panics.
+    var mbuf_a: [2048]u8 = undefined;
+    var mbuf_b: [2048]u8 = undefined;
+    const pieces = [_][]const u8{ "x", "y", "2", "+", "-", "{", "}", "^", "_",
+        "\\frac", "\\sum", "\\alpha", "\\text{a}",
+        "(", ")", " ", "&", "#", "$", "\\left(", "\\", "~", ",", ";" };
+    var prng = std.Random.DefaultPrng.init(0x5EED);
+    var rnd = prng.random();
+    var i: usize = 0;
+    while (i < 1500) : (i += 1) {
+        var buf: [256]u8 = undefined;
+        var len: usize = 0;
+        var k: usize = 0;
+        const n = 1 + rnd.uintLessThan(usize, 24);
+        while (k < n and len < buf.len) : (k += 1) {
+            const pc = pieces[rnd.uintLessThan(usize, pieces.len)];
+            const m = @min(pc.len, buf.len - len);
+            @memcpy(buf[len..][0..m], pc[0..m]);
+            len += m;
+        }
+        const src = buf[0..len];
+        const m1 = render(src, .{}, &mbuf_a);
+        const m2 = render(src, .{}, &mbuf_b);
+        if (m1) |s1| {
+            const s2 = try m2;
+            try std.testing.expectEqualStrings(s1, s2);
+        } else |e1| {
+            try std.testing.expectError(e1, m2);
+        }
+    }
+}
+
+test "mathml truncation is NoSpace, never panic" {
+    var mbuf: [8]u8 = undefined;
+    try std.testing.expectError(error.NoSpace, render("\\frac{a}{b}", .{}, &mbuf));
+    // Empty input still needs the envelope: a zero-length buffer
+    // fails honestly instead of truncating.
+    var mbuf0: [0]u8 = undefined;
+    try std.testing.expectError(error.NoSpace, render("", .{}, &mbuf0));
+    var mbuf1: [256]u8 = undefined;
+    const s = try render("", .{}, &mbuf1);
+    try std.testing.expect(s.len > 0);
+}
+
+test "mathml envelope carries semantics and the raw source" {
+    var out: [1024]u8 = undefined;
+    const s = try render("x^2", .{}, &out);
+    try std.testing.expect(std.mem.startsWith(u8, s, "<math xmlns=\"http://www.w3.org/1998/Math/MathML\">"));
+    try std.testing.expect(std.mem.endsWith(u8, s, "</annotation></semantics></math>"));
+    try std.testing.expect(std.mem.indexOf(u8, s, "<annotation encoding=\"application/x-tex\">x^2</annotation>") != null);
+    var dbl: [1024]u8 = undefined;
+    const d = try render("x^2", .{ .display_mode = true }, &dbl);
+    try std.testing.expect(std.mem.indexOf(u8, d, "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">") != null);
+    try std.testing.expect(std.mem.indexOf(u8, s, "display=") == null);
+}
+
+test "mathml annotation escapes markup-significant bytes" {
+    // \verb is verbatim, so every ASCII escape target rides along
+    // and still parses.
+    var out: [1024]u8 = undefined;
+    const s = try render("\\verb|A<B>&\"C\"'D|", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, s, "A&lt;B&gt;&amp;&quot;C&quot;&#x27;D") != null);
+    // The escaped bytes never terminate the annotation early.
+    try std.testing.expect(std.mem.indexOf(u8, s, "</annotation>") != null);
+    try std.testing.expect(std.mem.endsWith(u8, s, "</annotation></semantics></math>"));
+}
+
+test "mathml tag table pins one element per family" {
+    const Case = struct { tex: []const u8, tag: []const u8 };
+    const cases = [_]Case{
+        .{ .tex = "\\frac12", .tag = "<mfrac>" },
+        .{ .tex = "\\sqrt{x}", .tag = "<msqrt>" },
+        .{ .tex = "\\sqrt[3]{x}", .tag = "<mroot>" },
+        .{ .tex = "x^2", .tag = "<msup>" },
+        .{ .tex = "x_2", .tag = "<msub>" },
+        .{ .tex = "x_2^3", .tag = "<msubsup>" },
+        .{ .tex = "\\overline{x}", .tag = "<mover>" },
+        .{ .tex = "\\underline{x}", .tag = "<munder>" },
+        .{ .tex = "\\hat{x}", .tag = "<mover>" },
+        .{ .tex = "\\begin{matrix}a&b\\\\c&d\\end{matrix}", .tag = "<mtable>" },
+        .{ .tex = "\\text{hi}", .tag = "<mtext>" },
+        .{ .tex = "12", .tag = "<mn>" },
+        .{ .tex = "+", .tag = "<mo>" },
+        .{ .tex = "\\alpha", .tag = "<mi>" },
+        .{ .tex = "\\boxed{x}", .tag = "<menclose" },
+        .{ .tex = "\\phantom{x}", .tag = "<mphantom>" },
+        .{ .tex = "\\color{red}{x}", .tag = "<mstyle" },
+        .{ .tex = "\\boldsymbol{x}", .tag = "<mstyle" },
+    };
+    for (cases) |c| {
+        var buf: [2048]u8 = undefined;
+        const s = render(c.tex, .{}, &buf) catch |e| {
+            std.debug.print("\ntag table: {s} failed with {s}\n", .{ c.tex, @errorName(e) });
+            return e;
+        };
+        std.testing.expect(std.mem.indexOf(u8, s, c.tag) != null) catch |e| {
+            std.debug.print("\ntag table: {s} missing {s}, got:\n{s}\n", .{ c.tex, c.tag, s });
+            return e;
+        };
+    }
+}
+
+test "mathml accepts exactly what layout accepts" {
+    // The emitter shares the core parser/expander, so accept/reject
+    // must agree error-for-error (the sweep checks layout rejects and
+    // MathML tags on accepts, but never that a layout reject also
+    // fails to render).
+    const zatex_core = @import("zatex");
+    const S = struct {
+        fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
+            return 500;
+        }
+        fn ruleThickness(_: *const anyopaque, _: u16, _: zatex_core.RuleKind) i32 {
+            return 40;
+        }
+    };
+    const prov: zatex_core.MetricsProvider = .{
+        .ctx = &.{},
+        .glyphId = S.glyphId,
+        .advance = S.advance,
+        .ruleThickness = S.ruleThickness,
+    };
+    const cases = [_][]const u8{
+        "x",           "x^2_1",       "\\alpha+\\beta",
+        "\\frac{1}{2}", "\\sqrt{2}",   "\\sum_{i=1}^{n} i",
+        "\\color{red}{x}+y", "\\verb|x|", "\\text{a+b}",
+        "\\left(\\frac12\\right)", "\\begin{matrix}a&b\\\\c&d\\end{matrix}",
+        "\\nope",      "{x",          "\\def\\a{\\a}\\a",
+    };
+    for (cases) |src| {
+        var runs: [64]zatex_core.ir.Run = undefined;
+        var rules: [16]zatex_core.ir.Rule = undefined;
+        var glyphs: [1024]u16 = undefined;
+        var mbuf: [4096]u8 = undefined;
+        const l = zatex_core.layoutFull(src, .{}, prov, &runs, &rules, &glyphs);
+        const m = render(src, .{}, &mbuf);
+        if (l) |_| {
+            const s = try m;
+            try std.testing.expect(s.len > 0);
+        } else |e1| {
+            try std.testing.expectError(e1, m);
+        }
+    }
 }

@@ -241,22 +241,6 @@ export fn zatex_layout_utf8(
     return STATUS_OK;
 }
 
-/// MathML Core serialization into caller-owned `out`. Returns the
-/// byte count, or a negative status on error.
-export fn zatex_mathml_utf8(
-    src_ptr: ?[*]const u8,
-    src_len: usize,
-    display_mode: bool,
-    out_ptr: ?[*]u8,
-    out_cap: usize,
-) isize {
-    const out = (out_ptr orelse return -STATUS_NO_SPACE)[0..out_cap];
-    if (src_len > zatex.max_input_len) return -STATUS_TOO_LONG;
-    const src = (src_ptr orelse return -STATUS_NO_SPACE)[0..src_len];
-    const s = zatex.mathml(src, .{ .display_mode = display_mode }, out) catch |e| return -toStatus(e);
-    return @intCast(s.len);
-}
-
 /// Packed semantic version: major << 16 | minor << 8 | patch.
 export fn zatex_version() u32 {
     return (@as(u32, zatex.version.major) << 16) |
@@ -403,13 +387,6 @@ test "cabi reports NoSpace when caller buffers overflow" {
     const st_rules = zatex_layout_utf8(src.ptr, src.len, false, &m, &runs, runs.len, &tiny_rules, tiny_rules.len, &glyphs, glyphs.len, &out);
     try std.testing.expectEqual(STATUS_NO_SPACE, st_rules);
 }
-test "cabi mathml truncates with negative NoSpace" {
-    var tiny: [8]u8 = undefined;
-    const src = "\\frac{a}{b}";
-    const n = zatex_mathml_utf8(src.ptr, src.len, false, &tiny, tiny.len);
-    try std.testing.expectEqual(-STATUS_NO_SPACE, n);
-}
-
 test "cabi adversarial provider stays total and deterministic" {
     const S = struct {
         fn adv0(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
@@ -462,12 +439,4 @@ test "cabi adversarial provider stays total and deterministic" {
             try std.testing.expectEqual(o1.nrules, o2.nrules);
         }
     }
-}
-
-test "cabi mathml serializes" {
-    var out: [256]u8 = undefined;
-    const src = "\\frac12";
-    const n = zatex_mathml_utf8(src.ptr, src.len, false, &out, out.len);
-    try std.testing.expect(n > 0);
-    try std.testing.expect(std.mem.indexOf(u8, out[0..@intCast(n)], "<mfrac>") != null);
 }

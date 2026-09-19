@@ -1,9 +1,11 @@
 //! ZaTeX — KaTeX-compatible LaTeX math engine (native Zig).
 //!
 //! Library root: public API plus the engine wiring (parse → layout →
-//! IR/MathML). The frozen v1 shapes live in `contract.zig` and are
+//! IR). MathML lives in the `zatex-mathml` package now (thin
+//! structural walker over this engine's parse tree). The frozen v1 shapes live in `contract.zig` and are
 //! re-exported here unchanged; the output contract lives in `ir.zig`.
 const std = @import("std");
+const build_options = @import("build_options");
 
 pub const ir = @import("ir.zig");
 pub const parse = @import("parse.zig");
@@ -14,12 +16,14 @@ const engine = @import("layout.zig");
 /// high-water marks without duplicating the engine wiring; the
 /// stable embedding surface stays `layoutFull`/`layoutDiag`/C ABI.
 pub const layout_core = engine;
-const mathml_mod = @import("mathml.zig");
 pub const contract = @import("contract.zig");
 
-// C ABI (issue 9): exports + conformance tests ride along with the lib.
+// C ABI (issue 9): exports + conformance tests ride along with the lib,
+// unless `-Dcabi=false` (a downstream package with its own C surface —
+// `zatex-mathml` — where duplicate exports across linked libs must not
+// happen; see packages/zatex/build.zig).
 comptime {
-    _ = @import("cabi.zig");
+    if (build_options.cabi) _ = @import("cabi.zig");
 }
 
 // ---------------------------------------------------------------------------
@@ -99,12 +103,6 @@ pub fn layoutInner(
     var lc = engine.LayCtx.init(&pc, provider);
     const style: parse.Style = if (options.display_mode) .D else .T;
     return engine.layout(&lc, root, style, runs, rules, glyphs);
-}
-
-/// MathML Core serialization of one formula into caller-owned `out`.
-/// Pure structural mapping over the parse tree — no layout math.
-pub fn mathml(source: []const u8, options: LayoutOptions, out: []u8) LayoutError![]const u8 {
-    return mathml_mod.render(source, options, out);
 }
 
 /// Lay out one formula into caller-owned buffers (zero allocations).
@@ -264,8 +262,6 @@ test "adversarial inputs are total and deterministic" {
     var runs_b: [64]ir.Run = undefined;
     var rules_b: [16]ir.Rule = undefined;
     var glyphs_b: [1024]u16 = undefined;
-    var mbuf_a: [2048]u8 = undefined;
-    var mbuf_b: [2048]u8 = undefined;
     const pieces = [_][]const u8{ "x", "y", "2", "+", "-", "{", "}", "^", "_",
         "\\frac", "\\sum", "\\alpha", "\\text{a}",
         "(", ")", " ", "&", "#", "$", "\\left(", "\\", "~", ",", ";" };
@@ -298,14 +294,8 @@ test "adversarial inputs are total and deterministic" {
             try std.testing.expectError(e1, r2);
             try std.testing.expect(da.offset <= src.len);
         }
-        const m1 = mathml(src, .{}, &mbuf_a);
-        const m2 = mathml(src, .{}, &mbuf_b);
-        if (m1) |s1| {
-            const s2 = try m2;
-            try std.testing.expectEqualStrings(s1, s2);
-        } else |e1| {
-            try std.testing.expectError(e1, m2);
-        }
+        // MathML determinism moved with the emitter (`zatex-mathml`
+        // package, same seed and pieces).
     }
     // Structured worst cases with exact errors.
     var deep: [200]u8 = undefined;
@@ -331,12 +321,6 @@ test "accept: user macro expands" {
     var glyphs_buf: [32]u16 = undefined;
     const l = try layoutOk("\\newcommand{\\f}{x}\\f", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(usize, 1), l.runs.len);
-}
-
-test "accept: mathml maps frac structurally" {
-    var out: [256]u8 = undefined;
-    const s = try mathml("\\frac12", .{}, &out);
-    try std.testing.expect(std.mem.indexOf(u8, s, "<mfrac>") != null);
 }
 
 test "accept: empty input lays out empty" {
@@ -398,8 +382,6 @@ test "caller buffers: exhaustion is NoSpace, never panic" {
         error.NoSpace,
         layoutFull("wxyz", .{}, testProvider(), &runs_buf, &rules_buf, &glyphs3),
     );
-    var mbuf: [8]u8 = undefined;
-    try std.testing.expectError(error.NoSpace, mathml("\\frac{a}{b}", .{}, &mbuf));
     // Empty input needs nothing: zero-length buffers still serve it.
     var runs0: [0]ir.Run = undefined;
     var rules00: [0]ir.Rule = undefined;

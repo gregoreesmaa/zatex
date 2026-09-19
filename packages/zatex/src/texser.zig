@@ -10,6 +10,7 @@
 //! silently changing meaning.
 const std = @import("std");
 const zatex = @import("zatex");
+const zatex_mathml = @import("zatex_mathml");
 const parse = zatex.parse;
 const symbols = zatex.symbols;
 const contract = zatex.contract;
@@ -1172,8 +1173,8 @@ test "serializer: round-trip keeps MathML identical" {
             };
             var m1: [8192]u8 = undefined;
             var m2: [8192]u8 = undefined;
-            const a = try zatex.mathml(src, opts, &m1);
-            const b = try zatex.mathml(tex, opts, &m2);
+            const a = try zatex_mathml.render(src, opts, &m1);
+            const b = try zatex_mathml.render(tex, opts, &m2);
             // The normalized source re-annotates by design (issue
             // #119); the body must still be byte-identical.
             try expectSameBody(src, tex, a, b);
@@ -1195,8 +1196,8 @@ test "serializer: equation tag round-trips in display mode" {
         var m1: [8192]u8 = undefined;
         var m2: [8192]u8 = undefined;
         const opts: zatex.LayoutOptions = .{ .display_mode = true };
-        const a = try zatex.mathml(c[0], opts, &m1);
-        const b = try zatex.mathml(tex, opts, &m2);
+        const a = try zatex_mathml.render(c[0], opts, &m1);
+        const b = try zatex_mathml.render(tex, opts, &m2);
         try expectSameBody(c[0], tex, a, b);
     }
 }
@@ -1208,8 +1209,8 @@ test "style scoping: color is transparent to atoms and spacing" {
     const opts: zatex.LayoutOptions = .{};
     var m1: [4096]u8 = undefined;
     var m2: [4096]u8 = undefined;
-    const plain = try zatex.mathml("a+b=c", opts, &m1);
-    const styled = try zatex.mathml("\\color{red}{a+b=c}", opts, &m2);
+    const plain = try zatex_mathml.render("a+b=c", opts, &m1);
+    const styled = try zatex_mathml.render("\\color{red}{a+b=c}", opts, &m2);
     // Same mo sequence: plus and equals stay first-class atoms.
     for ([_][]const u8{ "<mo>+</mo>", "<mo>=</mo>" }) |mo| {
         try std.testing.expect(std.mem.indexOf(u8, plain, mo) != null);
@@ -1231,7 +1232,7 @@ test "style scoping: color is transparent to atoms and spacing" {
 
 test "style scoping: colorbox keeps text, colors the box" {
     var mbuf: [4096]u8 = undefined;
-    const s = try zatex.mathml("\\colorbox{yellow}{hi}", .{}, &mbuf);
+    const s = try zatex_mathml.render("\\colorbox{yellow}{hi}", .{}, &mbuf);
     try std.testing.expect(std.mem.indexOf(u8, s, "background") != null);
     try std.testing.expect(std.mem.indexOf(u8, s, ">hi</mtext>") != null);
 }

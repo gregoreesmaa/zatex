@@ -19,8 +19,9 @@ no untracked float in the contract.
   `diag` strokes a `thick`-wide butt-cap diagonal across its rect
   instead (`\cancel` family, issue #107) — hosts without line stroking
   skip those rules rather than filling the rect.
-* **Emitters** walk the same tree: MathML ships in the core,
-  `packages/zatex-png` renders PNG (macOS-only backend), SVG is future.
+* **Emitters** walk the same tree: MathML ships in
+  `packages/zatex-mathml`, `packages/zatex-png` renders PNG
+  (macOS-only backend), SVG is future.
   Emitters contain no layout math. Trust posture for embedding the
   MathML (sanitizer allowlist, CSP, URL filtering) lives in
   `docs/parity.md` ("Host security guidance") — the engine applies
@@ -45,6 +46,7 @@ The message is what the host renders in its error fallback: source
 text plus message bytes as real text (never hover/tooltip alone),
 conventionally painted `#cc0000` — the full recipe lives in
 `docs/parity.md` ("Error fallback (host recipe)"). `zatex_mathml_utf8`
+(living in `packages/zatex-mathml`, alongside the core library)
 returns only a status (bytes written or `-status`); hosts needing the
 message call the layout entry for the same input.
 

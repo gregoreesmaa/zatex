@@ -34,7 +34,9 @@ principles (adapted from `read`: same discipline, new domain).
   `parse.opBase`/`useLimits`, glue widths via `parse.space_*`) are owned
   by the core and reused, never re-derived. Geometric emitters (native
   runs, later SVG/PNG) are thin walkers over the box tree. The MathML
-  emitter is a thin *structural* walker over the AST (KaTeX builds its
+  emitter (packaged as `zatex-mathml`, compiled against the core's
+  parse tree but never linked into the core library) is a thin
+  *structural* walker over the AST (KaTeX builds its
   MathML from its parse tree too — the positioned box tree has already
   lost the semantics MathML needs); it takes no `MetricsProvider`, so
   measuring there is impossible by construction. No layout math in

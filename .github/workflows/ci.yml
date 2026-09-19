@@ -15,6 +15,9 @@ jobs:
       - name: Run core tests (incl. pinned-KaTeX sweep)
         working-directory: packages/zatex
         run: zig build test --summary all
+      - name: Run zatex-mathml tests
+        working-directory: packages/zatex-mathml
+        run: zig build test --summary all
       - name: Run zatex-png tests
         working-directory: packages/zatex-png
         run: zig build test --summary all
