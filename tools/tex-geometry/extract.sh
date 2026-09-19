@@ -51,11 +51,14 @@ if ! (cd "$cwork" && dvipdfmx -o case.pdf case.dvi >/dev/null 2>&1); then
   rm -rf "$cwork"
   return 1
 fi
-if ! pdftoppm -png -r 300 -singlefile "$cwork/case.pdf" "${out%.json}" >/dev/null 2>&1; then
+# Atomic publish (tmp + rename): a killed run must never leave a
+# partial PNG that a later reuse pass mistakes for a finished render.
+if ! pdftoppm -png -r 300 -singlefile "$cwork/case.pdf" "${out%.json}.tmp" >/dev/null 2>&1; then
   echo "extract: pdftoppm failed for $texfile" >&2
   rm -rf "$cwork"
   return 1
 fi
+mv "${out%.json}.tmp.png" "${out%.json}.png"
 # Keep the raw dump beside the JSON (diagnostic: absolute positions,
 # font selections) — the CI artifact carries both.
 cp "$cwork/case.dump" "${out%.json}.dump"
@@ -65,11 +68,27 @@ rm -rf "$cwork"
 if [ "${1:-}" = batch ]; then
   work=$2
   fail=0
+  reused=0
+  rendered=0
   while read -r id display; do
     [ -n "$id" ] || continue
+    out="$work/$id.tex.png"
+    # Render reuse, opt-in via ORACLE_REUSE=1 (see tools/diff-oracles.sh).
+    # Off by default so other batch consumers (notably the tex-oracle
+    # workflow, whose force-refresh runs on a restored workdir) always
+    # re-extract. `==` prints on actual renders only.
+    if [ "${ORACLE_REUSE:-0}" = "1" ] && [ -s "$out" ]; then
+      reused=$((reused + 1))
+      continue
+    fi
     echo "== $id"
-    extract_case "$work/$id.tex" "$display" "$work/$id.tex.json" || fail=1
+    if extract_case "$work/$id.tex" "$display" "$work/$id.tex.json"; then
+      rendered=$((rendered + 1))
+    else
+      fail=1
+    fi
   done < "$work/cases.tsv"
+  echo "tex: reused $reused, rendered $rendered"
   exit $fail
 fi
 extract_case "$1" "$2" "$3"
