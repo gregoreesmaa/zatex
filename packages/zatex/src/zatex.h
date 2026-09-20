@@ -44,7 +44,13 @@ typedef struct zatex_metrics {
     // glyphs mis-centers accents by ~half an em. The bridge's 500 for
     // a NULL advance hook is totality, not correctness.
     int32_t (*advance)(const void *ctx, uint16_t font, uint16_t glyph);
-    // kind: 0 fraction_bar, 1 radical, 2 overline, 3 underline.
+    // kind selects the rule (C ABI order = contract.zig `RuleKind`
+    // declaration order, bridged via @intFromEnum — NOT MATH-table
+    // order, so fraction/over/under/radical is the wrong guess):
+    //   0 = fraction_bar,
+    //   1 = radical,
+    //   2 = overline (also used for underlines today),
+    //   3 = underline (reserved: never requested yet).
     // Thousandths; <= 0 reads as 40 (floored further by the caller's
     // min_rule_thickness option).
     int32_t (*rule_thickness)(const void *ctx, uint16_t font, uint32_t kind);
