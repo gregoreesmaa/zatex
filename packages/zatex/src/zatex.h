@@ -61,7 +61,9 @@ typedef struct zatex_metrics {
     // Optional (may be NULL): OpenType MATH italic correction scaled to
     // thousandths (truncate toward zero). The core looks it up on the
     // laid-out glyph, halves it, and adds the KaTeX Math-Italic skew;
-    // NULL reads 0 (upright accents).
+    // NULL reads 0 (upright accents). No right-side-bearing fallback
+    // (issue #206 rejects it: measured RSB anti-correlates with MATH
+    // corrections, and KaTeX reads the MATH value, never a bearing).
     int32_t (*italic_correction)(const void *ctx, uint16_t font, uint16_t glyph);
     // Optional (may be NULL, v3): MathKern cut-in for glyph at correction
     // height; corner: 0 top_right, 1 top_left, 2 bottom_right, 3 bottom_left.
@@ -69,7 +71,9 @@ typedef struct zatex_metrics {
     // the script gap); other corners return 0. NULL/0: no cut-in.
     int32_t (*kern_correction)(const void *ctx, uint16_t font, uint16_t glyph, int32_t height, uint32_t corner);
     // Optional (may be NULL, v4): [height_above, depth_below] of glyph
-    // at 1000 units (blank glyphs report [0, 0]). Null keeps the uniform
+    // at 1000 units (blank glyphs report [0, 0]). Null derives the
+    // vertical slice of the ink box when one is present (issue #206:
+    // ha = max(0, y1), db = max(0, -y0)), else keeps the uniform
     // 700/250 approximation, bit-identical to v3. True extents shift
     // vertical clearance (e.g. accent clearance) versus the reference.
     zatex_extents_t (*extents)(const void *ctx, uint16_t font, uint16_t glyph);

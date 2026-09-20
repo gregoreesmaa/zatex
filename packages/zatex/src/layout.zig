@@ -236,6 +236,21 @@ pub const LayCtx = struct {
     }
     fn extents(self: *LayCtx, font: u16, glyph: u16) [2]i32 {
         if (self.provider.extents) |f| return f(self.provider.ctx, font, glyph);
+        // NULL derivation (issue #206): the vertical slice of the ink
+        // box — `ha = max(0, y1)`, `db = max(0, -y0)`. Bit-identical
+        // to outline-derived extents from the same box (both round the
+        // shared outline outward before the thousandths scale), so a
+        // file-less host passing glyph ids, exact advances, and ink
+        // boxes with NULL extents lays out like the file provider.
+        // Degenerate (all-zero) ink stays on the uniform 700/250
+        // approximation: all-zero means blank-or-uncovered, and the
+        // core must keep ignoring uncovered glyphs exactly (v3).
+        if (self.ink(font, glyph)) |b| {
+            // All-zero is the blank-or-uncovered marker (see `ink`).
+            if (b[0] != 0 or b[1] != 0 or b[2] != 0 or b[3] != 0) {
+                return .{ @max(@as(i32, 0), b[3]), @max(@as(i32, 0), -b[1]) };
+            }
+        }
         return .{ 700, 250 };
     }
     /// True ink box `[x_min, y_min, x_max, y_max]`, y up from the
