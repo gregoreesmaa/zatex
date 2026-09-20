@@ -132,21 +132,93 @@ pub const KernCorner = enum(u32) {
 /// identity, advances, and rule weights arrive here in integer font
 /// units. `font` is the host's own namespace, opaque to the core.
 ///
-/// Optional hooks (default null) unlock typographic refinements when
-/// the host can supply them; the core is correct without them:
-/// - `glyphVariant` returns a taller variant of `glyph` whose extent
-///   is at least `min_height`, or the input glyph when unknown.
-/// - `italicCorrection` returns the italic correction of `glyph`.
-/// - `kernCorrection` (v3) returns the MathKern cut-in of `glyph` at
-///   correction `height` for `corner`; the core applies top-right
-///   cut-ins to superscripts and bottom-right cut-ins to subscripts.
-/// - `inkBounds` (v4) returns the true ink box of `glyph` as
+/// Denomination: every numeric hook value is in thousandths of an em
+/// (1000 units = 1em at text size). The core scales each value to the
+/// ambient size itself with truncation toward zero. Determinism is
+/// input + metrics: the same hooks returning the same values produce
+/// byte-identical layout.
+///
+/// Per-hook exactness contract (issue #193) — what is load-bearing,
+/// which layout decisions branch on the value, and what misrendering
+/// a wrong value produces. Normative for hosts; `docs/ir.md` carries
+/// the host-oriented guide with the `\tilde{x}` / `\vec{v}` recipe.
+///
+/// - `glyphId`: glyph id for (`font`, `codepoint`) in the host's
+///   namespace; 0 means missing (issue #142). Load-bearing
+///   everywhere: 0 still lays out (using that hook's advance/extents
+///   for 0), so boxes/tofu on screen always trace back here.
+/// - `advance`: the font's horizontal advance (hmtx) scaled to
+///   thousandths, truncation toward zero — bit-for-bit, INCLUDING 0
+///   for zero-width combining marks (e.g. U+20D7). Load-bearing for
+///   every run width; `layoutAccent` branches on `adv == 0`: zero
+///   takes the ink-centering path
+///   (`ax = (nucleus_w - ink_w) / 2 - ink_x0 + shift`), nonzero the
+///   advance-box rule (`ax = (nucleus_w - adv_w) / 2 + shift`). A
+///   nonzero missing-glyph fallback (a "reasonable" 500!) takes the
+///   wrong branch and mis-centers the accent by roughly half an em —
+///   the worked `\vec{v}` example in `docs/ir.md`. This is
+///   traceability sentence T1: the `read` host's 500-for-zero-width
+///   fallback bug is this sentence's violation.
+/// - `ruleThickness`: rule weight in thousandths; values <= 0 read as
+///   40, and `LayoutOptions.min_rule_thickness_milli_em` floors the
+///   result on top (0 disables the floor). Load-bearing for fraction
+///   bars, radicals, over/underlines and the clearances derived from
+///   them. Wrong weights thicken bars and shift bar-to-body gaps.
+/// - `extents`: `[height_above, depth_below]` of `glyph` at 1000
+///   units; blank glyphs report `[0, 0]`. Null keeps the uniform
+///   700/250 approximation bit-identically (deterministic; hosts with
+///   outline metrics should supply the real extents). Load-bearing
+///   for every glyph box height/depth: accent clearance
+///   (`min(body height, x-height 431)`), the brace-label legacy gaps,
+///   fence target comparison. True extents shift vertical clearance
+///   versus the reference — untracked lore before this contract.
+/// - `glyphVariant`: a taller variant of `glyph` whose extent is at
+///   least `min_height` (thousandths), or the input glyph when
+///   unknown. Null returns the input glyph bit-identically.
+///   Load-bearing for fences (`need > 0`) and radicals. Always-
+///   identity keeps tall fences/radicals under-grown (clipped or
+///   overlapped spans); a wrong-face glyph misdraws.
+/// - `italicCorrection`: the OpenType MATH italic-correction value
+///   scaled to thousandths, truncation toward zero. The core looks it
+///   up on the LAID-OUT nucleus glyph (post-substitution, not the
+///   parse codepoint), halves it, and adds KaTeX's Math-Italic skew
+///   for single-symbol math-italic nuclei
+///   (`symbols.mathItalicSkew`; upright and unlisted nuclei shift 0).
+///   Null reads 0 (upright accents, bit-identical). Failure symptom:
+///   a parse-codepoint lookup sees text `y` (correction 8) instead of
+///   math-italic U+1D466 (28), shifting `\hat{y}` by 10mu at text
+///   size; unscaled font units skew every slanted-nucleus accent.
+///   This is traceability sentence T2: the `read` host's italic
+///   lookup/units bug is this sentence's violation.
+/// - `kernCorrection` (v3): the MathKern cut-in of `glyph` at
+///   correction `height` for `corner` (OpenType MATH semantics: first
+///   CorrectionHeight at or above the query wins, else the last
+///   value), scaled to thousandths. The core applies top-right
+///   cut-ins to superscripts and bottom-right cut-ins to subscripts,
+///   each clamped to `[0, gap]`; other corners are reserved (return
+///   0). Null/0 means no cut-in, bit-identical — failure costs only
+///   looser scripts, never overlap.
+/// - `inkBounds` (v4): the true ink box of `glyph` as
 ///   `[x_min, y_min, x_max, y_max]` at 1000 units, y UP from the
-///   baseline (unclipped: parts below/left of the origin stay
-///   negative). The core uses it only for accent placement: centering
-///   zero-advance combining marks by ink (e.g. U+20D7 whose ink hangs
-///   left of the origin) and lifting low-sitting accents (e.g. `~`)
-///   clear of the nucleus. Null behaves exactly as v3.
+///   baseline, unclipped (parts below/left of the origin stay
+///   negative); +/-1 rounding from float outlines is acceptable, and
+///   all-zero means blank (the core ignores it). Load-bearing
+///   consumers: accent ink-centering for `adv == 0` combining marks
+///   (U+20D7 ink `[-472, 521, -56, 711]` hangs left of its origin);
+///   low-accent lift (accent ink must clear the nucleus top by at
+///   least 130: `ay = max(ay, nucleus_top + 130 - ink_bottom)` —
+///   `~` ink bottom +193 would otherwise nestle into the nucleus);
+///   wide-accent ink scaling (KaTeX `preserveAspectRatio="none"`
+///   parity: ink, not the advance box, spans the nucleus); dot-stack
+///   lift (`\ddot` family via `.` ink); brace-label outer kern (0.2em
+///   off ink vs the 150mu legacy rule off the extents box);
+///   over/underbrace 0.1em ink-to-ink kern; the sqrt surd-hook
+///   junction (the vinculum starts one rule thickness inside the
+///   hook's right ink edge, clamped to `[ink left, advance]`); `\not`
+///   slash ink-centering. Null costs exactly the v3 behavior per
+///   construct above — a host reading "optional" can price NULL from
+///   this list. This is traceability sentence T3: the `read` host's
+///   ink-frame / NULL-cost bug is this sentence's violation.
 pub const provider_version: u32 = 4;
 pub const MetricsProvider = struct {
     ctx: *const anyopaque,

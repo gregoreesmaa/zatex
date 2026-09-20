@@ -36,6 +36,71 @@ defaults; `LayoutError` variants are added, never removed;
 Hard caps are named constants (`max_input_len`, `max_nesting_depth`,
 `max_expand`). Call-site shape is frozen; only additive growth.
 
+## Provider exactness contract (host guide, issue #193)
+
+Every numeric provider value is in thousandths of an em (1000 units =
+1em at text size); the core scales to the ambient size itself with
+truncation toward zero. Normative per-hook text lives in
+`packages/zatex/src/contract.zig` (`MetricsProvider` doc comment) and
+in `packages/zatex/src/zatex.h` field comments; what follows is the
+host-oriented reading: what to return, what branches on it, and what
+breaks when it is wrong.
+
+| Hook | Return | Load-bearing consumers / failure symptom |
+| ---- | ------ | ---------------------------------------- |
+| `glyphId` | Host-namespace id; 0 = missing (issue #142) | Everything. 0 still lays out, so boxes/tofu always trace back here — log the (font, cp) pairs. |
+| `advance` | hmtx advance in thousandths, trunc-zero — **bit-for-bit, including 0** for zero-width combining marks | Every run width. `layoutAccent` branches on `adv == 0` (ink-center vs advance-box); a nonzero fallback (e.g. 500) for a zero-width mark mis-centers the accent by ~half an em. |
+| `ruleThickness` | Weight in thousandths; `<= 0` reads as 40 (plus the caller's `min_rule_thickness` floor) | Fraction bars, radicals, over/underlines and their clearances. Wrong weights thicken bars and shift gaps. |
+| `extents` (null ok) | `[height_above, depth_below]` at 1000 units (`[0,0]` if blank); null = uniform 700/250 | Every box height/depth; accent clearance `min(body, x-height 431)`; brace-label gaps; fence choice. True extents shift vertical clearance vs the reference. |
+| `glyphVariant` (null ok) | Variant with extent `>= min_height` (thousandths), or the input glyph | Fences, radicals. Always-identity under-grows tall spans. |
+| `italicCorrection` (null ok) | MATH italic correction in thousandths, trunc-zero; null = 0 | Accent shift over slanted nuclei: the core halves it and adds the KaTeX Math-Italic skew (single-symbol nuclei only). Wrong glyph or wrong units shift every such accent. |
+| `kernCorrection` (null ok) | MathKern cut-in in thousandths; null/0 = none | Top-right tucks superscripts, bottom-right subscripts (clamped to the gap). Costs only looseness. |
+| `inkBounds` (null ok) | `[x_min, y_min, x_max, y_max]` at 1000 units, **y up**, unclipped (negatives kept); all-zero = blank, ignored; ±1 float rounding ok | Accent ink-centering, low-accent lift (≥ 130 clear), wide-accent ink scaling, dot lift, brace-label/brace kerns, sqrt junction, `\not` centering. Null = exact v3 behavior per construct (priced in `contract.zig`). |
+
+### Worked recipe: `\tilde{x}` and `\vec{v}` at text size
+
+A new host must return these values — no engine reading required:
+
+1. `advance` must be the font's real advance, including **0 for the
+   combining arrow U+20D7** (`\vec`). Any nonzero fallback (500 is the
+   classic) sends `\vec{v}` down the advance-box path instead of the
+   ink-centering path `ax = (nucleus_w − ink_w) / 2 − ink_x0 + shift`.
+   With U+20D7 ink `[-472, 521, -56, 711]` (width 416, hanging left of
+   its zero origin), the correct offset recenters that 416-wide ink
+   over the nucleus; the fallback centers a phantom 500-wide box.
+2. `inkBounds` for `~` (`\tilde`) is `[0, 193, 555, 307]`, y up. The
+   core lifts low accents so ink clears the nucleus top by ≥ 130:
+   `ay = nucleus_top + 130 − 193`. For an `x` nucleus (top 700) that
+   is `ay = 637` (total height 1337) — without the hook the accent
+   would nestle to within 12 units of the nucleus.
+3. `italicCorrection` is looked up on the **laid-out** glyph, so the
+   host just reports the MATH table value per glyph id (scaled,
+   trunc-zero); the core does the halving and the skew. `x` carries
+   KaTeX skew 28, so the tilde run starts at +28 over the nucleus —
+   report the raw correction and centering follows.
+
+### Traceability (the `read` host's three bugs)
+
+- **T1 — 500-for-zero-width fallback:** fixed by the `advance` row's
+  "bit-for-bit, including 0" plus the `adv == 0` branch note.
+- **T2 — italic lookup on the parse codepoint / unscaled units:**
+  fixed by the `italicCorrection` row's laid-out-glyph + thousandths
+  wording (`y`: text 8 vs math-italic U+1D466 28 = 10mu at text size).
+- **T3 — ink frame guesses / unknown NULL cost:** fixed by the
+  `inkBounds` row's y-up/unclipped wording plus the per-construct NULL
+  price list in `contract.zig`.
+
+## Stretched runs across the C ABI
+
+`Run.x_scale` (per-mille horizontal scale, 1000 = identity) crosses
+the C ABI as `zatex_run_t.x_scale` (issue #197: wide accents, braces,
+arrows). Hosts stretch the run's ink AND its intra-run pen advances
+by `x_scale`/1000 about the run origin (`x`, `baseline_y`) —
+CoreText: save, translate to the origin, scale x, draw, restore.
+Without it wide accents render at natural size, off-span. Appended
+at the struct tail like `err_msg`: old readers ignore it and draw
+unstretched, exactly as before.
+
 ## Errors across the C ABI
 
 Zig callers read `Diag{offset, message}` from `layoutDiag`. C
