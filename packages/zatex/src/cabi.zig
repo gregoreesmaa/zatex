@@ -325,6 +325,52 @@ export fn zatex_conform_metrics(metrics: ?*const CMetrics, font: u16, buf_ptr: ?
     return @intCast(res.diagnostics);
 }
 
+test "cabi rule_thickness kind values match zatex.h docs (issue #205)" {
+    // The documented C ABI table, one line per value in zatex.h. The
+    // bridge passes @intFromEnum(kind), so declaration order IS the
+    // ABI — pin it against the Zig side drifting.
+    try std.testing.expectEqual(0, @intFromEnum(zatex.RuleKind.fraction_bar));
+    try std.testing.expectEqual(1, @intFromEnum(zatex.RuleKind.radical));
+    try std.testing.expectEqual(2, @intFromEnum(zatex.RuleKind.overline));
+    try std.testing.expectEqual(3, @intFromEnum(zatex.RuleKind.underline));
+    // End to end: the u32 each construct's rule carries over the C
+    // bridge is the documented row.
+    const S = struct {
+        var seen: ?u32 = null;
+        fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return 500;
+        }
+        fn rt(_: ?*const anyopaque, _: u16, kind: u32) callconv(.c) i32 {
+            seen = kind;
+            return 40;
+        }
+    };
+    const m: CMetrics = .{ .ctx = null, .glyph_id = S.gid, .advance = S.adv, .rule_thickness = S.rt };
+    const cases = [_]struct { tex: []const u8, want: u32 }{
+        .{ .tex = "\\frac12", .want = 0 },
+        .{ .tex = "\\sqrt{x}", .want = 1 },
+        .{ .tex = "\\overline{x}", .want = 2 },
+        // KaTeX parity: \underline reuses the overline weight
+        // (layoutOver queries .overline for both), so the core
+        // never emits kind 3 today — .underline stays reserved.
+        .{ .tex = "\\underline{x}", .want = 2 },
+    };
+    for (cases) |c| {
+        S.seen = null;
+        var runs: [16]CRun = undefined;
+        var rules: [8]CRule = undefined;
+        var glyphs: [64]u16 = undefined;
+        var out: CLayout = undefined;
+        const st = zatex_layout_utf8(c.tex.ptr, c.tex.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+        try std.testing.expectEqual(STATUS_OK, st);
+        try std.testing.expect(S.seen != null);
+        try std.testing.expectEqual(c.want, S.seen.?);
+    }
+}
+
 test "cabi lays out through C function pointers" {
     const S = struct {
         fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
