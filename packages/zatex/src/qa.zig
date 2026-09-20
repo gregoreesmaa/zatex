@@ -838,11 +838,14 @@ test "qa96 groups stack contiguously by ink" {
     // the SVG's own transparent top provides the daylight), so the
     // group ink bottom lands exactly on the nucleus top (issue
     // #96). Ink-stub LM bounds: overgroup ink bottom +657,
-    // undergroup ink top -227; nucleus extents 700/250.
+    // undergroup ink top -227; nucleus extents 700/250. The group
+    // box itself is ink-derived (issue #206: overgroup ink top +829
+    // replaces the 700 stub), so the construction stands 43 + 829 =
+    // 872 tall; the KaTeX-anchored 43-gap below is unchanged.
     var bo: ProvBuf = .{};
     const o = try layInk("\\overgroup{AB}", &bo);
     try std.testing.expectEqual(@as(u32, 1000), o.width);
-    try std.testing.expectEqual(@as(u32, 743), o.height_above);
+    try std.testing.expectEqual(@as(u32, 872), o.height_above);
     var onuc: ?i32 = null;
     var ogrp: ?i32 = null;
     for (o.runs) |r| {
@@ -861,7 +864,10 @@ test "qa96 groups stack contiguously by ink" {
     var bu: ProvBuf = .{};
     const u = try layInk("\\undergroup{AB}", &bu);
     try std.testing.expectEqual(@as(u32, 1000), u.width);
-    try std.testing.expectEqual(@as(u32, 273), u.depth_below);
+    // Mirror of the over half: the group box hangs on its own ink
+    // depth (issue #206: undergroup ink bottom -399 replaces the 250
+    // stub), so depth 23 + 399 = 422; the 23-gap below is unchanged.
+    try std.testing.expectEqual(@as(u32, 422), u.depth_below);
     var unuc: ?i32 = null;
     var ugrp: ?i32 = null;
     for (u.runs) |r| {
@@ -1963,12 +1969,16 @@ test "qa48 ink lift raises low accents clear" {
     // Tilde ink bottom (+193) would nestle into the nucleus under the
     // v3 rule (ay = 700-431+250 = 519, bottom at 519+193 = 712 barely
     // above the 700 top); the v4 hook lifts it to a uniform 130mu
-    // daylight: ay = 700+130-193 = 637, height 637+700 = 1337.
+    // daylight: ay = 700+130-193 = 637. The accent box itself is
+    // ink-derived (issue #206: tilde ink top +307 replaces the 700
+    // stub), so height 637+307 = 944. KaTeX-side proof (pinned
+    // 0.18.7 metricMap, Main-Regular 126): height 0.31786 — both real
+    // fonts agree the tilde is ~0.31em tall, not 0.70.
     // Calibrated against KaTeX ground-truth pixels (tilde ~160mu).
     var b: ProvBuf = .{};
     const l = try layInk("\\tilde{x}", &b);
     try std.testing.expectEqual(@as(u32, 500), l.width);
-    try std.testing.expectEqual(@as(u32, 1337), l.height_above);
+    try std.testing.expectEqual(@as(u32, 944), l.height_above);
     try std.testing.expectEqual(@as(u32, 250), l.depth_below);
     const ax = try glyphX(l, '~');
     // Issue #70: the tilde centers at nucleus-center + KaTeX skew
@@ -1990,11 +2000,15 @@ test "qa48 ink centers combining marks by ink" {
 
 test "qa48 ink dots stack with daylight" {
     // Dot-run row (3 periods, 1500 wide) centers over the nucleus and
-    // lifts to the same 130mu floor (period ink bottom +0).
+    // lifts to the same 130mu floor (period ink bottom +0): lift
+    // 700+130-0 = 830. The dot box is ink-derived (issue #206:
+    // period ink top +106 replaces the 700 stub), so height 830+106
+    // = 936. KaTeX-side proof (pinned 0.18.7 metricMap, Main-Regular
+    // 46): height 0.10556 — exactly 106mu.
     var b: ProvBuf = .{};
     const l = try layInk("\\dddot{x}", &b);
     try std.testing.expectEqual(@as(u32, 1500), l.width);
-    try std.testing.expectEqual(@as(u32, 1530), l.height_above);
+    try std.testing.expectEqual(@as(u32, 936), l.height_above);
     var found = false;
     for (l.runs) |r| {
         // Issue #70: the row centers at nucleus-center + KaTeX skew
@@ -2082,14 +2096,17 @@ test "qa50 math alphanumeric remap" {
 
 test "qa51 brace kern is ink to ink" {
     // Issue #55: the brace↔nucleus kern is 0.1em ink-to-ink (KaTeX
-    // `horizBrace.ts`), not 150mu off the extents box. Stub extents
-    // are 700/250 for every glyph; the ink stub carries the LM brace
-    // edges (0x23DE ink bottom +539, 0x23DF ink top -109), so with
-    // nucleus ha/db 700/250: over gy = 700+100-539 = 261 in a
-    // 961-high construction (brace baseline 700, nucleus 961);
-    // under gy = -(250+100-109) = -241 in a 491-deep one (brace
-    // baseline 941, nucleus 700). Null-hook providers keep the
-    // legacy 150mu rule (all other tests).
+    // `horizBrace.ts`), not 150mu off the extents box. The ink stub
+    // carries the LM brace edges (0x23DE ink [0, 539, 492, 783],
+    // 0x23DF ink top -109); uncovered glyphs keep the 700/250 stub
+    // (issue #206 derives extents only from present ink), so with
+    // nucleus ha/db 700/250: over gy = 700+100-539 = 261, and the
+    // brace box stands on its own ink top (783, derived) instead of
+    // the 700 stub — brace baseline 783, nucleus 1044. KaTeX draws
+    // braces from SVG stretchies (no per-glyph metric to cite); the
+    // KaTeX-anchored 0.1em ink kern above is unchanged, and 783 is
+    // the fontTools-measured LM outline top by construction.
+    // Null-hook providers keep the legacy 150mu rule (all tests).
     var b1: ProvBuf = .{};
     const o = try layInk("\\overbrace{x}", &b1);
     var oy_brace: ?i32 = null;
@@ -2100,8 +2117,8 @@ test "qa51 brace kern is ink to ink" {
             if (g == 0xD465) oy_nuc = r.baseline_y;
         }
     }
-    try std.testing.expectEqual(@as(?i32, 700), oy_brace);
-    try std.testing.expectEqual(@as(?i32, 961), oy_nuc);
+    try std.testing.expectEqual(@as(?i32, 783), oy_brace);
+    try std.testing.expectEqual(@as(?i32, 1044), oy_nuc);
     var b2: ProvBuf = .{};
     const u = try layInk("\\underbrace{x}", &b2);
     var uy_brace: ?i32 = null;

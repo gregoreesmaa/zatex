@@ -463,6 +463,185 @@ test "fileprovider without CFF degrades to v3 geometry" {
     try std.testing.expectEqual(@as(i32, 0), prov.italicCorrection.?(prov.ctx, 0, 3));
 }
 
+// NULL-derivation proof (issue #206): extents are the vertical
+// slice of the ink box. Full-font sweep: every glyph's outline
+// extents equal `ha = max(0, y1)`, `db = max(0, -y0)` of its ink
+// box, on the reference font and on the KaTeX Main face (the accent
+// face per issue #103) — so the engine derivation reproduces the
+// file provider bit-for-bit. Exact by construction: both helpers
+// round the same outline box outward (floor the minima, ceil the
+// maxima) before the thousandths scale, and `-floor(bot)` is
+// `ceil(-bot)`, so the bottom slice survives the scale identically.
+const katex_main_path = "fixtures/fonts/katex/KaTeX_Main-Regular.otf";
+
+fn expectDerivation(prov: contract.MetricsProvider, num_glyphs: u32) !void {
+    var g: u32 = 0;
+    while (g < num_glyphs) : (g += 1) {
+        const u: u16 = @intCast(g);
+        const ink = prov.inkBounds.?(prov.ctx, 0, u);
+        const want = [2]i32{ @max(@as(i32, 0), ink[3]), @max(@as(i32, 0), -ink[1]) };
+        try std.testing.expectEqual(want, prov.extents.?(prov.ctx, 0, u));
+    }
+}
+
+test "fileprovider extents equal the ink vertical slice" {
+    const bytes = try loadTestFile(lm_path);
+    defer std.testing.allocator.free(bytes);
+    const font = try otmath.load(bytes);
+    var fp = try FileProvider.init(bytes);
+    try expectDerivation(fp.provider(), font.num_glyphs);
+    // The #194 conformance ink pins slice to these extents exactly.
+    const pins = [_]struct { cp: u21, want: [2]i32 }{
+        .{ .cp = 0x20D7, .want = .{ 711, 0 } },
+        .{ .cp = '~', .want = .{ 307, 0 } },
+        .{ .cp = 0x02C7, .want = .{ 692, 0 } },
+        .{ .cp = 0x221A, .want = .{ 40, 960 } },
+    };
+    const prov = fp.provider();
+    for (pins) |p| {
+        const gid = prov.glyphId(prov.ctx, 0, p.cp);
+        try std.testing.expect(gid != 0);
+        try std.testing.expectEqual(p.want, prov.extents.?(prov.ctx, 0, gid));
+    }
+    const kbytes = try loadTestFile(katex_main_path);
+    defer std.testing.allocator.free(kbytes);
+    const kfont = try otmath.load(kbytes);
+    var kfp = try FileProvider.init(kbytes);
+    try expectDerivation(kfp.provider(), kfont.num_glyphs);
+}
+
+// Rejection proof (issue #206): the right side bearing
+// `max(0, advance - ink.x1)` is NOT an italic correction. It misses
+// the real MATH corrections on slanted nuclei and invents skew where
+// KaTeX wants none — in both directions, so no fallback constant or
+// clamp repairs it. (KaTeX reads the MATH value, never a bearing.)
+test "fileprovider rsb is not an italic correction" {
+    const bytes = try loadTestFile(lm_path);
+    defer std.testing.allocator.free(bytes);
+    var fp = try FileProvider.init(bytes);
+    // { codepoint, MATH italic, RSB }: each pair disagrees.
+    const pins = [_]struct { cp: u21, italic: i32, rsb: i32 }{
+        .{ .cp = 0x1D466, .italic = 28, .rsb = 0 },
+        .{ .cp = '~', .italic = 27, .rsb = 1 },
+        .{ .cp = 'x', .italic = 16, .rsb = 12 },
+        .{ .cp = 0x1D465, .italic = 0, .rsb = 45 },
+        .{ .cp = 'A', .italic = 0, .rsb = 33 },
+        .{ .cp = 0x20D7, .italic = 0, .rsb = 56 },
+    };
+    for (pins) |p| {
+        const gid = fp.stack.glyphIdFor(0, p.cp);
+        try std.testing.expect(gid != 0);
+        try std.testing.expectEqual(p.italic, fp.italicFor(gid));
+        const ink = fp.inkBoundsFor(gid);
+        try std.testing.expectEqual(p.rsb, @max(@as(i32, 0), fp.advance1000(gid) - ink[2]));
+        try std.testing.expect(p.italic != p.rsb);
+    }
+}
+
+// File-less host simulation (issue #206): NULL extents with exact
+// advance/ink lays out byte-identically to the file provider —
+// except blanks, whose all-zero ink keeps the 700/250 approximation
+// while the file reports [0, 0] (documented in contract.zig), so the
+// corpus carries no spaces.
+const NoExtents = struct {
+    fp: *FileProvider,
+
+    fn gid(ctx: *const anyopaque, font_id: u16, cp: u21) u16 {
+        const s: *const @This() = @ptrCast(@alignCast(ctx));
+        return s.fp.stack.glyphIdFor(font_id, cp);
+    }
+    fn adv(ctx: *const anyopaque, font_id: u16, glyph: u16) i32 {
+        _ = font_id;
+        const s: *const @This() = @ptrCast(@alignCast(ctx));
+        return s.fp.advance1000(glyph);
+    }
+    fn rule(ctx: *const anyopaque, font_id: u16, kind: contract.RuleKind) i32 {
+        _ = font_id;
+        const s: *const @This() = @ptrCast(@alignCast(ctx));
+        return s.fp.stack.ruleFor(kind);
+    }
+    fn variant(ctx: *const anyopaque, font_id: u16, glyph: u16, min_height: i32) u16 {
+        _ = font_id;
+        const s: *const @This() = @ptrCast(@alignCast(ctx));
+        return s.fp.stack.variantFor(glyph, min_height);
+    }
+    fn italic(ctx: *const anyopaque, font_id: u16, glyph: u16) i32 {
+        _ = font_id;
+        const s: *const @This() = @ptrCast(@alignCast(ctx));
+        return s.fp.italicFor(glyph);
+    }
+    fn kern(ctx: *const anyopaque, font_id: u16, glyph: u16, height: i32, corner: contract.KernCorner) i32 {
+        _ = font_id;
+        const s: *const @This() = @ptrCast(@alignCast(ctx));
+        return s.fp.stack.kernFor(glyph, height, corner);
+    }
+    fn ink(ctx: *const anyopaque, font_id: u16, glyph: u16) [4]i32 {
+        _ = font_id;
+        const s: *const @This() = @ptrCast(@alignCast(ctx));
+        return s.fp.inkBoundsFor(glyph);
+    }
+};
+
+test "fileprovider null extents lay out like the file" {
+    const bytes = try loadTestFile(lm_path);
+    defer std.testing.allocator.free(bytes);
+    var fp = try FileProvider.init(bytes);
+    const full = fp.provider();
+    var w = NoExtents{ .fp = &fp };
+    const partial = contract.MetricsProvider{
+        .ctx = &w,
+        .glyphId = NoExtents.gid,
+        .advance = NoExtents.adv,
+        .ruleThickness = NoExtents.rule,
+        .glyphVariant = NoExtents.variant,
+        .italicCorrection = NoExtents.italic,
+        .kernCorrection = NoExtents.kern,
+        .extents = null,
+        .inkBounds = NoExtents.ink,
+    };
+    const cases = [_][]const u8{
+        "\\hat{x}+\\frac{a}{b}",
+        "\\vec{x}",
+        "\\sum_{i=1}^{n}\\frac{i}{\\sqrt{i+1}}",
+        "\\tilde{x}",
+        "\\ddot{x}",
+        "\\hat{y}",
+        "\\overbrace{x}",
+        "\\underbrace{x}",
+        "\\left(\\frac{a}{b}\\right)",
+        "x",
+    };
+    for (cases) |src| {
+        var ra: [64]zatex.ir.Run = undefined;
+        var la: [16]zatex.ir.Rule = undefined;
+        var ga: [1024]u16 = undefined;
+        var rb: [64]zatex.ir.Run = undefined;
+        var lb: [16]zatex.ir.Rule = undefined;
+        var gb: [1024]u16 = undefined;
+        const a = try zatex.layoutFull(src, .{}, full, &ra, &la, &ga);
+        const b = try zatex.layoutFull(src, .{}, partial, &rb, &lb, &gb);
+        try std.testing.expectEqual(a.width, b.width);
+        try std.testing.expectEqual(a.height_above, b.height_above);
+        try std.testing.expectEqual(a.depth_below, b.depth_below);
+        try std.testing.expectEqual(a.runs.len, b.runs.len);
+        try std.testing.expectEqual(a.rules.len, b.rules.len);
+        for (a.runs, b.runs) |x, y| {
+            try std.testing.expectEqual(x.font_id, y.font_id);
+            try std.testing.expectEqual(x.size_units, y.size_units);
+            try std.testing.expectEqual(x.x, y.x);
+            try std.testing.expectEqual(x.baseline_y, y.baseline_y);
+            try std.testing.expectEqual(x.x_scale, y.x_scale);
+            try std.testing.expectEqualSlices(u16, x.glyphs, y.glyphs);
+        }
+        for (a.rules, b.rules) |x, y| {
+            try std.testing.expectEqual(x.x, y.x);
+            try std.testing.expectEqual(x.y, y.y);
+            try std.testing.expectEqual(x.w, y.w);
+            try std.testing.expectEqual(x.h, y.h);
+        }
+    }
+}
+
 // End to end: real formulas lay out deterministically through the
 // file provider, accents included (the ink path is live).
 test "fileprovider layouts are deterministic" {

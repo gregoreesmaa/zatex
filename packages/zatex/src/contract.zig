@@ -170,10 +170,13 @@ pub const KernCorner = enum(u32) {
 ///   bars, radicals, over/underlines and the clearances derived from
 ///   them. Wrong weights thicken bars and shift bar-to-body gaps.
 /// - `extents`: `[height_above, depth_below]` of `glyph` at 1000
-///   units; blank glyphs report `[0, 0]`. Null keeps the uniform
-///   700/250 approximation bit-identically (deterministic; hosts with
-///   outline metrics should supply the real extents). Load-bearing
-///   for every glyph box height/depth: accent clearance
+///   units; blank glyphs report `[0, 0]`. Null derives the vertical
+///   slice of the ink box when one is present (issue #206:
+///   `ha = max(0, y1)`, `db = max(0, -y0)` — bit-identical to
+///   outline-derived extents from the same box), else keeps the
+///   uniform 700/250 approximation bit-identically (deterministic;
+///   hosts with outline metrics should supply the real extents).
+///   Load-bearing for every glyph box height/depth: accent clearance
 ///   (`min(body height, x-height 431)`), the brace-label legacy gaps,
 ///   fence target comparison. True extents shift vertical clearance
 ///   versus the reference — untracked lore before this contract.
@@ -194,7 +197,11 @@ pub const KernCorner = enum(u32) {
 ///   math-italic U+1D466 (28), shifting `\hat{y}` by 10mu at text
 ///   size; unscaled font units skew every slanted-nucleus accent.
 ///   This is traceability sentence T2: the `read` host's italic
-///   lookup/units bug is this sentence's violation.
+///   lookup/units bug is this sentence's violation. No right-side-
+///   bearing fallback (issue #206 rejects it): measured RSB
+///   anti-correlates with MATH corrections (U+1D466 28 vs 0, `~` 27
+///   vs 1, `x` 16 vs 12 — and spurious skew where none belongs:
+///   U+1D465 0 vs 45, `A` 0 vs 33, U+20D7 0 vs 56).
 /// - `kernCorrection` (v3): the MathKern cut-in of `glyph` at
 ///   correction `height` for `corner` (OpenType MATH semantics: first
 ///   CorrectionHeight at or above the query wins, else the last
@@ -223,7 +230,24 @@ pub const KernCorner = enum(u32) {
 ///   slash ink-centering. Null costs exactly the v3 behavior per
 ///   construct above — a host reading "optional" can price NULL from
 ///   this list. This is traceability sentence T3: the `read` host's
-///   ink-frame / NULL-cost bug is this sentence's violation.
+///   ink-frame / NULL-cost bug is this sentence's violation. Present
+///   ink also feeds the `extents` NULL derivation above.
+///
+/// NULL-derivation semantics (issue #206) — the file-less host
+/// recipe: `glyphId` + exact `advance` + `inkBounds` (+ the KaTeX rule
+/// weight) with NULL for the rest. Accepted: `extents` derives from
+/// ink (`ha = max(0, y1)`, `db = max(0, -y0)`), exact for every
+/// non-degenerate glyph by construction — both round the shared
+/// outline outward before the thousandths scale, so the derivation
+/// reproduces the file provider bit-for-bit on the reference font.
+/// All-zero ink keeps the 700/250 approximation: the marker means
+/// blank-or-uncovered and uncovered glyphs stay v3-exact. Rejected:
+/// `italicCorrection` from right side bearing (`max(0, advance -
+/// ink.x1)`): on the reference font it misses the real corrections
+/// (U+1D466, `~`, `x` above) while inventing up to 98mu of skew on
+/// upright glyphs, combining marks, and fences — KaTeX reads the
+/// MATH value, never a bearing, so no KaTeX-side proof is possible.
+/// NULL italic stays 0.
 ///
 /// Hosts validate their provider with the metrics conformance check
 /// (issue #194): `conform.check` natively, `zatex_conform_metrics`
