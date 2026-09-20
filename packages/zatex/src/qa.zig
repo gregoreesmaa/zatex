@@ -3429,3 +3429,203 @@ test "trip10 mathchoice picks the style branch" {
     const text = try lay("\\mathchoice{xy}{x}{x}{x}", false, &b0);
     try std.testing.expectEqual(@as(u32, 500), text.width);
 }
+
+// ---------------------------------------------------------------------------
+// Issue #200: fence extent residual on the demo-cauchy sentinel
+// (`\left( \sum_{k=1}^n a_k b_k \right)`, display). Two deltas vs
+// pinned KaTeX 0.18.7: (a) the display limit stack used a fixed
+// 150mu gap, starving body depth (1092 vs 1302); (b) grown fences
+// boxed the `need` target instead of the picked glyph (1459/959 vs
+// the Size4 glyph). Both fixed per the pinned sources
+// (`assembleSupSub.ts`, `delimiter.ts` + `fontMetrics.ts`); the
+// proofs are re-derived in the comments below so the pins stand
+// without re-reading KaTeX.
+// ---------------------------------------------------------------------------
+
+/// Provider modeling the pinned KaTeX 0.18.7 metrics behind the
+/// sentinel: op/limit extents are KaTeX's Size2/script values x1000,
+/// the Main paren is KaTeX_Main's 750/250 (total 1000), and the
+/// variant hook models the SizeN sequence — a Size4-class glyph
+/// (KaTeX Size4 paren 1750/1250) whenever the target passes the
+/// Size3 boundary (`sizeToMaxHeight[3]` = 2.4). It records the last
+/// requested target so tests pin `need` exactly.
+const Issue200 = struct {
+    var last_need: i32 = 0;
+    const BIG: u16 = 0xF000;
+    fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+        return @truncate(cp);
+    }
+    fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
+        return 500;
+    }
+    fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+        return 40;
+    }
+    fn extents(_: *const anyopaque, _: u16, glyph: u16) [2]i32 {
+        if (glyph == BIG) return .{ 1750, 1250 };
+        // Math-italic lowercase (U+1D44E..U+1D467) folds to ASCII:
+        // the parser remaps math letters (qa43 pins U+1D45B `n`).
+        const base = if (glyph >= 0xD44E and glyph <= 0xD467) glyph - 0xD44E + 'a' else glyph;
+        return switch (base) {
+            0x2211 => .{ 1050, 550 }, // Size2 summation sign
+            'n', 'a', 'b' => .{ 431, 0 }, // ascender-only italic
+            'k' => .{ 694, 0 },
+            '=' => .{ 367, -133 },
+            '1' => .{ 644, 0 },
+            '(' => .{ 750, 250 }, // KaTeX_Main paren, total 1000
+            else => .{ 700, 250 },
+        };
+    }
+    fn variant(_: *const anyopaque, _: u16, glyph: u16, min_height: i32) u16 {
+        last_need = min_height;
+        if (glyph == '(' and min_height > 2400) return BIG;
+        return glyph;
+    }
+};
+
+fn issue200Provider() zatex.MetricsProvider {
+    const S = struct {
+        var dummy: u8 = 0;
+    };
+    return .{
+        .ctx = &S.dummy,
+        .glyphId = Issue200.glyphId,
+        .advance = Issue200.advance,
+        .ruleThickness = Issue200.ruleThickness,
+        .extents = Issue200.extents,
+        .glyphVariant = Issue200.variant,
+    };
+}
+
+fn lay200(src: []const u8, display: bool, b: *B) !zatex.ir.Layout {
+    Issue200.last_need = 0;
+    var diag = zatex.Diag.empty();
+    return zatex.layoutDiag(src, .{ .display_mode = display }, issue200Provider(), &b.runs, &b.rules, &b.glyphs, &diag);
+}
+
+test "issue200 display limit stack follows KaTeX Rule 13a" {
+    // Pinned 0.18.7 `assembleSupSub`: supKern = max(bigOpSpacing1,
+    // bigOpSpacing3 - supDepth), subKern = max(bigOpSpacing2,
+    // bigOpSpacing4 - subHeight), bigOpSpacing5 padding outside each
+    // limit, base centered on the axis (baseShift = 0 here:
+    // (1050-550)/2 - 250). Sup `n` at script scale: 431*700/1000 =
+    // 301 above, 0 below; supKern = max(111, 200-0) = 200. Sub
+    // `k=1`: ha = max(694,367,644)*700/1000 = 485, db = 0
+    // (`=` sits above the baseline: depth -133); subKern =
+    // max(166, 600-485) = 166.
+    // ha = 1050 + 200 + 301 + 100 = 1651 (KaTeX DOM 1.6514em).
+    // db = 550 + 166 + 485 + 100 = 1301: KaTeX's real-valued
+    // pipeline carries 0.48611em = 486mu for the subscript, one mu
+    // above the engine's truncated 485 — integer-thousandths
+    // truncation, not a contract gap (KaTeX DOM depth 1.3021em).
+    var b: B = .{};
+    const l = try lay200("\\sum_{k=1}^n", true, &b);
+    try std.testing.expectEqual(@as(u32, 1651), l.height_above);
+    try std.testing.expectEqual(@as(u32, 1301), l.depth_below);
+}
+
+test "issue200 grown fence boxes the picked variant" {
+    // Sup-only sentinel: body = 1651/550 (no sub, no bottom pad),
+    // maxDist = max(1651-250, 550+250) = 1401, need =
+    // max(1401*901/500, 2*1401-500) = max(2524, 2302) = 2524.
+    // 2524 > 2400 (KaTeX Size3 boundary): the hook picks the
+    // Size4-class glyph, and the fence boxes ITS extents (KaTeX
+    // `makeLargeDelim`: 1750/1250), never `need` centered on the
+    // axis (250+1262 / 1262-250 = 1512/1012).
+    var b: B = .{};
+    const l = try lay200("\\left(\\sum^{n}\\right)", true, &b);
+    try std.testing.expectEqual(@as(i32, 2524), Issue200.last_need);
+    try std.testing.expectEqual(@as(u32, 1750), l.height_above);
+    try std.testing.expectEqual(@as(u32, 1250), l.depth_below);
+}
+
+test "issue200 sentinel overall matches the KaTeX base strut" {
+    // Full sentinel: body 1651/1301 (above), maxDist =
+    // max(1401, 1551) = 1551, need = max(1551*901/500, 2602) =
+    // max(2794, 2602) = 2794 — past Size3, so the Size4-class glyph
+    // wins, exactly as KaTeX's traverseSequence picks size4 for its
+    // 2797. Overall is the per-side max: ha = max(1750, 1651),
+    // db = max(1250, 1301) — the KaTeX base strut
+    // (3.0521em/-1.3021em) to the integer-truncation mu. (The 1302
+    // in that strut is the BODY's depth winning the max, not the
+    // fence's: KaTeX's fence span itself is the Size4 glyph,
+    // 1750/1250 — which is what the previous test pins.)
+    var b: B = .{};
+    const l = try lay200("\\left( \\sum_{k=1}^n a_k b_k \\right)", true, &b);
+    try std.testing.expectEqual(@as(i32, 2794), Issue200.last_need);
+    try std.testing.expectEqual(@as(u32, 1750), l.height_above);
+    try std.testing.expectEqual(@as(u32, 1301), l.depth_below);
+}
+
+/// Provider pinning every Rule 13a max() branch with exact
+/// script-scale integers (script = x700/1000) on a 700/250 base
+/// (baseShift = (700-250)/2 - 250 = -25, pad = 100).
+const Issue200b = struct {
+    fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+        return @truncate(cp);
+    }
+    fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
+        return 500;
+    }
+    fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+        return 40;
+    }
+    fn extents(_: *const anyopaque, _: u16, glyph: u16) [2]i32 {
+        // Same math-italic fold as above: limits arrive as U+1D44E+.
+        const base = if (glyph >= 0xD44E and glyph <= 0xD467) glyph - 0xD44E + 'a' else glyph;
+        return switch (base) {
+            'B' => .{ 700, 250 },
+            'p' => .{ 100, 100 }, // script 70/70: 200-70 = 130
+            'q' => .{ 100, 200 }, // script 70/140: 200-140 < 111
+            'm' => .{ 500, 100 }, // script 350/70: 600-350 = 250
+            'w' => .{ 700, 100 }, // script 490/70: 600-490 < 166
+            else => .{ 700, 250 },
+        };
+    }
+};
+
+fn lay200b(src: []const u8, display: bool, b: *B) !zatex.ir.Layout {
+    const S = struct {
+        var dummy: u8 = 0;
+    };
+    const prov: zatex.MetricsProvider = .{
+        .ctx = &S.dummy,
+        .glyphId = Issue200b.glyphId,
+        .advance = Issue200b.advance,
+        .ruleThickness = Issue200b.ruleThickness,
+        .extents = Issue200b.extents,
+    };
+    var diag = zatex.Diag.empty();
+    return zatex.layoutDiag(src, .{ .display_mode = display }, prov, &b.runs, &b.rules, &b.glyphs, &diag);
+}
+
+test "issue200 limit gaps follow the bigOpSpacing floors" {
+    // Subtraction branches: supKern = max(111, 200-70) = 130,
+    // subKern = max(166, 600-350) = 250. Sup sits at
+    // 25+700+130+70 = 925, ha = 925+70+100 = 1095; sub at
+    // -(-25+250+250+350) = -825, db = 825+70+100 = 995.
+    var b: B = .{};
+    const sub = try lay200b("\\mathop{B}\\limits^{p}_{m}", true, &b);
+    try std.testing.expectEqual(@as(u32, 1095), sub.height_above);
+    try std.testing.expectEqual(@as(u32, 995), sub.depth_below);
+    // Floor branches: supKern = max(111, 200-140) = 111, subKern =
+    // max(166, 600-490) = 166. Sup at 25+700+111+140 = 976,
+    // ha = 976+70+100 = 1146; sub at -(-25+250+166+490) = -881,
+    // db = 881+70+100 = 1051.
+    var b0: B = .{};
+    const flr = try lay200b("\\mathop{B}\\limits^{q}_{w}", true, &b0);
+    try std.testing.expectEqual(@as(u32, 1146), flr.height_above);
+    try std.testing.expectEqual(@as(u32, 1051), flr.depth_below);
+    // bigOpSpacing5 pads only outside PRESENT limits (KaTeX's three
+    // vlist shapes): sup-only keeps the top pad and a bare base
+    // below (db = 250-25 = 225); sub-only keeps the bottom pad and
+    // a bare base above (ha = 700+25 = 725).
+    var b1: B = .{};
+    const sup_only = try lay200b("\\mathop{B}\\limits^{p}", true, &b1);
+    try std.testing.expectEqual(@as(u32, 1095), sup_only.height_above);
+    try std.testing.expectEqual(@as(u32, 225), sup_only.depth_below);
+    var b2: B = .{};
+    const sub_only = try lay200b("\\mathop{B}\\limits_{m}", true, &b2);
+    try std.testing.expectEqual(@as(u32, 725), sub_only.height_above);
+    try std.testing.expectEqual(@as(u32, 995), sub_only.depth_below);
+}
