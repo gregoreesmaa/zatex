@@ -133,6 +133,17 @@ int32_t zatex_layout_utf8(const char *src, size_t src_len, bool display_mode,
 // Packed semantic version: major << 16 | minor << 8 | patch.
 uint32_t zatex_version(void);
 
+// Host metrics conformance check (issue #194): runs the diagnostic
+// corpus against the host's metrics at font id `font` — no rendering,
+// no engine rebuild. Returns the diagnostic count (0 is a clean pass;
+// -1 is a usage error: null metrics, or non-null buf with zero cap).
+// When buf is non-null, newline-separated diagnostics fill
+// buf[0..buf_cap], truncated to fit and always NUL-terminated (pass a
+// null buf to count only). Expectations are calibrated for rm (font
+// 0) on the reference font; see docs/ir.md "Metrics conformance".
+int32_t zatex_conform_metrics(const zatex_metrics_t *metrics, uint16_t font,
+                              char *buf, size_t buf_cap);
+
 #ifdef __cplusplus
 }
 #endif

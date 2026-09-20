@@ -17,6 +17,11 @@ const engine = @import("layout.zig");
 /// stable embedding surface stays `layoutFull`/`layoutDiag`/C ABI.
 pub const layout_core = engine;
 pub const contract = @import("contract.zig");
+/// Host metrics conformance check (issue #194): diagnostic corpus
+/// against an arbitrary host provider, callable natively here and at
+/// the C ABI level (`zatex_conform_metrics`). Ships with the library
+/// so hosts verify providers with no engine rebuild and no rendering.
+pub const conform = @import("conform.zig");
 
 // C ABI (issue 9): exports + conformance tests ride along with the lib,
 // unless `-Dcabi=false` (a downstream package with its own C surface —
