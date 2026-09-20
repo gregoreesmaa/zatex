@@ -101,9 +101,22 @@ the C ABI as `zatex_run_t.x_scale` (issue #197: wide accents, braces,
 arrows). Hosts stretch the run's ink AND its intra-run pen advances
 by `x_scale`/1000 about the run origin (`x`, `baseline_y`) —
 CoreText: save, translate to the origin, scale x, draw, restore.
-Without it wide accents render at natural size, off-span. Appended
-at the struct tail like `err_msg`: old readers ignore it and draw
-unstretched, exactly as before.
+Without it wide accents render at natural size, off-span.
+
+Stride contract (issue #203): appending `x_scale` changed the array
+stride (20 → 24), so a new dylib writing full structs into an old
+host's 20-byte slots would scramble every run past the first. The
+`err_msg` "old readers ignore the tail" rule holds for single
+structs only — never for array elements. Instead the runs buffer is
+stride-negotiated: `zatex_layout_utf8` is frozen as the v1 entry
+(20-byte `zatex_run_v1_t` slots, prefix only, never `x_scale` —
+safe with any dylib/host mix, drawn unstretched exactly as before),
+and `zatex_layout_utf8_ex` takes the host's element size
+(`sizeof(zatex_run_t)`): the engine writes the 20-byte prefix always
+and `x_scale` only when the stride reaches byte 22, leaving every
+other tail byte untouched; strides below 20 fail with status 7
+(limit). Hosts wanting `x_scale` dlsym the `_ex` entry and fall back
+to the v1 entry when absent (old dylib).
 
 ## Errors across the C ABI
 
