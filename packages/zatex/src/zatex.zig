@@ -638,6 +638,90 @@ test "issue37: sqrt root index is scriptscript, raised and tucked" {
     try std.testing.expect(saw_index and saw_x);
 }
 
+test "issue204: sqrt index tuck ignores surd height (KaTeX-exact, wontfix)" {
+    // Resolution (b) with KaTeX-side proof: pinned KaTeX 0.18.7 never
+    // consults RadicalKernBeforeDegree/RadicalKernAfterDegree. The
+    // vertical shift is `0.6 * (body.height - body.depth)` from TeX
+    // `\r@@t` (sqrt.ts:95-97) and the horizontal tuck is a hardcoded
+    // `margin-left: 5/18em` / `margin-right: -10/18em` (`\mkern 5mu` /
+    // `\mkern -10mu`, katex.css `.sqrt > .katex-root`), with zero
+    // RadicalKern/MATH-table references anywhere in KaTeX src; the
+    // surd itself is a synthetic SVG (`makeSqrtImage`, hardcoded
+    // 0.833em advance), so no font kern could even apply. Driving
+    // the tuck from the host font's MATH kerns would diverge from
+    // pinned KaTeX and violate AGENTS.md section 2.
+    //
+    // This pins the wontfix contract: a STIX-tall surd (extents
+    // 1400/500 vs the 700/250 stub) changes rule_top and depth but
+    // the tuck bearings (+5mu lead / -10mu trail) and the 0.6 raise
+    // factor stay bit-identical. Hand arithmetic, text style, size
+    // 1000: clearance0 = 40 + 40/4 = 50; delim_depth = 1400 + 500
+    // - 40 = 1860 > 700 + 250 + 50, so the KaTeX overshoot split
+    // fires: clearance = (1860 + 50 - 700 - 250)/2 = 480, rule_top
+    // = 700 + 480 + 40 = 1220. The split adds 430 above and 430
+    // below, so ha - db = 1220 - 680 = 540 is unchanged and idx_dy
+    // = 6*540/10 = 324, exactly as with the short surd. Bearings
+    // 277/-555 against the 250-wide index normalize the body to x
+    // 0 (pad 28) with the index at 305; width equals the plain
+    // tall-surd root.
+    const S = struct {
+        fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
+            return 500;
+        }
+        fn ruleThickness(_: *const anyopaque, _: u16, _: RuleKind) i32 {
+            return 40;
+        }
+        fn extents(_: *const anyopaque, _: u16, glyph: u16) [2]i32 {
+            // STIX-tall surd; every other glyph keeps stub extents.
+            if (glyph == 0x221A) return .{ 1400, 500 };
+            return .{ 700, 250 };
+        }
+    };
+    const tall: MetricsProvider = .{
+        .ctx = &.{},
+        .glyphId = S.glyphId,
+        .advance = S.advance,
+        .ruleThickness = S.ruleThickness,
+        .extents = S.extents,
+    };
+    var runs_buf: [32]ir.Run = undefined;
+    var rules_buf: [8]ir.Rule = undefined;
+    var glyphs_buf: [128]u16 = undefined;
+    const l = try layoutFull("\\sqrt[3]{x}", .{}, tall, &runs_buf, &rules_buf, &glyphs_buf);
+    var pruns_buf: [32]ir.Run = undefined;
+    var prules_buf: [8]ir.Rule = undefined;
+    var pglyphs_buf: [128]u16 = undefined;
+    const p = try layoutFull("\\sqrt{x}", .{}, tall, &pruns_buf, &prules_buf, &pglyphs_buf);
+    try std.testing.expectEqual(p.width, l.width);
+    try std.testing.expectEqual(@as(u32, 1090), l.width);
+    try std.testing.expectEqual(@as(u32, 1220), l.height_above);
+    try std.testing.expectEqual(@as(u32, 680), l.depth_below);
+    var saw_index = false;
+    var saw_x = false;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == @as(u16, '3')) {
+                // Scriptscript size, KaTeX-exact tuck: same x and
+                // raise as the short-surd pin in the issue37 test,
+                // baseline re-based onto the taller rule_top.
+                try std.testing.expectEqual(@as(u16, 500), r.size_units);
+                try std.testing.expectEqual(@as(i32, 305), r.x);
+                try std.testing.expectEqual(@as(i32, 896), r.baseline_y);
+                saw_index = true;
+            }
+            if (g == @as(u16, 0xD465)) {
+                try std.testing.expectEqual(@as(i32, 550), r.x);
+                try std.testing.expectEqual(@as(i32, 1220), r.baseline_y);
+                saw_x = true;
+            }
+        }
+    }
+    try std.testing.expect(saw_index and saw_x);
+}
+
 test "issue37: rule dimensions and raise pin the IR rect" {
     // KaTeX parity: `\rule[raise]{w}{h}` is a filled rect spanning
     // [raise, raise + h] above the baseline — never below it (the
