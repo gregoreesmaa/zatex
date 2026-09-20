@@ -1,4 +1,4 @@
-//! CFF/Type2 outline reader for the software backend (`sw_backend.zig`).
+//! Shared CFF/Type2 outline reader (host-side, issue #192).
 //!
 //! Parses the CFF table of OpenType/CFF fonts (the Latin Modern Math
 //! fixture and the STIX Two fallback both are) and executes Type2
@@ -11,6 +11,14 @@
 //!
 //! No allocation: works over caller bytes into a caller segment buffer.
 //! CID-keyed fonts are rejected (neither of our fonts is CID-keyed).
+//!
+//! This is HOST-side code (like `otmath` and `fontstack`), never linked
+//! into the layout core: the blessed file provider (`fileprovider.zig`)
+//! reads ink boxes through it, and the software backend
+//! (`packages/zatex-png`) draws through it. One copy, one behavior —
+//! the `extents1000`/`inkBounds1000` helpers below are the single
+//! outline-to-thousandths conversion both consumers share, so a host
+//! handing file bytes measures exactly what the reference hosts draw.
 const std = @import("std");
 
 pub const Error = error{
@@ -881,6 +889,43 @@ pub fn outline(font: *const CffFont, glyph: u16, out: []Seg) Error![]Seg {
     return out[0..ip.nsegs];
 }
 
+/// Scale a font-unit value to core thousandths (1000/upm). Shared by
+/// every outline-to-metrics conversion so providers and backends agree.
+pub fn scale1000(upm: u16, v: i32) i32 {
+    return @divTrunc(v * 1000, upm);
+}
+
+/// True ink extents from CFF outlines, scaled to core thousandths:
+/// [height_above, depth_below]. Blank or undecodable glyphs report
+/// [0, 0] (callers draw nothing there either, so measuring and drawing
+/// stay consistent with each other).
+pub fn extents1000(font: *const CffFont, upm: u16, glyph: u16, scratch: []Seg) [2]i32 {
+    const bb = outlineBbox(font, glyph, scratch) catch return .{ 0, 0 };
+    const b = bb orelse return .{ 0, 0 };
+    const top = b[3];
+    const bot = b[1];
+    const ha: i32 = if (top <= 0) 0 else scale1000(upm, @intFromFloat(@ceil(top)));
+    const db: i32 = if (bot >= 0) 0 else scale1000(upm, @intFromFloat(@ceil(-bot)));
+    return .{ ha, db };
+}
+
+/// True ink box from CFF outlines at 1000 units, y up from the baseline,
+/// unclipped (v4 provider hook shape). Blank or undecodable glyphs
+/// report all zeros, which the core treats as absent (its accent path
+/// requires `x1 > x0`). Rounding is outward (floor the minima, ceil the
+/// maxima), so the integer box always contains the outline: at most 1
+/// unit of float slack per edge against a shaper's own rounding.
+pub fn inkBounds1000(font: *const CffFont, upm: u16, glyph: u16, scratch: []Seg) [4]i32 {
+    const bb = outlineBbox(font, glyph, scratch) catch return .{ 0, 0, 0, 0 };
+    const b = bb orelse return .{ 0, 0, 0, 0 };
+    return .{
+        scale1000(upm, @intFromFloat(@floor(b[0]))),
+        scale1000(upm, @intFromFloat(@floor(b[1]))),
+        scale1000(upm, @intFromFloat(@ceil(b[2]))),
+        scale1000(upm, @intFromFloat(@ceil(b[3]))),
+    };
+}
+
 /// Ink bounding box of a glyph in font units (y-up), or null when the
 /// glyph draws nothing. `scratch` must hold the largest glyph path
 /// (8K segments covers the fixture's worst case several times over).
@@ -905,14 +950,26 @@ pub fn outlineBbox(font: *const CffFont, glyph: u16, scratch: []Seg) Error!?[4]f
     return .{ x0, y0, x1, y1 };
 }
 
-test "cff loads the fixture with 4802 glyphs and subrs" {
-    const alloc = std.testing.allocator;
-    const path = @import("build_options").fixture_font;
-    var threaded = std.Io.Threaded.init(alloc, .{});
+/// Vendored reference font, read from the working tree by tests only
+/// (the reader itself only ever sees caller-provided bytes).
+const ref_path = "fixtures/fonts/latinmodern-math.otf";
+
+fn loadRef() !struct { bytes: []u8, font: CffFont } {
+    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
     defer threaded.deinit();
-    const bytes = try std.Io.Dir.cwd().readFileAlloc(threaded.io(), path, alloc, .limited(32 * 1024 * 1024));
-    defer alloc.free(bytes);
-    const font = try load(bytes);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(
+        threaded.io(),
+        ref_path,
+        std.testing.allocator,
+        .limited(32 * 1024 * 1024),
+    );
+    return .{ .bytes = bytes, .font = try load(bytes) };
+}
+
+test "cff loads the fixture with 4802 glyphs and subrs" {
+    const r = try loadRef();
+    defer std.testing.allocator.free(r.bytes);
+    const font = r.font;
     try std.testing.expectEqual(4802, font.num_glyphs);
     try std.testing.expect(font.subrs.count > 0);
     try std.testing.expectEqual(0, font.gsubrs.count);
@@ -920,13 +977,9 @@ test "cff loads the fixture with 4802 glyphs and subrs" {
 
 test "every fixture glyph executes without error" {
     var scratch: [8192]Seg = undefined;
-    const alloc = std.testing.allocator;
-    const path = @import("build_options").fixture_font;
-    var threaded = std.Io.Threaded.init(alloc, .{});
-    defer threaded.deinit();
-    const bytes = try std.Io.Dir.cwd().readFileAlloc(threaded.io(), path, alloc, .limited(32 * 1024 * 1024));
-    defer alloc.free(bytes);
-    const font = try load(bytes);
+    const r = try loadRef();
+    defer std.testing.allocator.free(r.bytes);
+    const font = r.font;
     var g: usize = 0;
     var blanks: usize = 0;
     while (g < font.num_glyphs) : (g += 1) {

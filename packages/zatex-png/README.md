@@ -37,7 +37,7 @@ a macOS host, and how the Linux oracle image builds).
 - `src/cg_backend.zig` — CoreGraphics implementation (reference).
   `src/ios_backend.zig` — iOS re-export of it.
 - `src/sw_backend.zig` — portable software rasterizer (the endgame:
-  CFF/Type2 outlines from `sw_font.zig`, scanline fill from
+  CFF/Type2 outlines from the shared `cff` module, scanline fill from
   `sw_raster.zig`, PNG via `std.compress.flate` from `sw_png.zig`;
   zero host dependencies beyond libc). `src/linux_backend.zig`,
   `src/windows_backend.zig`, `src/android_backend.zig` re-export it

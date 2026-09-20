@@ -18,7 +18,11 @@ no untracked float in the contract.
   parsing and zero rasterization at showtime. A `Rule` with a non-`none`
   `diag` strokes a `thick`-wide butt-cap diagonal across its rect
   instead (`\cancel` family, issue #107) — hosts without line stroking
-  skip those rules rather than filling the rect.
+  skip those rules rather than filling the rect. Hosts with font file
+  bytes skip hand-rolled parsing entirely via the blessed file-based
+  provider (see `docs/file-provider.md`, issue #192); the gid-namespace
+  handshake there decides when file gids may be drawn through a
+  platform shaper.
 * **Emitters** walk the same tree: MathML ships in
   `packages/zatex-mathml`, `packages/zatex-png` renders PNG
   (macOS-only backend), SVG is future.

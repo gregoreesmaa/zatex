@@ -120,6 +120,36 @@ pub fn build(b: *std.Build) void {
     const fontstack_tests = b.addTest(.{ .root_module = fontstack_mod });
     const run_fontstack_tests = b.addRunArtifact(fontstack_tests);
     test_step.dependOn(&run_fontstack_tests.step);
+
+    // Shared CFF/Type2 outline reader (host-side ink boxes, issue
+    // #192): the blessed file provider measures through it and the
+    // software backend draws through it. Host/tool code, never in the
+    // core library — the dist lib never imports it (size gate proves).
+    const cff_mod = b.addModule("cff", .{
+        .root_source_file = b.path("src/cff.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const cff_tests = b.addTest(.{ .root_module = cff_mod });
+    const run_cff_tests = b.addRunArtifact(cff_tests);
+    test_step.dependOn(&run_cff_tests.step);
+
+    // Blessed file-based MetricsProvider (issue #192): host hands
+    // font file bytes, gets reference-identical metrics. Same
+    // host-side status as `fontstack` (test + embedder module, never
+    // in the core library).
+    const fileprovider_mod = b.addModule("fileprovider", .{
+        .root_source_file = b.path("src/fileprovider.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    fileprovider_mod.addImport("zatex", mod);
+    fileprovider_mod.addImport("otmath", otmath_mod);
+    fileprovider_mod.addImport("fontstack", fontstack_mod);
+    fileprovider_mod.addImport("cff", cff_mod);
+    const fileprovider_tests = b.addTest(.{ .root_module = fileprovider_mod });
+    const run_fileprovider_tests = b.addRunArtifact(fileprovider_tests);
+    test_step.dependOn(&run_fileprovider_tests.step);
     refhost_mod.addImport("fontstack", fontstack_mod);
     const refhost_tests = b.addTest(.{ .root_module = refhost_mod });
     const run_refhost_tests = b.addRunArtifact(refhost_tests);
