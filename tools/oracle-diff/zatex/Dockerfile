@@ -26,7 +26,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 ENV PATH=/opt/zig:$PATH
 
 # Render one case: render-one <texfile> <display:0|1> <out.png>
-# [--font PATH]. Builds zatex-png from /work on first use.
+# [--font PATH]. Builds zatex-png from /repo on first use. Default (no
+# --font) renders with the full fixture stack incl. KaTeX Size1/Size2
+# (issue #195); --font is a single-face-experiment opt-in only.
 COPY render-one.sh /usr/local/bin/render-one
 RUN chmod +x /usr/local/bin/render-one
 ENTRYPOINT ["render-one"]

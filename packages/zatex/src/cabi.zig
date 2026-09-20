@@ -45,6 +45,12 @@ pub const CRun = extern struct {
     baseline_y: i32,
     glyph_start: u32,
     glyph_count: u32,
+    /// Horizontal raster scale in per-mille (1000 = identity), the
+    /// `ir.Run.x_scale` stretch factor (issue #197: wide accents,
+    /// braces, arrows). Must match `zatex.h` `zatex_run_t.x_scale`.
+    /// Appended — old readers ignore the tail and draw unstretched,
+    /// exactly as before.
+    x_scale: u16 = 1000,
 };
 
 pub const CRule = extern struct {
@@ -239,6 +245,9 @@ export fn zatex_layout_utf8(
             .baseline_y = r.baseline_y,
             .glyph_start = ng,
             .glyph_count = @intCast(r.glyphs.len),
+            // Stretch factor (issue #197): without it C hosts draw
+            // wide accents at natural size, off-span.
+            .x_scale = r.x_scale,
         };
         ng += @intCast(r.glyphs.len);
     }
@@ -347,6 +356,104 @@ test "cabi v4 extents+ink flow into layout, null keeps v3" {
     try std.testing.expectEqual(@as(u32, 1), out1.nrules);
     try std.testing.expect(rules1[0].x < rules0[0].x);
     try std.testing.expect(out1.height_above != out0.height_above);
+}
+
+test "cabi run layout is frozen v1 plus appended x_scale (issue #197)" {
+    // Frozen v1 prefix: field offsets never move, so old readers
+    // keep parsing the head. `x_scale` appends at the tail (same
+    // policy as `CLayout.err_msg`), padding the struct to 24.
+    comptime {
+        std.debug.assert(@offsetOf(CRun, "font_id") == 0);
+        std.debug.assert(@offsetOf(CRun, "size_units") == 2);
+        std.debug.assert(@offsetOf(CRun, "x") == 4);
+        std.debug.assert(@offsetOf(CRun, "baseline_y") == 8);
+        std.debug.assert(@offsetOf(CRun, "glyph_start") == 12);
+        std.debug.assert(@offsetOf(CRun, "glyph_count") == 16);
+        std.debug.assert(@offsetOf(CRun, "x_scale") == 20);
+        std.debug.assert(@sizeOf(CRun) == 24);
+        // The rect surface is untouched by this change.
+        std.debug.assert(@sizeOf(CRule) == 16);
+    }
+}
+
+test "cabi carries x_scale through for wide accents (issue #197)" {
+    // `\widetilde{AB}` / `\widehat{AB}` through the C ABI must span
+    // their nuclei exactly like the IR backend: every run's origin
+    // and stretch factor match the Zig surface run-for-run, and the
+    // stretched accent advance covers the nucleus span. Stub
+    // advances are uniform 500 (null v4 hooks): AB spans 1000 over
+    // the 500-wide accent glyph, so the factor is 2000.
+    const S = struct {
+        fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return 500;
+        }
+        fn rt(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) i32 {
+            return 40;
+        }
+    };
+    const Z = struct {
+        var dummy: u8 = 0;
+        fn gid(_: *const anyopaque, _: u16, cp: u21) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: *const anyopaque, _: u16, _: u16) i32 {
+            return 500;
+        }
+        fn rt(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+            return 40;
+        }
+    };
+    const zprov: zatex.MetricsProvider = .{
+        .ctx = &Z.dummy,
+        .glyphId = Z.gid,
+        .advance = Z.adv,
+        .ruleThickness = Z.rt,
+    };
+    const m: CMetrics = .{ .ctx = null, .glyph_id = S.gid, .advance = S.adv, .rule_thickness = S.rt };
+    // accent codepoint per input: `~` (widetilde), `^` (widehat).
+    const cases = [_]struct { tex: []const u8, accent: u16 }{
+        .{ .tex = "\\widetilde{AB}", .accent = 0x007E },
+        .{ .tex = "\\widehat{AB}", .accent = 0x005E },
+    };
+    for (cases) |c| {
+        var runs: [16]CRun = undefined;
+        var rules: [8]CRule = undefined;
+        var glyphs: [64]u16 = undefined;
+        var out: CLayout = undefined;
+        const st = zatex_layout_utf8(c.tex.ptr, c.tex.len, false, &m, &runs, runs.len, &rules, rules.len, &glyphs, glyphs.len, &out);
+        try std.testing.expectEqual(STATUS_OK, st);
+        // Independent oracle: the Zig surface on the same input with
+        // the equivalent provider (the IR backend's own view).
+        var zruns: [16]zatex.ir.Run = undefined;
+        var zrules: [8]zatex.ir.Rule = undefined;
+        var zglyphs: [64]u16 = undefined;
+        const l = try zatex.layoutFull(c.tex, .{}, zprov, &zruns, &zrules, &zglyphs);
+        try std.testing.expectEqual(l.runs.len, out.nruns);
+        var accent_scale: ?u16 = null;
+        for (l.runs, 0..) |zr, i| {
+            const cr = runs[i];
+            try std.testing.expectEqual(zr.font_id, cr.font_id);
+            try std.testing.expectEqual(zr.size_units, cr.size_units);
+            try std.testing.expectEqual(zr.x, cr.x);
+            try std.testing.expectEqual(zr.baseline_y, cr.baseline_y);
+            try std.testing.expectEqual(zr.x_scale, cr.x_scale);
+            try std.testing.expectEqual(zr.glyphs.len, cr.glyph_count);
+            const cg = glyphs[cr.glyph_start..][0..cr.glyph_count];
+            try std.testing.expectEqualSlices(u16, zr.glyphs, cg);
+            for (cg) |g| {
+                if (g == c.accent) accent_scale = cr.x_scale;
+            }
+        }
+        // The accent run stretches (2000 over the 500 stub glyph)
+        // and the stretched ink spans the 1000-wide nucleus: the C
+        // host draws it with the documented origin-scale recipe.
+        try std.testing.expectEqual(@as(?u16, 2000), accent_scale);
+        try std.testing.expectEqual(@as(u32, 1000), l.width);
+        try std.testing.expectEqual(@as(u32, 1000), out.width);
+    }
 }
 
 test "cabi reports Invalid with offset" {

@@ -63,11 +63,20 @@ sweeps any checkout.
 
 ## Fonts and DPI
 
-Cases enter via mounted files; fonts resolve Latin Modern Math fixture
-first, STIX Two fallback — the same order `refhost.zig` uses.
-`tools/diff-oracles.sh` stages both into `tools/oracle-diff/fonts/`
-(the LM fixture is copied from the repo; STIX Two Math is picked up
-from well-known host paths when present).
+Cases enter via mounted files. The ZaTeX side renders with the **full
+fixture stack** by default — `tools/oracle-diff/zatex/render-one.sh`
+passes no `--font`, so `zatex-png` loads its default stack (Latin
+Modern Math first, then the KaTeX faces including `KaTeX_Size1` /
+`KaTeX_Size2`, then system STIX when present; issue #195). The KaTeX
+faces are vendored CFF-OTF converts of the pinned `katex@0.18.7`
+bundle (`packages/zatex/fixtures/fonts/katex/OFL-README.txt`), so
+ZaTeX's KaTeX-face roles render from the same outlines as the KaTeX
+web oracle. A single `--font` remains only as an explicit opt-in for
+single-face experiments (there the one face answers everything and
+Size1/Size2/AMS roles collapse onto it). `tools/diff-oracles.sh`
+additionally stages the LM fixture and host STIX Two into
+`tools/oracle-diff/fonts/` (mounted at `/fonts`); nothing in the
+default sweep consumes that staging.
 
 Two documented approximations (triage-grade, not proof-grade):
 
@@ -75,8 +84,10 @@ Two documented approximations (triage-grade, not proof-grade):
   MathJax ship their own), not the LM fixture — forcing them onto LM
   would mis-map their glyph ids. The LuaTeX oracle renders Computer
   Modern, the design Latin Modern remakes, so the LuaTeX↔ZaTeX pair
-  shares outlines. Font-stack spread is exactly why the score is a max
-  and why the `spec-ambiguous` tag exists.
+  shares outlines on Main-role glyphs. Remaining font spread on the
+  ZaTeX side is the LM-first Main-role policy (documented) vs the web
+  bundles — the residual issue owns that. Font-stack spread is exactly
+  why the score is a max and why the `spec-ambiguous` tag exists.
 - Absolute scale differs per engine (CSS px × deviceScaleFactor,
   `pdftoppm -r 300`, `--px 48`); the normalization below equalizes it.
   Absolute-size divergences are out of scope here — layout-IR tests own

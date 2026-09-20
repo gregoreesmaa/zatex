@@ -35,22 +35,45 @@ typedef struct zatex_metrics {
     // mean this callback returned 0 — log the (font, cp) pairs to
     // enumerate coverage (see docs/parity.md font troubleshooting).
     uint16_t (*glyph_id)(const void *ctx, uint16_t font, uint32_t cp);
+    // Per-hook exactness contract (issue #193; normative text in
+    // contract.zig, host guide in docs/ir.md). Every numeric value is
+    // in thousandths of an em; the core scales to the ambient size.
+    // advance: hmtx bit-for-bit, INCLUDING 0 for zero-width combining
+    // marks (e.g. U+20D7). The core branches on adv == 0 (ink-center
+    // vs advance-box accent path): a nonzero fallback for zero-width
+    // glyphs mis-centers accents by ~half an em. The bridge's 500 for
+    // a NULL advance hook is totality, not correctness.
     int32_t (*advance)(const void *ctx, uint16_t font, uint16_t glyph);
-    // kind: 0 fraction_bar, 1 radical, 2 overline, 3 underline
+    // kind: 0 fraction_bar, 1 radical, 2 overline, 3 underline.
+    // Thousandths; <= 0 reads as 40 (floored further by the caller's
+    // min_rule_thickness option).
     int32_t (*rule_thickness)(const void *ctx, uint16_t font, uint32_t kind);
-    // Optional (may be NULL): taller glyph variant, italic correction.
+    // Optional (may be NULL): taller glyph variant whose extent is at
+    // least min_height (thousandths), or the input glyph when unknown.
+    // Feeds fences and radicals; always-identity under-grows them.
     uint16_t (*glyph_variant)(const void *ctx, uint16_t font, uint16_t glyph, int32_t min_height);
+    // Optional (may be NULL): OpenType MATH italic correction scaled to
+    // thousandths (truncate toward zero). The core looks it up on the
+    // laid-out glyph, halves it, and adds the KaTeX Math-Italic skew;
+    // NULL reads 0 (upright accents).
     int32_t (*italic_correction)(const void *ctx, uint16_t font, uint16_t glyph);
     // Optional (may be NULL, v3): MathKern cut-in for glyph at correction
     // height; corner: 0 top_right, 1 top_left, 2 bottom_right, 3 bottom_left.
+    // Top-right tucks superscripts, bottom-right subscripts (clamped to
+    // the script gap); other corners return 0. NULL/0: no cut-in.
     int32_t (*kern_correction)(const void *ctx, uint16_t font, uint16_t glyph, int32_t height, uint32_t corner);
     // Optional (may be NULL, v4): [height_above, depth_below] of glyph
     // at 1000 units (blank glyphs report [0, 0]). Null keeps the uniform
-    // 700/250 approximation, bit-identical to v3.
+    // 700/250 approximation, bit-identical to v3. True extents shift
+    // vertical clearance (e.g. accent clearance) versus the reference.
     zatex_extents_t (*extents)(const void *ctx, uint16_t font, uint16_t glyph);
     // Optional (may be NULL, v4): true ink box at 1000 units, y up from
-    // the baseline, unclipped (blank glyphs report all zeros). Null
-    // keeps exact v3 behavior (e.g. advance-edge vinculum starts).
+    // the baseline, unclipped — negatives preserved (blank glyphs
+    // report all zeros, which the core ignores). Feeds accent
+    // ink-centering, low-accent lift (>= 130 clear), wide-accent ink
+    // scaling, dot lift, brace kerns, and the sqrt junction. Null
+    // keeps exact v3 behavior per construct (e.g. advance-edge
+    // vinculum starts).
     zatex_inkbox_t (*ink_bounds)(const void *ctx, uint16_t font, uint16_t glyph);
 } zatex_metrics_t;
 
@@ -61,6 +84,15 @@ typedef struct zatex_run {
     int32_t baseline_y;
     uint32_t glyph_start;
     uint32_t glyph_count;
+    // Horizontal raster scale in per-mille (1000 = identity), the
+    // ir.Run.x_scale stretch factor (issue #197: wide accents,
+    // braces, arrows). The host stretches the run's ink AND its
+    // intra-run pen advances by x_scale/1000 about the run origin
+    // (x, baseline_y) — CoreText: save, translate to the origin,
+    // scale x, draw, restore (same recipe as zatex-png render.zig).
+    // Appended — old readers ignore the tail and draw unstretched,
+    // exactly as before. Must match cabi.zig `CRun` field-for-field.
+    uint16_t x_scale;
 } zatex_run_t;
 
 typedef struct zatex_rule {
