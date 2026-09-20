@@ -87,6 +87,19 @@ typedef struct zatex_metrics {
     zatex_inkbox_t (*ink_bounds)(const void *ctx, uint16_t font, uint16_t glyph);
 } zatex_metrics_t;
 
+// Frozen v1 run prefix (issue #203): the 20-byte head every host
+// understands. Must match cabi.zig `CRunV1` field-for-field. The v1
+// entry below fills arrays of exactly this shape; the `_ex` entry
+// strides by the host's own element size.
+typedef struct zatex_run_v1 {
+    uint16_t font_id;
+    uint16_t size_units;
+    int32_t x;
+    int32_t baseline_y;
+    uint32_t glyph_start;
+    uint32_t glyph_count;
+} zatex_run_v1_t;
+
 typedef struct zatex_run {
     uint16_t font_id;
     uint16_t size_units;
@@ -100,8 +113,11 @@ typedef struct zatex_run {
     // intra-run pen advances by x_scale/1000 about the run origin
     // (x, baseline_y) — CoreText: save, translate to the origin,
     // scale x, draw, restore (same recipe as zatex-png render.zig).
-    // Appended — old readers ignore the tail and draw unstretched,
-    // exactly as before. Must match cabi.zig `CRun` field-for-field.
+    // Written only when the host's run stride admits it (see
+    // zatex_layout_utf8_ex): appending changes sizeof, so a new
+    // dylib striding wider than an old host's slots would scramble
+    // every run past the first (issue #203). Must match cabi.zig
+    // `CRun` field-for-field.
     uint16_t x_scale;
 } zatex_run_t;
 
@@ -133,12 +149,46 @@ typedef struct zatex_layout {
 // (no_space) means need exceeds the smaller of caller buffers and
 // these ceilings: growing caller buffers helps, up to the ceilings.
 // Input is capped at 65536 bytes.
+//
+// Frozen v1 entry (issue #203): `runs` is an array of `runs_cap`
+// 20-byte v1 slots (`zatex_run_v1_t`). The engine strides 20 and
+// writes the v1 prefix only — never `x_scale` — so hosts compiled
+// against the old struct stay bit-identical across dylib updates
+// (they draw unstretched, exactly as before). Hosts compiled
+// against the 24-byte `zatex_run_t` call `zatex_layout_utf8_ex`.
+// (Declared with the v1 pointer type on purpose: passing a
+// `zatex_run_t` array here warns and scrambles — stride 20 over
+// 24-byte slots.)
 int32_t zatex_layout_utf8(const char *src, size_t src_len, bool display_mode,
                           const zatex_metrics_t *metrics,
-                          zatex_run_t *runs, size_t runs_cap,
+                          zatex_run_v1_t *runs, size_t runs_cap,
                           zatex_rule_t *rules, size_t rules_cap,
                           uint16_t *glyphs, size_t glyphs_cap,
                           zatex_layout_t *out);
+
+// Stride-negotiated layout (issue #203): identical to
+// `zatex_layout_utf8`, except `runs` elements are `runs_stride`
+// bytes wide — pass sizeof() your run struct
+// (`sizeof(zatex_run_t)`, 24 today).
+//
+// Stride contract: the engine writes the frozen v1 prefix (bytes
+// 0..20) into every element and `x_scale` (bytes 20..22) only when
+// `runs_stride >= 22`; every other tail byte (including struct
+// padding) is left untouched. Strides below 20 fail with status 7
+// (limit) without touching the runs buffer. A future wider host
+// struct keeps working: the engine never writes past its known 22
+// bytes and never strides wider than the host's own size.
+//
+// Pairing: hosts wanting `x_scale` need a dylib exporting this
+// entry — dlsym() it and fall back to `zatex_layout_utf8` when
+// absent (old dylib), drawing unstretched. The v1 entry is safe
+// with any dylib/host mix.
+int32_t zatex_layout_utf8_ex(const char *src, size_t src_len, bool display_mode,
+                             const zatex_metrics_t *metrics,
+                             zatex_run_t *runs, size_t runs_cap, size_t runs_stride,
+                             zatex_rule_t *rules, size_t rules_cap,
+                             uint16_t *glyphs, size_t glyphs_cap,
+                             zatex_layout_t *out);
 
 // Packed semantic version: major << 16 | minor << 8 | patch.
 uint32_t zatex_version(void);
