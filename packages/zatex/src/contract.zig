@@ -117,7 +117,12 @@ pub const PresetMacro = struct {
 /// Hard cap on preset macros per call (part of the contract).
 pub const max_presets: usize = 16;
 
-/// Rule kinds the core may ask a thickness for.
+/// Rule kinds the core may ask a thickness for. Declaration order is
+/// the C ABI contract (`zatex.h` `rule_thickness` kind, bridged via
+/// `@intFromEnum` in cabi.zig — not MATH-table order):
+/// 0 = fraction_bar, 1 = radical, 2 = overline, 3 = underline.
+/// Underlines reuse the overline weight today (KaTeX parity), so the
+/// core never requests `underline` yet — it stays reserved.
 pub const RuleKind = enum { fraction_bar, radical, overline, underline };
 
 /// MathKern corner for script cut-ins (v3 hook below).
