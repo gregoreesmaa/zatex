@@ -981,6 +981,73 @@ test "oracle-165: blackboard-bold alphabet resolves, no gid-0 fallback" {
     try std.testing.expectEqual(@as(usize, 62), n);
 }
 
+test "issue196-b2: delimiter roles resolve KaTeX faces first" {
+    // Owner decision (issue #196-B2): fence/delimiter roles resolve
+    // KaTeX outlines first — KaTeX never sets a delimiter from a
+    // Computer-Modern face (pinned 0.18.7 `delimTypeToFont`: small →
+    // Main-Regular, large → SizeN-Regular). Small fences stay Main
+    // (font 10); Rule 15e binom fences land on Size1 (font 11, KaTeX's
+    // `delimsizing size1`); grown parens walk Size2 (font 12) while
+    // ZaTeX need exceeds Size1 ink. stackAlways `|` and Size3-territory
+    // dbinom keep the LM variant backstop; atom-role parens (B1) stay
+    // rm untouched.
+    var ref = try Ref.load();
+    defer ref.free();
+    var runs: [64]zatex.ir.Run = undefined;
+    var rules: [16]zatex.ir.Rule = undefined;
+    var glyphs: [512]u16 = undefined;
+    // `\\binom{a}{b}` (text): both fences Size1, KaTeX-exact.
+    {
+        const lay = try layoutCase(&ref, "\\binom{a}{b}", false, &runs, &rules, &glyphs);
+        try std.testing.expectEqual(@as(usize, 4), lay.runs.len);
+        try std.testing.expectEqual(@as(u16, 11), lay.runs[0].font_id);
+        try std.testing.expectEqual(@as(u16, 11), lay.runs[3].font_id);
+        try std.testing.expectEqual(fontstack.Role.size1, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
+        try std.testing.expectEqual(fontstack.Role.size1, ref.stack.roleOf(lay.runs[3].glyphs[0]).?);
+    }
+    // Small `\\left(x\\right)`: Main base covers, unchanged.
+    {
+        const lay = try layoutCase(&ref, "\\left(x\\right)", false, &runs, &rules, &glyphs);
+        try std.testing.expectEqual(@as(u16, 10), lay.runs[0].font_id);
+        try std.testing.expectEqual(@as(u16, 10), lay.runs[2].font_id);
+        try std.testing.expectEqual(fontstack.Role.main, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
+    }
+    // Grown parens walk past Size1 to Size2 (ZaTeX need exceeds Size1
+    // ink here; KaTeX's own need lands one step lower — pinned need
+    // formula territory, issues #102/#200, not outlines).
+    {
+        const lay = try layoutCase(&ref, "\\left(\\frac{a}{b}\\right)", false, &runs, &rules, &glyphs);
+        try std.testing.expectEqual(@as(u16, 12), lay.runs[0].font_id);
+        try std.testing.expectEqual(@as(u16, 12), lay.runs[3].font_id);
+        try std.testing.expectEqual(fontstack.Role.size2, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
+    }
+    // stackAlways `|` keeps the LM variant backstop (KaTeX stacks
+    // Size4 pieces there; assembly is issues #102/#104).
+    {
+        const lay = try layoutCase(&ref, "\\left|\\frac{a}{b}\\right|", false, &runs, &rules, &glyphs);
+        try std.testing.expectEqual(@as(u16, 0), lay.runs[0].font_id);
+        try std.testing.expectEqual(fontstack.Role.lm, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
+    }
+    // `\\dbinom` display need is Size3 territory (KaTeX `delimsizing
+    // size3`): unvendored, so the LM backstop stands — pinned here so
+    // a future Size3 vendor fails loudly.
+    {
+        const lay = try layoutCase(&ref, "\\dbinom{a}{b}", true, &runs, &rules, &glyphs);
+        try std.testing.expectEqual(@as(u16, 0), lay.runs[0].font_id);
+        try std.testing.expectEqual(fontstack.Role.lm, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
+    }
+    // B1 atom-role parens stay rm: no fence path involved.
+    {
+        const lay = try layoutCase(&ref, "\\frac{y}{)(}", true, &runs, &rules, &glyphs);
+        try std.testing.expectEqual(@as(u32, 1018), lay.width);
+        var found = false;
+        for (lay.runs) |r| {
+            if (r.font_id == 0 and r.glyphs.len == 2) found = true;
+        }
+        try std.testing.expect(found);
+    }
+}
+
 test "oracle-167: gathered cells are displaystyle" {
     // KaTeX's `gathered` handler styles cells `"display"` (like the
     // MathML walker already records): a display `\sum` draws from

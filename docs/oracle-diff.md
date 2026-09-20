@@ -85,9 +85,15 @@ Two documented approximations (triage-grade, not proof-grade):
   would mis-map their glyph ids. The LuaTeX oracle renders Computer
   Modern, the design Latin Modern remakes, so the LuaTeX↔ZaTeX pair
   shares outlines on Main-role glyphs. Remaining font spread on the
-  ZaTeX side is the LM-first Main-role policy (documented) vs the web
+  ZaTeX side is the LM-first policy for atom/text roles vs the web
   bundles — the residual issue owns that. Font-stack spread is exactly
   why the score is a max and why the `spec-ambiguous` tag exists.
+  Delimiter/fence roles are exempt from LM-first since the #196-B2
+  owner decision: they resolve KaTeX outlines first (Main, then the
+  vendored Size1/Size2 in KaTeX traverse order, LM variants only as
+  the backstop for unvendored Size3+ / stack territory) — KaTeX never
+  sets a delimiter from a Computer-Modern face (pinned 0.18.7
+  `delimTypeToFont`).
 - Absolute scale differs per engine (CSS px × deviceScaleFactor,
   `pdftoppm -r 300`, `--px 48`); the normalization below equalizes it.
   Absolute-size divergences are out of scope here — layout-IR tests own
