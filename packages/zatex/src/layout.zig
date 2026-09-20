@@ -1685,13 +1685,36 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 // Fences, accents, overs
 // ---------------------------------------------------------------------------
 
+/// Delimiter codepoints whose KaTeX class walks Size faces past Main
+/// (issue #196-B2): pinned 0.18.7 `stackLargeDelimiters` — parens,
+/// brackets, braces, floors, ceils, surd — plus `stackNeverDelimiters`
+/// as ZaTeX codepoints — angles, slash, backslash. `</>` are excluded
+/// (parse maps no langle: KaTeX's proof covers ⟨⟩, not `<`), as is the
+/// whole stackAlways class (`|`, arrows, groups, moustaches).
+fn sizeDelimCp(cp: u21) bool {
+    return switch (cp) {
+        0x28, 0x29, 0x5B, 0x5D, 0x7B, 0x7D,
+        0x230A, 0x230B, 0x2308, 0x2309, 0x221A,
+        0x27E8, 0x27E9, 0x2F, 0x5C,
+        => true,
+        else => false,
+    };
+}
+
 /// One fence glyph for `need` (total height, TeX `make_left_right`
 /// target). KaTeX `traverseSequence` tries the Main-face base
 /// delimiter first (pinned 0.18.7 `delimiters.js`): when it covers
 /// `need` it is emitted at natural extents, never grown nor centered
 /// (issue #102 — the Main design carries the heavier KaTeX stroke).
-/// Otherwise the rm glyph grows through the variant hook and the box
-/// centers on the math axis.
+/// Past Main, KaTeX walks its Size faces in order (`delimTypeToFont`:
+/// small → Main-Regular, large → SizeN-Regular — a delimiter never
+/// comes from a Computer-Modern face), so the vendored Size1/Size2
+/// faces are tried next for the stacking classes, first ink-covering
+/// face winning at natural extents (issue #196-B2: KaTeX_Main-first
+/// delimiter outlines). Unvendored sizes (Size3+, stacks) and
+/// providers without an ink hook fall through to the rm glyph, which
+/// grows through the variant hook while the box centers on the math
+/// axis.
 fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32, variant_box: bool) Error!u16 {
     const size = lc.effSize(style);
     const main_font: u16 = @intFromEnum(contract.FontId.main);
@@ -1708,6 +1731,42 @@ fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32, variant_box:
                 .db = mdb,
                 .kind = .{ .glyph = .{ .font = main_font, .size = size, .glyph = mg } },
             });
+        }
+    }
+    // KaTeX size traversal for the stacking classes (pinned 0.18.7
+    // `stackLargeDelimiters` ∪ `stackNeverDelimiters`, as ZaTeX
+    // codepoints; `</>` stay out — parse maps no langle, so they are
+    // outside the proven territory — as do the stackAlways class
+    // (`|`, arrows, groups, moustaches: KaTeX stacks Size4 pieces,
+    // which issues #102/#104 own, so they keep the variant backstop).
+    if (sizeDelimCp(cp)) {
+        const size_fonts = [_]u16{
+            @intFromEnum(contract.FontId.size1),
+            @intFromEnum(contract.FontId.size2),
+        };
+        for (size_fonts) |sf| {
+            const sg = lc.glyphId(sf, cp);
+            // A zero gid means the host ships no such face; a gid
+            // equal to Main's means one face answered every id
+            // (single-file hosts) — either way there is nothing new
+            // to try, so the legacy path below stays bit-identical.
+            if (sg == 0 or sg == mg) continue;
+            if (lc.ink(sf, sg)) |sib| {
+                const htot = sib[3] - sib[1];
+                if (htot <= 0) continue;
+                if (@divTrunc(htot * size, 1000) > need) {
+                    const se = lc.extents(sf, sg);
+                    const sha = @divTrunc(se[0] * size, 1000);
+                    const sdb = @divTrunc(se[1] * size, 1000);
+                    const sadv = lc.advance(sf, sg);
+                    return lc.allocBox(.{
+                        .w = @divTrunc(sadv * size, 1000),
+                        .ha = sha,
+                        .db = sdb,
+                        .kind = .{ .glyph = .{ .font = sf, .size = size, .glyph = sg } },
+                    });
+                }
+            }
         }
     }
     const font: u16 = @intFromEnum(contract.FontId.rm);
