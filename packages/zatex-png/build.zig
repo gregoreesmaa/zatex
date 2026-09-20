@@ -68,6 +68,8 @@ pub fn build(b: *std.Build) void {
     mod.addImport("zatex", zatex_dep.module("zatex"));
     mod.addImport("otmath", zatex_dep.module("otmath"));
     mod.addImport("fontstack", zatex_dep.module("fontstack"));
+    mod.addImport("cff", zatex_dep.module("cff"));
+    mod.addImport("fileprovider", zatex_dep.module("fileprovider"));
     if (backend_is_cg) {
         mod.linkFramework("CoreGraphics", .{});
         mod.linkFramework("CoreText", .{});
@@ -99,6 +101,8 @@ pub fn build(b: *std.Build) void {
     mod_test_mod.addImport("zatex", zatex_dep.module("zatex"));
     mod_test_mod.addImport("otmath", zatex_dep.module("otmath"));
     mod_test_mod.addImport("fontstack", zatex_dep.module("fontstack"));
+    mod_test_mod.addImport("cff", zatex_dep.module("cff"));
+    mod_test_mod.addImport("fileprovider", zatex_dep.module("fileprovider"));
     if (apple) {
         mod_test_mod.linkFramework("CoreGraphics", .{});
         mod_test_mod.linkFramework("CoreText", .{});
@@ -124,6 +128,8 @@ pub fn build(b: *std.Build) void {
     render_mod.addImport("zatex", zatex_dep.module("zatex"));
     render_mod.addImport("otmath", zatex_dep.module("otmath"));
     render_mod.addImport("fontstack", zatex_dep.module("fontstack"));
+    render_mod.addImport("cff", zatex_dep.module("cff"));
+    render_mod.addImport("fileprovider", zatex_dep.module("fileprovider"));
     if (backend_is_cg) {
         render_mod.linkFramework("CoreGraphics", .{});
         render_mod.linkFramework("CoreText", .{});
@@ -146,6 +152,8 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     sw_mod.addOptions("build_options", opts);
+    sw_mod.addImport("cff", zatex_dep.module("cff"));
+    sw_mod.addImport("fileprovider", zatex_dep.module("fileprovider"));
     if (apple) {
         sw_mod.linkFramework("CoreGraphics", .{});
         sw_mod.linkFramework("CoreText", .{});
@@ -175,6 +183,8 @@ pub fn build(b: *std.Build) void {
         nmod.addOptions("build_options", opts);
         nmod.addImport("zatex", zatex_dep.module("zatex"));
         nmod.addImport("otmath", zatex_dep.module("otmath"));
+        nmod.addImport("cff", zatex_dep.module("cff"));
+        nmod.addImport("fileprovider", zatex_dep.module("fileprovider"));
         // Sibling-backend imports reference CoreGraphics on Apple
         // hosts whatever `-Dbackend` selects (same rule as sw_mod).
         if (apple) {

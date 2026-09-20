@@ -11,7 +11,7 @@
 //! (draws a subset — deterministic, and caps are sized so the fixture
 //! never gets near them).
 const std = @import("std");
-const Seg = @import("sw_font.zig").Seg;
+const Seg = @import("cff").Seg;
 
 /// Straight segment in device pixels (y-up, canvas space).
 pub const Line = struct {
