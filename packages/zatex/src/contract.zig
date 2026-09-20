@@ -219,6 +219,13 @@ pub const KernCorner = enum(u32) {
 ///   construct above — a host reading "optional" can price NULL from
 ///   this list. This is traceability sentence T3: the `read` host's
 ///   ink-frame / NULL-cost bug is this sentence's violation.
+///
+/// Hosts validate their provider with the metrics conformance check
+/// (issue #194): `conform.check` natively, `zatex_conform_metrics`
+/// at the C ABI level — a diagnostic corpus with reference-font
+/// expectations that names each mismatch (missing hooks, wrong
+/// advances, bad ink boxes). The reference provider passes cleanly;
+/// see `docs/ir.md` ("Metrics conformance").
 pub const provider_version: u32 = 4;
 pub const MetricsProvider = struct {
     ctx: *const anyopaque,

@@ -268,6 +268,240 @@ test "reference: scaled fences use taller variants" {
     try std.testing.expect(tall.width > flat.width);
 }
 
+// Host metrics conformance (issue #194): the reference provider
+// passes the shipped check cleanly, and each of the three
+// historical provider bugs fails with a named diagnostic when
+// reintroduced — natively and through the C entry point.
+test "conform: reference provider passes cleanly at font 0" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var buf: [4096]u8 = undefined;
+    const res = zatex.conform.check(ref.provider(), 0, &buf);
+    try std.testing.expectEqual(@as(usize, 0), res.diagnostics);
+}
+
+test "conform: NULL italic hook on the reference fails named" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var prov = ref.provider();
+    prov.italicCorrection = null;
+    var buf: [4096]u8 = undefined;
+    const res = zatex.conform.check(prov, 0, &buf);
+    try std.testing.expect(res.diagnostics > 0);
+    try std.testing.expect(std.mem.indexOf(u8, buf[0..res.bytes], "italic hook: NULL") != null);
+}
+
+test "conform: 500-for-zero advances on the reference fail named" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const W = struct {
+        inner: zatex.MetricsProvider,
+        fn adv(ctx: *const anyopaque, font: u16, glyph: u16) i32 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            const v = s.inner.advance(s.inner.ctx, font, glyph);
+            return if (v == 0) 500 else v;
+        }
+        fn gid(ctx: *const anyopaque, font: u16, cp: u21) u16 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            return s.inner.glyphId(s.inner.ctx, font, cp);
+        }
+        fn rule(ctx: *const anyopaque, font: u16, kind: zatex.RuleKind) i32 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            return s.inner.ruleThickness(s.inner.ctx, font, kind);
+        }
+        fn variant(ctx: *const anyopaque, font: u16, glyph: u16, min_height: i32) u16 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            const f = s.inner.glyphVariant orelse return glyph;
+            return f(s.inner.ctx, font, glyph, min_height);
+        }
+        fn italic(ctx: *const anyopaque, font: u16, glyph: u16) i32 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            const f = s.inner.italicCorrection orelse return 0;
+            return f(s.inner.ctx, font, glyph);
+        }
+        fn kern(ctx: *const anyopaque, font: u16, glyph: u16, height: i32, corner: zatex.contract.KernCorner) i32 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            const f = s.inner.kernCorrection orelse return 0;
+            return f(s.inner.ctx, font, glyph, height, corner);
+        }
+        fn ext(ctx: *const anyopaque, font: u16, glyph: u16) [2]i32 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            const f = s.inner.extents orelse return .{ 700, 250 };
+            return f(s.inner.ctx, font, glyph);
+        }
+        fn ink(ctx: *const anyopaque, font: u16, glyph: u16) [4]i32 {
+            const s: *const @This() = @ptrCast(@alignCast(ctx));
+            const f = s.inner.inkBounds orelse return .{ 0, 0, 0, 0 };
+            return f(s.inner.ctx, font, glyph);
+        }
+    };
+    var w = W{ .inner = ref.provider() };
+    const prov = zatex.MetricsProvider{
+        .ctx = &w,
+        .glyphId = W.gid,
+        .advance = W.adv,
+        .ruleThickness = W.rule,
+        .glyphVariant = W.variant,
+        .italicCorrection = W.italic,
+        .kernCorrection = W.kern,
+        .extents = W.ext,
+        .inkBounds = W.ink,
+    };
+    var buf: [4096]u8 = undefined;
+    const res = zatex.conform.check(prov, 0, &buf);
+    try std.testing.expect(res.diagnostics > 0);
+    try std.testing.expect(std.mem.indexOf(u8, buf[0..res.bytes], "advance U+20D7: got 500, want 0") != null);
+}
+
+test "conform: NULL ink hook on the reference fails named" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var prov = ref.provider();
+    prov.inkBounds = null;
+    var buf: [4096]u8 = undefined;
+    const res = zatex.conform.check(prov, 0, &buf);
+    try std.testing.expect(res.diagnostics > 0);
+    try std.testing.expect(std.mem.indexOf(u8, buf[0..res.bytes], "ink hook: NULL") != null);
+}
+
+// C ABI surface for the conformance check: mirrors zatex.h plus
+// cabi.zig `CMetrics` field-for-field (the passing run below proves
+// the mirror at runtime — a drifted mirror reads garbage and fails).
+const CExtents = extern struct {
+    ha: i32,
+    db: i32,
+};
+const CInkBox = extern struct {
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+};
+const CMetrics = extern struct {
+    ctx: ?*const anyopaque,
+    glyph_id: ?*const fn (?*const anyopaque, u16, u32) callconv(.c) u16,
+    advance: ?*const fn (?*const anyopaque, u16, u16) callconv(.c) i32,
+    rule_thickness: ?*const fn (?*const anyopaque, u16, u32) callconv(.c) i32,
+    glyph_variant: ?*const fn (?*const anyopaque, u16, u16, i32) callconv(.c) u16 = null,
+    italic_correction: ?*const fn (?*const anyopaque, u16, u16) callconv(.c) i32 = null,
+    kern_correction: ?*const fn (?*const anyopaque, u16, u16, i32, u32) callconv(.c) i32 = null,
+    extents: ?*const fn (?*const anyopaque, u16, u16) callconv(.c) CExtents = null,
+    ink_bounds: ?*const fn (?*const anyopaque, u16, u16) callconv(.c) CInkBox = null,
+};
+
+extern fn zatex_conform_metrics(metrics: ?*const CMetrics, font: u16, buf: ?[*]u8, cap: usize) i32;
+
+const CWrap = struct {
+    fn gid(ctx: ?*const anyopaque, font: u16, cp: u32) callconv(.c) u16 {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        return st.glyphIdFor(font, @intCast(cp));
+    }
+    fn adv(ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) i32 {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        _ = font;
+        return st.advance1000(glyph);
+    }
+    fn rule(ctx: ?*const anyopaque, font: u16, kind: u32) callconv(.c) i32 {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        _ = font;
+        return st.ruleFor(@enumFromInt(kind));
+    }
+    fn variant(ctx: ?*const anyopaque, font: u16, glyph: u16, min_height: i32) callconv(.c) u16 {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        _ = font;
+        return st.variantFor(glyph, min_height);
+    }
+    fn italic(ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) i32 {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        _ = font;
+        return st.italicFor(glyph);
+    }
+    fn kern(ctx: ?*const anyopaque, font: u16, glyph: u16, height: i32, corner: u32) callconv(.c) i32 {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        _ = font;
+        return st.kernFor(glyph, height, @enumFromInt(corner));
+    }
+    fn ext(ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) CExtents {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        const e = st.extentsFor();
+        _ = font;
+        _ = glyph;
+        return .{ .ha = e[0], .db = e[1] };
+    }
+    fn ink(ctx: ?*const anyopaque, font: u16, glyph: u16) callconv(.c) CInkBox {
+        const st: *const fontstack.Stack = @ptrCast(@alignCast(ctx.?));
+        const b = st.inkFor(glyph);
+        _ = font;
+        return .{ .x0 = b[0], .y0 = b[1], .x1 = b[2], .y1 = b[3] };
+    }
+};
+
+fn cMetricsFor(stack: *const fontstack.Stack) CMetrics {
+    return .{
+        .ctx = @ptrCast(stack),
+        .glyph_id = CWrap.gid,
+        .advance = CWrap.adv,
+        .rule_thickness = CWrap.rule,
+        .glyph_variant = CWrap.variant,
+        .italic_correction = CWrap.italic,
+        .kern_correction = CWrap.kern,
+        .extents = CWrap.ext,
+        .ink_bounds = CWrap.ink,
+    };
+}
+
+fn cText(buf: []u8) []u8 {
+    var len: usize = 0;
+    while (len < buf.len and buf[len] != 0) : (len += 1) {}
+    return buf[0..len];
+}
+
+test "conform C entry: real provider passes with no rebuild or render" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var m = cMetricsFor(&ref.stack);
+    var buf: [2048]u8 = undefined;
+    @memset(&buf, 0xAA);
+    const n = zatex_conform_metrics(&m, 0, &buf, buf.len);
+    try std.testing.expectEqual(@as(i32, 0), n);
+    try std.testing.expectEqual(@as(usize, 0), cText(&buf).len);
+}
+
+test "conform C entry: null hooks fail named" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var buf: [2048]u8 = undefined;
+
+    var no_italic = cMetricsFor(&ref.stack);
+    no_italic.italic_correction = null;
+    try std.testing.expect(zatex_conform_metrics(&no_italic, 0, &buf, buf.len) > 0);
+    try std.testing.expect(std.mem.indexOf(u8, cText(&buf), "italic hook: NULL (want MATH corrections)") != null);
+
+    var no_advance = cMetricsFor(&ref.stack);
+    no_advance.advance = null;
+    try std.testing.expect(zatex_conform_metrics(&no_advance, 0, &buf, buf.len) > 0);
+    try std.testing.expect(std.mem.indexOf(u8, cText(&buf), "advance U+20D7: got 500, want 0") != null);
+
+    var no_ink = cMetricsFor(&ref.stack);
+    no_ink.ink_bounds = null;
+    try std.testing.expect(zatex_conform_metrics(&no_ink, 0, &buf, buf.len) > 0);
+    try std.testing.expect(std.mem.indexOf(u8, cText(&buf), "ink hook: NULL") != null);
+}
+
+test "conform C entry: usage errors and dry runs" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var m = cMetricsFor(&ref.stack);
+    var buf: [2048]u8 = undefined;
+    try std.testing.expectEqual(@as(i32, -1), zatex_conform_metrics(null, 0, &buf, buf.len));
+    try std.testing.expectEqual(@as(i32, -1), zatex_conform_metrics(&m, 0, &buf, 0));
+    // Null buffer counts without writing.
+    try std.testing.expectEqual(@as(i32, 0), zatex_conform_metrics(&m, 0, null, 0));
+    var no_ink = cMetricsFor(&ref.stack);
+    no_ink.ink_bounds = null;
+    try std.testing.expect(zatex_conform_metrics(&no_ink, 0, null, 0) > 0);
+}
+
 // Fallback order is total: unloadable paths skip, the vendored fixture
 // resolves through the same entry point hosts use.
 test "fallback: unloadable paths skip, fixture resolves" {

@@ -382,6 +382,643 @@ pub fn kernCorrection(f: Font, glyph: u16, height: i32, corner: KernCorner) Erro
     return try i16be(b, t + 2 + n * 4 + i * 2);
 }
 
+// ---------------------------------------------------------------------------
+// CFF outline bounds: true ink boxes for the v4 `inkBounds` provider
+// hook (issue #194 conformance corpus).
+//
+// Host-side like everything else here: the core never touches font
+// files. Parses the CFF table (Type 2 charstrings) tracking only the
+// current point and a bounding box — no rasterization, no floats:
+// cubic extrema resolve by adaptive De Casteljau subdivision in 16.16
+// fixed point (leaf chords bound the truth within 1/32 unit, so the
+// rounded box matches a fontTools BoundsPen exactly on every fixture
+// glyph; the conformance doc records the differential).
+//
+// Charstring ops covered: the moveto/lineto/curve families (opcodes
+// 4-8, 21-27, 30-31, plus rcurveline/rlinecurve and the flex family),
+// stems and hint/counter masks (stem counts only — mask bytes are
+// skipped), subrs, shortint and 255-fixed numbers. Anything else
+// (seac endchar, arithmetic/stack ops, blend, CID-keyed CFF) reports
+// `error.UnsupportedTable`, and the caller falls back to the
+// degenerate box — the core ignores degenerate boxes exactly, so this
+// degrades to v3 behavior, never to a wrong box. `Font` gains no
+// fields (CFF offsets re-parse per call; hosts cache per-glyph boxes).
+// ---------------------------------------------------------------------------
+
+fn u8at(b: []const u8, off: usize) Error!u8 {
+    if (off >= b.len) return error.Truncated;
+    return b[off];
+}
+
+fn readOff(b: []const u8, at: usize, size: u8) Error!u32 {
+    var v: u32 = 0;
+    var i: usize = 0;
+    while (i < size) : (i += 1) v = (v << 8) | try u8at(b, at + i);
+    return v;
+}
+
+const CffIndex = struct {
+    count: u32,
+    off_size: u8,
+    offs: usize,
+    data: usize,
+};
+
+fn cffIndex(bytes: []const u8, off: usize) Error!struct { idx: CffIndex, next: usize } {
+    const count = try u16be(bytes, off);
+    if (count == 0) return .{
+        .idx = .{ .count = 0, .off_size = 0, .offs = 0, .data = off + 2 },
+        .next = off + 2,
+    };
+    const os = try u8at(bytes, off + 2);
+    if (os < 1 or os > 4) return error.UnsupportedTable;
+    const offs = off + 3;
+    const data = offs + (@as(usize, count) + 1) * os;
+    if (data > bytes.len) return error.Truncated;
+    const last = try readOff(bytes, offs + @as(usize, count) * os, os);
+    if (last == 0) return error.UnsupportedTable;
+    const next = data + last - 1;
+    if (next > bytes.len) return error.Truncated;
+    return .{ .idx = .{ .count = count, .off_size = os, .offs = offs, .data = data }, .next = next };
+}
+
+fn cffElem(bytes: []const u8, idx: CffIndex, i: u32) Error![]const u8 {
+    if (i >= idx.count) return error.Truncated;
+    const s = try readOff(bytes, idx.offs + @as(usize, i) * idx.off_size, idx.off_size);
+    const e = try readOff(bytes, idx.offs + (@as(usize, i) + 1) * idx.off_size, idx.off_size);
+    if (s == 0 or e < s) return error.UnsupportedTable;
+    const a = idx.data + s - 1;
+    const b = idx.data + e - 1;
+    if (b > bytes.len or a > b) return error.Truncated;
+    return bytes[a..b];
+}
+
+/// One DICT number (Top/Private encoding: shortint 28, longint 29;
+/// real 30 never carries an offset, so it is rejected). `b0` is the
+/// already-consumed first byte; `pos` reads any following bytes.
+fn dictNum(prog: []const u8, b0: u8, pos: *usize) Error!i64 {
+    if (b0 == 28) {
+        const v = try i16be(prog, pos.*);
+        pos.* += 2;
+        return v;
+    }
+    if (b0 == 29) {
+        const v = try u32be(prog, pos.*);
+        pos.* += 4;
+        return @as(i64, @as(i32, @bitCast(v)));
+    }
+    if (b0 >= 32 and b0 <= 246) {
+        // Single-byte number: already consumed, nothing follows.
+        return @as(i64, b0) - 139;
+    }
+    if (b0 >= 247 and b0 <= 250) {
+        const b1 = try u8at(prog, pos.*);
+        pos.* += 1;
+        return (@as(i64, b0) - 247) * 256 + b1 + 108;
+    }
+    if (b0 >= 251 and b0 <= 254) {
+        const b1 = try u8at(prog, pos.*);
+        pos.* += 1;
+        return -((@as(i64, b0) - 251) * 256 + b1 + 108);
+    }
+    if (b0 == 30) {
+        // BCD real (FontMatrix, ItalicAngle, ...): consume nibbles
+        // to the 0xF terminator. Offsets never need the value, so a
+        // placeholder keeps the operand scan in sync.
+        while (true) {
+            if (pos.* >= prog.len) return error.Truncated;
+            const byte = prog[pos.*];
+            pos.* += 1;
+            if (byte >> 4 == 0xF or byte & 0xF == 0xF) break;
+        }
+        return 0;
+    }
+    return error.UnsupportedTable;
+}
+
+const CffCtx = struct {
+    bytes: []const u8,
+    cs: CffIndex,
+    local: ?CffIndex,
+    global: ?CffIndex,
+};
+
+/// Operands of single-byte DICT op `want` (null when absent).
+/// Escape 12,30 (ROS) rejects CID-keyed CFF outright: glyph ids do
+/// not index CharStrings there. Long operand runs (BlueValues
+/// arrays, ...) saturate the store: only the first two are kept and
+/// the count is exact, so callers still validate their arity.
+fn dictOp(prog: []const u8, want: u8) Error!?struct { n: usize, v: [2]i64 } {
+    var ops: [2]i64 = .{ 0, 0 };
+    var nops: usize = 0;
+    var pos: usize = 0;
+    while (pos < prog.len) {
+        const b = prog[pos];
+        pos += 1;
+        if (b == 12) {
+            if (pos >= prog.len) return error.Truncated;
+            if (prog[pos] == 30) return error.UnsupportedTable;
+            pos += 1;
+            nops = 0;
+            continue;
+        }
+        if (b <= 21) {
+            if (b == want) return .{ .n = nops, .v = ops };
+            nops = 0;
+            continue;
+        }
+        if (b <= 27 or b == 31) return error.UnsupportedTable;
+        const v = try dictNum(prog, b, &pos);
+        if (nops < ops.len) ops[nops] = v;
+        nops += 1;
+    }
+    return null;
+}
+
+fn cffCtx(f: Font) Error!CffCtx {
+    const bytes = f.bytes;
+    const base = tableOff(bytes, tag('C', 'F', 'F', ' ')) catch return error.UnsupportedTable;
+    if (try u8at(bytes, base) != 1) return error.UnsupportedTable;
+    const hdr = try u8at(bytes, base + 2);
+    if (hdr < 4) return error.UnsupportedTable;
+    var pos = base + hdr;
+    pos = (try cffIndex(bytes, pos)).next; // Name
+    const topi = try cffIndex(bytes, pos);
+    pos = topi.next;
+    if (topi.idx.count == 0) return error.UnsupportedTable;
+    pos = (try cffIndex(bytes, pos)).next; // String
+    const gsi = try cffIndex(bytes, pos);
+    const top = try cffElem(bytes, topi.idx, 0);
+    // Top DICT: CharStrings 17, Private 18 (size, offset).
+    const cs = try dictOp(top, 17);
+    if (cs == null or cs.?.n != 1 or cs.?.v[0] < 0) return error.UnsupportedTable;
+    const cs_abs = base + @as(usize, @intCast(cs.?.v[0]));
+    if (cs_abs >= bytes.len) return error.Truncated;
+    const csi = (try cffIndex(bytes, cs_abs)).idx;
+    var local: ?CffIndex = null;
+    if (try dictOp(top, 18)) |pr| {
+        if (pr.n != 2 or pr.v[0] < 0 or pr.v[1] < 0) return error.UnsupportedTable;
+        // Size 0 declares no Private dict (converter fonts); only a
+        // positive size carries a Subrs offset worth parsing.
+        const size: usize = @intCast(pr.v[0]);
+        if (size == 0) return .{
+            .bytes = bytes,
+            .cs = csi,
+            .local = null,
+            .global = if (gsi.idx.count == 0) null else gsi.idx,
+        };
+        const priv_abs = base + @as(usize, @intCast(pr.v[1]));
+        if (priv_abs + size < priv_abs or priv_abs + size > bytes.len) return error.Truncated;
+        // Private DICT: Subrs 19 (offset relative to Private start).
+        if (try dictOp(bytes[priv_abs..][0..size], 19)) |sr| {
+            if (sr.n != 1 or sr.v[0] < 0) return error.UnsupportedTable;
+            const sub_abs = priv_abs + @as(usize, @intCast(sr.v[0]));
+            if (sub_abs >= bytes.len) return error.Truncated;
+            const li = (try cffIndex(bytes, sub_abs)).idx;
+            if (li.count != 0) local = li;
+        }
+    }
+    return .{
+        .bytes = bytes,
+        .cs = csi,
+        .local = local,
+        .global = if (gsi.idx.count == 0) null else gsi.idx,
+    };
+}
+
+/// Bounds-machine state: current point in font units, box in 16.16.
+const BoundsSt = struct {
+    x: i32,
+    y: i32,
+    stack: [48]i32,
+    n: u8,
+    have_width: bool,
+    nstems: u32,
+    /// Mask byte count, frozen at the first mask (fontTools parity:
+    /// later stems do not resize earlier masks).
+    mask_bytes: ?u32,
+    x0: i64,
+    y0: i64,
+    x1: i64,
+    y1: i64,
+    any: bool,
+};
+
+fn bPush(st: *BoundsSt, v: i32) Error!void {
+    if (st.n >= st.stack.len) return error.UnsupportedTable;
+    st.stack[st.n] = v;
+    st.n += 1;
+}
+
+fn bPop(st: *BoundsSt) Error!i32 {
+    if (st.n == 0) return error.UnsupportedTable;
+    st.n -= 1;
+    return st.stack[st.n];
+}
+
+/// First stem/move/mask clears a leading width argument (fontTools
+/// `popallWidth` parity: stems, rmoveto and masks strip on odd depth;
+/// hmoveto/vmoveto strip on even depth — a lone [width] before
+/// h/vmoveto is the common converter pattern).
+fn widthClear(st: *BoundsSt, even_odd: u8) void {
+    if (st.have_width) return;
+    st.have_width = true;
+    if (st.n % 2 == even_odd) {
+        var i: usize = 0;
+        while (i + 1 < st.n) : (i += 1) st.stack[i] = st.stack[i + 1];
+        st.n -= 1;
+    }
+}
+
+fn endpt(st: *BoundsSt, x: i64, y: i64) void {
+    if (!st.any) {
+        st.x0 = x;
+        st.x1 = x;
+        st.y0 = y;
+        st.y1 = y;
+        st.any = true;
+        return;
+    }
+    st.x0 = @min(st.x0, x);
+    st.x1 = @max(st.x1, x);
+    st.y0 = @min(st.y0, y);
+    st.y1 = @max(st.y1, y);
+}
+
+fn dot(st: *BoundsSt, x: i32, y: i32) void {
+    endpt(st, @as(i64, x) << 16, @as(i64, y) << 16);
+}
+
+/// One cubic from the current point through three relative deltas.
+/// Adaptive De Casteljau subdivision: a leaf whose control hull
+/// exceeds the endpoint box by at most 1/32 unit contributes its
+/// endpoints (the chord under-reads the truth by less than that).
+fn curve(st: *BoundsSt, dx1: i32, dy1: i32, dx2: i32, dy2: i32, dx3: i32, dy3: i32) Error!void {
+    const ax = @as(i64, st.x) << 16;
+    const ay = @as(i64, st.y) << 16;
+    const bx = ax +% (@as(i64, dx1) << 16);
+    const by = ay +% (@as(i64, dy1) << 16);
+    const cx = bx +% (@as(i64, dx2) << 16);
+    const cy = by +% (@as(i64, dy2) << 16);
+    const dx = cx +% (@as(i64, dx3) << 16);
+    const dy = cy +% (@as(i64, dy3) << 16);
+    try sub(st, ax, ay, bx, by, cx, cy, dx, dy, 0);
+    st.x +%= dx1 +% dx2 +% dx3;
+    st.y +%= dy1 +% dy2 +% dy3;
+}
+
+fn sub(st: *BoundsSt, ax: i64, ay: i64, bx: i64, by: i64, cx: i64, cy: i64, dx: i64, dy: i64, level: u8) Error!void {
+    if (level >= 24) return error.UnsupportedTable;
+    const hx0 = @min(@min(ax, bx), @min(cx, dx));
+    const hx1 = @max(@max(ax, bx), @max(cx, dx));
+    const hy0 = @min(@min(ay, by), @min(cy, dy));
+    const hy1 = @max(@max(ay, by), @max(cy, dy));
+    // Hull excess outside the endpoint box (both terms >= 0: the
+    // hull always contains the endpoints).
+    const ex = (@min(ax, dx) - hx0) + (hx1 - @max(ax, dx));
+    const ey = (@min(ay, dy) - hy0) + (hy1 - @max(ay, dy));
+    // Leaf chords under-read the truth by less than 1/256 unit, so
+    // the rounded box flips only when the truth sits within 1/256
+    // of a .5 tie (documented residue, verified per glyph).
+    if (ex + ey <= 256) {
+        endpt(st, ax, ay);
+        endpt(st, dx, dy);
+        return;
+    }
+    const abx = @divTrunc(ax + bx, 2);
+    const aby = @divTrunc(ay + by, 2);
+    const bcx = @divTrunc(bx + cx, 2);
+    const bcy = @divTrunc(by + cy, 2);
+    const cdx = @divTrunc(cx + dx, 2);
+    const cdy = @divTrunc(cy + dy, 2);
+    const abcx = @divTrunc(abx + bcx, 2);
+    const abcy = @divTrunc(aby + bcy, 2);
+    const bcdx = @divTrunc(bcx + cdx, 2);
+    const bcdy = @divTrunc(bcy + cdy, 2);
+    const mx = @divTrunc(abcx + bcdx, 2);
+    const my = @divTrunc(abcy + bcdy, 2);
+    try sub(st, ax, ay, abx, aby, abcx, abcy, mx, my, level + 1);
+    try sub(st, mx, my, bcdx, bcdy, cdx, cdy, dx, dy, level + 1);
+}
+
+/// One charstring number (opcodes dispatch below).
+fn csNum(prog: []const u8, b0: u8, pos: *usize) Error!i32 {
+    if (b0 >= 32 and b0 <= 246) return @as(i32, b0) - 139;
+    if (b0 >= 247 and b0 <= 250) {
+        const b1: i32 = try u8at(prog, pos.*);
+        pos.* += 1;
+        return (@as(i32, b0) - 247) * 256 + b1 + 108;
+    }
+    if (b0 >= 251 and b0 <= 254) {
+        const b1: i32 = try u8at(prog, pos.*);
+        pos.* += 1;
+        return -((@as(i32, b0) - 251) * 256 + b1 + 108);
+    }
+    // 255: 16.16 fixed, rounded to the nearest unit.
+    const w: i64 = @as(i32, @bitCast(try u32be(prog, pos.*)));
+    pos.* += 4;
+    if (w >= 0) return @intCast(@divTrunc(w + 32768, 65536));
+    return @intCast(-@divTrunc(-w + 32768, 65536));
+}
+
+fn subrBias(count: u32) i32 {
+    if (count < 1240) return 107;
+    if (count < 33900) return 1131;
+    return 32768;
+}
+
+fn runCs(ctx: *const CffCtx, prog: []const u8, st: *BoundsSt, depth: u8) Error!void {
+    if (depth > 10) return error.UnsupportedTable;
+    var pos: usize = 0;
+    while (pos < prog.len) {
+        const b = prog[pos];
+        pos += 1;
+        if (b == 28) {
+            try bPush(st, try i16be(prog, pos));
+            pos += 2;
+            continue;
+        }
+        if (b >= 32) {
+            try bPush(st, try csNum(prog, b, &pos));
+            continue;
+        }
+        switch (b) {
+            1, 3, 18, 23 => { // hstem, vstem, hstemhm, vstemhm
+                widthClear(st, 1);
+                if (st.n % 2 != 0) return error.UnsupportedTable;
+                // Sequential subr calls re-execute stem ops: cap the
+                // total so hostile bytes cannot overflow the counter.
+                if (st.nstems > (1 << 20)) return error.UnsupportedTable;
+                st.nstems += @as(u32, st.n) / 2;
+                st.n = 0;
+            },
+            19, 20 => { // hintmask, cntrmask
+                widthClear(st, 1);
+                // Implied stems: bare stem pairs before a mask count
+                // without an explicit stem op (fontTools countHints).
+                if (st.n % 2 != 0) return error.UnsupportedTable;
+                if (st.nstems > (1 << 20)) return error.UnsupportedTable;
+                st.nstems += @as(u32, st.n) / 2;
+                if (st.mask_bytes == null) st.mask_bytes = (st.nstems + 7) / 8;
+                const skip = st.mask_bytes.?;
+                if (pos + skip > prog.len) return error.Truncated;
+                pos += skip;
+                st.n = 0;
+            },
+            21 => { // rmoveto
+                widthClear(st, 1);
+                if (st.n != 2) return error.UnsupportedTable;
+                st.x +%= st.stack[0];
+                st.y +%= st.stack[1];
+                dot(st, st.x, st.y);
+                st.n = 0;
+            },
+            22 => { // hmoveto
+                widthClear(st, 0);
+                if (st.n != 1) return error.UnsupportedTable;
+                st.x +%= st.stack[0];
+                dot(st, st.x, st.y);
+                st.n = 0;
+            },
+            4 => { // vmoveto
+                widthClear(st, 0);
+                if (st.n != 1) return error.UnsupportedTable;
+                st.y +%= st.stack[0];
+                dot(st, st.x, st.y);
+                st.n = 0;
+            },
+            5 => { // rlineto
+                if (st.n % 2 != 0) return error.UnsupportedTable;
+                var i: usize = 0;
+                while (i < st.n) : (i += 2) {
+                    st.x +%= st.stack[i];
+                    st.y +%= st.stack[i + 1];
+                    dot(st, st.x, st.y);
+                }
+                st.n = 0;
+            },
+            6, 7 => { // hlineto, vlineto (alternating from h/v)
+                var horiz = b == 6;
+                for (st.stack[0..st.n]) |d| {
+                    if (horiz) {
+                        st.x +%= d;
+                    } else {
+                        st.y +%= d;
+                    }
+                    dot(st, st.x, st.y);
+                    horiz = !horiz;
+                }
+                st.n = 0;
+            },
+            8 => { // rrcurveto
+                if (st.n % 6 != 0) return error.UnsupportedTable;
+                var i: usize = 0;
+                while (i < st.n) : (i += 6) {
+                    try curve(st, st.stack[i], st.stack[i + 1], st.stack[i + 2], st.stack[i + 3], st.stack[i + 4], st.stack[i + 5]);
+                }
+                st.n = 0;
+            },
+            24 => { // rcurveline: curves of six, then one line
+                if (st.n < 8 or (st.n - 2) % 6 != 0) return error.UnsupportedTable;
+                var i: usize = 0;
+                while (i < st.n - 2) : (i += 6) {
+                    try curve(st, st.stack[i], st.stack[i + 1], st.stack[i + 2], st.stack[i + 3], st.stack[i + 4], st.stack[i + 5]);
+                }
+                st.x +%= st.stack[st.n - 2];
+                st.y +%= st.stack[st.n - 1];
+                dot(st, st.x, st.y);
+                st.n = 0;
+            },
+            25 => { // rlinecurve: lines, then one curve of six
+                if (st.n < 8 or st.n % 2 != 0) return error.UnsupportedTable;
+                var i: usize = 0;
+                while (i < st.n - 6) : (i += 2) {
+                    st.x +%= st.stack[i];
+                    st.y +%= st.stack[i + 1];
+                    dot(st, st.x, st.y);
+                }
+                try curve(st, st.stack[st.n - 6], st.stack[st.n - 5], st.stack[st.n - 4], st.stack[st.n - 3], st.stack[st.n - 2], st.stack[st.n - 1]);
+                st.n = 0;
+            },
+            26 => { // vvcurveto: odd head is dx1, then groups of four
+                var k: usize = 0;
+                var dx1: i32 = 0;
+                if (st.n % 2 == 1) {
+                    dx1 = st.stack[0];
+                    k = 1;
+                }
+                if ((st.n - k) % 4 != 0) return error.UnsupportedTable;
+                while (k < st.n) : (k += 4) {
+                    try curve(st, dx1, st.stack[k], st.stack[k + 1], st.stack[k + 2], 0, st.stack[k + 3]);
+                    dx1 = 0;
+                }
+                st.n = 0;
+            },
+            27 => { // hhcurveto: odd head is dy1, then groups of four
+                var k: usize = 0;
+                var dy1: i32 = 0;
+                if (st.n % 2 == 1) {
+                    dy1 = st.stack[0];
+                    k = 1;
+                }
+                if ((st.n - k) % 4 != 0) return error.UnsupportedTable;
+                while (k < st.n) : (k += 4) {
+                    try curve(st, st.stack[k], dy1, st.stack[k + 1], st.stack[k + 2], st.stack[k + 3], 0);
+                    dy1 = 0;
+                }
+                st.n = 0;
+            },
+            30, 31 => { // vhcurveto, hvcurveto: alternating quartets
+                var k: usize = 0;
+                // Group orientation alternates starting vertical (30)
+                // or horizontal (31); a lone trailing arg completes the
+                // last curve along its end tangent (fontTools parity).
+                var vert = b == 30;
+                while (k < st.n) {
+                    if (st.n - k < 4) return error.UnsupportedTable;
+                    if (vert) {
+                        var dyc: i32 = 0;
+                        var end = k + 4;
+                        if (st.n - end == 1) {
+                            dyc = st.stack[st.n - 1];
+                            end = st.n;
+                        } else if (st.n - end != 0 and (st.n - end) % 4 != 0 and st.n - end < 4) {
+                            return error.UnsupportedTable;
+                        }
+                        try curve(st, 0, st.stack[k], st.stack[k + 1], st.stack[k + 2], st.stack[k + 3], dyc);
+                        k = end;
+                    } else {
+                        var dxc: i32 = 0;
+                        var end = k + 4;
+                        if (st.n - end == 1) {
+                            dxc = st.stack[st.n - 1];
+                            end = st.n;
+                        } else if (st.n - end != 0 and (st.n - end) % 4 != 0 and st.n - end < 4) {
+                            return error.UnsupportedTable;
+                        }
+                        try curve(st, st.stack[k], 0, st.stack[k + 1], st.stack[k + 2], dxc, st.stack[k + 3]);
+                        k = end;
+                    }
+                    vert = !vert;
+                }
+                st.n = 0;
+            },
+            10, 29 => { // callsubr, callgsubr
+                const num = try bPop(st);
+                const subrs = if (b == 10) ctx.local else ctx.global;
+                const idx = subrs orelse return error.UnsupportedTable;
+                const which = num +% subrBias(idx.count);
+                if (which < 0) return error.UnsupportedTable;
+                try runCs(ctx, try cffElem(ctx.bytes, idx, @intCast(which)), st, depth + 1);
+            },
+            11 => { // return (malformed at top level)
+                if (depth == 0) return error.UnsupportedTable;
+                return;
+            },
+            14 => { // endchar: bare ends the outline; seac carries args
+                if (st.n <= 1) {
+                    st.n = 0;
+                    return;
+                }
+                return error.UnsupportedTable;
+            },
+            12 => {
+                if (pos >= prog.len) return error.Truncated;
+                const e = prog[pos];
+                pos += 1;
+                switch (e) {
+                    0 => {}, // dotsection: deprecated no-op
+                    34 => { // hflex
+                        if (st.n != 7) return error.UnsupportedTable;
+                        const s = st.stack;
+                        try curve(st, s[0], 0, s[1], s[2], s[3], 0);
+                        try curve(st, s[4], 0, s[5], 0 -% s[2], s[6], 0);
+                        st.n = 0;
+                    },
+                    35 => { // flex
+                        if (st.n != 13) return error.UnsupportedTable;
+                        const s = st.stack;
+                        try curve(st, s[0], s[1], s[2], s[3], s[4], s[5]);
+                        try curve(st, s[6], s[7], s[8], s[9], s[10], s[11]);
+                        st.n = 0;
+                    },
+                    36 => { // hflex1
+                        if (st.n != 9) return error.UnsupportedTable;
+                        const s = st.stack;
+                        const dy6 = 0 -% (s[1] +% s[3] +% s[5] +% s[7]);
+                        try curve(st, s[0], s[1], s[2], s[3], s[4], 0);
+                        try curve(st, s[5], 0, s[6], s[7], s[8], dy6);
+                        st.n = 0;
+                    },
+                    37 => { // flex1
+                        if (st.n != 11) return error.UnsupportedTable;
+                        const s = st.stack;
+                        const dx = s[0] +% s[2] +% s[4] +% s[6] +% s[8];
+                        const dy = s[1] +% s[3] +% s[5] +% s[7] +% s[9];
+                        var dx6 = s[10];
+                        var dy6: i32 = 0;
+                        const ax = if (dx == std.math.minInt(i32)) @as(u32, 0x80000000) else @abs(dx);
+                        const ay = if (dy == std.math.minInt(i32)) @as(u32, 0x80000000) else @abs(dy);
+                        if (ax > ay) {
+                            dy6 = 0 -% dy;
+                        } else {
+                            dx6 = 0 -% dx;
+                            dy6 = s[10];
+                        }
+                        try curve(st, s[0], s[1], s[2], s[3], s[4], s[5]);
+                        try curve(st, s[6], s[7], s[8], s[9], dx6, dy6);
+                        st.n = 0;
+                    },
+                    else => return error.UnsupportedTable,
+                }
+            },
+            else => return error.UnsupportedTable,
+        }
+    }
+}
+
+/// True ink box `[x_min, y_min, x_max, y_max]` in font units, y up
+/// from the baseline. Blank outlines report all zeros; glyphs whose
+/// outlines use unsupported constructs report `UnsupportedTable`
+/// (callers fall back to the degenerate box).
+pub fn glyphBounds(f: Font, glyph: u16) Error![4]i32 {
+    if (glyph >= f.num_glyphs) return error.Truncated;
+    const ctx = try cffCtx(f);
+    const prog = try cffElem(ctx.bytes, ctx.cs, glyph);
+    var st = BoundsSt{
+        .x = 0,
+        .y = 0,
+        .stack = undefined,
+        .n = 0,
+        .have_width = false,
+        .nstems = 0,
+        .mask_bytes = null,
+        .x0 = 0,
+        .y0 = 0,
+        .x1 = 0,
+        .y1 = 0,
+        .any = false,
+    };
+    try runCs(&ctx, prog, &st, 0);
+    if (!st.any) return .{ 0, 0, 0, 0 };
+    // Round half up out of 16.16, then scale to 1000 units exactly
+    // like the advance path (all fixtures are 1000 upm, so pins are
+    // exact; odd upms truncate identically).
+    const r: [4]i64 = .{
+        @divFloor(st.x0 + 32768, 65536),
+        @divFloor(st.y0 + 32768, 65536),
+        @divFloor(st.x1 + 32768, 65536),
+        @divFloor(st.y1 + 32768, 65536),
+    };
+    var out: [4]i32 = undefined;
+    for (r, 0..) |v, i| {
+        const s = @divTrunc(v * 1000, f.upm);
+        const c = std.math.clamp(s, @as(i64, std.math.minInt(i32)), @as(i64, std.math.maxInt(i32)));
+        out[i] = @intCast(c);
+    }
+    return out;
+}
+
 /// Italic correction in font units (0 when uncovered).
 pub fn italicCorrection(f: Font, glyph: u16) Error!i32 {
     if (f.math_off == 0) return error.UnsupportedTable;
@@ -405,16 +1042,22 @@ pub fn italicCorrection(f: Font, glyph: u16) Error!i32 {
 /// (the reader itself only ever sees caller-provided bytes).
 const ref_path = "fixtures/fonts/latinmodern-math.otf";
 
-fn loadRef() !struct { bytes: []u8, font: Font } {
+const LoadedFont = struct { bytes: []u8, font: Font };
+
+fn loadPath(path: []const u8) !LoadedFont {
     var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
     defer threaded.deinit();
     const bytes = try std.Io.Dir.cwd().readFileAlloc(
         threaded.io(),
-        ref_path,
+        path,
         std.testing.allocator,
         .limited(4 * 1024 * 1024),
     );
     return .{ .bytes = bytes, .font = try load(bytes) };
+}
+
+fn loadRef() !LoadedFont {
+    return loadPath(ref_path);
 }
 
 test "reference font loads with expected census" {
@@ -468,6 +1111,184 @@ test "reference italic correction matches ground truth" {
     try std.testing.expectEqual(@as(i32, 16), try italicCorrection(r.font, x));
     const xi = try glyphId(r.font, 0x03BE);
     try std.testing.expectEqual(@as(i32, 0), try italicCorrection(r.font, xi));
+}
+
+test "reference ink boxes match fontTools ground truth" {
+    // CFF outline bounds against BoundsPen (issue #194 corpus pins):
+    // combining marks with zero advance, slanted nuclei, capitals,
+    // the surd, and the over/under brace pair.
+    const r = try loadRef();
+    defer std.testing.allocator.free(r.bytes);
+    const cases = [_]struct { cp: u21, want: [4]i32 }{
+        .{ .cp = 0x20D7, .want = .{ -472, 521, -56, 711 } },
+        .{ .cp = '~', .want = .{ 0, 193, 555, 307 } },
+        .{ .cp = 0x02C7, .want = .{ 98, 516, 402, 692 } },
+        .{ .cp = 0x221A, .want = .{ 73, -960, 853, 40 } },
+        .{ .cp = '.', .want = .{ 86, 0, 192, 106 } },
+        .{ .cp = 0x02D9, .want = .{ 85, 551, 192, 657 } },
+        .{ .cp = 0x23DE, .want = .{ 0, 539, 492, 783 } },
+        .{ .cp = 0x23DF, .want = .{ 0, -353, 492, -109 } },
+        .{ .cp = 'A', .want = .{ 32, 0, 717, 716 } },
+    };
+    for (cases) |c| {
+        const gid = try glyphId(r.font, c.cp);
+        try std.testing.expect(gid != 0);
+        try std.testing.expectEqual(c.want, try glyphBounds(r.font, gid));
+    }
+}
+
+test "ink boxes validate across faces" {
+    // Same interpreter, different CFFs: KaTeX Main caron/vec and the
+    // one-glyph STIX overline subset (fontTools cross-checked).
+    const m = try loadPath("fixtures/fonts/katex/KaTeX_Main-Regular.otf");
+    defer std.testing.allocator.free(m.bytes);
+    try std.testing.expectEqual(
+        [4]i32{ 114, 513, 385, 644 },
+        try glyphBounds(m.font, try glyphId(m.font, 0x02C7)),
+    );
+    try std.testing.expectEqual(
+        [4]i32{ -471, 517, -29, 714 },
+        try glyphBounds(m.font, try glyphId(m.font, 0x20D7)),
+    );
+    const s = try loadPath("fixtures/fonts/STIXTwoMath-overline.otf");
+    defer std.testing.allocator.free(s.bytes);
+    try std.testing.expectEqual(
+        [4]i32{ 0, 792, 512, 839 },
+        try glyphBounds(s.font, try glyphId(s.font, 0x203E)),
+    );
+}
+
+// Minimal synthetic sfnt+CFF: pins the fallback triggers
+// (reserved opcode, seac endchar, missing CFF table) and the happy
+// path on hand-laid bytes, with no fixture files involved. The CFF
+// below is byte-mapped in the test.
+const CffFixture = struct {
+    buf: [256]u8 = .{0} ** 256,
+    pos: usize = 0,
+
+    fn w8(self: *CffFixture, v: u8) void {
+        self.buf[self.pos] = v;
+        self.pos += 1;
+    }
+
+    fn w16(self: *CffFixture, v: u16) void {
+        self.w8(@intCast(v >> 8));
+        self.w8(@intCast(v & 0xFF));
+    }
+
+    fn w32(self: *CffFixture, v: u32) void {
+        self.w16(@intCast(v >> 16));
+        self.w16(@intCast(v & 0xFFFF));
+    }
+
+    fn bytes(self: *CffFixture) []const u8 {
+        return self.buf[0..self.pos];
+    }
+
+    fn table(self: *CffFixture, tagv: u32, at: usize) void {
+        const base = 12 + at * 16;
+        self.buf[base] = @intCast(tagv >> 24);
+        self.buf[base + 1] = @intCast((tagv >> 16) & 0xFF);
+        self.buf[base + 2] = @intCast((tagv >> 8) & 0xFF);
+        self.buf[base + 3] = @intCast(tagv & 0xFF);
+        self.buf[base + 8] = @intCast(self.pos >> 24);
+        self.buf[base + 9] = @intCast((self.pos >> 16) & 0xFF);
+        self.buf[base + 10] = @intCast((self.pos >> 8) & 0xFF);
+        self.buf[base + 11] = @intCast(self.pos & 0xFF);
+    }
+
+    fn build(self: *CffFixture, with_cff: bool) void {
+        const ntab: u16 = if (with_cff) 6 else 5;
+        self.w32(0x00010000);
+        self.w16(ntab);
+        self.w16(0);
+        self.w16(0);
+        self.w16(0);
+        for (0..ntab) |_| {
+            self.w32(0);
+            self.w32(0);
+            self.w32(0);
+            self.w32(0);
+        }
+        var at: usize = 0;
+        // head: upm 1000 at +18.
+        self.table(0x68656164, at);
+        at += 1;
+        for (0..9) |_| self.w16(0);
+        self.w16(1000);
+        // maxp: 3 glyphs at +4.
+        self.table(0x6D617870, at);
+        at += 1;
+        self.w32(0);
+        self.w16(3);
+        // cmap: present but never parsed here.
+        self.table(0x636D6170, at);
+        at += 1;
+        self.w16(0);
+        self.w16(0);
+        // hmtx: 3 advances.
+        self.table(0x686D7478, at);
+        at += 1;
+        self.w16(500);
+        self.w16(500);
+        self.w16(500);
+        // hhea: 3 metrics at +34.
+        self.table(0x68686561, at);
+        at += 1;
+        for (0..17) |_| self.w16(0);
+        self.w16(3);
+        if (!with_cff) return;
+        self.table(0x43464620, at);
+        // CFF: header + Name("X") + Top(CharStrings=21) + empty
+        // String/GlobalSubrs + 3 CharStrings:
+        // g0 reserved opcode, g1 seac-form endchar,
+        // g2 rmoveto(10,20) rlineto(30,40) endchar.
+        const cff = [_]u8{
+            0x01, 0x00, 0x04, 0x01,
+            0x00, 0x01, 0x01, 0x01, 0x02, 0x58,
+            0x00, 0x01, 0x01, 0x01, 0x03, 0xA0, 0x11,
+            0x00, 0x00,
+            0x00, 0x00,
+            0x00, 0x03, 0x01, 0x01, 0x03, 0x08, 0x0F,
+            0x94, 0x09,
+            0x94, 0x94, 0x94, 0x94, 0x0E,
+            0x95, 0x9F, 0x15, 0xA9, 0xB3, 0x05, 0x0E,
+        };
+        for (cff) |b| self.w8(b);
+    }
+};
+
+test "synthetic CFF bounds: happy path and fallback triggers" {
+    var fx = CffFixture{};
+    fx.build(true);
+    const font = try load(fx.bytes());
+    // Reserved opcode and seac-form endchar report unsupported (the
+    // caller falls back to the degenerate box, never a wrong one).
+    try std.testing.expectError(error.UnsupportedTable, glyphBounds(font, 0));
+    try std.testing.expectError(error.UnsupportedTable, glyphBounds(font, 1));
+    // Hand-laid outline: exact box, no fixture files.
+    try std.testing.expectEqual([4]i32{ 10, 20, 40, 60 }, try glyphBounds(font, 2));
+    // No CFF table at all: unsupported, not a crash.
+    var bare = CffFixture{};
+    bare.build(false);
+    const plain = try load(bare.bytes());
+    try std.testing.expectError(error.UnsupportedTable, glyphBounds(plain, 2));
+}
+
+test "blank and unsupported outlines report honestly" {
+    const r = try loadRef();
+    defer std.testing.allocator.free(r.bytes);
+    // space draws nothing: the degenerate box, exactly per contract.
+    try std.testing.expectEqual(
+        [4]i32{ 0, 0, 0, 0 },
+        try glyphBounds(r.font, try glyphId(r.font, ' ')),
+    );
+    // .notdef carries only a width: blank, so zeros as well.
+    try std.testing.expectEqual(
+        [4]i32{ 0, 0, 0, 0 },
+        try glyphBounds(r.font, 0),
+    );
+    try std.testing.expectError(error.Truncated, glyphBounds(r.font, 9999));
 }
 
 test "reference stack/fraction/over/under constants match ground truth" {

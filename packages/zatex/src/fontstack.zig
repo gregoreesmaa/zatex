@@ -189,6 +189,7 @@ pub const Stack = struct {
             .italicCorrection = italic,
             .kernCorrection = kern,
             .extents = ext,
+            .inkBounds = ink,
         };
     }
 
@@ -311,6 +312,30 @@ pub const Stack = struct {
         _ = font_id;
         const self: *const Stack = @ptrCast(@alignCast(ctx));
         return self.kernFor(glyph, height, corner);
+    }
+
+    /// True ink box at 1000 units, y up from the baseline. Glyphs
+    /// whose outlines the reader cannot bound (seac composites,
+    /// CID-keyed or exotic charstrings) report the degenerate box,
+    /// which the core ignores exactly (v3 behavior, never a wrong
+    /// box). Units scale exactly like advances (all fixtures are
+    /// 1000 upm).
+    pub fn inkFor(self: *const Stack, unified: u16) [4]i32 {
+        const r = self.faceOf(unified) orelse return .{ 0, 0, 0, 0 };
+        const f = &self.faces[r.index];
+        const b = otmath.glyphBounds(f.font, r.gid) catch return .{ 0, 0, 0, 0 };
+        return .{
+            scale1000(f, b[0]),
+            scale1000(f, b[1]),
+            scale1000(f, b[2]),
+            scale1000(f, b[3]),
+        };
+    }
+
+    fn ink(ctx: *const anyopaque, font_id: u16, glyph: u16) [4]i32 {
+        _ = font_id;
+        const self: *const Stack = @ptrCast(@alignCast(ctx));
+        return self.inkFor(glyph);
     }
 
     pub fn extentsFor(self: *const Stack) [2]i32 {
@@ -496,6 +521,31 @@ test "issue92 underbar hook resolves from the vendored subset" {
     try std.testing.expect(g != 0);
     try std.testing.expectEqual(Role.stix, ts.stack.roleOf(g));
     try std.testing.expect(ts.stack.advance1000(g) > 0);
+}
+
+test "issue 194: unified ink boxes match the outline reader" {
+    var ts = TestStack{};
+    defer ts.free();
+    try ts.add(.lm, lm_path);
+    try ts.add(.main, katex_dir ++ "KaTeX_Main-Regular.otf");
+    // Vec arrow via rm (LM): zero advance, true ink.
+    const vec = ts.stack.glyphIdFor(0, 0x20D7);
+    try std.testing.expect(vec != 0);
+    try std.testing.expectEqual([4]i32{ -472, 521, -56, 711 }, ts.stack.inkFor(vec));
+    // Caron via rm resolves LM; via main accents it resolves Main.
+    const caron_rm = ts.stack.glyphIdFor(0, 0x02C7);
+    try std.testing.expectEqual([4]i32{ 98, 516, 402, 692 }, ts.stack.inkFor(caron_rm));
+    const caron_main = ts.stack.glyphIdFor(10, 0x02C7);
+    try std.testing.expect(caron_main != 0 and caron_main != caron_rm);
+    try std.testing.expectEqual([4]i32{ 114, 513, 385, 644 }, ts.stack.inkFor(caron_main));
+    // Blank: zeros, never an error; unknown: zeros.
+    try std.testing.expectEqual(
+        [4]i32{ 0, 0, 0, 0 },
+        ts.stack.inkFor(ts.stack.glyphIdFor(0, ' ')),
+    );
+    try std.testing.expectEqual([4]i32{ 0, 0, 0, 0 }, ts.stack.inkFor(0xFFFF));
+    // The v4 hook is live on the served provider.
+    try std.testing.expect(ts.stack.provider().inkBounds != null);
 }
 
 test "unified gids round-trip and variants stay in-face" {

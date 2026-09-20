@@ -144,6 +144,26 @@ const Host = struct {
     }
 };
 
+/// One bridge for every engine entry: the same C hooks back both
+/// layout and the conformance check, so a clean conformance run
+/// describes the provider layout actually sees. `host` must outlive
+/// the returned provider (callers keep it on their stack frame).
+fn hostProvider(m: *const CMetrics, host: *const Host) zatex.MetricsProvider {
+    return .{
+        .ctx = @ptrCast(host),
+        .glyphId = Host.gid,
+        .advance = Host.adv,
+        .ruleThickness = Host.rule,
+        .glyphVariant = if (m.glyph_variant != null) Host.variant else null,
+        .italicCorrection = if (m.italic_correction != null) Host.italic else null,
+        .kernCorrection = if (m.kern_correction != null) Host.kern else null,
+        // Null C hooks stay null natively: the core keeps its own
+        // fallbacks bit-identically (no duplicated constants here).
+        .extents = if (m.extents != null) Host.ext else null,
+        .inkBounds = if (m.ink_bounds != null) Host.ink else null,
+    };
+}
+
 /// Lay out one UTF-8 formula. All buffers are caller-owned. `src_len`
 /// is capped at `max_input_len`; output counts are capped by the
 /// buffer lengths (`STATUS_NO_SPACE` on overflow).
@@ -179,19 +199,7 @@ export fn zatex_layout_utf8(
     }
     const src = (src_ptr orelse return STATUS_NO_SPACE)[0..src_len];
     const host = Host{ .m = m };
-    const prov: zatex.MetricsProvider = .{
-        .ctx = @ptrCast(&host),
-        .glyphId = Host.gid,
-        .advance = Host.adv,
-        .ruleThickness = Host.rule,
-        .glyphVariant = Host.variant,
-        .italicCorrection = Host.italic,
-        .kernCorrection = Host.kern,
-        // Null C hooks stay null natively: the core keeps its own
-        // fallbacks bit-identically (no duplicated constants here).
-        .extents = if (m.extents != null) Host.ext else null,
-        .inkBounds = if (m.ink_bounds != null) Host.ink else null,
-    };
+    const prov = hostProvider(m, &host);
     // Reinterpret caller buffers as Zig slices.
     const runs_z = (runs_ptr orelse return STATUS_NO_SPACE)[0..runs_cap];
     const rules_z = (rules_ptr orelse return STATUS_NO_SPACE)[0..rules_cap];
@@ -291,6 +299,32 @@ export fn zatex_version() u32 {
         (@as(u32, zatex.version.minor) << 8) | zatex.version.patch;
 }
 
+/// Host metrics conformance check (issue #194). Runs the diagnostic
+/// corpus (`zatex.conform`) against the host's `metrics` at `font`:
+/// no rendering, no engine rebuild — the check ships in the library
+/// and exercises the same bridge the layout path uses.
+///
+/// Returns the diagnostic count (0 is a clean pass; -1 is a usage
+/// error: null `metrics`, or non-null `buf` with zero `cap`). When
+/// `buf` is non-null, newline-separated diagnostics fill
+/// `buf[0..buf_cap]` truncated to fit and always NUL-terminated (a
+/// null `buf` counts only, for dry runs).
+export fn zatex_conform_metrics(metrics: ?*const CMetrics, font: u16, buf_ptr: ?[*]u8, buf_cap: usize) i32 {
+    const m = metrics orelse return -1;
+    const host = Host{ .m = m };
+    const prov = hostProvider(m, &host);
+    var scratch: [3072]u8 = undefined;
+    const res = zatex.conform.check(prov, font, &scratch);
+    if (buf_ptr) |bp| {
+        if (buf_cap == 0) return -1;
+        const out = bp[0..buf_cap];
+        const take = @min(res.bytes, buf_cap - 1);
+        @memcpy(out[0..take], scratch[0..take]);
+        out[take] = 0;
+    }
+    return @intCast(res.diagnostics);
+}
+
 test "cabi lays out through C function pointers" {
     const S = struct {
         fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
@@ -383,6 +417,7 @@ test "cabi carries x_scale through for wide accents (issue #197)" {
     // stretched accent advance covers the nucleus span. Stub
     // advances are uniform 500 (null v4 hooks): AB spans 1000 over
     // the 500-wide accent glyph, so the factor is 2000.
+
     const S = struct {
         fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
             return @intCast(cp & 0xFFFF);
@@ -454,6 +489,37 @@ test "cabi carries x_scale through for wide accents (issue #197)" {
         try std.testing.expectEqual(@as(u32, 1000), l.width);
         try std.testing.expectEqual(@as(u32, 1000), out.width);
     }
+}
+
+test "cabi conform entry: usage errors, truncation, termination" {
+    const S = struct {
+        fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return 500;
+        }
+        fn rt(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) i32 {
+            return 40;
+        }
+    };
+    const m: CMetrics = .{ .ctx = null, .glyph_id = S.gid, .advance = S.adv, .rule_thickness = S.rt };
+    var buf: [2048]u8 = undefined;
+    try std.testing.expectEqual(@as(i32, -1), zatex_conform_metrics(null, 0, &buf, buf.len));
+    try std.testing.expectEqual(@as(i32, -1), zatex_conform_metrics(&m, 0, &buf, 0));
+    // Dry run counts without writing.
+    const dry = zatex_conform_metrics(&m, 0, null, 0);
+    try std.testing.expect(dry > 0);
+    // Full buffer: same count, NUL-terminated named diagnostics.
+    @memset(&buf, 0xAA);
+    const n = zatex_conform_metrics(&m, 0, &buf, buf.len);
+    try std.testing.expectEqual(dry, n);
+    try std.testing.expect(std.mem.indexOfScalar(u8, &buf, 0) != null);
+    try std.testing.expect(std.mem.indexOf(u8, &buf, "advance U+20D7: got 500, want 0") != null);
+    // Tiny buffer: same count, still NUL-terminated.
+    @memset(&buf, 0xAA);
+    try std.testing.expectEqual(dry, zatex_conform_metrics(&m, 0, &buf, 32));
+    try std.testing.expectEqual(@as(u8, 0), buf[31]);
 }
 
 test "cabi reports Invalid with offset" {

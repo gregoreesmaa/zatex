@@ -119,6 +119,36 @@ conventionally painted `#cc0000` — the full recipe lives in
 returns only a status (bytes written or `-status`); hosts needing the
 message call the layout entry for the same input.
 
+## Metrics conformance
+
+`zatex_conform_metrics(metrics, font, buf, buf_cap)` runs a diagnostic
+corpus against an arbitrary host provider at the C ABI level — no
+engine rebuild, no rendering. It returns the diagnostic count (0 is a
+clean pass; -1 is a usage error: null metrics, or a non-null buf with
+zero cap). A non-null buf receives newline-separated diagnostics,
+whole lines only, always NUL-terminated; a null buf counts without
+writing, so the count is exact past any buffer. The same corpus is
+available natively as `conform.check(provider, font, buf)`.
+
+The corpus pins reference-font (Latin Modern Math) ground truth for
+`rm` (font 0): zero-width combining marks (the 500-for-zero trap),
+slanted italic nuclei, exact advances, `.notdef` mapping to glyph 0, a
+growing paren variant, the four MATH rule weights, representative ink
+boxes, and a two-formula layout smoke test. Other font ids run the
+same probes; differences report by name (font, codepoint, got, want),
+so multi-face hosts can triage them — e.g. a text face without a MATH
+table legitimately reports no italic there.
+
+Each mismatch names itself; the three historical provider bugs read:
+
+* `italic hook: NULL (want MATH corrections)` — missing hook
+* `advance U+20D7: got 500, want 0` — zero advance reported as 500
+* `ink hook: NULL (want ink boxes)` — missing hook
+
+The reference provider (`refhost.zig`) passes cleanly; its tests
+reintroduce each bug and assert the named line, natively and through
+the C entry.
+
 ## Reference rendering
 
 Latin Modern Math is the reference font (Computer Modern look is part of
