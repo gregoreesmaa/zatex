@@ -1123,27 +1123,45 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         udb = sb.db;
         has_sub = true;
     }
-    const gap: i32 = @divTrunc((@as(i32, 150) * size), 1000);
+    // KaTeX Rule 13a (pinned 0.18.7 `assembleSupSub`, issue #200):
+    // limit gaps come from the big-op spacing table, never a fixed
+    // kern: supKern = max(bigOpSpacing1, bigOpSpacing3 - supDepth),
+    // subKern = max(bigOpSpacing2, bigOpSpacing4 - subHeight), with
+    // bigOpSpacing5 of padding outside each present limit. Constants
+    // below are the normal-size row of `fontMetrics.ts`
+    // (111/166/200/600/100 mu). The base shifts so its center sits
+    // on the math axis (Rule 13: baseShift = (h-d)/2 - axis).
+    const axis = @divTrunc(@as(i32, 250) * size, 1000);
+    const base_shift = @divTrunc(bb.ha - bb.db, 2) - axis;
+    const pad = @divTrunc(@as(i32, 100) * size, 1000);
+    const sup_kern: i32 = if (has_sup)
+        @max(@divTrunc(@as(i32, 111) * size, 1000), @divTrunc(@as(i32, 200) * size, 1000) - sdb)
+    else
+        0;
+    const sub_kern: i32 = if (has_sub)
+        @max(@divTrunc(@as(i32, 166) * size, 1000), @divTrunc(@as(i32, 600) * size, 1000) - uha)
+    else
+        0;
     var w = bb.w;
     if (sw > w) w = sw;
     if (uw > w) w = uw;
     var parts: [3]BKid = undefined;
     var nparts: usize = 0;
-    parts[0] = .{ .box = base, .dx = @divTrunc(w - bb.w, 2), .dy = 0 };
+    parts[0] = .{ .box = base, .dx = @divTrunc(w - bb.w, 2), .dy = -base_shift };
     nparts = 1;
-    var ha = bb.ha;
-    var db = bb.db;
+    var ha = bb.ha - base_shift;
+    var db = bb.db + base_shift;
     if (has_sup) {
-        const sy = bb.ha + gap + sdb;
+        const sy = -base_shift + bb.ha + sup_kern + sdb;
         parts[nparts] = .{ .box = sup, .dx = @divTrunc(w - sw, 2), .dy = sy };
         nparts += 1;
-        ha = sy + sha;
+        ha = sy + sha + pad;
     }
     if (has_sub) {
-        const sy = -(bb.db + gap + uha);
+        const sy = -(base_shift + bb.db + sub_kern + uha);
         parts[nparts] = .{ .box = sub, .dx = @divTrunc(w - uw, 2), .dy = sy };
         nparts += 1;
-        db = -sy + udb;
+        db = -sy + udb + pad;
     }
     const sk = try lc.allocKids(nparts);
     @memcpy(lc.bkids[sk .. sk + nparts], parts[0..nparts]);
@@ -1687,22 +1705,33 @@ fn layoutFence(lc: *LayCtx, style: parse.Style, cp: u21, need: i32, variant_box:
     var ha = @divTrunc(e[0] * size, 1000);
     var db = @divTrunc(e[1] * size, 1000);
     if (need > 0) {
-        // Center the grown fence on the math axis. Rule 15e fences
-        // (issue #112) box the picked variant instead of the target —
-        // KaTeX's span follows its `delimsizing sizeN` glyph, so with
-        // a real font the box is the ~1.2em size-1 paren, not the
-        // 1.01em target; without variants the target always wins, so
-        // stub integers never move.
-        var total = need;
+        // Grown-fence boxing (issue #200, pinned 0.18.7
+        // `delimiter.ts`): KaTeX's small/large paths box the PICKED
+        // glyph's own metrics — `makeLargeDelim` keeps the SizeN
+        // symbol's height/depth, and `centerSpan` is a no-op in
+        // display/text — never the requested total. Only the
+        // fallback stack centers a computed height on the axis. So a
+        // covering `\left`/`\right` variant keeps its measured
+        // extents; only a shortfall (KaTeX would stack past `need`)
+        // centers `need` on the axis. Rule 15e fixed fences (issue
+        // #112) still box the target: their KaTeX span follows the
+        // fixed `delimsizing` size. Without variants the target
+        // always wins, so stub integers never move.
+        const vt = ha + db;
+        var total: ?i32 = null;
         if (variant_box) {
-            const vt = ha + db;
-            if (vt > total) total = vt;
+            total = need;
+            if (vt > total.?) total = vt;
+        } else if (vt < need) {
+            total = need;
         }
-        const axis = @divTrunc((@as(i32, 250) * size), 1000);
-        const half = @divTrunc(total + 1, 2);
-        ha = axis + half;
-        db = half - axis;
-        if (db < 0) db = 0;
+        if (total) |t| {
+            const axis = @divTrunc((@as(i32, 250) * size), 1000);
+            const half = @divTrunc(t + 1, 2);
+            ha = axis + half;
+            db = half - axis;
+            if (db < 0) db = 0;
+        }
     }
     return lc.allocBox(.{
         .w = w,
