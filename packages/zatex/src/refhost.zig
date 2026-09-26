@@ -1036,10 +1036,12 @@ test "issue196-b2: delimiter roles resolve KaTeX faces first" {
         try std.testing.expectEqual(@as(u16, 0), lay.runs[0].font_id);
         try std.testing.expectEqual(fontstack.Role.lm, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
     }
-    // B1 atom-role parens stay rm: no fence path involved.
+    // B1 atom-role parens stay rm: no fence path involved. Width is
+    // the unpadded denominator content (zero side padding, pinned
+    // KaTeX `genfrac.ts`, issue #237).
     {
         const lay = try layoutCase(&ref, "\\frac{y}{)(}", true, &runs, &rules, &glyphs);
-        try std.testing.expectEqual(@as(u32, 1018), lay.width);
+        try std.testing.expectEqual(@as(u32, 778), lay.width);
         var found = false;
         for (lay.runs) |r| {
             if (r.font_id == 0 and r.glyphs.len == 2) found = true;
