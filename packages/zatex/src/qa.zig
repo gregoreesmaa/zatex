@@ -298,12 +298,20 @@ test "qa40 fraction growth is monotonic" {
             prev = l;
         }
     }
-    // Nesting a fraction inside both slots grows the box strictly.
+    // Nesting a fraction inside both slots stacks the box taller
+    // while content shrinks a level (script to scriptscript): width
+    // follows the narrower inner content, so no width growth is
+    // promised — only strict vertical growth. Stub-exact: the inner
+    // singletons lay out at scriptscript width (250) under the outer
+    // script singletons (350), and the bar spans exactly that inner
+    // content (zero side padding, pinned KaTeX `genfrac.ts`,
+    // issue #237).
     var b0: B = .{};
     var b1: B = .{};
     const small = try lay("\\frac{x}{y}", false, &b0);
     const big = try lay("\\frac{\\frac{p}{q}}{\\frac{r}{s}}", false, &b1);
-    try inv.expectGrowsOrEqual(small, big);
+    try std.testing.expectEqual(@as(u32, 350), small.width);
+    try std.testing.expectEqual(@as(u32, 250), big.width);
     try std.testing.expect(big.height_above + big.depth_below > small.height_above + small.depth_below);
 }
 
@@ -985,20 +993,44 @@ test "qa104 overarrows stretch to the nucleus span" {
 }
 
 test "qa104 x-arrows stretch to the label span" {
-    // KaTeX stretches x-arrow shafts to the label width (pinned
-    // 0.18.7 `stretchy.ts`, minWidth 1.469em): the glyph
-    // raster-stretches to the label span (issue #104). Stub advances
-    // are uniform 500, scaled by the script size: [ab]{cd} spans
-    // 2*350 = 700 (scale 1400).
+    // KaTeX x-arrow span (pinned 0.18.7, issue #236): the shaft
+    // windows over the padded label span with a per-kind minimum —
+    // `stretchy.ts` `katexImagesData` minWidth 1.469em for
+    // xrightarrow, labels padded 0.5em each side in script size
+    // (`x-arrow-pad`, `katex.scss`). Stub advances are uniform 500:
+    // [ab]{cd} spans 2*350 = 700, padded to 700+700 = 1400, but the
+    // 1469 minimum wins; the glyph raster-stretches 1469/500
+    // (scale 2938, issue #104).
     var b: ProvBuf = .{};
     const l = try layProv("\\xrightarrow[ab]{cd}", stubProvider(), &b);
-    try std.testing.expectEqual(@as(u32, 700), l.width);
+    try std.testing.expectEqual(@as(u32, 1469), l.width);
     var found = false;
     for (l.runs) |r| {
         for (r.glyphs) |g| {
             if (g != 0x2192) continue;
             found = true;
-            try std.testing.expectEqual(@as(u16, 1400), r.x_scale);
+            try std.testing.expectEqual(@as(u16, 2938), r.x_scale);
+            try std.testing.expectEqual(@as(i32, 0), r.x);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "qa220 x-arrow label padding widens the span" {
+    // Issue #236 companion to qa104: when padded labels exceed the
+    // 1.469em minimum, the padding wins. Stub advances are uniform
+    // 500: [abcdef]{gh} spans 6*350 = 2100 above, padded to
+    // 2100+700 = 2800; below 2*350+700 = 1400 stays under the
+    // minimum. Width 2800, glyph stretch 2800/500 (scale 5600).
+    var b: ProvBuf = .{};
+    const l = try layProv("\\xrightarrow[abcdef]{gh}", stubProvider(), &b);
+    try std.testing.expectEqual(@as(u32, 2800), l.width);
+    var found = false;
+    for (l.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g != 0x2192) continue;
+            found = true;
+            try std.testing.expectEqual(@as(u16, 5600), r.x_scale);
             try std.testing.expectEqual(@as(i32, 0), r.x);
         }
     }
@@ -1020,10 +1052,12 @@ test "qa43 fraction shifts differ per mode" {
     var bt: B = .{};
     const d = try lay("\\frac{a}{b}", true, &bd);
     const t = try lay("\\frac{a}{b}", false, &bt);
-    try std.testing.expectEqual(@as(u32, 740), d.width);
+    // Stub-exact widths (issue #237): the bar spans exactly
+    // max(num, den) with zero side padding (pinned KaTeX `genfrac.ts`).
+    try std.testing.expectEqual(@as(u32, 500), d.width);
     try std.testing.expectEqual(@as(u32, 1377), d.height_above);
     try std.testing.expectEqual(@as(u32, 936), d.depth_below);
-    try std.testing.expectEqual(@as(u32, 590), t.width);
+    try std.testing.expectEqual(@as(u32, 350), t.width);
     try std.testing.expectEqual(@as(u32, 975), t.height_above);
     try std.testing.expectEqual(@as(u32, 520), t.depth_below);
     try std.testing.expectEqual(@as(usize, 1), d.rules.len);
@@ -1729,10 +1763,11 @@ test "qa48 fraction geometry moves with provider metrics" {
     //   210/630/315; gap_n = (394-315)-(250+45) = -216 < 90 so
     //   ns = 394+306 = 700, ha = 700+630 = 1330; gap_d =
     //   (250-45)-(630-345) = -80 < 90 so ds = 345+170 = 515,
-    //   db = 515+315 = 830; width 210+240 = 450.
+    //   db = 515+315 = 830; width 210 (zero side padding, pinned
+    //   KaTeX `genfrac.ts`, issue #237).
     // short/wide (adv 700, ext 500/100, bar 20): script extents
     //   490/350/70; gap_n = 64 ≥ 20 so ns = 394, ha = 744;
-    //   gap_d = 235 ≥ 20 so ds = 345, db = 415; width 730.
+    //   gap_d = 235 ≥ 20 so ds = 345, db = 415; width 490.
     const sets = [_]struct {
         prov: zatex.MetricsProvider,
         adv: i32,
@@ -1761,7 +1796,7 @@ test "qa48 fraction geometry moves with provider metrics" {
         var ds: i64 = 345;
         const gap_d: i64 = (axis - @divTrunc(@as(i64, s.th), 2)) - (nha - ds);
         if (gap_d < clear) ds += clear - gap_d;
-        try std.testing.expectEqual(@as(u32, @intCast(nw + 2 * 120)), l.width);
+        try std.testing.expectEqual(@as(u32, @intCast(nw)), l.width);
         try std.testing.expectEqual(@as(u32, @intCast(ns + nha)), l.height_above);
         try std.testing.expectEqual(@as(u32, @intCast(ds + ndb)), l.depth_below);
         try std.testing.expectEqual(@as(usize, 1), l.rules.len);
@@ -1770,11 +1805,11 @@ test "qa48 fraction geometry moves with provider metrics" {
     }
     try std.testing.expect(!std.mem.eql(u8, dumps[0], dumps[1]));
     // Tall-set exact numbers must NOT match the wide layout: the
-    // hardcoded-constant killer, asserted directly (tall width 450 and
-    // bar 90 vs wide 730 and 20).
+    // hardcoded-constant killer, asserted directly (tall width 210 and
+    // bar 90 vs wide 490 and 20).
     var bw: ProvBuf = .{};
     const lw = try layProv("\\frac{a}{b}", wideProvider(), &bw);
-    try std.testing.expect(lw.width != 450);
+    try std.testing.expect(lw.width != 210);
     try std.testing.expect(lw.rules[0].h != 90);
 }
 
@@ -1865,7 +1900,9 @@ test "qa48 delimiter extents move with provider metrics" {
         const want_db: i64 = @max(fdb, half - axis);
         try std.testing.expectEqual(@as(u32, @intCast(want_ha)), l.height_above);
         try std.testing.expectEqual(@as(u32, @intCast(want_db)), l.depth_below);
-        const want_w: i64 = 2 * s.adv + (nw + 2 * 120);
+        // Body width is the unpadded fraction content (zero side
+        // padding, pinned KaTeX `genfrac.ts`, issue #237).
+        const want_w: i64 = 2 * s.adv + nw;
         try std.testing.expectEqual(@as(u32, @intCast(want_w)), l.width);
         dumps[k] = dumpAny(l, &dump_bufs[k]);
     }
@@ -1899,6 +1936,37 @@ test "qa48 fcolorbox frame surrounds background" {
         try std.testing.expectEqual(w[1], r.y);
         try std.testing.expectEqual(@as(u32, @intCast(w[2])), r.w);
         try std.testing.expectEqual(@as(u32, @intCast(w[3])), r.h);
+    }
+}
+
+test "qa219 fcolorbox frame draws with unresolvable specs" {
+    // Issue #241: `\fcolorbox{r}{y}{}` rendered blank — the frame
+    // rules were gated on the spec *resolving* to paint. KaTeX
+    // `enclose.ts` sets border style/width unconditionally (only the
+    // color is conditional), so the frame must exist with ambient
+    // paint (host default ink) while the unresolvable background
+    // stays absent (transparent). Empty body: pad-only box 600 wide,
+    // 300 above/below; the frame adds one rule thickness (40) on
+    // every side (outer 680/340/340), top/bottom/left/right order.
+    var b: B = .{};
+    const l = try lay("\\fcolorbox{r}{y}{}", false, &b);
+    try std.testing.expectEqual(@as(u32, 680), l.width);
+    try std.testing.expectEqual(@as(u32, 340), l.height_above);
+    try std.testing.expectEqual(@as(u32, 340), l.depth_below);
+    try std.testing.expectEqual(@as(usize, 0), l.runs.len);
+    try std.testing.expectEqual(@as(usize, 4), l.rules.len);
+    const want = [_][4]i64{
+        .{ -40, 0, 680, 40 },
+        .{ -40, 640, 680, 40 },
+        .{ -40, 0, 40, 680 },
+        .{ 600, 0, 40, 680 },
+    };
+    for (l.rules, want) |r, w| {
+        try std.testing.expectEqual(w[0], r.x);
+        try std.testing.expectEqual(w[1], r.y);
+        try std.testing.expectEqual(@as(u32, @intCast(w[2])), r.w);
+        try std.testing.expectEqual(@as(u32, @intCast(w[3])), r.h);
+        try std.testing.expectEqual(@as(?u32, null), r.color);
     }
 }
 
@@ -3127,7 +3195,10 @@ test "qa107 cancel strikes corner-to-corner" {
     try std.testing.expectEqualStrings("500/700/250|1,1000,0,700:54373.;|0,-200,500,1350,d,46;", try T.dump("\\bcancel{x}", &b, &out));
     try std.testing.expectEqualStrings("1000/700/250|1,1000,0,700:54324.54325.;|-200,0,1400,950,u,46;-200,0,1400,950,d,46;", try T.dump("\\xcancel{AB}", &b, &out));
     try std.testing.expectEqualStrings("500/700/250|9,1000,0,700:54425.;|-200,0,900,950,u,46;", try T.dump("\\cancel{\\boldsymbol{x}}", &b, &out));
-    try std.testing.expectEqualStrings("590/975/520|0,700,120,490:49.;0,700,120,1320:50.;|0,705,590,40;-200,0,990,1495,u,46;", try T.dump("\\cancel{\\frac12}", &b, &out));
+    // `\frac12` is 350 wide after the issue-#237 zero-pad removal
+    // (was 590): digits recenter at x 0, the rule spans 350, and the
+    // corner-to-corner strike covers the 350+400 padded box.
+    try std.testing.expectEqualStrings("350/975/520|0,700,0,490:49.;0,700,0,1320:50.;|0,705,350,40;-200,0,750,1495,u,46;", try T.dump("\\cancel{\\frac12}", &b, &out));
     try std.testing.expectEqualStrings("500/700/250|1,1000,500,700:54373.;|0,-200,500,1350,d,46;", try T.dump("\\mathreflectbox{\\cancel{x}}", &b, &out));
     try std.testing.expectEqualStrings("1944/700/250|1,1000,0,700:54373.;0,1000,722,700:43.;1,1000,1444,700:54374.;|0,-200,500,1350,u,46;", try T.dump("\\cancel{x}+y", &b, &out));
     // Zero metric change: the strike never moves the footprint.
@@ -3341,7 +3412,32 @@ test "trip03 left right delimiters grow monotonically" {
     const small_total = small.height_above + small.depth_below;
     const tall_total = tall.height_above + tall.depth_below;
     try std.testing.expect(tall_total > small_total);
-    try std.testing.expect(tall.width >= small.width);
+    // The fence itself steps up with content (not just the outer
+    // box): around `x` the paren stays on the Main face, while
+    // around the taller fraction it leaves Main for the grown
+    // variant riding the content top. Total width follows the
+    // unpadded fraction content (pinned KaTeX `genfrac.ts`,
+    // issue #237), so the growth signal is the fence selection,
+    // not the width.
+    var small_font: ?u16 = null;
+    for (small.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 0x28) small_font = r.font_id;
+        }
+    }
+    var tall_font: ?u16 = null;
+    var tall_base: ?i32 = null;
+    for (tall.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g == 0x28) {
+                tall_font = r.font_id;
+                tall_base = r.baseline_y;
+            }
+        }
+    }
+    try std.testing.expect(small_font != null and tall_font != null);
+    try std.testing.expect(small_font.? != tall_font.?);
+    try std.testing.expectEqual(@as(?i32, @intCast(tall.height_above)), tall_base);
 }
 
 test "trip04 mathop forced limits stack in both modes" {

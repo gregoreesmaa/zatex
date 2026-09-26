@@ -894,8 +894,14 @@ fn classOf(pc: *const parse.ParseCtx, id: Idx) ?symbols.AtomClass {
 /// `\colorbox` / `\fcolorbox` (KaTeX parity, issue #35): text with a
 /// padded background rule plus, for `\fcolorbox`, frame rules.
 /// `\fboxsep` is 3pt; the frame is one rule thickness outside the
-/// background. Unresolvable specs keep geometry but emit no paint
-/// (the host renders ambient).
+/// background. The frame exists whenever the spec is present, even
+/// when it resolves to no paint (KaTeX `enclose.ts` sets border
+/// style/width unconditionally and only the color conditionally, so
+/// an unresolvable frame still draws in the fallback ink): such
+/// rules carry ambient (`no_color`) paint, which hosts render as
+/// their default ink. An unresolvable background stays absent, which
+/// is the transparent KaTeX leaves when its `background-color`
+/// declaration drops (issue #241).
 fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
     const size = lc.effSize(style);
     const tb = try layoutText(lc, style, c.body, parse.FontFam.rm);
@@ -908,7 +914,7 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
     const bgw = t.w + 2 * pad;
     const bgha = t.ha + pad;
     const bgdb = t.db + pad;
-    const nkids: usize = 1 + (if (bg != null) @as(usize, 1) else 0) + (if (frame != null) @as(usize, 4) else 0);
+    const nkids: usize = 1 + (if (bg != null) @as(usize, 1) else 0) + (if (has_frame) @as(usize, 4) else 0);
     const s = try lc.allocKids(@intCast(nkids));
     var n: u16 = 0;
     if (bg) |bc| {
@@ -924,7 +930,10 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
     }
     lc.bkids[s + n] = .{ .box = tb, .dx = pad, .dy = 0 };
     n += 1;
-    if (frame) |fc| {
+    if (has_frame) {
+        // Unresolvable frame specs still draw (KaTeX fallback ink):
+        // ambient paint, which hosts render as default ink.
+        const fc: u32 = frame orelse no_color;
         const top = try lc.allocBox(.{
             .w = bgw + 2 * th,
             .ha = th,
@@ -968,9 +977,9 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
         lc.bkids[s + n] = .{ .box = right, .dx = bgw, .dy = 0 };
         n += 1;
     }
-    const fw = if (frame != null) bgw + 2 * th else bgw;
-    const fha = if (frame != null) bgha + th else bgha;
-    const fdb = if (frame != null) bgdb + th else bgdb;
+    const fw = if (has_frame) bgw + 2 * th else bgw;
+    const fha = if (has_frame) bgha + th else bgha;
+    const fdb = if (has_frame) bgdb + th else bgdb;
     return lc.allocBox(.{
         .w = fw,
         .ha = fha,
@@ -1414,9 +1423,12 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
     var th = f.kind.thick;
     if (th == 0) th = th0;
     const axis = @divTrunc((@as(i32, 250) * size), 1000);
-    const pad: i32 = 120;
-    var content = if (nb.w > dbx.w) nb.w else dbx.w;
-    content += 2 * pad;
+    // KaTeX parity (pinned 0.18.7 `genfrac.ts`, issue #237): the bar
+    // spans exactly max(num, denom) — the vlist takes the widest
+    // child and the `frac-line` rule stretches to 100% of it, with
+    // zero side padding. (A legacy 120mu/side pad used to widen
+    // every fraction; it had no KaTeX counterpart and is removed.)
+    const content = if (nb.w > dbx.w) nb.w else dbx.w;
     // TeX Rules 15b-e (KaTeX `genfrac.ts`, Main metrics in thousandths
     // of an em — the reference font agrees to the unit, see
     // `otmath` ground truth): style-dependent numerator/denominator
@@ -2218,6 +2230,19 @@ fn overGlyph(kind: parse.OverKind) u21 {
     };
 }
 
+/// Minimum x-arrow shaft span, mu per em (pinned KaTeX 0.18.7
+/// `stretchy.ts` `katexImagesData` minWidth column, issue #236).
+fn xMinWidth(kind: parse.OverKind) i32 {
+    return switch (kind) {
+        .xleft, .xright => 1469,
+        .xdoubleleft, .xdoubleright => 1526,
+        .xboth, .xdoubleboth, .xleftrightharpoons, .xrightleftharpoons, .xtofrom => 1750,
+        .xhookleft, .xhookright => 1080,
+        .xmapsto => 1500,
+        else => 888,
+    };
+}
+
 fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
     const size = lc.effSize(style);
     const font: u16 = @intFromEnum(contract.FontId.rm);
@@ -2463,9 +2488,27 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                     below_db = bb2.db;
                     has_below = true;
                 }
+                // KaTeX x-arrow span (pinned 0.18.7, issue #236): the
+                // shaft windows over the padded label span with a
+                // per-kind minimum. Labels carry `x-arrow-pad` (0.5em
+                // each side in label/script size, `katex.scss`); the
+                // minimum is the `katexImagesData` minWidth column in
+                // outer-size mu — 3.0em for the labelless CD `=`
+                // (`\cdlongequal`), which shares the `.xlongequal`
+                // kind with the user-facing 0.888em `\xlongequal`.
+                const is_cd_eq = o.kind == .xlongequal and o.extra == NONE and o.under == NONE;
+                const ssize = lc.effSize(style.script());
+                const pad = @divTrunc(@as(i32, 500) * ssize, 1000);
+                const min_mu: i32 = if (is_cd_eq) 3000 else xMinWidth(o.kind);
+                const minw_x = @divTrunc(min_mu * size, 1000);
                 var w = gw;
-                if (ab.w > w) w = ab.w;
-                if (below_w > w) w = below_w;
+                if (minw_x > w) w = minw_x;
+                const abw = ab.w + 2 * pad;
+                if (abw > w) w = abw;
+                if (has_below) {
+                    const bbw = below_w + 2 * pad;
+                    if (bbw > w) w = bbw;
+                }
                 // Extensible x-arrows (issue #104): KaTeX windows the
                 // shaft SVG over the label span (pinned 0.18.7
                 // `stretchy.ts`), so the glyph raster-stretches to it
@@ -2525,6 +2568,13 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
             // their exact span (issue #96).
             const minw = @divTrunc(@as(i32, 888) * size, 1000);
             var w = if (is_brace) nb.w else if (nb.w > gw) nb.w else gw;
+            // Braces never shrink below KaTeX's 1.6em SVG minimum
+            // (pinned 0.18.7 `stretchy.ts` `katexImagesData`, issue
+            // #236); the nucleus centers on the wider span below.
+            if (is_brace) {
+                const brace_min = @divTrunc(@as(i32, 1600) * size, 1000);
+                if (w < brace_min) w = brace_min;
+            }
             if (stretchy and !is_tilde and w < minw) w = minw;
             // A fixed host glyph wider than the span cannot center
             // without leaving the ink box (negative run x breaks the

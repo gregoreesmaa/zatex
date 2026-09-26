@@ -553,10 +553,13 @@ test "issue36: liminf and limsup carry a thin space" {
 }
 
 test "issue37: overbrace spans its nucleus and carries its label" {
-    // KaTeX parity: the brace stretches to the nucleus span (never
-    // narrower, never contributing extra width); `\overbrace{...}^`
-    // centers its label above like limits (pinned 0.18.7 nested
-    // `mover`), and symmetrically below for `\underbrace{...}_`.
+    // KaTeX parity: the brace stretches to the nucleus span, floored
+    // at the 1.6em SVG minimum (pinned 0.18.7 `stretchy.ts`
+    // `katexImagesData` overbrace/underbrace rows, issue #236) —
+    // narrow nuclei get a wider brace with the nucleus centered;
+    // `\overbrace{...}^` centers its label above like limits (pinned
+    // 0.18.7 nested `mover`), and symmetrically below for
+    // `\underbrace{...}_`.
     const P = struct {
         fn gid(_: *const anyopaque, _: u16, cp: u21) u16 {
             return @intCast(cp & 0xFFFF);
@@ -578,10 +581,12 @@ test "issue37: overbrace spans its nucleus and carries its label" {
     var runs_buf: [32]ir.Run = undefined;
     var rules_buf: [8]ir.Rule = undefined;
     var glyphs_buf: [128]u16 = undefined;
+    // `AB` is 1000mu < the 1600mu brace floor: brace wins, nucleus
+    // centers on it.
     const o = try layoutFull("\\overbrace{AB}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
-    try std.testing.expectEqual(@as(u32, 1000), o.width);
+    try std.testing.expectEqual(@as(u32, 1600), o.width);
     const u = try layoutFull("\\underbrace{AB}", .{}, prov, &runs_buf, &rules_buf, &glyphs_buf);
-    try std.testing.expectEqual(@as(u32, 1000), u.width);
+    try std.testing.expectEqual(@as(u32, 1600), u.width);
     // `1+2`: 500 + med + 500 + med + 500 = 1944; label `100` in
     // script style is 3 * 350 = 1050. Stacked, the brace span wins.
     const l = try layoutOk("\\overbrace{1+2}^{100}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
