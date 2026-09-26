@@ -1930,6 +1930,18 @@ fn spanScale(span: i32, nat: i32) u16 {
     return if (q > 65535) 65535 else @intCast(q);
 }
 
+/// Fit factor (per-mille) to draw a glyph of natural width `nat`
+/// across `span`: KaTeX stretchy accents always fill their wrapper
+/// (`width:100%`, `preserveAspectRatio="none"`), squeezing when the
+/// nucleus is narrower than the accent (issue #246). Sibling
+/// `spanScale` stays stretch-only for braces (issues #31/#37).
+fn fitScale(span: i32, nat: i32) u16 {
+    if (nat <= 0 or span <= 0 or span == nat) return 1000;
+    const q = @divTrunc(span * 1000, nat);
+    if (q < 1) return 1;
+    return if (q > 65535) 65535 else @intCast(q);
+}
+
 fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const size = lc.effSize(style);
     const nuc = try layoutNode(lc, style, a.nucleus);
@@ -1969,16 +1981,23 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const ic1000: i32 = if (ng) |found| lc.italicCorr(found.font, found.glyph) else 0;
     const ic = @divTrunc(ic1000 * @as(i32, size), 1000);
     // KaTeX gates the shift on shifty accents over single-symbol
-    // nuclei only: wide (`\widetilde` etc.) and multi-symbol
-    // (`\tilde{AB}`) nuclei stay centered.
-    const shifty = !a.wide and nucleusIsSingle(lc.pctx, a.nucleus);
+    // nuclei only: multi-symbol (`\tilde{AB}`) nuclei stay centered.
+    // Narrow accents shift by half the italic correction plus the
+    // Math-Italic skew; the stretchy trio (`\widehat`,
+    // `\widetilde`, `\widecheck` — exactly the `wide` family,
+    // pinned 0.18.7 `accent.js` isShifty) shifts by twice the skew
+    // with no italic term: the wrapper sits at marginLeft 2·skew,
+    // width calc(100% − 2·skew) (issue #246).
+    const single = nucleusIsSingle(lc.pctx, a.nucleus);
+    const shifty = !a.wide and single;
     const ncp = nucleusFirstCp(lc.pctx, a.nucleus);
-    const kskew1000: i32 = if (shifty and ng != null and ng.?.font == @intFromEnum(contract.FontId.math_italic))
+    const kskew1000: i32 = if (single and ng != null and ng.?.font == @intFromEnum(contract.FontId.math_italic))
         symbols.mathItalicSkew(ncp)
     else
         0;
     const kskew = @divTrunc(kskew1000 * @as(i32, size), 1000);
     const shift: i32 = if (shifty) @divTrunc(ic, 2) + kskew else 0;
+    const wshift: i32 = if (a.wide and single) 2 * kskew else 0;
     // v4 ink refinement (null hook = exact v3 behavior): the clipped
     // extents above lose where ink really starts, so low-sitting
     // accents (`~`, ink bottom +193mu) would nestle into the nucleus
@@ -2048,32 +2067,42 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
         // so the accent INK spans the nucleus — not the advance box
         // (issue #58: the caron advance already covers AB, so
         // advance-stretch never fired and the check covered only part
-        // of the nucleus). With ink metrics, scale ink to the span and
-        // center it; without them keep the advance-box rule below
-        // bit-identically.
+        // of the nucleus). With ink metrics, fit ink to the span;
+        // without them fit the advance box. Over a single slanted
+        // nucleus the span starts at the 2·skew wrapper offset, and
+        // the fit squeezes when the nucleus is narrower than the
+        // accent (issue #246); unshifted spans keep the stretch-only
+        // rule below bit-identically.
+        // Degenerate guard: the shift never exceeds the span (total
+        // on adversarial metrics); without room it drops to 0.
+        const dw: i32 = if (wshift < nb.w) wshift else 0;
+        const span: i32 = nb.w - dw;
         var ink_sc: u16 = 1000;
+        var placed = false;
         if (ink) |ib| {
             const jx0 = @divTrunc(ib[0] * size, 1000);
             const jx1 = @divTrunc(ib[2] * size, 1000);
             if (jx1 > jx0) {
-                const jsc = spanScale(nb.w, jx1 - jx0);
-                if (jsc > 1000) {
+                const jsc = fitScale(span, jx1 - jx0);
+                if (jsc != 1000 or dw != 0) {
                     ink_sc = jsc;
-                    ax = @divTrunc(nb.w, 2) + shift -
+                    ax = dw + @divTrunc(span, 2) -
                         @divTrunc((jx0 + jx1) * @as(i32, jsc), 2000);
+                    placed = true;
                 }
             }
         }
-        if (ink_sc > 1000) {
+        if (!placed) {
+            const sc = fitScale(span, aw);
+            if (sc != 1000 or dw != 0) {
+                ink_sc = sc;
+                ax = dw;
+                placed = true;
+            }
+        }
+        if (placed) {
             lc.boxes[ab].x_scale = ink_sc;
             lc.boxes[ab].w = nb.w;
-        } else {
-            const sc = spanScale(nb.w, aw);
-            if (sc > 1000) {
-                lc.boxes[ab].x_scale = sc;
-                lc.boxes[ab].w = nb.w;
-                ax = shift;
-            }
         }
     }
     var ay = nb.ha - clearance + adb;
