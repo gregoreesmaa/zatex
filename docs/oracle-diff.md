@@ -2,8 +2,8 @@
 
 `tools/diff-oracles.sh` renders each corpus case in ZaTeX plus 3
 independent oracle engines and emits `zig-out/oracle-diff/report.md`
-(rows sorted worst-first) so investigator attention goes where ZaTeX
-stands alone. It pre-sorts a review queue; it decides nothing.
+(rows sorted by shift descending, largest ZaTeX-oracle alignment
+offset first) so investigator attention goes to the biggest offsets. It pre-sorts a review queue; it decides nothing.
 
 Staging: per-case renders live in `tools/oracle-diff/work/` (gitignored
 staging, never committed). The latest full-sweep triage report is
@@ -109,7 +109,8 @@ offsets; sensitive to structural differences like wrong glyphs or
 missing strokes — a low score means genuinely different shapes).
 
 - `score(c) = max_i sim(ZaTeX_c, Oracle_i_c)` — low max ⇒ solo outlier
-  ⇒ investigate first. Rows sort by score ascending.
+  ⇒ investigate first. Rows sort by shift descending; score, spread,
+  and the tags below still carry the similarity signal.
 - `spread(c) = min` oracle↔oracle similarity; `spread < 0.90` tags the
   row `spec-ambiguous`.
 - `shift(c)` = largest ZaTeX↔oracle alignment offset in rescaled px:
@@ -126,10 +127,10 @@ matrices, fonts, colors, spacing, missing glyphs), the PR #52 review
 rows (sqrt family incl. `\sqrt[3]{x}`, accent alignment, brace spans,
 colorbox/fcolorbox, `\not\in`), and general breadth (big ops,
 auto-sized delimiters, nested fractions/scripts, text, relations) plus
-boring-agreement rows. After a real sweep, the bottom (high-score)
-rows should be the agreement cases and the top rows should reproduce
-the #30–#38 divergences — if the funnel points elsewhere first,
-suspect the tool before the engine.
+boring-agreement rows. After a real sweep, the agreement cases should
+carry high scores and the #30–#38 divergences should show in the
+low-score rows — if the scores point elsewhere first, suspect the
+tool before the engine.
 
 ## Calibration (second real sweep, 2026-09-13, 47 cases)
 
