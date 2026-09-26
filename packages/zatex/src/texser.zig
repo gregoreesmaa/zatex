@@ -194,8 +194,8 @@ const Walker = struct {
                         .pmatrix => .{ .l = '(', .r = ')' },
                         .bmatrix => .{ .l = '[', .r = ']' },
                         .Bmatrix => .{ .l = '{', .r = '}' },
-                        .vmatrix => .{ .l = '|', .r = '|' },
-                        .Vmatrix => .{ .l = 0x2016, .r = 0x2016 },
+                        .vmatrix => .{ .l = 0x2223, .r = 0x2223 },
+                        .Vmatrix => .{ .l = 0x2225, .r = 0x2225 },
                         .cases => .{ .l = '{', .r = 0 },
                         .dcases => .{ .l = '{', .r = 0 },
                         .drcases => .{ .l = 0, .r = '}' },
@@ -665,7 +665,6 @@ const Walker = struct {
     }
 
     fn atom(self: *Walker, class: symbols.AtomClass, font: parse.FontFam, cp: u21) contract.LayoutError!void {
-        _ = class;
         // Default fonts print literally; anything else takes an
         // explicit family wrapper so the round-trip keeps mathvariant.
         const default_font: parse.FontFam = if ((cp >= 'a' and cp <= 'z') or (cp >= 'A' and cp <= 'Z'))
@@ -703,6 +702,50 @@ const Walker = struct {
         }
         if (cp < 128) {
             try self.putCp(cp);
+            return;
+        }
+        // ASCII-source mathcode replacements (pinned 0.18.7, issue
+        // #218): re-emit a spelling that re-parses to identical
+        // MathML. Bare `\lvert`/`\lVert` keep their side so the
+        // open/close class survives the round-trip.
+        if (cp == 0x2212) {
+            try self.put("-");
+            return;
+        }
+        if (cp == 0x2217) {
+            try self.put("*");
+            return;
+        }
+        if (cp == 0x2223) {
+            if (class == .Open) {
+                try self.cmd("lvert");
+                return;
+            }
+            if (class == .Close) {
+                try self.cmd("rvert");
+                return;
+            }
+            // `\mid` is the Rel spelling (its bar re-parses through
+            // the same codepoint, so the class must round-trip).
+            // `cmd` (not `put`) tracks the word gap so a following
+            // letter cannot fuse (`\midy`).
+            if (class == .Rel) {
+                try self.cmd("mid");
+                return;
+            }
+            try self.put("|");
+            return;
+        }
+        if (cp == 0x2225) {
+            if (class == .Open) {
+                try self.cmd("lVert");
+                return;
+            }
+            if (class == .Close) {
+                try self.cmd("rVert");
+                return;
+            }
+            try self.cmd("|");
             return;
         }
         try self.cmd(symbols.commandFor(cp) orelse return error.Unsupported);
@@ -1122,6 +1165,15 @@ test "serializer: round-trip keeps MathML identical" {
         "\\colorbox{yellow}{hi}",
         "\\text{hi there}",
         "a+b=c",
+        "a-b",
+        "a*b",
+        "a|b",
+        "a\\|b",
+        "\\lvert x\\rvert",
+        "\\left|x\\right|",
+        "\\left\\|x\\right\\|",
+        "\\left. x\\middle| y\\right.",
+        "\\begin{vmatrix}a\\end{vmatrix}",
         "\\alpha+\\beta=\\gamma",
         "\\overline{AB}",
         "\\hat{x}",

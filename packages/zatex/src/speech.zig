@@ -519,6 +519,10 @@ fn binWord(cp: u21) ?[]const u8 {
     return switch (cp) {
         '+' => "plus",
         '-' => "minus",
+        // ASCII-source mathcode replacements (pinned 0.18.7, issue
+        // #218): `-`/`*` parse to U+2212/U+2217, same words.
+        0x2212 => "minus",
+        0x2217 => "times",
         0x00B1 => "plus minus",
         0x22C5 => "dot",
         '*' => "times",
@@ -556,6 +560,12 @@ fn genericWord(cp: u21) contract.LayoutError![]const u8 {
     switch (cp) {
         '+' => return "plus",
         '-' => return "minus",
+        // Remapped mathcode points (issue #218) keep their ASCII
+        // words wherever the old codepoint had one.
+        0x2212 => return "minus",
+        0x2217 => return "star",
+        0x2223 => return "vertical bar",
+        0x2225 => return "double vertical bar",
         '=' => return "equals",
         '<' => return "is less than",
         '>' => return "is greater than",
@@ -644,13 +654,13 @@ fn opWord(text: []const u8) ?[]const u8 {
 /// Open-position delimiter word (KaTeX `openMap`, then `stringMap`).
 /// `.` (empty side) has no word — callers skip it.
 fn speakDelimOpen(cp: u21) contract.LayoutError![]const u8 {
-    if (cp == '|') return "open vertical bar";
+    if (cp == '|' or cp == 0x2223) return "open vertical bar";
     return genericWord(cp);
 }
 
 /// Close-position delimiter word (KaTeX `closeMap`, then `stringMap`).
 fn speakDelimClose(cp: u21) contract.LayoutError![]const u8 {
-    if (cp == '|') return "close vertical bar";
+    if (cp == '|' or cp == 0x2223) return "close vertical bar";
     return genericWord(cp);
 }
 
@@ -859,6 +869,8 @@ test "speech: bin/rel-sensitive words (issue #124)" {
         .{ "a\\cdot b", "a, dot, b" },
         .{ "a\\times b", "a, times, b" },
         .{ "a*b", "a, times, b" },
+        .{ "a-b", "a, minus, b" },
+        .{ "a|b", "a, vertical bar, b" },
         .{ "a\\approx b", "a, approximately equals, b" },
         .{ "\\ne", "does not equal" },
         .{ "\\leq", "is less than or equal to" },

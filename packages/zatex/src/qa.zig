@@ -3070,11 +3070,39 @@ test "qa88 paren math islands re-enter math in text (issue #81)" {
     try std.testing.expectError(error.Invalid, lay("\\text{\\(a$b\\)}", false, &b5));
 }
 
-
-
-
-
-
+test "qa218 mathcode minus/star/bars resolve to KaTeX codepoints" {
+    // Pinned 0.18.7 MathML text (issue #218): `-` lays out MINUS
+    // SIGN (U+2212, not hyphen), `*` lays out ASTERISK OPERATOR
+    // (U+2217, math-axis height), `|` lays out DIVIDES (U+2223),
+    // `\|` lays out PARALLEL (U+2225). The stub maps codepoint to
+    // glyph id 1:1, so run glyphs pin the codepoints directly;
+    // the ASCII forms must be gone from the same runs.
+    const goldens = [_]struct { tex: []const u8, want: u16, gone: u16 }{
+        .{ .tex = "a-b", .want = 0x2212, .gone = '-' },
+        .{ .tex = "a*b", .want = 0x2217, .gone = '*' },
+        .{ .tex = "a|b", .want = 0x2223, .gone = '|' },
+        .{ .tex = "a\\|b", .want = 0x2225, .gone = 0x2016 },
+    };
+    for (goldens) |g| {
+        var b: B = .{};
+        const l = try lay(g.tex, false, &b);
+        var found = false;
+        for (l.runs) |r| for (r.glyphs) |h| {
+            try std.testing.expect(h != g.gone);
+            if (h == g.want) found = true;
+        };
+        try std.testing.expect(found);
+    }
+    // Fences ride the same codepoints (`\left|` is DIVIDES).
+    var bf: B = .{};
+    const f = try lay("\\left|x\\right|", false, &bf);
+    var nfence: usize = 0;
+    for (f.runs) |r| for (r.glyphs) |h| {
+        try std.testing.expect(h != '|' and h != 0x2016);
+        if (h == 0x2223) nfence += 1;
+    };
+    try std.testing.expectEqual(@as(usize, 2), nfence);
+}
 
 test "qa107 cancel strikes corner-to-corner" {
     // Issue #107 (pinned 0.18.7 `stretchyEnclose`): `\cancel` strikes

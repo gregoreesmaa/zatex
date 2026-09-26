@@ -2705,3 +2705,40 @@ test "mathml accepts exactly what layout accepts" {
         }
     }
 }
+
+test "mathcode replacements emit KaTeX codepoints (issue #218)" {
+    // Pinned 0.18.7 MathML text: `-` is MINUS SIGN (U+2212), `*`
+    // is ASTERISK OPERATOR (U+2217), `|` is DIVIDES (U+2223),
+    // `\|` is PARALLEL (U+2225, a textord like KaTeX). Text mode
+    // keeps ASCII.
+    var out: [1024]u8 = undefined;
+    const minus = try render("a-b", .{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, minus, "<mo>\xe2\x88\x92</mo>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, minus, "<mo>-</mo>") == null);
+    var out2: [1024]u8 = undefined;
+    const star = try render("a*b", .{}, &out2);
+    try std.testing.expect(std.mem.indexOf(u8, star, "<mo>\xe2\x88\x97</mo>") != null);
+    var out3: [1024]u8 = undefined;
+    const bar = try render("|", .{}, &out3);
+    try std.testing.expect(std.mem.indexOf(u8, bar, "<mi mathvariant=\"normal\">\xe2\x88\xa3</mi>") != null);
+    var out4: [1024]u8 = undefined;
+    const dbl = try render("\\|", .{}, &out4);
+    try std.testing.expect(std.mem.indexOf(u8, dbl, "<mi mathvariant=\"normal\">\xe2\x88\xa5</mi>") != null);
+    var out5: [2048]u8 = undefined;
+    const fence = try render("\\left|x\\right|", .{}, &out5);
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, fence, "<mo fence=\"true\">\xe2\x88\xa3</mo>"));
+    var out6: [2048]u8 = undefined;
+    const dfence = try render("\\left\\|x\\right\\|", .{}, &out6);
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, dfence, "<mo fence=\"true\">\xe2\x88\xa5</mo>"));
+    // The `\middle` quirk: `|`/`\vert` stay raw U+007C (pinned).
+    var out7: [2048]u8 = undefined;
+    const mid = try render("\\left. x\\middle| y\\right.", .{}, &out7);
+    try std.testing.expect(std.mem.indexOf(u8, mid, ">|</mo>") != null);
+    var out8: [2048]u8 = undefined;
+    const midv = try render("\\left. x\\middle\\vert y\\right.", .{}, &out8);
+    try std.testing.expect(std.mem.indexOf(u8, midv, ">|</mo>") != null);
+    // Text mode is untouched.
+    var out9: [1024]u8 = undefined;
+    const txt = try render("\\text{-*-|}", .{}, &out9);
+    try std.testing.expect(std.mem.indexOf(u8, txt, "<mtext>-*-|</mtext>") != null);
+}
