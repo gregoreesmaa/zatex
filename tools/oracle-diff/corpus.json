@@ -24,6 +24,7 @@
  {"id": "sqrt-idx", "tex": "\\sqrt[3]{x}", "display": false, "issue": null},
  {"id": "sqrt-disp", "tex": "\\sqrt{x^2+1}", "display": true, "issue": null},
  {"id": "sqrt-nest", "tex": "\\sqrt{1+\\sqrt{1+x}}", "display": false, "issue": null},
+ {"id": "sqrt-nest-idx", "tex": "\\sqrt{\\sqrt{x} + \\sqrt[3]{y}}", "display": false, "issue": 212},
  {"id": "sqrt-frac", "tex": "\\sqrt{\\frac{a}{b}}", "display": false, "issue": null},
  {"id": "acc-tilde", "tex": "\\tilde{x}", "display": false, "issue": null},
  {"id": "acc-ddot", "tex": "\\ddot{y}", "display": false, "issue": null},
