@@ -7,7 +7,8 @@ by ink centroid on the union canvas), compares with block SSIM, scores
 
     score(c) = max_i sim(ZaTeX_c, Oracle_i_c)
 
-and writes a markdown report sorted worst-first plus the normalized PNGs.
+and writes a markdown report sorted by shift descending (largest
+ZaTeX-oracle alignment offset first) plus the normalized PNGs.
 
 Usage:
     report.py --raw <rawdir> --out <outdir> [--corpus corpus.json]
@@ -386,7 +387,8 @@ def build_report(rawdir, outdir, corpus, jobs=1):
     os.makedirs(pngdir, exist_ok=True)
     # Cases are independent: score them in a process pool (same worker
     # function per case, rows reassembled in corpus order before the
-    # stable worst-first sort, so output is byte-identical).
+    # stable shift-descending sort, so ties keep corpus order and output
+    # is byte-identical).
     tasks = [(rawdir, pngdir, case) for case in corpus]
     if jobs < 1:
         jobs = 1
@@ -408,8 +410,7 @@ def build_report(rawdir, outdir, corpus, jobs=1):
     if missing:
         raise ValueError("report references missing renders: %s"
                          % sorted(missing))
-    rows.sort(key=lambda r: (r["score"] is None, r["score"]
-                             if r["score"] is not None else 0.0))
+    rows.sort(key=lambda r: -r["shift"])
     lines = []
     lines.append("# Oracle diff report (triage only — not a gate, not truth)")
     lines.append("")
@@ -424,7 +425,8 @@ def build_report(rawdir, outdir, corpus, jobs=1):
                  "are tagged `katex-outlier`: ZaTeX stands alone against "
                  "the reference even after allowing for oracle "
                  "disagreement — investigate first (triage attention, "
-                 "never a gate). When oracles "
+                 "never a gate). Rows are ordered by `shift` descending, "
+                 "largest ZaTeX-oracle alignment offset first. When oracles "
                  "disagree, pinned KaTeX 0.18.7 remains the sole truth "
                  "for accept/reject and geometry disputes."
                  % (AMBIGUOUS_SPREAD, KATEX_OUTLIER_MARGIN))
@@ -591,7 +593,10 @@ def selfcheck():
     rows = build_report(raw, out, cases)
     order = [r["case"]["id"] for r in rows]
     by_id = {r["case"]["id"]: r for r in rows}
-    check("worst-first sort puts solo outlier first", order[0] == "solo")
+    check("shift-descending sort puts largest offset first",
+          order[0] == "solo" and
+          all(by_id[order[i]]["shift"] >= by_id[order[i + 1]]["shift"]
+              for i in range(len(order) - 1)))
     check("agreement row scores 1.0", by_id["agree"]["score"] == 1.0)
     check("identical renders report zero shift",
           by_id["agree"]["shift"] == 0)
