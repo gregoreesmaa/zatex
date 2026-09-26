@@ -2438,7 +2438,16 @@ fn parseSingle(ctx: *ParseCtx, depth: u8) Error!?Idx {
                 .mathit
             else
                 .rm;
-            const id: ?Idx = try ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = t.cp, .textord = symbols.isTextordCp(t.cp) } });
+            // KaTeX mathcode replacements (pinned 0.18.7, issue #218):
+            // `-` is MINUS SIGN, `*` is ASTERISK OPERATOR, `|` is
+            // DIVIDES. Text mode keeps the ASCII forms (separate path).
+            const cp: u21 = switch (t.cp) {
+                '-' => 0x2212,
+                '*' => 0x2217,
+                '|' => 0x2223,
+                else => t.cp,
+            };
+            const id: ?Idx = try ctx.allocNode(.{ .atom = .{ .class = cls, .font = font, .cp = cp, .textord = symbols.isTextordCp(cp) } });
             return id;
         },
         .lbrace => {
@@ -3757,7 +3766,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
                     // KaTeX parity: the delimiter parses first (a missing one
                     // fails there); the fence check reports at the delimiter.
                     const dpos = (try ctx.peek()).pos;
-                    const cp = try parseDelimSpec(ctx);
+                    const cp = try parseDelimSpec(ctx, true);
                     if (ctx.in_fence == 0) return ctx.fail(dpos, "'\\middle' outside '\\left'");
                     return ctx.allocNode(.{ .middle = .{ .cp = cp } });
                 }
@@ -4302,7 +4311,8 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         '&' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '&', .textord = true } }),
         '#' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '#', .textord = true } }),
         '_' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = '_', .textord = true } }),
-        '|' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x2016, .textord = true } }),
+        // `\|` is PARALLEL (pinned 0.18.7 emits U+2225, issue #218).
+        '|' => return ctx.allocNode(.{ .atom = .{ .class = .Ord, .font = .rm, .cp = 0x2225, .textord = true } }),
         ' ' => return ctx.allocNode(.{ .nbsp = {} }),
         ',' => return ctx.allocNode(.{ .space = space_thin }),
         ':' => return ctx.allocNode(.{ .space = space_med }),
@@ -4656,11 +4666,17 @@ fn parseSqrt(ctx: *ParseCtx, depth: u8) Error!Idx {
 
 /// Read one delimiter specification: a bare char, `\|`, or a named
 /// delimiter command. `.` means "no fence" (u21 0).
-fn parseDelimSpec(ctx: *ParseCtx) Error!u21 {
+///
+/// Bar codepoints follow pinned KaTeX MathML (0.18.7, issue #218):
+/// `|` is DIVIDES (U+2223), `\|` is PARALLEL (U+2225), named bars
+/// come from the delimiter table. `\middle` keeps the raw U+007C for
+/// `|`/`\vert` (pinned quirk), so it passes `middle_quirk = true`.
+fn parseDelimSpec(ctx: *ParseCtx, middle_quirk: bool) Error!u21 {
     const t = try ctx.next();
     switch (t.kind) {
         .char => {
             if (t.cp == '.') return 0;
+            if (t.cp == '|' and !middle_quirk) return 0x2223;
             return switch (t.cp) {
                 '(', ')', '[', ']', '{', '}', '|', '/', '<', '>' => t.cp,
                 else => ctx.fail(t.pos, "expected delimiter"),
@@ -4670,13 +4686,15 @@ fn parseDelimSpec(ctx: *ParseCtx) Error!u21 {
             if (t.name.len == 1) {
                 const c = t.name[0];
                 switch (c) {
-                    '|', '/' => return c,
+                    '|' => return 0x2225,
+                    '/' => return c,
                     '\\' => return 0x005C,
                     '{' => return '{',
                     '}' => return '}',
                     else => return ctx.fail(t.pos, "expected delimiter"),
                 }
             }
+            if (middle_quirk and tokNameEq(t.name, "vert")) return '|';
             if (symbols.lookupDelim(t.name)) |d| return d.cp;
             return ctx.fail(t.pos, "expected delimiter");
         },
@@ -4685,7 +4703,7 @@ fn parseDelimSpec(ctx: *ParseCtx) Error!u21 {
 }
 
 fn parseLeftRight(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
-    const left = try parseDelimSpec(ctx);
+    const left = try parseDelimSpec(ctx, false);
     ctx.in_fence += 1;
     const body = try parseFormula(ctx, depth, .leftright, null);
     ctx.in_fence -= 1;
@@ -4693,7 +4711,7 @@ fn parseLeftRight(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     const r = try ctx.next();
     if (r.kind != .ctrl or !tokNameEq(r.name, "right")) return ctx.fail(r.pos, "expected '\\right'");
     _ = t;
-    const right = try parseDelimSpec(ctx);
+    const right = try parseDelimSpec(ctx, false);
     return ctx.allocNode(.{ .delim = .{ .left = left, .right = right, .body = body } });
 }
 
@@ -4723,17 +4741,21 @@ fn parseBig(ctx: *ParseCtx, name: []const u8, t: Tok) Error!Idx {
         return ctx.fail(t.pos, "undefined control sequence");
     }
     // Delimiter spec (`.` is not allowed here — KaTeX rejects `\big.`).
+    // Bar codepoints match parseDelimSpec without the `\middle` quirk
+    // (pinned 0.18.7: `\bigm|` is U+2223, issue #218).
     const dt = try ctx.next();
     const cp: u21 = switch (dt.kind) {
         .char => switch (dt.cp) {
-            '(', ')', '[', ']', '{', '}', '|', '/', '<', '>' => dt.cp,
+            '|' => 0x2223,
+            '(', ')', '[', ']', '{', '}', '/', '<', '>' => dt.cp,
             else => return ctx.fail(dt.pos, "expected delimiter"),
         },
         .ctrl => blk: {
             if (dt.name.len == 1) {
                 const c = dt.name[0];
                 break :blk switch (c) {
-                    '|', '/' => @as(u21, c),
+                    '|' => @as(u21, 0x2225),
+                    '/' => @as(u21, c),
                     '\\' => @as(u21, 0x005C),
                     '{' => @as(u21, '{'),
                     '}' => @as(u21, '}'),
@@ -6502,8 +6524,11 @@ fn singleDelimArg(ctx: *ParseCtx, r: Range, pos: u32) Error!u21 {
     switch (tk.kind) {
         .char => {
             if (tk.cp == '.') return 0;
+            // Bars match `\left` (pinned 0.18.7, issue #218); KaTeX
+            // MathML omits genfrac fences, so this is raster-only.
+            if (tk.cp == '|') return 0x2223;
             return switch (tk.cp) {
-                '(', ')', '[', ']', '{', '}', '|', '/', '<', '>' => tk.cp,
+                '(', ')', '[', ']', '{', '}', '/', '<', '>' => tk.cp,
                 else => ctx.fail(tk.pos, "expected delimiter"),
             };
         },
@@ -6511,7 +6536,8 @@ fn singleDelimArg(ctx: *ParseCtx, r: Range, pos: u32) Error!u21 {
             if (tk.name.len == 1) {
                 const c = tk.name[0];
                 switch (c) {
-                    '|', '/' => return c,
+                    '|' => return 0x2225,
+                    '/' => return c,
                     '\\' => return 0x005C,
                     '{' => return '{',
                     '}' => return '}',
@@ -7369,8 +7395,10 @@ fn parseEnv(ctx: *ParseCtx, depth: u8, cmd: Tok) Error!Idx {
         .pmatrix => .{ .l = '(', .r = ')' },
         .bmatrix => .{ .l = '[', .r = ']' },
         .Bmatrix => .{ .l = '{', .r = '}' },
-        .vmatrix => .{ .l = '|', .r = '|' },
-        .Vmatrix => .{ .l = 0x2016, .r = 0x2016 },
+        // Bar-matrix fences match `\left` bars (pinned 0.18.7,
+        // issue #218): vmatrix is DIVIDES, Vmatrix PARALLEL.
+        .vmatrix => .{ .l = 0x2223, .r = 0x2223 },
+        .Vmatrix => .{ .l = 0x2225, .r = 0x2225 },
         .cases => .{ .l = '{', .r = 0 },
         .dcases => .{ .l = '{', .r = 0 },
         .drcases => .{ .l = 0, .r = '}' },
@@ -7469,11 +7497,14 @@ fn parseCDArrow(ctx: *ParseCtx, items: []const u16, i: *usize, pos: u32) Error!I
                 .under = NONE,
             } });
         },
-        '|' => {
+        '|', 0x2223 => {
             i.* += 1;
             // KaTeX `cdArrow`: `\Big\Vert` (same node as the
-            // `\Big\Vert` spelling: level 1, Ord).
-            return ctx.allocNode(.{ .big = .{ .cp = 0x2016, .level = 1, .class = .Ord } });
+            // `\Big\Vert` spelling: level 1, Ord; the arrow char
+            // parses to U+2223 since the issue-#218 mathcode
+            // remap, and the node carries PARALLEL per pinned
+            // 0.18.7 MathML).
+            return ctx.allocNode(.{ .big = .{ .cp = 0x2225, .level = 1, .class = .Ord } });
         },
         '.' => {
             // KaTeX `cdArrow`: a textord space (its MathML is an

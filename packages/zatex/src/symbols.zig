@@ -801,7 +801,9 @@ pub fn isTextord(name: []const u8) bool {
 /// pinned here). Dotless ı/ȷ keep their dedicated MathML arm and the
 /// backtick lexes as an accent, so neither is listed.
 pub fn isTextordCp(cp: u21) bool {
-    if (cp == '|') return true;
+    // Math-mode `|` parses to U+2223 (KaTeX parity, issue #218); the
+    // raw U+007C arm stays for text-mode bars.
+    if (cp == '|' or cp == 0x2223) return true;
     return switch (cp) {
         0x0391, 0x0392, 0x0395, 0x0396, 0x0397, 0x0399, 0x039A,
         0x039C, 0x039D, 0x039F, 0x03A1, 0x03A4, 0x03A7,
@@ -981,12 +983,16 @@ const delims = [_]DelimEntry{
         .{ .name = "rangle", .cp = 0x27E9, .cls = .Close },
         .{ .name = "lbrace", .cp = 0x007B, .cls = .Open },
         .{ .name = "rbrace", .cp = 0x007D, .cls = .Close },
-        .{ .name = "lvert", .cp = 0x007C, .cls = .Open },
-        .{ .name = "rvert", .cp = 0x007C, .cls = .Close },
-        .{ .name = "vert", .cp = 0x007C, .cls = .Ord },
-        .{ .name = "lVert", .cp = 0x2016, .cls = .Open },
-        .{ .name = "rVert", .cp = 0x2016, .cls = .Close },
-        .{ .name = "Vert", .cp = 0x2016, .cls = .Ord },
+        // Bar delimiters resolve to the DIVIDES / PARALLEL codepoints
+        // KaTeX emits in MathML (pinned 0.18.7, issue #218): single
+        // bars are U+2223, doubles U+2225. (`\middle` keeps the raw
+        // U+007C for `|`/`\vert` — see parseDelimSpec.)
+        .{ .name = "lvert", .cp = 0x2223, .cls = .Open },
+        .{ .name = "rvert", .cp = 0x2223, .cls = .Close },
+        .{ .name = "vert", .cp = 0x2223, .cls = .Ord },
+        .{ .name = "lVert", .cp = 0x2225, .cls = .Open },
+        .{ .name = "rVert", .cp = 0x2225, .cls = .Close },
+        .{ .name = "Vert", .cp = 0x2225, .cls = .Ord },
         .{ .name = "lfloor", .cp = 0x230A, .cls = .Open },
         .{ .name = "rfloor", .cp = 0x230B, .cls = .Close },
         .{ .name = "lceil", .cp = 0x2308, .cls = .Open },
@@ -1285,6 +1291,16 @@ test "pinned KaTeX codepoints and classes" {
     try std.testing.expectEqual(@as(u21, 0x2021), lookup("ddag").?.cp);
     try std.testing.expectEqual(@as(u21, 0x2223), lookup("vert").?.cp);
     try std.testing.expectEqual(@as(u21, 0x2225), lookup("Vert").?.cp);
+    // Bar delimiters resolve to DIVIDES / PARALLEL (pinned 0.18.7
+    // MathML, issue #218).
+    try std.testing.expectEqual(@as(u21, 0x2223), lookupDelim("lvert").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2223), lookupDelim("rvert").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2223), lookupDelim("vert").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2225), lookupDelim("lVert").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2225), lookupDelim("rVert").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x2225), lookupDelim("Vert").?.cp);
+    try std.testing.expectEqual(AtomClass.Open, lookupDelim("lvert").?.cls);
+    try std.testing.expectEqual(AtomClass.Close, lookupDelim("rvert").?.cls);
     // Nationals KaTeX also accepts in math mode (pinned-proven); the
     // rest are text-mode-only and live in lookupText.
     try std.testing.expectEqual(@as(u21, 0x00E5), lookup("aa").?.cp);
