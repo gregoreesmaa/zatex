@@ -257,7 +257,7 @@ pub fn build(b: *std.Build) void {
     // engine (full profile), whose suite runs in its own targets.
     const qa_tests = b.addTest(.{
         .root_module = qa_mod,
-        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa81", "qa82", "qa83", "qa84", "qa85", "qa86", "qa87", "qa88", "qa218", "qa219", "qa220", "qa139", "qa140", "qa141", "qa144", "qa dump", "qa101", "qa104", "qa96", "qa107", "qa108", "qa113", "qa114", "qa115", "oracle-geometry", "trip", "issue200" },
+        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa81", "qa82", "qa83", "qa84", "qa85", "qa86", "qa87", "qa88", "qa218", "qa219", "qa220", "qa139", "qa140", "qa141", "qa144", "qa dump", "qa101", "qa104", "qa96", "qa107", "qa108", "qa113", "qa114", "qa115", "oracle-geometry", "trip", "issue200", "issue246" },
     });
     const run_qa_tests = b.addRunArtifact(qa_tests);
     run_qa_tests.setCwd(b.path("."));

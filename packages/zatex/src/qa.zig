@@ -3770,3 +3770,69 @@ test "issue200 limit gaps follow the bigOpSpacing floors" {
     try std.testing.expectEqual(@as(u32, 725), sub_only.height_above);
     try std.testing.expectEqual(@as(u32, 995), sub_only.depth_below);
 }
+
+test "issue246 widecheck shifts over single slanted nuclei" {
+    // Pinned KaTeX 0.18.7 `accent.js` isShifty: the stretchy trio
+    // (`\widehat`, `\widetilde`, `\widecheck`) shifts over a single
+    // slanted nucleus by twice the Math-Italic skew — the wrapper
+    // sits at marginLeft 2·skew, width calc(100% − 2·skew). Probed
+    // from the pinned bundle: `\widecheck{x}` carries
+    // `margin-left:0.0556em` (2 x 28mu), `\widecheck{M}`
+    // `margin-left:0.1667em` (2 x 83mu), `\widecheck{AB}` no shift.
+    // Multi-symbol nuclei stay centered at full span (regression
+    // guard for the #246 `wide-check` row); the construction is
+    // exactly the nucleus width either way (issue #31).
+    const skewed = [_]struct { tex: []const u8, d: i32, stub_scale: u16, ink_x: i32, ink_scale: u16 }{
+        // Stub: span 500-56=444, 444*1000/500=888 at x=56.
+        // Ink: caron ink [90,410] (320 wide) fits 444 -> 1387,
+        // x = 56+222-(500*1387)/2000 = -68.
+        .{ .tex = "\\widecheck{x}", .d = 56, .stub_scale = 888, .ink_x = -68, .ink_scale = 1387 },
+        // Stub: span 500-166=334, 334*1000/500=668 at x=166.
+        // Ink: 320-wide ink fits 334 -> 1043,
+        // x = 166+167-(500*1043)/2000 = 73.
+        .{ .tex = "\\widecheck{M}", .d = 166, .stub_scale = 668, .ink_x = 73, .ink_scale = 1043 },
+    };
+    for (skewed) |c| {
+        var b1: ProvBuf = .{};
+        const s = try layProv(c.tex, stubProvider(), &b1);
+        try std.testing.expectEqual(@as(u32, 500), s.width);
+        var found_stub = false;
+        for (s.runs) |r| {
+            for (r.glyphs) |g| {
+                if (g != 0x02C7) continue;
+                found_stub = true;
+                try std.testing.expectEqual(c.d, r.x);
+                try std.testing.expectEqual(c.stub_scale, r.x_scale);
+            }
+        }
+        try std.testing.expect(found_stub);
+        var b2: ProvBuf = .{};
+        const k = try layInk(c.tex, &b2);
+        try std.testing.expectEqual(@as(u32, 500), k.width);
+        var found_ink = false;
+        for (k.runs) |r| {
+            for (r.glyphs) |g| {
+                if (g != 0x02C7) continue;
+                found_ink = true;
+                try std.testing.expectEqual(c.ink_x, r.x);
+                try std.testing.expectEqual(c.ink_scale, r.x_scale);
+            }
+        }
+        try std.testing.expect(found_ink);
+    }
+    // Multi-symbol nucleus: no shift, accent spans the full width —
+    // the #246 `wide-check` row matches KaTeX with no change.
+    var b3: ProvBuf = .{};
+    const m = try layProv("\\widecheck{AB}", stubProvider(), &b3);
+    try std.testing.expectEqual(@as(u32, 1000), m.width);
+    var found = false;
+    for (m.runs) |r| {
+        for (r.glyphs) |g| {
+            if (g != 0x02C7) continue;
+            found = true;
+            try std.testing.expectEqual(@as(i32, 0), r.x);
+            try std.testing.expectEqual(@as(u16, 2000), r.x_scale);
+        }
+    }
+    try std.testing.expect(found);
+}
