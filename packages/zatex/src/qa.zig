@@ -664,12 +664,14 @@ test "qa43 sum limits stack in display, sit aside in text" {
     const y_sub_d = try baseY(d, 0xD456); // mathit i
     try std.testing.expect(y_sup_d < y_base_d);
     try std.testing.expect(y_sub_d > y_base_d);
-    // Text mode: side scripts at one 60mu script gap past the 500-unit base.
+    // Text mode: side scripts abut the 500-unit base with no leading
+    // gap (pinned KaTeX 0.18.7: the sup row carries no marginLeft and
+    // the Size1 sum italic is 0, so the sub `margin-left` is `0em`).
     const x_base_t = try glyphX(t, 8721);
     const x_sup_t = try glyphX(t, 0xD45B);
     const x_sub_t = try glyphX(t, 0xD456);
-    try std.testing.expectEqual(x_base_t + 500 + 60, x_sup_t);
-    try std.testing.expectEqual(x_base_t + 500 + 60, x_sub_t);
+    try std.testing.expectEqual(x_base_t + 500, x_sup_t);
+    try std.testing.expectEqual(x_base_t + 500, x_sub_t);
 }
 
 fn baseY(l: zatex.ir.Layout, glyph: u16) !i32 {
@@ -724,8 +726,10 @@ test "qa43 int scripts sit aside in both modes" {
         const l = try lay("\\int_{0}^{1} x", display, &b);
         const base_w: i32 = 500;
         const x_base = try glyphX(l, 8747);
-        try std.testing.expectEqual(x_base + base_w + 60, try glyphX(l, 49));
-        try std.testing.expectEqual(x_base + base_w + 60, try glyphX(l, 48));
+        // No leading script gap (pinned KaTeX 0.18.7, issue #219: the
+        // stub italic is 0, so both scripts abut the base edge).
+        try std.testing.expectEqual(x_base + base_w, try glyphX(l, 49));
+        try std.testing.expectEqual(x_base + base_w, try glyphX(l, 48));
     }
     var bd: B = .{};
     var bt: B = .{};
@@ -734,6 +738,78 @@ test "qa43 int scripts sit aside in both modes" {
     // Same ambient size, same stub advance: only the face differs, so
     // the stub boxes (and widths) coincide exactly (issue #101).
     try std.testing.expectEqual(t.width, d.width);
+}
+
+/// Stub metrics plus KaTeX's Size2 integral italic correction
+/// (0.44445em, pinned 0.18.7 `Size2-Regular` U+222B row): isolates the
+/// issue-#219 italic path from real-font metric values.
+const ItalicInt = struct {
+    fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+        return @truncate(cp);
+    }
+    fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
+        return 500;
+    }
+    fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+        return 40;
+    }
+    fn italicCorrection(_: *const anyopaque, _: u16, glyph: u16) i32 {
+        return if (glyph == 0x222B) 444 else 0;
+    }
+};
+
+fn italicIntProvider() zatex.MetricsProvider {
+    const S = struct {
+        var dummy: u8 = 0;
+    };
+    return .{
+        .ctx = &S.dummy,
+        .glyphId = ItalicInt.glyphId,
+        .advance = ItalicInt.advance,
+        .ruleThickness = ItalicInt.ruleThickness,
+        .italicCorrection = ItalicInt.italicCorrection,
+    };
+}
+
+fn layItalicInt(src: []const u8, display: bool, b: *B) !zatex.ir.Layout {
+    var diag = zatex.Diag.empty();
+    return zatex.layoutDiag(src, .{ .display_mode = display }, italicIntProvider(), &b.runs, &b.rules, &b.glyphs, &diag);
+}
+
+test "qa43 symbol-op side scripts use Rule 18 shifts and italic (issue #219)" {
+    // Display `\int` scripts follow KaTeX Rules 18a/c/d/e (pinned
+    // 0.18.7 `supsub` builder — symbol-op bases are never character
+    // boxes), not the fixed 400/260mu ordinary-script shifts. Stub
+    // (advance 500, extents 700/250, script size 700): Rule 18a gives
+    // sup0 = 700 - 353*0.7 = 453 and sub0 = 250 + 71*0.7 = 299;
+    // Rule 18e fires (gap 87 < 160) and settles sup +519, sub -306.
+    var b: B = .{};
+    const l = try lay("\\int_{0}^{1}", true, &b);
+    const y_base = try baseY(l, 8747);
+    try std.testing.expectEqual(y_base - 519, try baseY(l, 49));
+    try std.testing.expectEqual(y_base + 306, try baseY(l, 48));
+    // Scripts abut the base edge (no 60mu lead); the 50mu scriptspace
+    // trails the block: width 500 + 350 + 50 = 900.
+    const x_base = try glyphX(l, 8747);
+    try std.testing.expectEqual(x_base + 500, try glyphX(l, 49));
+    try std.testing.expectEqual(x_base + 500, try glyphX(l, 48));
+    try std.testing.expectEqual(@as(u32, 900), l.width);
+    // With KaTeX's integral italic the sup clears base + italic
+    // (NE: pinned HTML `margin-right:0.4445em` on the base, no
+    // marginLeft on the sup) while the sub pulls back under the base
+    // (SW: `margin-left:-0.4445em`); the widened block carries the
+    // post-Op thin glue to the following atom (agree-int `e`).
+    var bi: B = .{};
+    const li = try layItalicInt("\\int_{-\\infty}^{\\infty}e", true, &bi);
+    const xi_base = try glyphX(li, 8747);
+    try std.testing.expectEqual(xi_base + 500 + 444, try glyphX(li, 8734));
+    try std.testing.expectEqual(xi_base + 500, try glyphX(li, 8722));
+    const yi_base = try baseY(li, 8747);
+    try std.testing.expectEqual(yi_base - 519, try baseY(li, 8734));
+    try std.testing.expectEqual(yi_base + 306, try baseY(li, 8722));
+    // Block: max(500 + 444, 944 + 350 + 50, 500 + 700 + 50) = 1344;
+    // `e` (mathit U+1D452) sits one thin space past it.
+    try std.testing.expectEqual(xi_base + 1344 + 167, try glyphX(li, 0xD452));
 }
 
 test "qa101 display large ops use size2, text uses size1" {
@@ -3085,33 +3161,36 @@ test "qa87 clap subscripts center on the script anchor (issue #78)" {
     // KaTeX parity (pinned 0.18.7): a lap subscript is a zero-width
     // box (`mpadded lspace="-0.5width" width="0px"`) whose content
     // centers on the side-script anchor at the script drop. Anchor
-    // and drop follow the pinned script contracts (qa43 60mu gap,
-    // qa42 260mu drop); this test locks the LAP-relative geometry —
-    // exact centering, shared drop, zero construct width — so the
+    // and drop follow Rule 18 for symbol-op bases (issue #219: no
+    // leading gap, Rule 18b lone-sub drop); this test locks the
+    // LAP-relative geometry — exact centering, shared drop — so the
     // PR-#74-era misplacement (content at the base origin, undropped)
     // can never return. Sweep lap-clap-* rows pin the MathML side.
     var bp: B = .{};
     const p = try lay("\\sum_{n}", false, &bp);
     const anchor = try glyphX(p, 0xD45B); // mathit n
-    try std.testing.expectEqual(@as(i32, 560), anchor); // base 500 + 60mu gap
-    const adv = @as(i32, @intCast(p.width)) - anchor; // 350: script advance
+    try std.testing.expectEqual(@as(i32, 500), anchor); // abuts the base edge
+    // Script-size advance of the last clap glyph (stub 500 at 0.7):
+    // the block edge now trails 50mu of scriptspace past it, so the
+    // block width no longer isolates the glyph advance.
+    const adv: i32 = 350;
     var b1: B = .{};
     const l = try lay("\\sum_{\\mathclap{1\\le i\\le n}} x_{i}", false, &b1);
     const y_base = try baseY(l, 0x2211); // sum
     // Every content glyph shares the script drop ...
     for ([_]u16{ 0x31, 0x2264, 0xD456, 0xD45B }) |g| {
-        try std.testing.expectEqual(y_base + 260, try baseY(l, g));
+        try std.testing.expectEqual(y_base + 299, try baseY(l, g));
     }
     // ... and the content centers exactly on the anchor: first
-    // origin plus last end mirror about it (stub-exact: -703 and
-    // 1473 + 350 over anchor 560).
+    // origin plus last end mirror about it.
     const first = try glyphX(l, 0x31);
     const last = try glyphX(l, 0xD45B);
     try std.testing.expectEqual(2 * anchor, first + last + adv);
-    // The zero-width sub adds no construct width past the anchor ...
+    // The zero-width sub adds only the trailing scriptspace past the
+    // anchor (KaTeX puts `margin-right:0.05em` on every script row).
     var b2: B = .{};
     const q = try lay("\\sum_{\\mathclap{x}}", false, &b2);
-    try std.testing.expectEqual(@as(u32, @intCast(anchor)), q.width);
+    try std.testing.expectEqual(@as(u32, @intCast(anchor + 50)), q.width);
     // ... while the follower still lays out past it.
     try std.testing.expect(try glyphX(l, 0xD465) > anchor); // mathit x
 }

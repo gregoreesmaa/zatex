@@ -1199,9 +1199,13 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 
 fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var word_base = false;
+    var sym_op = false;
     if (parse.opBase(lc.pctx, s.base)) |o| {
         if (parse.useLimits(style, o)) return layoutLimits(lc, style, s);
-        word_base = o.func;
+        // Single-glyph symbol operators take KaTeX Rule 18 shifts
+        // with the symbol italic (issue #219); word operators keep
+        // the legacy path below (KaTeX leaves their marginLeft null).
+        if (!o.func) sym_op = true else word_base = true;
     }
     const size = lc.effSize(style);
     const base = try layoutNode(lc, style, s.base);
@@ -1285,36 +1289,123 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         },
         else => {},
     }
-    // Shifts in thousandths of an em (TeX-derived), scaled to size.
-    var sup_mu: i32 = switch (style) {
-        .D, .Dc, .T, .Tc => 400,
-        .S, .Sc => 350,
-        .SS, .SSc => 300,
-    };
-    if (style == .Dc or style == .Tc or style == .Sc or style == .SSc) sup_mu -= 30;
-    const sup_up: i32 = @divTrunc(sup_mu * size, 1000);
-    const sub_down: i32 = @divTrunc((@as(i32, 260) * size), 1000);
-    // KaTeX leaves the script marginLeft null for non-symbol (word)
-    // bases, so `\lim`-style word operators take no leading gap
-    // (issue #101). Single-glyph bases keep the legacy 60mu gap.
-    const script_gap: i32 = if (word_base) 0 else 60;
-    _ = sc_size;
-    const sx = bb.w + @divTrunc(script_gap * size, 1000);
-    // MathKern cut-ins (provider v3): top-right tucks superscripts,
-    // bottom-right tucks subscripts. The nucleus representative follows
-    // the accent precedent (roman font + first codepoint). Clamped to
-    // [0, gap]: adversarial hooks can neither overlap scripts nor push
-    // them outward. Null hooks read 0: output is bit-identical.
-    const kgap: i32 = sx - bb.w;
-    const kglyph = lc.glyphId(@intFromEnum(contract.FontId.rm), nucleusFirstCp(lc.pctx, s.base));
-    const cut_sup = if (has_sup)
-        @min(@max(lc.kernCorr(@intFromEnum(contract.FontId.rm), kglyph, sup_up, .top_right), 0), kgap)
-    else
-        0;
-    const cut_sub = if (has_sub)
-        @min(@max(lc.kernCorr(@intFromEnum(contract.FontId.rm), kglyph, sub_down, .bottom_right), 0), kgap)
-    else
-        0;
+    // Geometry: ordinary bases take fixed TeX shifts off a leading
+    // script gap; single-glyph symbol operators take KaTeX Rules
+    // 18a/c/d/e with the symbol italic (issue #219). Both share the
+    // assembly below; only the shifts, script offsets, trailing pad,
+    // and base span differ.
+    var sup_dy: i32 = 0;
+    var sub_dy: i32 = 0;
+    var sup_dx: i32 = 0;
+    var sub_dx: i32 = 0;
+    var trail: i32 = 0;
+    var w: i32 = bb.w;
+    if (sym_op) {
+        // Side scripts on a single-glyph symbol operator (`\int`,
+        // text-style `\sum`, ...): KaTeX Rules 18a/c/d/e (pinned
+        // 0.18.7 `supsub` builder). Symbol-op parse nodes are never
+        // character boxes, so Rule 18a always applies: shifts start
+        // from the base height/depth against the script-size drops
+        // (`supDrop`/`subDrop`), floored by the ambient minima
+        // (`sup1/2/3`, `sub1/2`, the x-height terms), with Rule 18e
+        // separation for the pair. Horizontally the sup clears the
+        // symbol italic (KaTeX base `margin-right`), the sub pulls
+        // back under the base (`margin-left:-italic`), and
+        // scriptspace (0.05em) trails the block — no leading gap.
+        // Constants are the text/script rows of KaTeX
+        // `fontMetrics.ts` in thousandths of an em; the two inverted
+        // display-integral shifts (sup 1.1129 = 1.36 - 0.353*0.7, sub
+        // 0.9119 = 0.86225 + 0.071*0.7) pin the script row choice.
+        const ss_script = sc_style.sizeUnits() == 500;
+        const sup_drop: i32 = if (ss_script) 494 else 353;
+        const sub_drop: i32 = if (ss_script) 100 else 71;
+        const sup0 = bb.ha - @divTrunc(sup_drop * @as(i32, sc_size), 1000);
+        const sub0 = bb.db + @divTrunc(sub_drop * @as(i32, sc_size), 1000);
+        const cramped = style == .Dc or style == .Tc or style == .Sc or style == .SSc;
+        const min_sup: i32 = if (style.isDisplay()) 413 else if (cramped) 289 else 363;
+        const min_sup_scaled = @divTrunc(min_sup * @as(i32, size), 1000);
+        const x_height_q = @divTrunc(@as(i32, 431) * @as(i32, size), 4000);
+        const x_height_4_5 = @divTrunc(@as(i32, 431) * 4 * @as(i32, size), 5000);
+        var sup_shift: i32 = 0;
+        var sub_shift: i32 = 0;
+        if (has_sup and has_sub) {
+            sup_shift = @max(@max(sup0, min_sup_scaled), sup_db + x_height_q);
+            sub_shift = @max(sub0, @divTrunc(@as(i32, 247) * @as(i32, size), 1000));
+            // Rule 18e: keep four rule-widths between the scripts,
+            // trading the overlap toward the superscript side first.
+            const max_w = @divTrunc(@as(i32, 160) * @as(i32, size), 1000);
+            if (sup_shift - sup_db - (sub_ha - sub_shift) < max_w) {
+                sub_shift = max_w - (sup_shift - sup_db) + sub_ha;
+                const psi = x_height_4_5 - (sup_shift - sup_db);
+                if (psi > 0) {
+                    sup_shift += psi;
+                    sub_shift -= psi;
+                }
+            }
+        } else if (has_sub) {
+            // Rule 18b.
+            sub_shift = @max(@max(sub0, @divTrunc(@as(i32, 150) * @as(i32, size), 1000)), sub_ha - x_height_4_5);
+        } else {
+            // Rules 18c/d.
+            sup_shift = @max(@max(sup0, min_sup_scaled), sup_db + x_height_q);
+        }
+        // Symbol italic (KaTeX `base.italic`, 0.44445 on the Size2
+        // integral). The sym path only fires past a bare `.op` node
+        // (`opBase` returns `func=false` solely from its `.op` arm),
+        // every wrapper it sees through (`.style`, `.size`,
+        // `.classwrap`, `.font`, `.color`, `.href`, `.htmlwrap`)
+        // returns the inner box id unchanged from `layoutNode`, and
+        // the symbol arm of `layoutOp` always returns a `.glyph`
+        // box — so the base box IS the symbol glyph box (Debug
+        // builds panic on field access if that ever stops holding).
+        // Reuse its exact (font, glyph): no second provider call,
+        // and `.style`-driven face swaps (Size2 in display) stay
+        // exact. Ambient size, clamped non-negative like every
+        // other mu width. KaTeX applies no MathKern tuck here.
+        const g = bb.kind.glyph;
+        const italic = @max(@divTrunc(lc.italicCorr(g.font, g.glyph) * @as(i32, size), 1000), 0);
+        trail = @divTrunc(@as(i32, 50) * @as(i32, size), 1000);
+        sup_dy = sup_shift;
+        sub_dy = -sub_shift;
+        sup_dx = bb.w + italic;
+        sub_dx = bb.w;
+        w = bb.w + italic;
+    } else {
+        // Shifts in thousandths of an em (TeX-derived), scaled to size.
+        var sup_mu: i32 = switch (style) {
+            .D, .Dc, .T, .Tc => 400,
+            .S, .Sc => 350,
+            .SS, .SSc => 300,
+        };
+        if (style == .Dc or style == .Tc or style == .Sc or style == .SSc) sup_mu -= 30;
+        const sup_up: i32 = @divTrunc(sup_mu * size, 1000);
+        const sub_down: i32 = @divTrunc((@as(i32, 260) * size), 1000);
+        // KaTeX leaves the script marginLeft null for non-symbol (word)
+        // bases, so `\lim`-style word operators take no leading gap
+        // (issue #101). Ordinary single-glyph bases keep the legacy
+        // 60mu gap.
+        const script_gap: i32 = if (word_base) 0 else 60;
+        const sx = bb.w + @divTrunc(script_gap * size, 1000);
+        // MathKern cut-ins (provider v3): top-right tucks superscripts,
+        // bottom-right tucks subscripts. The nucleus representative follows
+        // the accent precedent (roman font + first codepoint). Clamped to
+        // [0, gap]: adversarial hooks can neither overlap scripts nor push
+        // them outward. Null hooks read 0: output is bit-identical.
+        const kgap: i32 = sx - bb.w;
+        const kglyph = lc.glyphId(@intFromEnum(contract.FontId.rm), nucleusFirstCp(lc.pctx, s.base));
+        const cut_sup = if (has_sup)
+            @min(@max(lc.kernCorr(@intFromEnum(contract.FontId.rm), kglyph, sup_up, .top_right), 0), kgap)
+        else
+            0;
+        const cut_sub = if (has_sub)
+            @min(@max(lc.kernCorr(@intFromEnum(contract.FontId.rm), kglyph, sub_down, .bottom_right), 0), kgap)
+        else
+            0;
+        sup_dy = sup_up;
+        sub_dy = -sub_down;
+        sup_dx = sx - cut_sup;
+        sub_dx = sx - cut_sub;
+    }
     var parts: [3]BKid = undefined;
     var nparts: usize = 0;
     parts[0] = .{ .box = base, .dx = 0, .dy = 0 };
@@ -1322,28 +1413,28 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var ha = bb.ha;
     var db = bb.db;
     if (has_sup) {
-        parts[nparts] = .{ .box = sup, .dx = sx - cut_sup, .dy = sup_up };
+        parts[nparts] = .{ .box = sup, .dx = sup_dx, .dy = sup_dy };
         nparts += 1;
-        const top = sup_up + sup_ha;
+        const top = sup_dy + sup_ha;
         if (top > ha) ha = top;
         // A deep sup can hang below the baseline (tall content in the
         // superscript): the depth must cover it.
-        if (sup_db > sup_up and sup_db - sup_up > db) db = sup_db - sup_up;
+        if (sup_db > sup_dy and sup_db - sup_dy > db) db = sup_db - sup_dy;
     }
     if (has_sub) {
-        parts[nparts] = .{ .box = sub, .dx = sx - cut_sub, .dy = -sub_down };
+        parts[nparts] = .{ .box = sub, .dx = sub_dx, .dy = sub_dy };
         nparts += 1;
-        const bot = sub_down + sub_db;
+        const bot = sub_db - sub_dy;
         if (bot > db) db = bot;
         // A tall sub can reach above the baseline (tall content in the
         // subscript): the height must cover it.
-        if (sub_ha > sub_down and sub_ha - sub_down > ha) ha = sub_ha - sub_down;
+        if (sub_ha > -sub_dy and sub_ha + sub_dy > ha) ha = sub_ha + sub_dy;
     }
-    // Right edges account the tuck; identical to the old `sx + sw`
+    // Right edges account the tuck and the symbol-op trailing
+    // scriptspace; identical to the old `sx + sw` on the legacy path
     // when both cuts are 0 (kgap > 0 keeps the base edge inside).
-    var w = bb.w;
-    if (has_sup and sx - cut_sup + sup_w > w) w = sx - cut_sup + sup_w;
-    if (has_sub and sx - cut_sub + sub_w > w) w = sx - cut_sub + sub_w;
+    if (has_sup and sup_dx + sup_w + trail > w) w = sup_dx + sup_w + trail;
+    if (has_sub and sub_dx + sub_w + trail > w) w = sub_dx + sub_w + trail;
     const s2 = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s2 .. s2 + nparts], parts[0..nparts]);
     return lc.allocBox(.{
