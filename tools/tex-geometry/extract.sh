@@ -13,11 +13,19 @@ extract_case() {
 texfile=$1; display=$2; out=$3
 cwork=$(mktemp -d)
 tex=$(cat "$texfile")
+# Same oracle-side adaptations as the luatex sweep oracle
+# (tools/oracle-diff/texlive/render-one.sh): KaTeX `#RRGGBB` hex
+# colors have no pdflatex/xcolor spelling, so translate to the
+# equivalent `[HTML]` form (the compared property — the rendered
+# color — is unchanged). Short `#rgb` expands first for the same
+# reason. Packages mirror luatex-shot (article keeps `\pagestyle`,
+# which stays `empty` so no folio glyph pollutes the DVI counts).
+tex=$(printf '%s' "$tex" | sed -e 's/\({\)#\([0-9A-Fa-f]\)\([0-9A-Fa-f]\)\([0-9A-Fa-f]\)}/\1#\2\2\3\3\4\4}/g' -e 's/\\color{#\([0-9A-Fa-f]\{6\}\)}/\\color[HTML]{\1}/g' -e 's/\\colorbox{#\([0-9A-Fa-f]\{6\}\)}/\\colorbox[HTML]{\1}/g' -e 's/\\fcolorbox{\([^}]*\)}{#\([0-9A-Fa-f]\{6\}\)}/\\fcolorbox{\1}[HTML]{\2}/g' -e 's/\\textcolor{#\([0-9A-Fa-f]\{6\}\)}/\\textcolor[HTML]{\1}/g')
 if [ "$display" = "1" ]; then body="\\[ $tex \\]"; else body="\$$tex\$"; fi
 {
 cat <<'EOF'
 \documentclass{article}
-\usepackage{amsmath,amssymb}
+\usepackage{amsmath,amssymb,xcolor,mathrsfs,hyperref}
 \pagestyle{empty}
 \begin{document}
 EOF
