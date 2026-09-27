@@ -25,7 +25,7 @@ no untracked float in the contract.
   platform shaper.
 * **Emitters** walk the same tree: MathML ships in
   `packages/zatex-mathml`, `packages/zatex-png` renders PNG
-  (macOS-only backend), SVG is future.
+  (macOS-only backend), SVG ships in `packages/zatex-svg`.
   Emitters contain no layout math. Trust posture for embedding the
   MathML (sanitizer allowlist, CSP, URL filtering) lives in
   `docs/parity.md` ("Host security guidance") — the engine applies
