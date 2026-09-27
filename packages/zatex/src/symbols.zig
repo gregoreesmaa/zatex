@@ -1179,6 +1179,71 @@ const math_italic_skews = [_]u32{
     0xE23753,
 };
 
+/// KaTeX-parity accent TFM depth in mu (pinned 0.18.7 `Main-Regular`
+/// metricMap, first entry of each accent row): the accent baseline
+/// sits this far deeper into the clearance kern than the ink alone
+/// suggests, so `layoutAccent` adds it to the nucleus term. Only `~`
+/// (U+007E, depth 0.35) is nonzero — hat U+005E, check U+02C7, breve
+/// U+02D8, dot U+02D9, ddot U+00A8, ring U+02DA, and KaTeX's grave
+/// U+02CB / acute U+02CA / bar U+02C9 all carry depth 0, and `\vec`
+/// rides KaTeX's static SVG (span depth 0) — so one branch covers the
+/// table with no lookup structure (issues #253).
+pub fn accentDepth(cp: u21) i32 {
+    return if (cp == 0x007E) 350 else 0;
+}
+
+/// KaTeX-parity wide-accent ink bottom in mu above the accent
+/// baseline (pinned 0.18.7 stretchy SVG paths: viewBox ink-bottom
+/// fraction times the image height, issues #253). `layoutAccent`
+/// lands the stretched glyph ink where KaTeX lands its SVG ink.
+/// Render-measured cross-checks (headless Chrome over the pinned
+/// bundle, KaTeX woff2, KaTeX 1.21em scale folded out):
+/// `\widehat{x}` gap 70mu = 431 + 80 - 442; `\widetilde{x}` gap
+/// 120mu = 431 + 131 - 442; `\widetilde{AB}` gap 72mu =
+/// 683 + 105 - 716; `\widecheck{x}` gap 74mu = 431 + 85 - 442
+/// (path-exact 80, AA accounts the rest).
+pub fn wideInkBottom(cp: u21, img: u8) i32 {
+    // Widehat and widecheck share designs (80mu bottom margin on
+    // every image but the taller image 3, 67mu); tilde images carry
+    // more bottom whitespace over short nuclei (131/105/89/86mu).
+    if (cp == 0x007E) {
+        return switch (img) {
+            1 => 131,
+            2 => 105,
+            3 => 89,
+            else => 86,
+        };
+    }
+    return switch (img) {
+        3 => 67,
+        else => 80,
+    };
+}
+
+/// KaTeX-parity large-operator TFM box (height, depth) in mu (pinned
+/// 0.18.7 `Size1-Regular` / `Size2-Regular` metricMaps, issues #254):
+/// scripts and limits stack off TFM boxes, which provider extents
+/// cannot supply under CFF-only stacks (uniform 700/250), and
+/// outline ink understates one of them (Size2 `\sum`: ink 950/450 vs
+/// TFM 1050/550 — every other entry agrees with its ink to the mu).
+/// `large` selects the display face, exactly like KaTeX's
+/// Size1/Size2 swap. Unlisted codepoints resolve null and callers
+/// fall back to ink, then construction extents.
+pub fn opTfm(cp: u21, large: bool) ?struct { h: i32, d: i32 } {
+    if (!large) {
+        return switch (cp) {
+            0x220F, 0x2210, 0x2211, 0x22C0, 0x22C1, 0x22C2, 0x22C3, 0x2A00, 0x2A01, 0x2A02, 0x2A04, 0x2A06 => .{ .h = 750, .d = 250 },
+            0x222B, 0x222C, 0x222D, 0x222E => .{ .h = 805, .d = 306 },
+            else => null,
+        };
+    }
+    return switch (cp) {
+        0x220F, 0x2210, 0x2211, 0x22C0, 0x22C1, 0x22C2, 0x22C3, 0x2A00, 0x2A01, 0x2A02, 0x2A04, 0x2A06 => .{ .h = 1050, .d = 550 },
+        0x222B, 0x222C, 0x222D, 0x222E => .{ .h = 1360, .d = 862 },
+        else => null,
+    };
+}
+
 /// KaTeX-parity accent skew for a math-italic nucleus codepoint in
 /// mu; 0 for everything else (KaTeX's zero-skew metrics).
 pub fn mathItalicSkew(cp: u21) i32 {
