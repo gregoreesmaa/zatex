@@ -106,7 +106,9 @@ for hosts building from source:
   layout struct and read the code only when the bit is set. Host
   action: recompile against the new header (pre-1.0 exact-match
   rule already requires it) and branch retries on the code instead
-  of parsing `err_msg`.
+  of parsing `err_msg`. Size baseline ratcheted 323536 -> 324008
+  for this surface (`err_code` tail + capability bit + run-tail
+  table; precedent: 9e70d53).
 - Scripted test double (issue #274): `cd packages/zatex &&
   zig build test-double` produces `zig-out/test-double/`
   (`libzatex_test.a` / `.dylib`/`.so` plus `zatex.h` and
