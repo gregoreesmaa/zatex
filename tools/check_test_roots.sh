@@ -6,8 +6,9 @@
 # into analysis silently never runs (sw_png.zig proved it: a false
 # expectation stayed green). This gate fails loudly on that shape.
 #
-# Rule (sound, static): every packages/zatex-png/src/*.zig and
-# packages/zatex-mathml/src/*.zig containing a `test` block must
+# Rule (sound, static): every packages/zatex-png/src/*.zig,
+# packages/zatex-mathml/src/*.zig, and packages/zatex-svg/src/*.zig
+# containing a `test` block must
 # either be a test root in its package build.zig (root_source_file of
 # an addTest call) or be named in a refAllDecls(@import("...")) line
 # inside a root.
@@ -20,7 +21,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 fail=0
-for PKG in packages/zatex-png packages/zatex-mathml; do
+for PKG in packages/zatex-png packages/zatex-mathml packages/zatex-svg; do
 BUILD=$PKG/build.zig
 SRC=$PKG/src
 
@@ -47,4 +48,4 @@ for f in "$SRC"/*.zig; do
 done
 done
 if [ "$fail" = "1" ]; then exit 1; fi
-echo "test roots OK: every test-bearing png/mathml source is root- or refAllDecls-covered"
+echo "test roots OK: every test-bearing png/mathml/svg source is root- or refAllDecls-covered"

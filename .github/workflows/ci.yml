@@ -18,6 +18,9 @@ jobs:
       - name: Run zatex-mathml tests
         working-directory: packages/zatex-mathml
         run: zig build test --summary all
+      - name: Run zatex-svg tests
+        working-directory: packages/zatex-svg
+        run: zig build test --summary all
       - name: Run zatex-png tests
         working-directory: packages/zatex-png
         run: zig build test --summary all

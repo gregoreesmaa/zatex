@@ -21,6 +21,7 @@ apps like [read](../read) that budget kilobytes, not megabytes.
 | `zatex` (core) | Parser, macro expander, layout, C ABI. Portable Zig. | `packages/zatex/` |
 | `zatex-mathml` | MathML emitter over the core parse tree (thin structural walker, no layout math). Depends on the core, never the reverse. | `packages/zatex-mathml/` |
 | `zatex-png` | LaTeX → PNG CLI + visual regression set. One backend per OS (CoreGraphics on Apple, portable software rasterizer elsewhere). Depends on the core, never the reverse. | `packages/zatex-png/` |
+| `zatex-svg` | LaTeX → standalone SVG (outlined paths). Depends on the core, never the reverse. | `packages/zatex-svg/` |
 
 Shared at the root: `docs/` (contracts, policies, the syntax mirror),
 `tools/` (KaTeX sweep harness, size gate, render helpers), `.github/`

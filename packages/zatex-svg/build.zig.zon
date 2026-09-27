@@ -1,0 +1,21 @@
+.{
+    .name = .zatex_svg,
+    .version = "0.0.0",
+    // Changing this has security and trust implications.
+    .fingerprint = 0x7913df69fcd673bd,
+    .minimum_zig_version = "0.16.0",
+    // One direction only: SVG walks the core's box tree, so this
+    // package depends on `zatex` — the core never depends back (its
+    // distribution library stays SVG-free).
+    .dependencies = .{
+        .zatex = .{
+            .path = "../zatex",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}
