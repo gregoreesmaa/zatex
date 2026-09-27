@@ -488,7 +488,13 @@ export fn zatex_capabilities() u32 {
     return CAP_X_SCALE | CAP_RUN_COLOR | CAP_NEED_COUNTS;
 }
 
-/// Packed semantic version: major << 16 | minor << 8 | patch.
+/// Packed semantic version, ABI-stable (issue #276): `major << 16 |
+/// minor << 8 | patch` with normative widths major 16 bits, minor 8
+/// bits, patch 8 bits (`contract.version` comptime-asserts minor and
+/// patch below 256 so fields never bleed; major below 65536).
+/// Pre-1.0 hosts require an exact match, not a range. This word is
+/// the library version only — `provider_version` (`MetricsProvider`
+/// hooks) is a separate contract and never rides here.
 export fn zatex_version() u32 {
     return (@as(u32, zatex.version.major) << 16) |
         (@as(u32, zatex.version.minor) << 8) | zatex.version.patch;
@@ -1493,3 +1499,34 @@ test "cabi reports needed counts on space failures (issue #263)" {
         try std.testing.expectEqual(@as(u32, 0), out.nrules);
     }
 }
+
+test "zatex_version packs 16/8/8 with round-trip (issue #276)" {
+    // Normative widths: major 16 bits, minor 8, patch 8. Fields must
+    // fit — a patch above 255 would bleed into minor (0.0.300 would
+    // read as 0.1.44). `contract.zig` comptime-asserts the widths;
+    // this test pins the runtime word and the unpacking hosts use.
+    try std.testing.expect(zatex.contract.version.minor < 256);
+    try std.testing.expect(zatex.contract.version.patch < 256);
+    try std.testing.expect(zatex.contract.version.major < 65536);
+    const w = zatex_version();
+    try std.testing.expectEqual(
+        (@as(u32, @intCast(zatex.contract.version.major)) << 16) |
+            (@as(u32, @intCast(zatex.contract.version.minor)) << 8) |
+            @as(u32, @intCast(zatex.contract.version.patch)),
+        w,
+    );
+    try std.testing.expectEqual(@as(u32, @intCast(zatex.contract.version.major)), w >> 16);
+    try std.testing.expectEqual(@as(u32, @intCast(zatex.contract.version.minor)), (w >> 8) & 0xFF);
+    try std.testing.expectEqual(@as(u32, @intCast(zatex.contract.version.patch)), w & 0xFF);
+    // The version word packs the library version only (proven equal
+    // above): `provider_version` rides its own word and is never
+    // mixed into this one by construction (cabi.zig reads only
+    // `zatex.version` here).
+}
+
+// NOTE (issues #275): the release-docs agreement guard (workflow
+// trigger vs install asset names vs changelog trigger) and the
+// build.zig.zon-vs-contract.version pin live in
+// tools/check_release_docs.sh (CI `release-docs` job), not here:
+// @embedFile cannot reach outside the package src tree, so a Zig
+// test cannot read the workflow, docs, or changelog.

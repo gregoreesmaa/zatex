@@ -5,15 +5,29 @@ host integrator needs to upgrade deliberately instead of by
 surprise. **Maintainers: append here with every entry-point,
 struct, or hook change** (additive or breaking), before merging.
 
-## Unreleased — no GitHub releases yet
+## Unreleased — no tagged releases yet
 
-No versioned binaries are published yet (see issue #259); the
-recipe lands with the first `v*` tag. Current source state for
-hosts building from source:
+No versioned binaries are published yet — not a contradiction:
+issue #259 is closed (the release workflow
+`.github/workflows/release.yml` exists), but no `v*` tag has been
+pushed, so no GitHub release assets exist. The first `v*` tag
+publishes the first binaries (`libzatex-<tag>-<target>.{a,dylib,so}`
++ `zatex-<tag>.h` + `SHA256SUMS`, per `docs/install.md`); until
+then hosts pin from source (§4 of that recipe: commit SHA +
+local checksums + `zatex_version()` word). Current source state
+for hosts building from source:
 
-- Library version `0.0.0` (`contract.version`, `build.zig.zon`);
-  `zatex_version()` packs it as `major << 16 | minor << 8 | patch`.
-  Pre-release: hosts should require an exact match, not a range.
+- Library version `0.0.0` (`contract.version`, `build.zig.zon`;
+  the two are pinned equal by `tools/check_release_docs.sh`).
+  `zatex_version()` packs it
+  ABI-stably as `major << 16 | minor << 8 | patch` with normative
+  widths major 16 bits, minor 8 bits, patch 8 bits (issue #276):
+  minor and patch stay below 256 (build-time comptime assert; a
+  larger patch would bleed into minor — 0.0.300 would read as
+  0.1.44), major below 65536. Unpack with `(w >> 16)`,
+  `((w >> 8) & 0xFF)`, `(w & 0xFF)`. Pre-release: hosts should
+  require an exact match, not a range. The provider word stays
+  separate (see below).
 - Provider version 4 (`contract.provider_version`). Hooks:
   required `glyphId` / `advance` / `ruleThickness`; optional
   `glyphVariant`, `italicCorrection`, `kernCorrection` (v3),
