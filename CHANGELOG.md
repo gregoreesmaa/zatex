@@ -35,6 +35,15 @@ hosts building from source:
   exact `nruns`/`nrules` needs (zeroed = exceeds engine capacity);
   NULL buffers act as sizing probes. Size baseline ratcheted
   320000 -> 320112 for this surface (precedent: 9e70d53).
+- Layout corrections, issues #253/#254/#255 (PR #269, KaTeX-measured
+  proof in the PR body): accent boxes stack with no minimum-gap
+  floor (floor kept only for `\dddot`/`\ddddot` periods); large-op
+  scripts stack off the rendered Size1/Size2 face; radical
+  construction top IS the vinculum bar (KaTeX Rule 11). Visible
+  geometry moves in accents/sums/sqrts; screenshot and parity-kit
+  baselines re-rendered against the pinned KaTeX oracle. Size
+  baseline ratcheted 320112 -> 323536 (KaTeX TFM data tables + one
+  shared ink walker; precedent: 9e70d53).
 - Caps (part of the contract): 256 runs / 64 rules per call,
   65536 input bytes, `maxExpand` 1000, nesting depth 32.
 - Option knobs added since the freeze (all default-off, additive):
