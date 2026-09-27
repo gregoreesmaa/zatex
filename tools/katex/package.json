@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "sweep": "node sweep.mjs"
+    "sweep": "node sweep.mjs",
+    "delim-vectors": "node gen_delim_vectors.mjs"
   },
   "keywords": [],
   "author": "",

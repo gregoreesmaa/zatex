@@ -1,0 +1,489 @@
+{
+ "meta": {
+  "katex": "0.18.7",
+  "splitter": "contrib/auto-render/splitAtDelimiters.ts",
+  "splitter_sha256": "c8152596243d860320af476997aac22a30cb7a284fe9940fde82f917b0725938",
+  "generator": "tools/katex/gen_delim_vectors.mjs",
+  "note": "guards:false islands are raw KaTeX splitter output; guards:true islands add the spec guard layer."
+ },
+ "delim_tables": {
+  "katex_default": [
+   {
+    "left": "$$",
+    "right": "$$",
+    "display": true
+   },
+   {
+    "left": "\\(",
+    "right": "\\)",
+    "display": false
+   },
+   {
+    "left": "\\begin{equation}",
+    "right": "\\end{equation}",
+    "display": true
+   },
+   {
+    "left": "\\begin{align}",
+    "right": "\\end{align}",
+    "display": true
+   },
+   {
+    "left": "\\begin{alignat}",
+    "right": "\\end{alignat}",
+    "display": true
+   },
+   {
+    "left": "\\begin{gather}",
+    "right": "\\end{gather}",
+    "display": true
+   },
+   {
+    "left": "\\begin{CD}",
+    "right": "\\end{CD}",
+    "display": true
+   },
+   {
+    "left": "\\[",
+    "right": "\\]",
+    "display": true
+   }
+  ],
+  "dollar": [
+   {
+    "left": "$$",
+    "right": "$$",
+    "display": true
+   },
+   {
+    "left": "$",
+    "right": "$",
+    "display": false
+   },
+   {
+    "left": "\\(",
+    "right": "\\)",
+    "display": false
+   },
+   {
+    "left": "\\[",
+    "right": "\\]",
+    "display": true
+   }
+  ]
+ },
+ "vectors": [
+  {
+   "id": "disp-basic",
+   "text": "hello $$x^2$$ world",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 6,
+     "end": 13,
+     "display": true,
+     "tex": "x^2",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "disp-unclosed",
+   "text": "hello $$x^2 world",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": []
+  },
+  {
+   "id": "inline-paren",
+   "text": "hello \\(x+1\\) world",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 6,
+     "end": 13,
+     "display": false,
+     "tex": "x+1",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "inline-paren-unclosed",
+   "text": "a \\(x b",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": []
+  },
+  {
+   "id": "bracket",
+   "text": "see \\[\\frac12\\] here",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 4,
+     "end": 15,
+     "display": true,
+     "tex": "\\frac12",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "dollar-ignored-by-default",
+   "text": "costs $5 and $6",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": []
+  },
+  {
+   "id": "ams-equation",
+   "text": "read \\begin{equation}x^2\\end{equation} now",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 5,
+     "end": 38,
+     "display": true,
+     "tex": "\\begin{equation}x^2\\end{equation}",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "ams-align",
+   "text": "\\begin{align}a&=b\\end{align}",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 0,
+     "end": 28,
+     "display": true,
+     "tex": "\\begin{align}a&=b\\end{align}",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "brace-shield",
+   "text": "hello \\(a { \\) } b\\) end",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 6,
+     "end": 20,
+     "display": false,
+     "tex": "a { \\) } b",
+     "engine": "reject"
+    }
+   ]
+  },
+  {
+   "id": "escape-close",
+   "text": "q \\(a \\} b\\) r",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 2,
+     "end": 12,
+     "display": false,
+     "tex": "a \\} b",
+     "engine": "accept"
+    }
+   ],
+   "note": "A backslash-escaped closer is skipped, so the island runs to the next live closer."
+  },
+  {
+   "id": "adjacent-islands",
+   "text": "$$a$$ and $$b$$",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 0,
+     "end": 5,
+     "display": true,
+     "tex": "a",
+     "engine": "accept"
+    },
+    {
+     "start": 10,
+     "end": 15,
+     "display": true,
+     "tex": "b",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "disp-multiline-tex",
+   "text": "start $$\\sum_{i=1}^n i$$ stop",
+   "delims": "katex_default",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 6,
+     "end": 24,
+     "display": true,
+     "tex": "\\sum_{i=1}^n i",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "dollar-basic",
+   "text": "let $x^2$ be",
+   "delims": "dollar",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 4,
+     "end": 9,
+     "display": false,
+     "tex": "x^2",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "dollar-mix",
+   "text": "$hello$world$$boo$$",
+   "delims": "dollar",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 0,
+     "end": 7,
+     "display": false,
+     "tex": "hello",
+     "engine": "accept"
+    },
+    {
+     "start": 12,
+     "end": 19,
+     "display": true,
+     "tex": "boo",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "dollar-seq",
+   "text": "$hello$$world$$boo$",
+   "delims": "dollar",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 0,
+     "end": 7,
+     "display": false,
+     "tex": "hello",
+     "engine": "accept"
+    },
+    {
+     "start": 7,
+     "end": 14,
+     "display": false,
+     "tex": "world",
+     "engine": "accept"
+    },
+    {
+     "start": 14,
+     "end": 19,
+     "display": false,
+     "tex": "boo",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "dollar-escape-close",
+   "text": "$x = \\$5$",
+   "delims": "dollar",
+   "guards": false,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 0,
+     "end": 9,
+     "display": false,
+     "tex": "x = \\$5",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "guard-price-pair",
+   "text": "$100 and $200",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": []
+  },
+  {
+   "id": "guard-price-open",
+   "text": "pay $0.00 and $x$ now",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": [],
+   "note": "G-open drops the price island; the orphaned $x$ closer stays literal too."
+  },
+  {
+   "id": "guard-price-dot",
+   "text": "only $.99 or $x$ ok",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": []
+  },
+  {
+   "id": "guard-price-mid",
+   "text": "cost $5 for $x",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": []
+  },
+  {
+   "id": "guard-escaped-open",
+   "text": "a \\$b\\$ c $x$ d",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": [],
+   "note": "Guards filter KaTeX islands, never rescan: dropping the \\$-opened island orphans the $x$ closer, so the whole line stays literal."
+  },
+  {
+   "id": "guard-close-digit",
+   "text": "take $x$2 or $y$",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 13,
+     "end": 16,
+     "display": false,
+     "tex": "y",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "guard-real-math",
+   "text": "let $x^2$ and $a_1$ be",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 4,
+     "end": 9,
+     "display": false,
+     "tex": "x^2",
+     "engine": "accept"
+    },
+    {
+     "start": 14,
+     "end": 19,
+     "display": false,
+     "tex": "a_1",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "guard-display-price",
+   "text": "big $$x^2$$ and $$5$$ ok",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 4,
+     "end": 11,
+     "display": true,
+     "tex": "x^2",
+     "engine": "accept"
+    },
+    {
+     "start": 16,
+     "end": 21,
+     "display": true,
+     "tex": "5",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "guard-unclosed",
+   "text": "owe $5 today",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": []
+  },
+  {
+   "id": "guard-code-span",
+   "text": "use `$x$` here and $y$ too",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": true,
+   "islands": [
+    {
+     "start": 19,
+     "end": 22,
+     "display": false,
+     "tex": "y",
+     "engine": "accept"
+    }
+   ]
+  },
+  {
+   "id": "guard-paren-zone",
+   "text": "see \\(a\\) plus $b$ end",
+   "delims": "dollar",
+   "guards": true,
+   "mask_code": false,
+   "islands": [
+    {
+     "start": 4,
+     "end": 9,
+     "display": false,
+     "tex": "a",
+     "engine": "accept"
+    },
+    {
+     "start": 15,
+     "end": 18,
+     "display": false,
+     "tex": "b",
+     "engine": "accept"
+    }
+   ]
+  }
+ ]
+}
