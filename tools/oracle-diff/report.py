@@ -8,7 +8,8 @@ by ink centroid on the union canvas), compares with block SSIM, scores
     score(c) = max_i sim(ZaTeX_c, Oracle_i_c)
 
 and writes a markdown report sorted by shift descending (largest
-ZaTeX-oracle alignment offset first) plus the normalized PNGs.
+ZaTeX-oracle alignment offset first). The report links the raw cropped
+finals; the normalized PNGs are scoring scratch, ditched after the run.
 
 Usage:
     report.py --raw <rawdir> --out <outdir> [--corpus corpus.json]
@@ -16,7 +17,8 @@ Usage:
     report.py --selfcheck   # SSIM math unit checks + synthetic fixture report
 
 Raw layout: <rawdir>/<case-id>.<engine>.png with engines
-zatex | katex | mathjax | luatex. Output: <outdir>/report.md + <outdir>/png/.
+zatex | katex | mathjax | luatex. Output: <outdir>/report.md (images link
+raw/ relatively, so raw/ must sit beside it).
 
 Not a gate and not an oracle over pinned KaTeX: see docs/oracle-diff.md.
 Stdlib only.
@@ -24,8 +26,10 @@ Stdlib only.
 import json
 import math
 import os
+import shutil
 import struct
 import sys
+import tempfile
 import zlib
 
 ENGINES = ("zatex", "katex", "luatex", "tex", "mathjax")
@@ -383,33 +387,41 @@ def default_jobs():
 
 
 def build_report(rawdir, outdir, corpus, jobs=1):
-    pngdir = os.path.join(outdir, "png")
-    os.makedirs(pngdir, exist_ok=True)
-    # Cases are independent: score them in a process pool (same worker
-    # function per case, rows reassembled in corpus order before the
-    # stable shift-descending sort, so ties keep corpus order and output
-    # is byte-identical).
-    tasks = [(rawdir, pngdir, case) for case in corpus]
-    if jobs < 1:
-        jobs = 1
-    if jobs == 1:
-        rows = [score_one_case(t) for t in tasks]
-    else:
-        from multiprocessing import Pool
-        with Pool(min(jobs, len(tasks))) as pool:
-            rows = list(pool.imap(score_one_case, tasks))
-    rows = [r for r in rows if r is not None]
-    # Link integrity: every render the rows reference must exist on disk
-    # under exactly that name. Catches missing renders and case drift
-    # between corpus ids and filenames (invisible on case-insensitive
-    # filesystems, dead links on GitHub). Fail loudly: a report with
-    # dead images is broken output, not a triage aid.
-    refs = set("%s.%s.png" % (r["case"]["id"], e)
-               for r in rows for e in r["engines"])
-    missing = refs - set(os.listdir(pngdir))
-    if missing:
-        raise ValueError("report references missing renders: %s"
-                         % sorted(missing))
+    # Normalized PNGs are scoring scratch: workers share a temp dir
+    # that is ditched before return. Only the raw cropped finals
+    # persist — the report links them, and resweep publishes commit
+    # them for cross-checkout reuse.
+    pngdir = tempfile.mkdtemp(prefix="oracle-diff-norm-")
+    os.makedirs(outdir, exist_ok=True)
+    try:
+        # Cases are independent: score them in a process pool (same worker
+        # function per case, rows reassembled in corpus order before the
+        # stable shift-descending sort, so ties keep corpus order and output
+        # is byte-identical).
+        tasks = [(rawdir, pngdir, case) for case in corpus]
+        if jobs < 1:
+            jobs = 1
+        if jobs == 1:
+            rows = [score_one_case(t) for t in tasks]
+        else:
+            from multiprocessing import Pool
+            with Pool(min(jobs, len(tasks))) as pool:
+                rows = list(pool.imap(score_one_case, tasks))
+        rows = [r for r in rows if r is not None]
+        # Link integrity: every render the rows reference must exist on disk
+        # under exactly that name in the raw finals dir (what the report
+        # links). Catches missing renders and case drift between corpus
+        # ids and filenames (invisible on case-insensitive filesystems,
+        # dead links on GitHub). Fail loudly: a report with dead images
+        # is broken output, not a triage aid.
+        refs = set("%s.%s.png" % (r["case"]["id"], e)
+                   for r in rows for e in r["engines"])
+        missing = refs - set(os.listdir(rawdir))
+        if missing:
+            raise ValueError("report references missing renders: %s"
+                             % sorted(missing))
+    finally:
+        shutil.rmtree(pngdir, ignore_errors=True)
     rows.sort(key=lambda r: -r["shift"])
     lines = []
     lines.append("# Oracle diff report (triage only — not a gate, not truth)")
@@ -464,7 +476,7 @@ def build_report(rawdir, outdir, corpus, jobs=1):
         # file, and linking them produces dead images (the row's tag
         # column already records them via "missing:...").
         imgs = "<br>".join(
-            "![%s](png/%s.%s.png)" % (e[0].upper(), c["id"], e)
+            "![%s](raw/%s.%s.png)" % (e[0].upper(), c["id"], e)
             for e in r["engines"])
         miss = (" missing:" + ",".join(r["missing"])) if r["missing"] else ""
         lines.append("| %s %s | %s | %s | %s | %s | %s | %s | %.3f | %d | %s%s | %s |" % (
@@ -621,14 +633,17 @@ def selfcheck():
           os.path.exists(os.path.join(out, "report.md")) and
           all(i in open(os.path.join(out, "report.md")).read()
               for i in ("agree", "solo", "ambig")))
-    check("normalized pngs written per engine",
-          all(os.path.exists(os.path.join(out, "png", "%s.%s.png" % (i, e)))
-              for i in ("agree", "solo", "ambig") for e in ENGINES))
-    # No dead image references: every png/ link in the report resolves.
+    # The report links the raw cropped finals (committed for reuse):
+    # normalized PNGs are scoring scratch, ditched after the run.
     import re
     md = open(os.path.join(out, "report.md")).read()
-    refs = set(re.findall(r"png/(\S+?\.png)", md))
-    on_disk = set(os.listdir(os.path.join(out, "png")))
+    check("report references raw finals, not normalized pngs",
+          "raw/agree.zatex.png" in md and "png/agree.zatex.png" not in md)
+    check("normalized staging ditched (no png/ in out)",
+          not os.path.exists(os.path.join(out, "png")))
+    # No dead image references: every raw/ link in the report resolves.
+    refs = set(re.findall(r"raw/(\S+?\.png)", md))
+    on_disk = set(os.listdir(raw))
     check("every referenced render exists (no dead images)",
           refs <= on_disk)
     # Table shape: GFM drops a table whose header/delimiter cell counts

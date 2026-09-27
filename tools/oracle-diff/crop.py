@@ -6,7 +6,10 @@ engine's showcased render should be cropped before comparing and
 showcasing. Reuses report.py's PNG codec and crop_pad (ink bbox + 10px
 white pad) so the showcase crop is byte-consistent with the report's
 own normalization. Idempotent: already-cropped renders rewrite to
-(near-)identical bytes. Stdlib only.
+(near-)identical bytes. Unreadable files are DELETED: the sweep reuses
+renders across runs (see tools/diff-oracles.sh), and a corrupt file
+must surface as missing — re-rendered next run — never as trusted
+input. Stdlib only.
 
 Files are independent, so they crop in a process pool (default: every
 CPU): same functions per file, byte-identical output, ~N× faster wall
@@ -32,11 +35,18 @@ def default_jobs():
 
 def crop_one(path):
     if not os.path.exists(path):
-        return (path, "missing", "", 0)  # unmatched glob: recorded at render stage
+        return (path, "missing", "", 0)  # not rendered this run: recorded at render stage
     try:
         w, h, px = report.read_png(path)
     except ValueError as e:
-        return (path, "skip", str(e), 1)
+        # Corrupt/undecodable: remove so the row reports missing and the
+        # next sweep re-renders it (a kept corrupt file would poison the
+        # cross-run reuse cache with a trusted-looking PNG).
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return (path, "dropped", "%s; removed" % e, 1)
     cw, ch, out = report.crop_pad(w, h, px)
     report.write_png(path, cw, ch, out)
     return (path, "crop", "%dx%d -> %dx%d" % (w, h, cw, ch), 0)
@@ -66,8 +76,8 @@ def main(argv):
     for path, kind, msg, rc in results:
         if kind == "missing":
             continue
-        elif kind == "skip":
-            print("crop: skip %s (%s)" % (path, msg))
+        elif kind in ("skip", "dropped"):
+            print("crop: %s %s (%s)" % (kind, path, msg))
         else:
             print("crop: %s %s" % (path, msg))
         bad = max(bad, rc)
