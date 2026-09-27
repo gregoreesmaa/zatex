@@ -1,25 +1,41 @@
 //! SVG emitter: geometric walker over `zatex.ir.Layout`.
-// Scaffold: replaced by Tasks 2-4.
+//! Rules walk first (filled rects, diagonal strikes), then runs (one
+//! soup path per run, transforms baked into coordinates), inside the
+//! shift-fitted skeleton. Zero heap allocation; exhaustion is
+//! `error.NoSpace`.
 const std = @import("std");
 const zatex = @import("zatex");
 const cff = @import("cff");
 const outlines_mod = @import("outlines.zig");
 
-// Scaffold: replaced by Tasks 2-4.
+/// Walk `layout` into a standalone SVG document in `out`: shift-fit
+/// the viewport, `skeletonHead`, rules loop, runs loop, `</svg>`.
 pub fn renderLayout(
     layout: zatex.ir.Layout,
     ol: outlines_mod.Outlines,
     segs: []cff.Seg,
     out: []u8,
 ) zatex.LayoutError![]u8 {
-    _ = layout;
-    _ = ol;
-    _ = segs;
-    _ = out;
-    return error.NoSpace;
+    var w = W{ .buf = out };
+    const left = leftShiftUnits(ol, layout.runs, layout.rules);
+    const right = rightShiftUnits(ol, layout.runs, layout.rules, layout.width);
+    const total_w = satI32(@as(i64, layout.width) + @as(i64, left) + @as(i64, right));
+    const total_h = satI32(@as(i64, layout.height_above) + @as(i64, layout.depth_below));
+    w.skeletonHead(
+        satI32(-@as(i64, left)),
+        total_w,
+        total_h,
+        @as(f64, @floatFromInt(total_w)) / 1000.0,
+        @as(f64, @floatFromInt(total_h)) / 1000.0,
+    );
+    for (layout.rules) |r| emitRule(&w, r);
+    for (layout.runs) |run| emitRun(&w, ol, segs, run);
+    w.str("</svg>");
+    if (w.overflow) return error.NoSpace;
+    return w.done();
 }
 
-// Scaffold: replaced by Tasks 2-4.
+// Scaffold: replaced by Task 5.
 pub fn render(
     source: []const u8,
     options: zatex.LayoutOptions,
@@ -164,7 +180,7 @@ const W = struct {
         self.str("em\">");
     }
 
-    fn done(self: *W) []const u8 {
+    fn done(self: *W) []u8 {
         return self.buf[0..self.pos];
     }
 };
@@ -180,8 +196,459 @@ fn paintOf(color: ?u32) Paint {
     return .{ .rgb = @intCast(c >> 8), .a = @intCast(c & 0xFF) };
 }
 
-test "scaffold svg compiles" {
-    try std.testing.expect(true);
+/// Saturating i64 to i32: adversarial box sums stay total.
+fn satI32(v: i64) i32 {
+    if (v > std.math.maxInt(i32)) return std.math.maxInt(i32);
+    if (v < std.math.minInt(i32)) return std.math.minInt(i32);
+    return @intCast(v);
+}
+
+/// Pen step shared by the draw walk and the shift walks: integer
+/// advance exactly like the core measured, then the x_scale stretch
+/// (`zatex-png` render.zig:122-127 parity).
+fn stepPen(x_units: i64, adv1000: i32, run: zatex.ir.Run) i64 {
+    const step: i64 = @divTrunc(@as(i64, adv1000) * @as(i64, run.size_units), 1000);
+    return x_units + @divTrunc(step * @as(i64, run.x_scale), 1000);
+}
+
+/// One rule: filled integer rect, or a butt-cap diagonal across the
+/// rect (`up`: bottom-left to top-right; `down`: top-left to
+/// bottom-right). Core and SVG are both y-down, so no flip.
+fn emitRule(w: *W, r: zatex.ir.Rule) void {
+    const p = paintOf(r.color);
+    if (r.diag == .none) {
+        w.str("<rect x=\"");
+        w.int(r.x);
+        w.str("\" y=\"");
+        w.int(r.y);
+        w.str("\" width=\"");
+        w.uint(r.w);
+        w.str("\" height=\"");
+        w.uint(r.h);
+        w.str("\" fill=\"");
+        w.hexColor(p.rgb);
+        w.byte('"');
+        if (p.a != 0xFF) {
+            w.str(" fill-opacity=\"");
+            w.opacity(p.a);
+            w.byte('"');
+        }
+        w.str("/>");
+        return;
+    }
+    const x2 = satI32(@as(i64, r.x) + @as(i64, r.w));
+    const y2 = satI32(@as(i64, r.y) + @as(i64, r.h));
+    const up = r.diag == .up;
+    w.str("<line x1=\"");
+    w.int(r.x);
+    w.str("\" y1=\"");
+    w.int(if (up) y2 else r.y);
+    w.str("\" x2=\"");
+    w.int(x2);
+    w.str("\" y2=\"");
+    w.int(if (up) r.y else y2);
+    w.str("\" stroke=\"");
+    w.hexColor(p.rgb);
+    w.byte('"');
+    if (p.a != 0xFF) {
+        w.str(" stroke-opacity=\"");
+        w.opacity(p.a);
+        w.byte('"');
+    }
+    w.str(" stroke-width=\"");
+    w.uint(r.thick);
+    w.str("\" stroke-linecap=\"butt\"/>");
+}
+
+/// One run: `<g>` carrying only the fill (omitted for ambient black),
+/// wrapping a single soup `<path>` with every transform baked into
+/// coordinates. X = ox + mx·s·kx·x + mx·kh·(y·s), Y = oy − s·y with
+/// s = size/unified-upm, kx = x_scale/1000, kh = x_shear/1000,
+/// mx = mirrored ? -1 : 1. `M` on pen mismatch (exact float compare),
+/// `L`/`C` continuations, `Z` when a segment ends at its subpath
+/// start. Glyphs with no segments still step the pen. A run with no
+/// ink emits nothing at all.
+fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.Run) void {
+    if (run.glyphs.len == 0 or run.size_units == 0) return;
+    const ambient = run.color == null;
+    const mark = w.pos;
+    if (!ambient) {
+        const p = paintOf(run.color);
+        w.str("<g fill=\"");
+        w.hexColor(p.rgb);
+        w.byte('"');
+        if (p.a != 0xFF) {
+            w.str(" fill-opacity=\"");
+            w.opacity(p.a);
+            w.byte('"');
+        }
+        w.byte('>');
+    }
+    w.str("<path d=\"");
+    const dmark = w.pos;
+    const oy: f64 = @floatFromInt(run.baseline_y);
+    var x_units: i64 = run.x;
+    var pen_x: f64 = 0;
+    var pen_y: f64 = 0;
+    var have_pen = false;
+    var sub_x: f64 = 0;
+    var sub_y: f64 = 0;
+    for (run.glyphs) |g| {
+        const adv = ol.advance1000(ol.ptr, g);
+        const upm = ol.upmOf(ol.ptr, g);
+        if (upm == 0) {
+            x_units = stepPen(x_units, adv, run);
+            continue;
+        }
+        const got = ol.glyphSegs(ol.ptr, g, scratch) orelse {
+            x_units = stepPen(x_units, adv, run);
+            continue;
+        };
+        const s: f64 = @as(f64, @floatFromInt(run.size_units)) / @as(f64, @floatFromInt(upm));
+        const kx: f64 = @as(f64, @floatFromInt(run.x_scale)) / 1000.0;
+        const kh: f64 = @as(f64, @floatFromInt(run.x_shear)) / 1000.0;
+        const mx: f64 = if (run.mirrored) -1.0 else 1.0;
+        const ox: f64 = @floatFromInt(x_units);
+        for (got) |sg| {
+            // Lines store endpoints in slots 0 and 3; curves use all
+            // four (cff.outlineBbox parity).
+            var bx: [4]f64 = undefined;
+            var by: [4]f64 = undefined;
+            var k: usize = 0;
+            while (k < 4) : (k += 1) {
+                if (!sg.is_curve and (k == 1 or k == 2)) continue;
+                const ys = sg.y[k] * s;
+                bx[k] = ox + mx * s * kx * sg.x[k] + mx * kh * ys;
+                by[k] = oy - ys;
+            }
+            if (!have_pen or bx[0] != pen_x or by[0] != pen_y) {
+                w.byte('M');
+                w.num(bx[0]);
+                w.byte(' ');
+                w.num(by[0]);
+                sub_x = bx[0];
+                sub_y = by[0];
+            }
+            if (bx[3] == sub_x and by[3] == sub_y) {
+                w.byte('Z');
+            } else if (sg.is_curve) {
+                w.byte('C');
+                w.num(bx[1]);
+                w.byte(' ');
+                w.num(by[1]);
+                w.byte(' ');
+                w.num(bx[2]);
+                w.byte(' ');
+                w.num(by[2]);
+                w.byte(' ');
+                w.num(bx[3]);
+                w.byte(' ');
+                w.num(by[3]);
+            } else {
+                w.byte('L');
+                w.num(bx[3]);
+                w.byte(' ');
+                w.num(by[3]);
+            }
+            pen_x = bx[3];
+            pen_y = by[3];
+            have_pen = true;
+        }
+        x_units = stepPen(x_units, adv, run);
+    }
+    if (w.pos == dmark) {
+        w.pos = mark; // no ink: drop the empty path (and its group)
+        return;
+    }
+    w.str("\"/>");
+    if (!ambient) w.str("</g>");
+}
+
+/// Left-overflow shift in layout units (>= 0): the walk mirrors the
+/// draw loop's origin stepping, and each glyph contributes its true
+/// ink-left edge (`inkThou` [l,b,r,t], y-up, origin-relative).
+/// Mirrored ink spans [-r,-l] about the origin, so its left edge hangs
+/// off the ink right; shear slides ink with height, so the extremes
+/// sit at the ink top/bottom. Rules contribute their rect left edge.
+/// Transcribes `zatex-png`'s `leftShiftUnits`; zero keeps the viewport
+/// bit-identical.
+fn leftShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule) u32 {
+    var left: i64 = 0;
+    for (rules) |r| {
+        if (@as(i64, r.x) < left) left = @as(i64, r.x);
+    }
+    for (runs) |run| {
+        if (run.glyphs.len == 0) continue;
+        var x_units: i64 = run.x;
+        for (run.glyphs) |g| {
+            const ink = ol.inkThou(ol.ptr, g);
+            const ink_o: i64 = if (run.mirrored) ink[2] else ink[0];
+            const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
+            var edge = if (run.mirrored) x_units - ink_e else x_units + ink_e;
+            if (run.x_shear != 0) {
+                const top_u = @divTrunc(@as(i64, ink[3]) * @as(i64, run.size_units), 1000);
+                const bot_u = @divTrunc(@as(i64, ink[1]) * @as(i64, run.size_units), 1000);
+                const sh_top = @divFloor(@as(i64, run.x_shear) * top_u, 1000);
+                const sh_bot = @divFloor(@as(i64, run.x_shear) * bot_u, 1000);
+                if (run.mirrored) {
+                    edge -= @max(@as(i64, 0), @max(sh_top, sh_bot));
+                } else {
+                    edge += @min(@as(i64, 0), @min(sh_top, sh_bot));
+                }
+            }
+            if (edge < left) left = edge;
+            x_units = stepPen(x_units, ol.advance1000(ol.ptr, g), run);
+        }
+    }
+    return if (left < 0) @intCast(-left) else 0;
+}
+
+/// Right-overflow shift: mirror of `leftShiftUnits` for ink past the
+/// advance width. Transcribes `zatex-png`'s `rightShiftUnits`.
+fn rightShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule, width: u32) u32 {
+    var edge: i64 = width;
+    for (rules) |r| {
+        const right: i64 = @as(i64, r.x) + @as(i64, r.w);
+        if (right > edge) edge = right;
+    }
+    for (runs) |run| {
+        if (run.glyphs.len == 0) continue;
+        var x_units: i64 = run.x;
+        for (run.glyphs) |g| {
+            const ink = ol.inkThou(ol.ptr, g);
+            const ink_o: i64 = if (run.mirrored) -@as(i64, ink[0]) else ink[2];
+            const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
+            var right = x_units + ink_e;
+            if (run.x_shear != 0) {
+                const top_u = @divTrunc(@as(i64, ink[3]) * @as(i64, run.size_units), 1000);
+                const bot_u = @divTrunc(@as(i64, ink[1]) * @as(i64, run.size_units), 1000);
+                const sh_top = @divFloor(@as(i64, run.x_shear) * top_u, 1000);
+                const sh_bot = @divFloor(@as(i64, run.x_shear) * bot_u, 1000);
+                if (run.mirrored) {
+                    right -= @min(@as(i64, 0), @min(sh_top, sh_bot));
+                } else {
+                    right += @max(@as(i64, 0), @max(sh_top, sh_bot));
+                }
+            }
+            if (right > edge) edge = right;
+            x_units = stepPen(x_units, ol.advance1000(ol.ptr, g), run);
+        }
+    }
+    return if (edge > @as(i64, width)) @intCast(edge - @as(i64, width)) else 0;
+}
+
+/// Shared stub seam for walker tests: one line seg `(0,0)->(500,700)`
+/// in font units for every glyph, upm 1000. Advances and ink boxes
+/// mirror `zatex-png`'s shift-twin stubs (`x` overhangs by 50 each
+/// side, `s` is the sheared dotless-j shape, everything else inset).
+fn stubOutlines() outlines_mod.Outlines {
+    const S = struct {
+        var segbuf: [1]cff.Seg = .{.{
+            .x = .{ 0, 0, 0, 500 },
+            .y = .{ 0, 0, 0, 700 },
+            .is_curve = false,
+        }};
+        fn segs(_: *const anyopaque, _: u16, _: []cff.Seg) ?[]const cff.Seg {
+            return &segbuf;
+        }
+        fn adv(_: *const anyopaque, g: u16) i32 {
+            return switch (g) {
+                'x' => 500,
+                's' => 306,
+                else => 400,
+            };
+        }
+        fn upm(_: *const anyopaque, _: u16) u16 {
+            return 1000;
+        }
+        fn ink(_: *const anyopaque, g: u16) [4]i32 {
+            return switch (g) {
+                'x' => .{ -50, 0, 550, 700 },
+                's' => .{ -40, -205, 346, 442 },
+                else => .{ 10, 0, 390, 0 },
+            };
+        }
+        var tag: u8 = 0;
+    };
+    return .{
+        .ptr = &S.tag,
+        .glyphSegs = S.segs,
+        .advance1000 = S.adv,
+        .upmOf = S.upm,
+        .inkThou = S.ink,
+    };
+}
+
+fn bakeLayout(runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule, out: []u8) ![]u8 {
+    var segs: [8]cff.Seg = undefined;
+    const l = zatex.ir.Layout{ .width = 1000, .height_above = 1000, .depth_below = 500, .runs = runs, .rules = rules };
+    return renderLayout(l, stubOutlines(), &segs, out);
+}
+
+test "rules emit rects then diag lines with paint" {
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = 10, .y = 20, .w = 100, .h = 40 },
+        .{ .x = 0, .y = 0, .w = 50, .h = 50, .color = 0xFF0000FF, .diag = .up, .thick = 8 },
+    };
+    const l = zatex.ir.Layout{ .width = 200, .height_above = 100, .depth_below = 50, .runs = &.{}, .rules = &rules };
+    var segs: [8]cff.Seg = undefined;
+    var out: [1024]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    // rules-then-runs order, integer rect, butt line, red paint:
+    const rect_i = std.mem.indexOf(u8, got, "<rect x=\"10\" y=\"20\" width=\"100\" height=\"40\"");
+    try std.testing.expect(rect_i != null);
+    const line_i = std.mem.indexOf(u8, got, "<line x1=\"0\" y1=\"50\" x2=\"50\" y2=\"0\"");
+    try std.testing.expect(line_i != null);
+    try std.testing.expect(rect_i.? < line_i.?);
+    try std.testing.expect(std.mem.indexOf(u8, got, "stroke=\"#ff0000\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "stroke-width=\"8\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "stroke-linecap=\"butt\"") != null);
+}
+
+test "bake identity: X=ox+x, Y=oy-y" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'} },
+    };
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = 0, .y = 0, .w = 10, .h = 10 },
+    };
+    var out: [2048]u8 = undefined;
+    const got = try bakeLayout(&runs, &rules, &out);
+    try std.testing.expect(std.mem.indexOf(u8, got, "M100 200L600 -500") != null);
+    // rules walk before runs:
+    try std.testing.expect(std.mem.indexOf(u8, got, "<rect").? < std.mem.indexOf(u8, got, "M100 200").?);
+}
+
+test "bake mirror negates x" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'}, .mirrored = true },
+    };
+    var out: [2048]u8 = undefined;
+    const got = try bakeLayout(&runs, &.{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, got, "M100 200L-400 -500") != null);
+}
+
+test "bake shear slides with height" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'}, .x_shear = 250 },
+    };
+    var out: [2048]u8 = undefined;
+    const got = try bakeLayout(&runs, &.{}, &out);
+    // 100+500+0.25*700 = 775
+    try std.testing.expect(std.mem.indexOf(u8, got, "M100 200L775 -500") != null);
+}
+
+test "bake x_scale stretches ink and pen" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{ 'x', 'x' }, .x_scale = 2000 },
+    };
+    var out: [2048]u8 = undefined;
+    const got = try bakeLayout(&runs, &.{}, &out);
+    // advance 500, doubled pen step: second origin at 100+1000 = 1100.
+    try std.testing.expect(std.mem.indexOf(u8, got, "L1100 -500") != null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "M1100 200") != null);
+}
+
+test "left shift opens the viewBox for llap ink" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = -500, .baseline_y = 0, .glyphs = &[_]u16{'x'} },
+    };
+    const l = zatex.ir.Layout{ .width = 500, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var segs: [8]cff.Seg = undefined;
+    var out: [2048]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    // ink-left -50 at -500 reaches -550; nothing past the width.
+    try std.testing.expect(std.mem.indexOf(u8, got, "viewBox=\"-550 0 1050 1000\"") != null);
+}
+
+test "zero-shift common case keeps minX zero" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'} },
+    };
+    const l = zatex.ir.Layout{ .width = 400, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var segs: [8]cff.Seg = undefined;
+    var out: [2048]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    try std.testing.expect(std.mem.indexOf(u8, got, "viewBox=\"0 0 400 1000\"") != null);
+}
+
+test "right shift widens the viewBox for overhang ink" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'} },
+    };
+    const l = zatex.ir.Layout{ .width = 300, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var segs: [8]cff.Seg = undefined;
+    var out: [2048]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    // ink-right 390 past width 300: 90 wider, left edge untouched.
+    try std.testing.expect(std.mem.indexOf(u8, got, "viewBox=\"0 0 390 1000\"") != null);
+}
+
+test "colored runs wrap the path in a fill group" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'}, .color = 0xFF0000FF },
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'}, .color = 0x00FF0080 },
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'} },
+    };
+    var out: [2048]u8 = undefined;
+    const got = try bakeLayout(&runs, &.{}, &out);
+    // Opaque red: fill group without opacity; half green: with it.
+    try std.testing.expect(std.mem.indexOf(u8, got, "<g fill=\"#ff0000\"><path d=\"M100 200L600 -500\"/></g>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "<g fill=\"#00ff00\" fill-opacity=\"0.5\"><path") != null);
+    // All three runs bake the same soup, but only the two painted
+    // runs open a group: ambient black carries no `<g>` at all.
+    try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, got, "<path d=\"M100 200L600 -500\"/>"));
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, got, "<g fill="));
+}
+
+test "runs with no ink emit nothing" {
+    const S = struct {
+        fn segs(_: *const anyopaque, _: u16, _: []cff.Seg) ?[]const cff.Seg {
+            return null;
+        }
+        fn adv(_: *const anyopaque, _: u16) i32 {
+            return 500;
+        }
+        fn upm(_: *const anyopaque, _: u16) u16 {
+            return 1000;
+        }
+        fn ink(_: *const anyopaque, _: u16) [4]i32 {
+            return .{ 0, 0, 0, 0 };
+        }
+        var tag: u8 = 0;
+    };
+    const ol = outlines_mod.Outlines{ .ptr = &S.tag, .glyphSegs = S.segs, .advance1000 = S.adv, .upmOf = S.upm, .inkThou = S.ink };
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'x'}, .color = 0xFF0000FF },
+    };
+    const l = zatex.ir.Layout{ .width = 500, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var segs: [8]cff.Seg = undefined;
+    var out: [2048]u8 = undefined;
+    const got = try renderLayout(l, ol, &segs, &out);
+    try std.testing.expect(std.mem.indexOf(u8, got, "<path") == null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "<g") == null);
+    try std.testing.expect(std.mem.endsWith(u8, got, "</svg>"));
+}
+
+test "shift walks follow shear and mirror extremes" {
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'s'}, .x_shear = 250 },
+    };
+    const l = zatex.ir.Layout{ .width = 400, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var segs: [8]cff.Seg = undefined;
+    var out: [2048]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    // Plain shear: descender tail drags left (-40-52 = -92); the top
+    // leans right past the width (346+110 = 456 > 400: +56 wide).
+    try std.testing.expect(std.mem.indexOf(u8, got, "viewBox=\"-92 0 548 1000\"") != null);
+
+    const runs_mir = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'s'}, .x_shear = 250, .mirrored = true },
+    };
+    const lm = zatex.ir.Layout{ .width = 400, .height_above = 800, .depth_below = 200, .runs = &runs_mir, .rules = &.{} };
+    const got_mir = try renderLayout(lm, stubOutlines(), &segs, &out);
+    // Mirrored shear leans the other way: 0-346-110 = -456.
+    try std.testing.expect(std.mem.indexOf(u8, got_mir, "viewBox=\"-456 0 856 1000\"") != null);
 }
 
 test "num formats fixed 2-decimal stripped" {
