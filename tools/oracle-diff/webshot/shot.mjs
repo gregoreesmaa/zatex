@@ -14,7 +14,7 @@
 // and renders land at `<work>/<id>.<engine>.png`.
 import { createServer } from "node:http";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, renameSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
@@ -140,13 +140,17 @@ async function renderCase(page, port, tex, display, out) {
     console.error("oracle render empty: " + tex);
     return false;
   }
+  // Atomic publish (tmp + rename): a killed sweep must never leave a
+  // partial PNG that a later reuse pass mistakes for a finished render.
+  const tmp = out + ".tmp";
   await page.screenshot({
-    path: out,
+    path: tmp,
     clip: {
       x: Math.max(0, box.x - 8), y: Math.max(0, box.y - 8),
       width: box.width + 16, height: box.height + 16,
     },
   });
+  renameSync(tmp, out);
   console.log("shot: " + out);
   return true;
 }
@@ -166,15 +170,31 @@ try {
   if (batch) {
     // One browser for the whole TSV; per-case failures log and
     // continue so one bad case never sinks the sweep.
+    const reuse = process.env.ORACLE_REUSE === "1";
+    let reused = 0, rendered = 0;
     const tsv = await readFile(batch, "utf8");
     for (const line of tsv.split("\n")) {
       const [id, disp] = line.trim().split(/\s+/, 2);
       if (!id) continue;
+      const out = `${work}/${id}.${engine}.png`;
+      // Render reuse (see tools/diff-oracles.sh): with ORACLE_REUSE=1
+      // an existing non-empty render is trusted — the sweep only keeps
+      // such files when every input affecting their bytes is
+      // stamp-identical, and screenshots publish atomically (above),
+      // so a kept file is always whole. `==` prints on actual renders
+      // only; the sweep crops exactly those.
+      if (reuse) {
+        try {
+          if (statSync(out).size > 0) { reused++; continue; }
+        } catch { /* missing: render below */ }
+      }
       console.log("== " + id);
       const ctex = await readFile(`${work}/${id}.tex`, "utf8");
-      const ok = await renderCase(page, port, ctex, disp === "1", `${work}/${id}.${engine}.png`);
+      const ok = await renderCase(page, port, ctex, disp === "1", out);
       if (!ok) failed = true;
+      else rendered++;
     }
+    console.log(`${engine}: reused ${reused}, rendered ${rendered}`);
   } else {
     if (!await renderCase(page, port, tex, display, out)) failed = true;
   }

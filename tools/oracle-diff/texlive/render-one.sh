@@ -36,18 +36,38 @@ if ! (cd "$cwork" && pdflatex -interaction=nonstopmode -halt-on-error case.tex >
   rm -rf "$cwork"
   return 1
 fi
-pdftoppm -png -r 300 -singlefile "$cwork/case.pdf" "${out%.png}" >/dev/null
+# Atomic publish (tmp + rename): a killed sweep must never leave a
+# partial PNG that a later reuse pass mistakes for a finished render.
+pdftoppm -png -r 300 -singlefile "$cwork/case.pdf" "${out%.png}.tmp" >/dev/null
+mv "${out%.png}.tmp.png" "$out"
 rm -rf "$cwork"
 }
 
 if [ "${1:-}" = batch ]; then
   work=$2
   fail=0
+  reused=0
+  rendered=0
   while read -r id display; do
     [ -n "$id" ] || continue
+    out="$work/$id.luatex.png"
+    # Render reuse (see tools/diff-oracles.sh): with ORACLE_REUSE=1 an
+    # existing non-empty render is trusted — the sweep only keeps such
+    # files when every input affecting their bytes is stamp-identical,
+    # and writes are atomic (above), so a kept file is always whole.
+    # `==` prints on actual renders only; the sweep crops exactly those.
+    if [ "${ORACLE_REUSE:-0}" = "1" ] && [ -s "$out" ]; then
+      reused=$((reused + 1))
+      continue
+    fi
     echo "== $id"
-    render_case "$work/$id.tex" "$display" "$work/$id.luatex.png" || fail=1
+    if render_case "$work/$id.tex" "$display" "$out"; then
+      rendered=$((rendered + 1))
+    else
+      fail=1
+    fi
   done < "$work/cases.tsv"
+  echo "luatex: reused $reused, rendered $rendered"
   exit $fail
 fi
 render_case "$1" "$2" "$3"
