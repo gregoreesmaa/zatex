@@ -1,0 +1,77 @@
+# Per-release versioned libzatex binaries (issue #259).
+#
+# On every `v*` tag push: build the static + dynamic engine on each
+# release runner (native targets only — no cross-link surprises),
+# stage them under versioned filenames documented in
+# `docs/install.md`, and attach them to the GitHub release for the
+# tag (creating it when the tag has none yet). Docs-only otherwise:
+# this workflow never runs on `main` pushes or PRs and touches no
+# build input, so `zig build test` and `tools/size_gate.sh` cannot
+# see it.
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-macos
+            dyn_ext: dylib
+          - runner: ubuntu-latest
+            target: x86_64-linux
+            dyn_ext: so
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Build libzatex (native release target)
+        working-directory: packages/zatex
+        run: zig build -Dtarget=${{ matrix.target }}
+      - name: Stage versioned artifacts
+        working-directory: packages/zatex
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          TAG="${GITHUB_REF_NAME}"
+          cp "zig-out/lib/libzatex.a" \
+            "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${{ matrix.target }}.a"
+          cp "zig-out/lib/libzatex.${{ matrix.dyn_ext }}" \
+            "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${{ matrix.target }}.${{ matrix.dyn_ext }}"
+      - name: Stage C header (macOS leg only; identical everywhere)
+        if: matrix.target == 'aarch64-macos'
+        working-directory: packages/zatex
+        run: |
+          cp "src/zatex.h" "$GITHUB_WORKSPACE/dist/zatex-${GITHUB_REF_NAME}.h"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libzatex-${{ matrix.target }}
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksum and publish to the tag release
+        run: |
+          (cd dist && sha256sum ./* > SHA256SUMS)
+          TAG="${GITHUB_REF_NAME}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" \
+              --notes "libzatex $TAG. Install/load recipe: docs/install.md at this tag. ABI notes: CHANGELOG.md at this tag."
+          fi
+          gh release upload "$TAG" dist/* --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

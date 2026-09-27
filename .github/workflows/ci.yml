@@ -29,6 +29,35 @@ jobs:
       - name: Distribution size gate (no artifact growth)
         run: tools/size_gate.sh
 
+  # Host-facing tooling (issues #252/#256/#257/#258/#264): the C
+  # example builds and runs, the inspector dumps real geometry, and
+  # the render-parity kit re-renders drift-free. The delimiter vectors
+  # (#252) and bridge tests (#256) ride in `zig build test` above.
+  host-tooling:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: C example host builds and runs (issue #257)
+        working-directory: packages/zatex
+        run: |
+          zig build hello
+          ./zig-out/bin/hello-formula | tee /tmp/hello.txt
+          grep -q "^provider: .* conform diagnostics: " /tmp/hello.txt
+          grep -q "^extents: width=" /tmp/hello.txt
+          grep -q "^run 0:" /tmp/hello.txt
+          grep -q "^rule 0:" /tmp/hello.txt
+      - name: Layout inspector dumps real geometry (issue #264)
+        working-directory: packages/zatex
+        run: |
+          zig build inspect
+          ./zig-out/bin/inspect "x^2+\\frac12" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['width'] > 0 and len(d['runs']) > 0 and len(d['rules']) > 0"
+          if ./zig-out/bin/inspect '\foo'; then echo "inspect must fail on invalid TeX"; exit 1; fi
+      - name: Host render-parity kit is drift-free (issue #258)
+        run: ./tools/host-parity/check.sh /tmp/kit-ci
+
   sweep-freshness:
     runs-on: macos-14
     steps:
@@ -44,6 +73,11 @@ jobs:
           npm ci
           npm run sweep
           git diff --exit-code ../../packages/zatex/goldens/katex_sweep.json
+      - name: Regenerate delimiter vectors and fail on drift (issue #252)
+        run: |
+          cd tools/katex
+          npm run delim-vectors
+          git diff --exit-code ../../packages/zatex/goldens/delimiter_vectors.json
 
   # Doc-mirror freshness (issue #91): the syntax mirror is generated
   # from docs/support-table.md — re-resolve examples and fail on drift
