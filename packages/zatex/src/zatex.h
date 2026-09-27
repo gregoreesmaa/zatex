@@ -278,7 +278,13 @@ int32_t zatex_layout_utf8_ex(const char *src, size_t src_len, bool display_mode,
 #define ZATEX_CAP_ERR_CODE (1u << 3) // out->err_code written (issue #273)
 uint32_t zatex_capabilities(void);
 
-// Packed semantic version: major << 16 | minor << 8 | patch.
+// Packed semantic version, ABI-stable (issue #276): major << 16 |
+// minor << 8 | patch with normative widths major 16 bits, minor 8
+// bits, patch 8 bits (minor and patch stay below 256: a larger
+// patch would bleed into minor — 0.0.300 would read as 0.1.44).
+// Unpack with (w >> 16), ((w >> 8) & 0xFF), (w & 0xFF). Pre-1.0
+// requires an exact match, not a range. Library version only — the
+// provider word is separate.
 uint32_t zatex_version(void);
 
 // Host metrics conformance check (issue #194): runs the diagnostic

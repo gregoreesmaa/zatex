@@ -58,6 +58,17 @@ jobs:
       - name: Host render-parity kit is drift-free (issue #258)
         run: ./tools/host-parity/check.sh /tmp/kit-ci
 
+  # Release-docs agreement (issues #275/#276): the release workflow,
+  # the install recipe, the changelog, and the package version never
+  # contradict each other again (closed #259 vs no-assets-yet,
+  # zatex_version() field widths). Pure shell, no toolchain needed.
+  release-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Workflow, recipe, changelog, and versions agree
+        run: ./tools/check_release_docs.sh
+
   sweep-freshness:
     runs-on: macos-14
     steps:

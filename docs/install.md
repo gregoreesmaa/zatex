@@ -5,6 +5,11 @@ release assets (built by `.github/workflows/release.yml`); this is
 the blessed path from release asset to working host setup. No more
 hand-rolled install locations or per-host dlopen snowflakes.
 
+Status: issue #259 is closed (the release workflow above exists),
+but no `v*` tag has been pushed yet, so no release assets exist.
+The first `v*` tag publishes the first binaries; until then every
+host builds from source and pins per §4 below.
+
 ## 1. Get the asset
 
 Release assets are named
@@ -68,9 +73,25 @@ Then, per call:
 - Input: normalize to NFC at your boundary (see
   `docs/unicode.md`).
 
-## 4. Building from source instead
+## 4. Building from source (the only path until the first tag)
 
 Zig 0.16.0, `cd packages/zatex && zig build` → `zig-out/lib/`
 (`libzatex.a` + `libzatex.dylib`/`.so`) with `src/zatex.h` as the
-header. Pin the source by tag, not by `main`, and record the tag
-where you record the `zatex_version()` you validated against.
+header. Pin the source by tag once tags exist — never by `main` —
+and record the tag where you record the `zatex_version()` you
+validated against. Until the first `v*` tag, pin by commit SHA
+instead:
+
+```sh
+git fetch origin
+git checkout <sha>  # the commit you validated
+(cd packages/zatex && zig build)
+sha256sum packages/zatex/zig-out/lib/libzatex.* packages/zatex/src/zatex.h
+git rev-parse HEAD  # record this SHA alongside the checksums
+```
+
+Keep the SHA, the checksums, and the `zatex_version()` word in one
+place (e.g. your lockfile): re-verify all three on every engine
+update. After the first `v*` tag this recipe stays valid, with the
+tag replacing the SHA and the release `SHA256SUMS` replacing the
+local checksums.
