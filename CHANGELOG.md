@@ -26,6 +26,15 @@ hosts building from source:
   check, issue #194 — run it when bringing up a new font).
 - Run shape `zatex_run_t` is 24 bytes (`x_scale` appended, issue
   #197); rules, layout, extents, and ink-box shapes are unchanged.
+- Unreleased additive ABI (issues #251, #262, #263; PR #268):
+  `zatex_run_t` gains an optional 4-byte RGBA `color` tail at bytes
+  24..28 (0 = ambient), written only when `runs_stride >= 28` —
+  24-stride hosts stay bit-identical. New `zatex_capabilities()`
+  bitmask (`X_SCALE | RUN_COLOR | NEED_COUNTS`); per-symbol `dlsym`
+  probing still works. `STATUS_NO_SPACE` / `STATUS_LIMIT` now carry
+  exact `nruns`/`nrules` needs (zeroed = exceeds engine capacity);
+  NULL buffers act as sizing probes. Size baseline ratcheted
+  320000 -> 320112 for this surface (precedent: 9e70d53).
 - Caps (part of the contract): 256 runs / 64 rules per call,
   65536 input bytes, `maxExpand` 1000, nesting depth 32.
 - Option knobs added since the freeze (all default-off, additive):

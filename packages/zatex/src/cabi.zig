@@ -40,8 +40,8 @@ pub const CMetrics = extern struct {
 
 /// One laid-out glyph run. Must match `zatex.h` `zatex_run_t`
 /// field-for-field. The first 20 bytes are the frozen v1 prefix
-/// (`CRunV1`): field offsets never move, and `x_scale` appends at
-/// the tail (issue #197).
+/// (`CRunV1`): field offsets never move, and `x_scale` (issue #197)
+/// then `color` (issue #251) append at the tail.
 pub const CRun = extern struct {
     font_id: u16,
     size_units: u16,
@@ -60,6 +60,14 @@ pub const CRun = extern struct {
     /// admits it — see `zatex_layout_utf8_ex`. The v1 entry
     /// (`zatex_layout_utf8`) never writes it.
     x_scale: u16 = 1000,
+    /// Per-run paint in 0xRRGGBBAA (`\color` scope, issue #35, projected
+    /// through this surface by issue #251); 0 is the ambient (host
+    /// default) paint and matches `ir.Run.color == null` exactly —
+    /// resolved paints always carry opaque alpha, so 0 is unambiguous.
+    /// Must match `zatex.h` `zatex_run_t.color`. Same stride rule as
+    /// `x_scale`: written only when the host stride reaches past it
+    /// (bytes 24..28), so 24-stride hosts stay bit-identical.
+    color: u32 = 0,
 };
 
 /// Frozen v1 run prefix (issue #203): the 20-byte head every host
@@ -86,6 +94,15 @@ pub const crun_xscale_off: usize = 20;
 /// host stride reaches this far. Wider strides leave every remaining
 /// tail byte (including struct padding at 22..24) untouched.
 pub const crun_xscale_end: usize = 22;
+/// Offset of `color` within `CRun` (`@offsetOf(CRun, "color")`): the
+/// 2-byte pad at 22..24 keeps the u32 4-aligned, so the paint lands
+/// at 24, not 22.
+pub const crun_color_off: usize = 24;
+/// First byte past `color`: the engine writes bytes 24..28 only when
+/// the host stride reaches this far (issue #251). Strides in
+/// 22..28 carry `x_scale` without paint, exactly like the old
+/// 24-byte struct did — old hosts stay bit-identical.
+pub const crun_color_end: usize = 28;
 
 pub const CRule = extern struct {
     x: i32,
@@ -118,6 +135,16 @@ pub const STATUS_TOO_LONG: i32 = 4;
 pub const STATUS_EXPANSION_LIMIT: i32 = 5;
 pub const STATUS_NO_SPACE: i32 = 6;
 pub const STATUS_LIMIT: i32 = 7;
+
+/// Capability bits for `zatex_capabilities` (issue #262): one
+/// `dlsym`-free word negotiated once, so hosts branch on bits instead
+/// of accreting per-symbol probes (`_ex` for `x_scale` today, a color
+/// tail tomorrow). Bits are additive — new extensions set new bits,
+/// never move these. A dylib predating the query (dlsym NULL) is the
+/// v1 surface: frozen prefix only, zeroed counts on space failures.
+pub const CAP_X_SCALE: u32 = 1 << 0;
+pub const CAP_RUN_COLOR: u32 = 1 << 1;
+pub const CAP_NEED_COUNTS: u32 = 1 << 2;
 
 fn toStatus(e: zatex.LayoutError) i32 {
     return switch (e) {
@@ -202,6 +229,16 @@ fn hostProvider(m: *const CMetrics, host: *const Host) zatex.MetricsProvider {
 /// points at `runs_cap` array elements each `runs_stride` bytes wide
 /// (the host's own element size); see the stride contract on
 /// `zatex_layout_utf8_ex`.
+///
+/// Space-failure contract (issue #263): layout completes into
+/// ceiling-size stack temporaries before caller buffers are touched,
+/// so a layable formula's exact host-visible needs are always known —
+/// `STATUS_NO_SPACE`/`STATUS_LIMIT` carry them in
+/// `out.nruns`/`out.nrules` and hosts allocate exactly once. Zeroed
+/// counts mean the need exceeds engine capacity (even maximum buffers
+/// cannot succeed) or the call never reached layout (null
+/// metrics/source). All other failures keep today's shapes (zeroed
+/// counts, `err_*` diagnostics).
 fn layoutUtf8Impl(
     src_ptr: ?[*]const u8,
     src_len: usize,
@@ -236,29 +273,20 @@ fn layoutUtf8Impl(
     const src = (src_ptr orelse return STATUS_NO_SPACE)[0..src_len];
     const host = Host{ .m = m };
     const prov = hostProvider(m, &host);
-    // Reinterpret caller buffers as Zig slices. Runs arrive as an
-    // opaque base: the host's element size (`runs_stride`) is the
-    // only stride the engine ever uses (issue #203), so old-sized
-    // slots stay aligned no matter what the current `CRun` holds.
-    const runs_base: [*]u8 = @ptrCast(runs_ptr orelse return STATUS_NO_SPACE);
-    const rules_z = (rules_ptr orelse return STATUS_NO_SPACE)[0..rules_cap];
-    const glyphs = (glyphs_ptr orelse return STATUS_NO_SPACE)[0..glyphs_cap];
-    // Bridge C runs/rules to the IR shapes with a fixed scratch
-    // overlay: layout into stack temporaries, then translate.
+    // Scratch overlay (zero heap): layout completes into ceiling-size
+    // stack temporaries before caller buffers are touched, so a
+    // layable formula's exact needs are always known with one pass —
+    // no retry, no partial writes (issue #263). Glyphs land in
+    // `glyph_tmp` (at most one per glyph box, far below its length)
+    // and copy to the caller buffer on success.
     var runs_tmp: [256]zatex.ir.Run = undefined;
     var rules_tmp: [64]zatex.ir.Rule = undefined;
-    // Engine hard ceilings (documented in zatex.h): requests above
-    // them fail STATUS_LIMIT instead of silently depending on how
-    // much the fixed temporaries happen to hold. A run stride below
-    // the frozen v1 prefix is the same class of caller error: fail
-    // without touching the runs buffer.
-    if (runs_cap > runs_tmp.len or rules_cap > rules_tmp.len or runs_stride < crun_v1_len) {
-        out.status = STATUS_LIMIT;
-        out.err_offset = 0;
-        return out.status;
-    }
+    var glyph_tmp: [2048]u16 = undefined;
     var diag = zatex.Diag.empty();
-    const l = zatex.layoutInner(src, .{ .display_mode = display_mode }, prov, runs_tmp[0..runs_cap], rules_tmp[0..rules_cap], glyphs, &diag) catch |e| {
+    const l = zatex.layoutInner(src, .{ .display_mode = display_mode }, prov, &runs_tmp, &rules_tmp, &glyph_tmp, &diag) catch |e| {
+        // Malformed input reports its true error even on a probe or an
+        // over-ceiling request (more informative than the historical
+        // shape status, which only wins for layable formulas below).
         out.status = toStatus(e);
         out.err_offset = diag.offset;
         // `Diag.message` crosses the ABI (issues #126/#136): static
@@ -271,21 +299,50 @@ fn layoutUtf8Impl(
             out.err_msg = null;
             out.err_msg_len = 0;
         }
+        // A NoSpace here needs past the ceilings/pools: even maximum
+        // buffers cannot succeed, so the zeroed counts above already
+        // say "exceeds capacity" — nothing to measure.
         return out.status;
     };
-    if (l.runs.len > runs_cap) {
-        out.status = STATUS_NO_SPACE;
+    // Host-visible needs: run count, rect-projected rule count (skips
+    // `diag` strikes, exactly as the translate loop below), and
+    // backing glyphs.
+    var need_rules: u32 = 0;
+    for (l.rules) |r| {
+        if (r.diag != .none) continue;
+        need_rules += 1;
+    }
+    var need_glyphs: usize = 0;
+    for (l.runs) |r| need_glyphs += r.glyphs.len;
+    const need_runs: u32 = @intCast(l.runs.len);
+    // Space failures carry the needs (issue #263) through one shared
+    // store: a null-buffer probe reports NO_SPACE even when the caps
+    // are also over ceiling (the historical precedence). Caller
+    // buffers stay untouched, same as the old ceilings check.
+    const short = need_runs > runs_cap or need_rules > rules_cap or need_glyphs > glyphs_cap;
+    const probe = runs_ptr == null or rules_ptr == null or glyphs_ptr == null;
+    if (probe or short or runs_cap > runs_tmp.len or rules_cap > rules_tmp.len or runs_stride < crun_v1_len) {
+        out.status = if (probe or short) STATUS_NO_SPACE else STATUS_LIMIT;
         out.err_offset = 0;
+        out.nruns = need_runs;
+        out.nrules = need_rules;
         return out.status;
     }
-    // Energy (#155): glyph slices emit run-sequentially into the
-    // caller buffer, so `glyph_start` is a running cursor — no
-    // per-run pointer subtraction. Debug builds assert contiguity
-    // against the old difference on every run.
+    // Reinterpret caller buffers as Zig slices. Runs arrive as an
+    // opaque base: the host's element size (`runs_stride`) is the
+    // only stride the engine ever uses (issue #203), so old-sized
+    // slots stay aligned no matter what the current `CRun` holds.
+    const runs_base: [*]u8 = @ptrCast(runs_ptr.?);
+    const rules_z = rules_ptr.?[0..rules_cap];
+    const glyphs = glyphs_ptr.?[0..glyphs_cap];
+    // Energy (#155): glyph slices emit run-sequentially into the temp,
+    // so `glyph_start` is a running cursor — no per-run pointer
+    // subtraction. Debug builds assert contiguity against the old
+    // difference on every run.
     var ng: u32 = 0;
     for (l.runs, 0..) |r, i| {
         // Active in test/Debug builds; compiled out of ReleaseSmall.
-        const start = (@intFromPtr(r.glyphs.ptr) - @intFromPtr(glyphs.ptr)) / 2;
+        const start = (@intFromPtr(r.glyphs.ptr) - @intFromPtr(&glyph_tmp[0])) / 2;
         std.debug.assert(start == ng);
         const v: CRun = .{
             .font_id = r.font_id,
@@ -297,16 +354,24 @@ fn layoutUtf8Impl(
             // Stretch factor (issue #197): without it C hosts draw
             // wide accents at natural size, off-span.
             .x_scale = r.x_scale,
+            // Paint (issue #251): 0 is ambient (`ir.Run.color == null`),
+            // so unstylized formulas cross exactly as before.
+            .color = r.color orelse 0,
         };
         // Strided, alignment-safe stores (issue #203): `memcpy` of
-        // the frozen prefix plus `x_scale` iff the host stride
-        // admits it. Wider strides leave every other tail byte —
-        // including struct padding — to the host, so a future wider
-        // struct keeps working and old slots never misalign.
+        // the frozen prefix plus each tail field iff the host stride
+        // admits it (`x_scale` at 20..22, `color` at 24..28). Wider
+        // strides leave every other tail byte — including struct
+        // padding at 22..24 — to the host, so a future wider struct
+        // keeps working and old slots never misalign.
         const src_bytes = std.mem.asBytes(&v);
         const off = std.math.mul(usize, i, runs_stride) catch {
+            // Absurd strides only (caps were pre-checked): same LIMIT
+            // shape with the already-known needs.
             out.status = STATUS_LIMIT;
             out.err_offset = 0;
+            out.nruns = need_runs;
+            out.nrules = need_rules;
             return out.status;
         };
         const dst = runs_base + off;
@@ -314,28 +379,26 @@ fn layoutUtf8Impl(
         if (runs_stride >= crun_xscale_end) {
             @memcpy(dst[crun_xscale_off..crun_xscale_end], src_bytes[crun_xscale_off..crun_xscale_end]);
         }
+        if (runs_stride >= crun_color_end) {
+            @memcpy(dst[crun_color_off..crun_color_end], src_bytes[crun_color_off..crun_color_end]);
+        }
         ng += @intCast(r.glyphs.len);
     }
     // The frozen narrow surface projects filled rects only: diagonal
     // strikes (issue #107 `Rule.diag`) have no rect form, so they are
-    // skipped rather than misdrawn (like color, which this surface
-    // already drops — see `CRule`).
-    // Energy (#155): the rect recount and the translate copy fuse
-    // into one pass with an incremental cap check. Status contract
-    // is unchanged (`STATUS_NO_SPACE` exactly as before; error-path
-    // buffer contents were never specified); the happy path drops
-    // from two rule traversals to one.
+    // skipped rather than misdrawn. (Run paint does cross — see `CRun.color`
+    // — but rects carry no paint on this surface: `\colorbox` bodies
+    // keep their run colors while the background rect stays ambient.)
+    // Energy (#155): the recount above pre-verified the cap, so this
+    // pass is a plain copy — no incremental check, no partial writes.
     var nrules: u32 = 0;
     for (l.rules) |r| {
         if (r.diag != .none) continue;
-        if (nrules >= rules_z.len) {
-            out.status = STATUS_NO_SPACE;
-            out.err_offset = 0;
-            return out.status;
-        }
         rules_z[nrules] = .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
         nrules += 1;
     }
+    // Backing glyphs: pre-sized above, one bulk copy.
+    @memcpy(glyphs[0..need_glyphs], glyph_tmp[0..need_glyphs]);
     out.* = .{
         .width = l.width,
         .height_above = l.height_above,
@@ -357,10 +420,11 @@ fn layoutUtf8Impl(
 ///
 /// `runs` is an array of `runs_cap` 20-byte v1 slots (`zatex.h`
 /// `zatex_run_v1_t`, Zig `CRunV1`). The engine strides 20 and writes
-/// the v1 prefix only — never `x_scale` — so hosts compiled against
-/// the old struct stay bit-identical across dylib updates: they draw
-/// unstretched, exactly as before (issue #203). Hosts compiled
-/// against the 24-byte `zatex_run_t` call `zatex_layout_utf8_ex`.
+/// the v1 prefix only — never `x_scale`, never `color` — so hosts
+/// compiled against the old struct stay bit-identical across dylib
+/// updates: they draw unstretched in the ambient paint, exactly as
+/// before (issue #203). Hosts compiled against the 28-byte
+/// `zatex_run_t` call `zatex_layout_utf8_ex`.
 export fn zatex_layout_utf8(
     src_ptr: ?[*]const u8,
     src_len: usize,
@@ -380,20 +444,23 @@ export fn zatex_layout_utf8(
 /// Stride-negotiated layout entry (issue #203): identical to
 /// `zatex_layout_utf8`, except `runs` elements are `runs_stride`
 /// bytes wide — pass `sizeof` the host's run struct
-/// (`sizeof(zatex_run_t)`, 24 today).
+/// (`sizeof(zatex_run_t)`, 28 today).
 ///
 /// Stride contract: the engine writes the frozen v1 prefix (bytes
-/// 0..20) into every element and `x_scale` (bytes 20..22) only when
-/// `runs_stride >= 22`; every other tail byte (including struct
-/// padding) is left untouched. Strides below 20 fail with
+/// 0..20) into every element, `x_scale` (bytes 20..22) only when
+/// `runs_stride >= 22`, and `color` (bytes 24..28) only when
+/// `runs_stride >= 28`; every other tail byte (including struct
+/// padding at 22..24) is left untouched. Strides below 20 fail with
 /// `STATUS_LIMIT` without touching the runs buffer. A future wider
 /// host struct keeps working: the engine never writes past its known
-/// 22 bytes, and never strides wider than the host's own size.
+/// 28 bytes, and never strides wider than the host's own size.
 ///
-/// Pairing: hosts wanting `x_scale` need a dylib exporting this
-/// entry — `dlsym` it and fall back to `zatex_layout_utf8` when
-/// absent (old dylib), drawing unstretched. The v1 entry is safe
-/// with any dylib/host mix.
+/// Pairing: hosts wanting `x_scale`/`color` need a dylib exporting
+/// this entry — `dlsym` it and fall back to `zatex_layout_utf8` when
+/// absent (old dylib), drawing unstretched in the ambient paint — or
+/// negotiate once via `zatex_capabilities` (issue #262) and branch on
+/// `CAP_X_SCALE`/`CAP_RUN_COLOR`. The v1 entry is safe with any
+/// dylib/host mix.
 export fn zatex_layout_utf8_ex(
     src_ptr: ?[*]const u8,
     src_len: usize,
@@ -409,6 +476,16 @@ export fn zatex_layout_utf8_ex(
     out_ptr: ?*CLayout,
 ) i32 {
     return layoutUtf8Impl(src_ptr, src_len, display_mode, metrics, runs_ptr, runs_cap, runs_stride, rules_ptr, rules_cap, glyphs_ptr, glyphs_cap, out_ptr);
+}
+
+/// Capability word (issue #262): bitmask of `CAP_*` bits negotiated
+/// once, so hosts branch on capability bits instead of per-symbol
+/// `dlsym` probing. The `_ex` pairing keeps working (a present `_ex`
+/// implies `CAP_X_SCALE`, a 28-stride paint implies `CAP_RUN_COLOR`),
+/// but new extensions stop multiplying loader paths: probe this one
+/// symbol, fall back to the v1 surface when absent (old dylib).
+export fn zatex_capabilities() u32 {
+    return CAP_X_SCALE | CAP_RUN_COLOR | CAP_NEED_COUNTS;
 }
 
 /// Packed semantic version: major << 16 | minor << 8 | patch.
@@ -556,12 +633,12 @@ test "cabi v4 extents+ink flow into layout, null keeps v3" {
     try std.testing.expect(out1.height_above != out0.height_above);
 }
 
-test "cabi run layout is frozen v1 plus appended x_scale (issue #197)" {
-    // Frozen v1 prefix: field offsets never move. `x_scale` appends
-    // at the tail (same policy as `CLayout.err_msg`), padding the
-    // struct to 24. Appending alone does NOT keep old array readers
-    // safe (issue #203) — that is the stride contract's job; this
-    // test pins the offsets both sides rely on.
+test "cabi run layout is frozen v1 plus appended tails (issues #197, #251)" {
+    // Frozen v1 prefix: field offsets never move. `x_scale` then
+    // `color` append at the tail (same policy as `CLayout.err_msg`),
+    // padding the struct to 28. Appending alone does NOT keep old
+    // array readers safe (issue #203) — that is the stride contract's
+    // job; this test pins the offsets both sides rely on.
     comptime {
         std.debug.assert(@offsetOf(CRun, "font_id") == 0);
         std.debug.assert(@offsetOf(CRun, "size_units") == 2);
@@ -570,7 +647,7 @@ test "cabi run layout is frozen v1 plus appended x_scale (issue #197)" {
         std.debug.assert(@offsetOf(CRun, "glyph_start") == 12);
         std.debug.assert(@offsetOf(CRun, "glyph_count") == 16);
         std.debug.assert(@offsetOf(CRun, "x_scale") == 20);
-        std.debug.assert(@sizeOf(CRun) == 24);
+        std.debug.assert(@sizeOf(CRun) == 28);
         // The v1 prefix type is the head of `CRun`, 20 bytes flat.
         std.debug.assert(@sizeOf(CRunV1) == crun_v1_len);
         std.debug.assert(@offsetOf(CRunV1, "font_id") == @offsetOf(CRun, "font_id"));
@@ -581,6 +658,10 @@ test "cabi run layout is frozen v1 plus appended x_scale (issue #197)" {
         std.debug.assert(@offsetOf(CRunV1, "glyph_count") == @offsetOf(CRun, "glyph_count"));
         std.debug.assert(crun_xscale_off == @offsetOf(CRun, "x_scale"));
         std.debug.assert(crun_xscale_end == @offsetOf(CRun, "x_scale") + @sizeOf(u16));
+        // Paint tail (issue #251): 2-byte pad at 22..24 keeps the u32
+        // 4-aligned, so color lands at 24.
+        std.debug.assert(crun_color_off == @offsetOf(CRun, "color"));
+        std.debug.assert(crun_color_end == @offsetOf(CRun, "color") + @sizeOf(u32));
         // The rect surface is untouched by this change.
         std.debug.assert(@sizeOf(CRule) == 16);
     }
@@ -673,10 +754,10 @@ test "cabi v1 entry keeps old-sized readers safe (issue #203)" {
 
 test "cabi _ex negotiates run stride (issue #203)" {
     // Stride matrix on `\widetilde{AB}` (uniform-500 stubs pin the
-    // accent stretch at exactly 2000, per the issue-#197 test):
-    // stride 24 delivers the tail, wider strides leave it alone,
-    // narrower strides carry the prefix only, and strides below 20
-    // fail LIMIT without touching the buffer.
+    // accent stretch at exactly 2000, per the issue-#197 test): the
+    // full-struct stride delivers the tails, wider strides leave the
+    // unknown tail alone, narrower strides carry the prefix only, and
+    // strides below 20 fail LIMIT without touching the buffer.
     const S = struct {
         fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
             return @intCast(cp & 0xFFFF);
@@ -698,15 +779,18 @@ test "cabi _ex negotiates run stride (issue #203)" {
     try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &ref, ref.len, @sizeOf(CRun), &ref_rules, ref_rules.len, &ref_glyphs, ref_glyphs.len, &ref_out));
     var stretched = false;
     for (ref[0..ref_out.nruns]) |r| {
-        // The engine writes [0..22) only: struct padding stays host-owned.
+        // The engine writes [0..22) plus the paint at [24..28): struct
+        // padding at 22..24 stays host-owned. (This input is
+        // unstylized, so every paint crossing here is ambient zero.)
         const bytes = std.mem.asBytes(&r);
         try std.testing.expectEqual(@as(u8, 0xAA), bytes[22]);
         try std.testing.expectEqual(@as(u8, 0xAA), bytes[23]);
+        try std.testing.expectEqual(@as(u32, 0), r.color);
         if (r.x_scale != 1000) stretched = true;
     }
     try std.testing.expect(stretched);
-    // A future 32-byte struct: heads and `x_scale` land, bytes
-    // 22..32 stay canary.
+    // A future 32-byte struct: heads, `x_scale`, and `color` land; the
+    // pad (22..24) and the unknown tail (28..32) stay canary.
     var wide: [8 * 32]u8 = undefined;
     @memset(&wide, 0xAA);
     var wout: CLayout = undefined;
@@ -724,7 +808,15 @@ test "cabi _ex negotiates run stride (issue #203)" {
         var got: u16 = undefined;
         @memcpy(std.mem.asBytes(&got), slot[crun_xscale_off..][0..2]);
         try std.testing.expectEqual(ref[i].x_scale, got);
-        for (slot[crun_xscale_end..]) |b| {
+        // Paint crosses the same way at 24..28 (ambient zero here);
+        // the pad and the unknown tail stay canary.
+        var paint: u32 = undefined;
+        @memcpy(std.mem.asBytes(&paint), slot[crun_color_off..][0..4]);
+        try std.testing.expectEqual(ref[i].color, paint);
+        for (slot[crun_xscale_end..crun_color_off]) |b| {
+            try std.testing.expectEqual(@as(u8, 0xAA), b);
+        }
+        for (slot[crun_color_end..]) |b| {
             try std.testing.expectEqual(@as(u8, 0xAA), b);
         }
     }
@@ -748,14 +840,16 @@ test "cabi _ex negotiates run stride (issue #203)" {
             }
         }
     }
-    // Short strides fail LIMIT; the buffer and counts stay clean.
+    // Short strides fail LIMIT without touching the buffer — but the
+    // needs still cross (issue #263).
     for ([_]usize{ 0, 1, 19 }) |bad| {
         var probe: [8]CRun = undefined;
         @memset(std.mem.asBytes(&probe), 0xAA);
         var o: CLayout = undefined;
         try std.testing.expectEqual(STATUS_LIMIT, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &probe, probe.len, bad, &ref_rules, ref_rules.len, &ref_glyphs, ref_glyphs.len, &o));
         try std.testing.expectEqual(STATUS_LIMIT, o.status);
-        try std.testing.expectEqual(@as(u32, 0), o.nruns);
+        try std.testing.expectEqual(ref_out.nruns, o.nruns);
+        try std.testing.expectEqual(ref_out.nrules, o.nrules);
         for (std.mem.asBytes(&probe)) |b| {
             try std.testing.expectEqual(@as(u8, 0xAA), b);
         }
@@ -763,8 +857,8 @@ test "cabi _ex negotiates run stride (issue #203)" {
 }
 
 test "cabi old-sized arrays stay in bounds past 213 runs (issue #203)" {
-    // 256 v1 slots hold 5120 bytes: a 24-byte stride overruns them
-    // past run 213. Drive the v1 stride past that threshold — the
+    // 256 v1 slots hold 5120 bytes: a 28-byte stride overruns them
+    // past run 182. Drive the v1 stride past that threshold — the
     // trailing guard must survive — then prove the over-cap input
     // fails cleanly on both entries.
     const S = struct {
@@ -1135,5 +1229,267 @@ test "cabi adversarial provider stays total and deterministic" {
             try std.testing.expectEqual(o1.nruns, o2.nruns);
             try std.testing.expectEqual(o1.nrules, o2.nrules);
         }
+    }
+}
+
+test "cabi carries per-run color with the stride pattern (issue #251)" {
+    // `\color` scopes thread parse→IR→native runs (issue #35); the C
+    // surface projects the paint as a 4-byte RGBA tail (0 = ambient),
+    // written only when the run stride reaches past it — the #203
+    // pattern: 24-stride hosts stay bit-identical, v1 never delivers.
+    const S = struct {
+        fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return 500;
+        }
+        fn rt(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) i32 {
+            return 40;
+        }
+    };
+    const m: CMetrics = .{ .ctx = null, .glyph_id = S.gid, .advance = S.adv, .rule_thickness = S.rt };
+    const red: u32 = 0xFF0000FF;
+    // Fully scoped: every run carries red.
+    {
+        const src = "\\color{red}{x}";
+        var runs: [8]CRun = undefined;
+        var rules: [4]CRule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, runs.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &out));
+        try std.testing.expect(out.nruns > 0);
+        for (runs[0..out.nruns]) |r| {
+            try std.testing.expectEqual(red, r.color);
+        }
+    }
+    // Hex spec resolves the same way (`#00ff00` → opaque green).
+    {
+        const src = "\\color{#00ff00}{x}";
+        var runs: [8]CRun = undefined;
+        var rules: [4]CRule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, runs.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &out));
+        try std.testing.expect(out.nruns > 0);
+        for (runs[0..out.nruns]) |r| {
+            try std.testing.expectEqual(@as(u32, 0x00FF00FF), r.color);
+        }
+    }
+    // Scoped paint: `\textcolor` bounds the paint to one atom, so
+    // colored and ambient runs coexist (runs never merge across
+    // colors); unstylized input is all ambient (0). (`\color` is a
+    // declaration over the rest — no ambient tail by construction.)
+    {
+        const src = "\\textcolor{red}{x}+y";
+        var runs: [8]CRun = undefined;
+        var rules: [4]CRule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, runs.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &out));
+        var seen_red = false;
+        var seen_ambient = false;
+        for (runs[0..out.nruns]) |r| {
+            if (r.color == red) seen_red = true;
+            if (r.color == 0) seen_ambient = true;
+            try std.testing.expect(r.color == red or r.color == 0);
+        }
+        try std.testing.expect(seen_red and seen_ambient);
+        const plain = "x+y";
+        var pruns: [8]CRun = undefined;
+        var pout: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(plain.ptr, plain.len, false, &m, &pruns, pruns.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &pout));
+        for (pruns[0..pout.nruns]) |r| {
+            try std.testing.expectEqual(@as(u32, 0), r.color);
+        }
+    }
+    // Valid-but-unknown word (KaTeX passes bare words through; only
+    // known names resolve) renders ambient — never a garbage paint.
+    {
+        const src = "\\color{chartreuse}{x}";
+        var runs: [8]CRun = undefined;
+        var rules: [4]CRule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, runs.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &out));
+        try std.testing.expect(out.nruns > 0);
+        for (runs[0..out.nruns]) |r| {
+            try std.testing.expectEqual(@as(u32, 0), r.color);
+        }
+    }
+    // Old 24-byte stride: same heads as the 28 reference, `x_scale`
+    // delivered, paint region untouched (canary) — bit-identical to
+    // the pre-color dylib.
+    {
+        const src = "\\color{red}{x}+\\widetilde{AB}";
+        var ref: [8]CRun = undefined;
+        var ref_rules: [8]CRule = undefined;
+        var ref_glyphs: [64]u16 = undefined;
+        var ref_out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &ref, ref.len, @sizeOf(CRun), &ref_rules, ref_rules.len, &ref_glyphs, ref_glyphs.len, &ref_out));
+        try std.testing.expect(ref_out.nruns > 1);
+        var old: [8 * 24]u8 = undefined;
+        @memset(&old, 0xAA);
+        var orules: [8]CRule = undefined;
+        var oglyphs: [64]u16 = undefined;
+        var oout: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &old, 8, 24, &orules, orules.len, &oglyphs, oglyphs.len, &oout));
+        try std.testing.expectEqual(ref_out.nruns, oout.nruns);
+        for (0..oout.nruns) |i| {
+            const slot = old[i * 24 ..][0..24];
+            var head: CRunV1 = undefined;
+            @memcpy(std.mem.asBytes(&head), slot[0..crun_v1_len]);
+            try std.testing.expectEqual(ref[i].font_id, head.font_id);
+            try std.testing.expectEqual(ref[i].x, head.x);
+            try std.testing.expectEqual(ref[i].glyph_count, head.glyph_count);
+            var scale: u16 = undefined;
+            @memcpy(std.mem.asBytes(&scale), slot[crun_xscale_off..][0..2]);
+            try std.testing.expectEqual(ref[i].x_scale, scale);
+            // Padding at 22..24 stays host-owned (never written).
+            try std.testing.expectEqual(@as(u8, 0xAA), slot[22]);
+            try std.testing.expectEqual(@as(u8, 0xAA), slot[23]);
+        }
+        // And the v1 entry on colored input: same heads, no paint.
+        var vraw: [8 * crun_v1_len]u8 = undefined;
+        @memset(&vraw, 0xAA);
+        var vout: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8(src.ptr, src.len, false, &m, &vraw, 8, &orules, orules.len, &oglyphs, oglyphs.len, &vout));
+        try std.testing.expectEqual(ref_out.nruns, vout.nruns);
+        for (0..vout.nruns) |i| {
+            var head: CRunV1 = undefined;
+            @memcpy(std.mem.asBytes(&head), vraw[i * crun_v1_len ..][0..crun_v1_len]);
+            try std.testing.expectEqual(ref[i].x, head.x);
+            try std.testing.expectEqual(ref[i].glyph_count, head.glyph_count);
+        }
+    }
+}
+
+test "cabi capabilities bitmask (issue #262)" {
+    // One word negotiated once: the current surface carries the
+    // stretch tail, the paint tail, and space-failure needs. New bits
+    // arrive additively — this pins the known set, not the zeros
+    // above it.
+    try std.testing.expectEqual(CAP_X_SCALE, @as(u32, 1) << 0);
+    try std.testing.expectEqual(CAP_RUN_COLOR, @as(u32, 1) << 1);
+    try std.testing.expectEqual(CAP_NEED_COUNTS, @as(u32, 1) << 2);
+    const caps = zatex_capabilities();
+    try std.testing.expectEqual(CAP_X_SCALE | CAP_RUN_COLOR | CAP_NEED_COUNTS, caps);
+    // Deterministic across calls (pure constant, no provider state).
+    try std.testing.expectEqual(caps, zatex_capabilities());
+}
+
+test "cabi reports needed counts on space failures (issue #263)" {
+    const S = struct {
+        fn gid(_: ?*const anyopaque, _: u16, cp: u32) callconv(.c) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn adv(_: ?*const anyopaque, _: u16, _: u16) callconv(.c) i32 {
+            return 500;
+        }
+        fn rt(_: ?*const anyopaque, _: u16, _: u32) callconv(.c) i32 {
+            return 40;
+        }
+    };
+    const m: CMetrics = .{ .ctx = null, .glyph_id = S.gid, .advance = S.adv, .rule_thickness = S.rt };
+    // Two rects (radical vinculum + fraction bar) and several runs, so
+    // every starvation premise below is pinned, not assumed.
+    const src = "\\sqrt{x}+\\frac{a}{b}";
+    // Reference needs from a ceiling-size call.
+    var ref_runs: [256]CRun = undefined;
+    var ref_rules: [64]CRule = undefined;
+    var ref_glyphs: [4096]u16 = undefined;
+    var ref_out: CLayout = undefined;
+    try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &ref_runs, ref_runs.len, @sizeOf(CRun), &ref_rules, ref_rules.len, &ref_glyphs, ref_glyphs.len, &ref_out));
+    try std.testing.expect((ref_out.nruns > 1) and (ref_out.nrules > 1));
+    // Starved runs: exact needs cross, and allocating exactly them
+    // (with a generous glyph buffer) succeeds in one retry.
+    {
+        var tiny: [1]CRun = undefined;
+        var rules: [64]CRule = undefined;
+        var glyphs: [4096]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_NO_SPACE, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &tiny, tiny.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &out));
+        try std.testing.expectEqual(ref_out.nruns, out.nruns);
+        try std.testing.expectEqual(ref_out.nrules, out.nrules);
+        var runs: [256]CRun = undefined;
+        var rrules: [64]CRule = undefined;
+        var rglyphs: [4096]u16 = undefined;
+        var rout: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, out.nruns, @sizeOf(CRun), &rrules, out.nrules, &rglyphs, rglyphs.len, &rout));
+        try std.testing.expectEqual(ref_out.nruns, rout.nruns);
+    }
+    // Starved rules: same shape (a 1-rule cap starves a 2-rect need).
+    {
+        var runs: [256]CRun = undefined;
+        var tiny: [1]CRule = undefined;
+        var glyphs: [4096]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_NO_SPACE, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, runs.len, @sizeOf(CRun), &tiny, tiny.len, &glyphs, glyphs.len, &out));
+        try std.testing.expectEqual(ref_out.nruns, out.nruns);
+        try std.testing.expectEqual(ref_out.nrules, out.nrules);
+    }
+    // Starved glyphs: runs/rules needs still cross; growing only the
+    // glyph buffer then succeeds.
+    {
+        var runs: [256]CRun = undefined;
+        var rules: [64]CRule = undefined;
+        var tiny: [2]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_NO_SPACE, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, runs.len, @sizeOf(CRun), &rules, rules.len, &tiny, tiny.len, &out));
+        try std.testing.expectEqual(ref_out.nruns, out.nruns);
+        try std.testing.expectEqual(ref_out.nrules, out.nrules);
+        var glyphs: [4096]u16 = undefined;
+        var rout: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, out.nruns, @sizeOf(CRun), &rules, out.nrules, &glyphs, glyphs.len, &rout));
+    }
+    // Over-ceiling request: STATUS_LIMIT, but the needs still cross —
+    // the host learns its 300-run ask was over ceiling and the true
+    // need fits small buffers.
+    {
+        var big: [300]CRun = undefined;
+        var rules: [64]CRule = undefined;
+        var glyphs: [4096]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_LIMIT, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &big, big.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &out));
+        try std.testing.expectEqual(ref_out.nruns, out.nruns);
+        try std.testing.expectEqual(ref_out.nrules, out.nrules);
+    }
+    // Null-buffer probe: NO_SPACE with the needs, allocate, succeed.
+    {
+        var out: CLayout = undefined;
+        var glyphs: [4096]u16 = undefined;
+        try std.testing.expectEqual(STATUS_NO_SPACE, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, null, 0, @sizeOf(CRun), null, 0, &glyphs, glyphs.len, &out));
+        try std.testing.expectEqual(ref_out.nruns, out.nruns);
+        try std.testing.expectEqual(ref_out.nrules, out.nrules);
+        var runs: [256]CRun = undefined;
+        var rules: [64]CRule = undefined;
+        var rout: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_OK, zatex_layout_utf8_ex(src.ptr, src.len, false, &m, &runs, out.nruns, @sizeOf(CRun), &rules, out.nrules, &glyphs, glyphs.len, &rout));
+    }
+    // Past the ceilings the need is unmeasurable: zeroed counts (as
+    // before) — with CAP_NEED_COUNTS set the host reads zero as
+    // "exceeds capacity", not "old dylib".
+    {
+        try std.testing.expect((zatex_capabilities() & CAP_NEED_COUNTS) != 0);
+        var text: [8192]u8 = undefined;
+        var pos: usize = 0;
+        for (0..140) |i| {
+            if (i > 0) {
+                text[pos] = '+';
+                pos += 1;
+            }
+            const s = std.fmt.bufPrint(text[pos..], "x_{d}", .{i % 10}) catch break;
+            pos += s.len;
+        }
+        const big = text[0..pos];
+        var runs: [256]CRun = undefined;
+        var rules: [64]CRule = undefined;
+        var glyphs: [8192]u16 = undefined;
+        var out: CLayout = undefined;
+        try std.testing.expectEqual(STATUS_NO_SPACE, zatex_layout_utf8_ex(big.ptr, big.len, false, &m, &runs, runs.len, @sizeOf(CRun), &rules, rules.len, &glyphs, glyphs.len, &out));
+        // Ceiling-size buffers on an over-ceiling formula: needs stay
+        // zeroed (unmeasurable), exactly the old shape.
+        try std.testing.expectEqual(@as(u32, 0), out.nruns);
+        try std.testing.expectEqual(@as(u32, 0), out.nrules);
     }
 }
