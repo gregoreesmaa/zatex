@@ -29,9 +29,10 @@ jobs:
       - name: Distribution size gate (no artifact growth)
         run: tools/size_gate.sh
 
-  # Host-facing tooling (issues #252/#256/#257/#258/#264): the C
-  # example builds and runs, the inspector dumps real geometry, and
-  # the render-parity kit re-renders drift-free. The delimiter vectors
+  # Host-facing tooling (issues #252/#256/#257/#258/#264/#274):
+  # the C example builds and runs, the inspector dumps real
+  # geometry, the test double answers its scripts, and the
+  # render-parity kit re-renders drift-free. The delimiter vectors
   # (#252) and bridge tests (#256) ride in `zig build test` above.
   host-tooling:
     runs-on: macos-14
@@ -57,6 +58,12 @@ jobs:
           if ./zig-out/bin/inspect '\foo'; then echo "inspect must fail on invalid TeX"; exit 1; fi
       - name: Host render-parity kit is drift-free (issue #258)
         run: ./tools/host-parity/check.sh /tmp/kit-ci
+      - name: Scripted test double builds and answers (issue #274)
+        working-directory: packages/zatex
+        run: |
+          zig build test-double
+          ls zig-out/test-double/
+          python3 ../../tools/test-double/check.py
 
   # Release-docs agreement (issues #275/#276): the release workflow,
   # the install recipe, the changelog, and the package version never
