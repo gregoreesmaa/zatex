@@ -35,7 +35,17 @@ pub fn renderLayout(
     return w.done();
 }
 
-// Scaffold: replaced by Task 5.
+/// One-shot `render`: CLI glue over `layoutDiag` + `renderLayout`.
+///
+/// Same-files agreement: the measuring `prov` and the outline faces
+/// behind `ol` must be the same files — pen steps bake the measured
+/// advances while ink comes from the faces, so a mismatch drifts
+/// glyphs from their boxes. `TooLong` is guarded first; `Invalid`
+/// carries `diag.offset`/`diag.message` through from `layoutDiag`;
+/// `OutOfMemory` maps to `NoSpace` at the boundary (nothing
+/// allocates, so it is unreachable — the mapping exists for
+/// exhaustiveness). `Unsupported` passes through for engine-scope
+/// rejections the layout path may report.
 pub fn render(
     source: []const u8,
     options: zatex.LayoutOptions,
@@ -48,17 +58,16 @@ pub fn render(
     out: []u8,
     diag: *zatex.Diag,
 ) zatex.LayoutError![]u8 {
-    _ = source;
-    _ = options;
-    _ = prov;
-    _ = ol;
-    _ = runs;
-    _ = rules;
-    _ = glyphs;
-    _ = segs;
-    _ = out;
-    _ = diag;
-    return error.NoSpace;
+    if (source.len > zatex.max_input_len) return error.TooLong;
+    const layout = zatex.layoutDiag(source, options, prov, runs, rules, glyphs, diag) catch |err| return mapErr(err);
+    return renderLayout(layout, ol, segs, out) catch |err| return mapErr(err);
+}
+
+/// Boundary error mapping: the reserved `OutOfMemory` (the core and
+/// this walker allocate nothing) surfaces as `NoSpace`; every other
+/// variant passes through unchanged.
+fn mapErr(err: zatex.LayoutError) zatex.LayoutError {
+    return if (err == error.OutOfMemory) error.NoSpace else err;
 }
 
 /// Fixed-precision buffer writer (mathml `Writer` shape, extended
@@ -710,4 +719,269 @@ test "hexColor opacity and overflow stop" {
     try std.testing.expect(o.overflow);
     o.str("more"); // stuck: further writes are no-ops
     try std.testing.expectEqualStrings("ab", o.done());
+}
+
+fn testProvider() zatex.MetricsProvider {
+    const S = struct {
+        fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+            return @intCast(cp & 0xFFFF);
+        }
+        fn advance(_: *const anyopaque, _: u16, _: u16) i32 {
+            return 500;
+        }
+        fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+            return 40;
+        }
+    };
+    return .{
+        .ctx = &.{},
+        .glyphId = S.glyphId,
+        .advance = S.advance,
+        .ruleThickness = S.ruleThickness,
+    };
+}
+
+test "one-shot renders x^2 through the stub seam" {
+    var runs: [8]zatex.ir.Run = undefined;
+    var rules: [4]zatex.ir.Rule = undefined;
+    var glyphs: [32]u16 = undefined;
+    var segs: [64]cff.Seg = undefined;
+    var out: [4096]u8 = undefined;
+    var diag = zatex.Diag.empty();
+    const got = try render("x^2", .{}, testProvider(), stubOutlines(),
+        &runs, &rules, &glyphs, &segs, &out, &diag);
+    try std.testing.expect(std.mem.startsWith(u8, got, "<svg "));
+    try std.testing.expect(std.mem.endsWith(u8, got, "</svg>"));
+}
+
+test "one-shot error matrix covers all 7 variants" {
+    // Invalid: unknown command; diag carries the 0-based token offset.
+    {
+        var runs: [8]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [4096]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        try std.testing.expectError(error.Invalid, render("\\nope", .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag));
+        try std.testing.expectEqual(@as(u32, 0), diag.offset);
+        try std.testing.expect(diag.message.len > 0);
+    }
+    // TooDeep: 200 unmatched opens.
+    {
+        var deep: [200]u8 = undefined;
+        @memset(&deep, '{');
+        var runs: [8]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [4096]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        try std.testing.expectError(error.TooDeep, render(&deep, .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag));
+    }
+    // TooLong: one past the contract cap (guarded before layout).
+    {
+        var big: [zatex.max_input_len + 1]u8 = .{'x'} ** (zatex.max_input_len + 1);
+        var runs: [8]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [4096]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        try std.testing.expectError(error.TooLong, render(&big, .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag));
+    }
+    // ExpansionLimit: self-feeding macro.
+    {
+        var runs: [8]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [4096]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        try std.testing.expectError(error.ExpansionLimit, render("\\def\\a{\\a}\\a", .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag));
+    }
+    // Unsupported: no input emits it through layoutDiag (probed:
+    // `\includegraphics{a}`, `\htmlClass{c}{x}`, and
+    // `\raisebox{2pt}{x}` all lay out), so the boundary passthrough
+    // is pinned on the mapping function instead of a guessed input.
+    try std.testing.expectEqual(error.Unsupported, mapErr(error.Unsupported));
+    // NoSpace: an 8-byte out cannot hold even the skeleton.
+    {
+        var runs: [8]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [8]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        try std.testing.expectError(error.NoSpace, render("x^2", .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag));
+    }
+    // OutOfMemory: reserved and unreachable (nothing allocates); the
+    // boundary maps it to NoSpace for exhaustiveness.
+    try std.testing.expectEqual(error.NoSpace, mapErr(error.OutOfMemory));
+    try std.testing.expectEqual(error.Invalid, mapErr(error.Invalid));
+    try std.testing.expectEqual(error.NoSpace, mapErr(error.NoSpace));
+}
+
+fn readSvgTestFile(path: []const u8) ![]u8 {
+    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    return std.Io.Dir.cwd().readFileAlloc(
+        threaded.io(),
+        path,
+        std.testing.allocator,
+        .limited(8 * 1024 * 1024),
+    );
+}
+
+test "same input twice is byte-identical" {
+    const src = "x^2+\\frac{a}{b}";
+    // Stub seam twice.
+    {
+        var runs_a: [8]zatex.ir.Run = undefined;
+        var rules_a: [4]zatex.ir.Rule = undefined;
+        var glyphs_a: [32]u16 = undefined;
+        var segs_a: [64]cff.Seg = undefined;
+        var out_a: [4096]u8 = undefined;
+        var diag_a = zatex.Diag.empty();
+        var runs_b: [8]zatex.ir.Run = undefined;
+        var rules_b: [4]zatex.ir.Rule = undefined;
+        var glyphs_b: [32]u16 = undefined;
+        var segs_b: [64]cff.Seg = undefined;
+        var out_b: [4096]u8 = undefined;
+        var diag_b = zatex.Diag.empty();
+        const a = try render(src, .{}, testProvider(), stubOutlines(), &runs_a, &rules_a, &glyphs_a, &segs_a, &out_a, &diag_a);
+        const b = try render(src, .{}, testProvider(), stubOutlines(), &runs_b, &rules_b, &glyphs_b, &segs_b, &out_b, &diag_b);
+        try std.testing.expectEqualStrings(a, b);
+    }
+    // File outlines (LM + KaTeX_Main): same input, same files, same bytes.
+    {
+        const dir = std.fs.path.dirname(@import("build_options").fixture_font) orelse ".";
+        var p0: [1024]u8 = undefined;
+        var p1: [1024]u8 = undefined;
+        const lm_path = try std.fmt.bufPrint(&p0, "{s}/latinmodern-math.otf", .{dir});
+        const main_path = try std.fmt.bufPrint(&p1, "{s}/katex/KaTeX_Main-Regular.otf", .{dir});
+        const lm_bytes = try readSvgTestFile(lm_path);
+        defer std.testing.allocator.free(lm_bytes);
+        const main_bytes = try readSvgTestFile(main_path);
+        defer std.testing.allocator.free(main_bytes);
+        var so_a = outlines_mod.StackOutlines{};
+        try so_a.addFile(.lm, lm_bytes);
+        try so_a.addFile(.main, main_bytes);
+        var so_b = outlines_mod.StackOutlines{};
+        try so_b.addFile(.lm, lm_bytes);
+        try so_b.addFile(.main, main_bytes);
+        var runs_a: [8]zatex.ir.Run = undefined;
+        var rules_a: [4]zatex.ir.Rule = undefined;
+        var glyphs_a: [32]u16 = undefined;
+        var segs_a: [64]cff.Seg = undefined;
+        var out_a: [4096]u8 = undefined;
+        var diag_a = zatex.Diag.empty();
+        var runs_b: [8]zatex.ir.Run = undefined;
+        var rules_b: [4]zatex.ir.Rule = undefined;
+        var glyphs_b: [32]u16 = undefined;
+        var segs_b: [64]cff.Seg = undefined;
+        var out_b: [4096]u8 = undefined;
+        var diag_b = zatex.Diag.empty();
+        const a = try render(src, .{}, testProvider(), so_a.iface(), &runs_a, &rules_a, &glyphs_a, &segs_a, &out_a, &diag_a);
+        const b = try render(src, .{}, testProvider(), so_b.iface(), &runs_b, &rules_b, &glyphs_b, &segs_b, &out_b, &diag_b);
+        try std.testing.expectEqualStrings(a, b);
+    }
+}
+
+test "adversarial inputs are total" {
+    // Same 1500-soup shape as the core's totality test (same pieces,
+    // seed 0x5EED): each input either renders twice-identical or
+    // errors identically twice — never hangs, never panics.
+    var runs_a: [64]zatex.ir.Run = undefined;
+    var rules_a: [16]zatex.ir.Rule = undefined;
+    var glyphs_a: [1024]u16 = undefined;
+    var segs_a: [64]cff.Seg = undefined;
+    var out_a: [8192]u8 = undefined;
+    var runs_b: [64]zatex.ir.Run = undefined;
+    var rules_b: [16]zatex.ir.Rule = undefined;
+    var glyphs_b: [1024]u16 = undefined;
+    var segs_b: [64]cff.Seg = undefined;
+    var out_b: [8192]u8 = undefined;
+    const pieces = [_][]const u8{ "x", "y", "2", "+", "-", "{", "}", "^", "_",
+        "\\frac", "\\sum", "\\alpha", "\\text{a}",
+        "(", ")", " ", "&", "#", "$", "\\left(", "\\", "~", ",", ";" };
+    var prng = std.Random.DefaultPrng.init(0x5EED);
+    var rnd = prng.random();
+    var i: usize = 0;
+    while (i < 1500) : (i += 1) {
+        var buf: [256]u8 = undefined;
+        var len: usize = 0;
+        var k: usize = 0;
+        const n = 1 + rnd.uintLessThan(usize, 24);
+        while (k < n and len < buf.len) : (k += 1) {
+            const pc = pieces[rnd.uintLessThan(usize, pieces.len)];
+            const m = @min(pc.len, buf.len - len);
+            @memcpy(buf[len..][0..m], pc[0..m]);
+            len += m;
+        }
+        const src = buf[0..len];
+        var da = zatex.Diag.empty();
+        var db = zatex.Diag.empty();
+        const r1 = render(src, .{}, testProvider(), stubOutlines(), &runs_a, &rules_a, &glyphs_a, &segs_a, &out_a, &da);
+        const r2 = render(src, .{}, testProvider(), stubOutlines(), &runs_b, &rules_b, &glyphs_b, &segs_b, &out_b, &db);
+        if (r1) |b1| {
+            const b2 = try r2;
+            try std.testing.expectEqualStrings(b1, b2);
+        } else |e1| {
+            try std.testing.expectError(e1, r2);
+            try std.testing.expectEqual(da.offset, db.offset);
+        }
+    }
+}
+
+test "tiny buffers are NoSpace, never panic" {
+    // 8-byte out cannot hold even the skeleton.
+    {
+        var runs: [8]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [8]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        try std.testing.expectError(error.NoSpace, render("x^2", .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag));
+    }
+    // One run slot cannot hold the fraction row.
+    {
+        var runs: [1]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [32]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [4096]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        try std.testing.expectError(error.NoSpace, render("\\frac{a}{b}+x", .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag));
+    }
+    // Empty input needs nothing: zero-length buffers still serve it.
+    {
+        var runs: [0]zatex.ir.Run = undefined;
+        var rules: [0]zatex.ir.Rule = undefined;
+        var glyphs: [0]u16 = undefined;
+        var segs: [64]cff.Seg = undefined;
+        var out: [512]u8 = undefined;
+        var diag = zatex.Diag.empty();
+        const got = try render("", .{}, testProvider(), stubOutlines(), &runs, &rules, &glyphs, &segs, &out, &diag);
+        try std.testing.expect(std.mem.startsWith(u8, got, "<svg "));
+        try std.testing.expect(std.mem.endsWith(u8, got, "</svg>"));
+    }
+}
+
+test "translucent down rule paints stroke-opacity corner to corner" {
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = 0, .y = 0, .w = 50, .h = 50, .color = 0xFF000080, .diag = .down, .thick = 8 },
+        .{ .x = 10, .y = 20, .w = 100, .h = 40, .color = 0x00FF0080 },
+    };
+    const l = zatex.ir.Layout{ .width = 200, .height_above = 100, .depth_below = 50, .runs = &.{}, .rules = &rules };
+    var segs: [8]cff.Seg = undefined;
+    var out: [1024]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    // .down runs top-left → bottom-right with a translucent stroke.
+    try std.testing.expect(std.mem.indexOf(u8, got, "<line x1=\"0\" y1=\"0\" x2=\"50\" y2=\"50\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "stroke=\"#ff0000\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, got, "stroke-opacity=\"0.5\"") != null);
+    // Translucent rect carries fill-opacity instead.
+    try std.testing.expect(std.mem.indexOf(u8, got, "fill=\"#00ff00\" fill-opacity=\"0.5\"") != null);
 }
