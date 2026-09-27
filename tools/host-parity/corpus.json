@@ -1,0 +1,146 @@
+[
+ {
+  "id": "sup",
+  "tex": "x^2",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "frac",
+  "tex": "\\frac{1}{2}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "frac-display",
+  "tex": "\\frac{a}{b}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "sqrt",
+  "tex": "\\sqrt{2}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sqrt-n",
+  "tex": "\\sqrt[3]{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "sum-display",
+  "tex": "\\sum_{i=1}^{n} i",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "int",
+  "tex": "\\int_0^1 x\\,dx",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "lim",
+  "tex": "\\lim_{x\\to 0} f(x)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "leftright",
+  "tex": "\\left(\\frac12\\right)",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "pmatrix",
+  "tex": "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "aligned",
+  "tex": "\\begin{aligned} a &= b + c \\\\ d &= e \\end{aligned}",
+  "display": true,
+  "expect": "accept"
+ },
+ {
+  "id": "cases",
+  "tex": "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "hat",
+  "tex": "\\hat{x} + \\hat\\xi",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "overline",
+  "tex": "\\overline{AB}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "accents",
+  "tex": "\\check{a}\\grave{a}\\acute{a}\\tilde{a}\\bar{a}\\breve{a}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "braces",
+  "tex": "\\overbrace{a+b}^{n} + \\underbrace{c}_{m}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "arrows",
+  "tex": "\\overrightarrow{AB} + \\overleftarrow{CD}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "binom",
+  "tex": "\\binom{n}{k}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "textbb",
+  "tex": "\\text{for all } x \\in \\mathbb{R}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "spacing",
+  "tex": "a\\,b\\:c\\;d\\!e\\quad f\\qquad g",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "greek",
+  "tex": "\\alpha\\beta\\gamma\\delta\\epsilon",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "cancel",
+  "tex": "\\cancel{x}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "rule",
+  "tex": "\\rule{1em}{2pt}",
+  "display": false,
+  "expect": "accept"
+ },
+ {
+  "id": "bigdelim",
+  "tex": "\\bigl(\\frac12\\Bigr)",
+  "display": false,
+  "expect": "accept"
+ }
+]

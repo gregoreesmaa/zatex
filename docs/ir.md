@@ -104,19 +104,33 @@ CoreText: save, translate to the origin, scale x, draw, restore.
 Without it wide accents render at natural size, off-span.
 
 Stride contract (issue #203): appending `x_scale` changed the array
-stride (20 → 24), so a new dylib writing full structs into an old
-host's 20-byte slots would scramble every run past the first. The
-`err_msg` "old readers ignore the tail" rule holds for single
-structs only — never for array elements. Instead the runs buffer is
-stride-negotiated: `zatex_layout_utf8` is frozen as the v1 entry
-(20-byte `zatex_run_v1_t` slots, prefix only, never `x_scale` —
-safe with any dylib/host mix, drawn unstretched exactly as before),
-and `zatex_layout_utf8_ex` takes the host's element size
-(`sizeof(zatex_run_t)`): the engine writes the 20-byte prefix always
-and `x_scale` only when the stride reaches byte 22, leaving every
-other tail byte untouched; strides below 20 fail with status 7
-(limit). Hosts wanting `x_scale` dlsym the `_ex` entry and fall back
-to the v1 entry when absent (old dylib).
+stride (20 → 24 → 28 with the `color` tail, issue #251), so a new
+dylib writing full structs into an old host's 20-byte slots would
+scramble every run past the first. The `err_msg` "old readers ignore
+the tail" rule holds for single structs only — never for array
+elements. Instead the runs buffer is stride-negotiated:
+`zatex_layout_utf8` is frozen as the v1 entry (20-byte
+`zatex_run_v1_t` slots, prefix only, never `x_scale`, never `color` —
+safe with any dylib/host mix, drawn unstretched in the ambient paint
+exactly as before), and `zatex_layout_utf8_ex` takes the host's
+element size (`sizeof(zatex_run_t)`): the engine writes the 20-byte
+prefix always, `x_scale` only when the stride reaches byte 22, and
+`color` (0xRRGGBBAA, 0 = ambient) only when it reaches byte 28,
+leaving every other tail byte untouched; strides below 20 fail with
+status 7 (limit). Hosts wanting the tails dlsym the `_ex` entry and
+fall back to the v1 entry when absent (old dylib) — or negotiate
+once via `zatex_capabilities()` (issue #262) and branch on
+`ZATEX_CAP_X_SCALE`/`ZATEX_CAP_RUN_COLOR` instead of per-symbol
+probing.
+
+Space failures (issue #263): on status 6 (no_space) and 7 (limit),
+`out->nruns`/`nrules` carry the counts the formula actually needs,
+so hosts allocate exactly once instead of guess-and-double. Zeroed
+counts mean the need exceeds the engine ceilings (fail with a
+message) or the call never reached layout; a null runs/rules/glyphs
+buffer is a sizing probe (status 6 with the needs). Glyph needs have
+no field — after exact-sizing runs/rules, a second failure means the
+glyph buffer is short, so grow it and retry.
 
 ## Errors across the C ABI
 

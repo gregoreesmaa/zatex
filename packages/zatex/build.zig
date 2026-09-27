@@ -150,6 +150,88 @@ pub fn build(b: *std.Build) void {
     const fileprovider_tests = b.addTest(.{ .root_module = fileprovider_mod });
     const run_fileprovider_tests = b.addRunArtifact(fileprovider_tests);
     test_step.dependOn(&run_fileprovider_tests.step);
+
+    // Delimiter-scan conformance vectors (issue #252): replays the
+    // KaTeX-generated goldens against the existing engine only. No
+    // scanner, no core API — spec plus vectors, enforced in `test`.
+    const delimvectors_mod = b.addModule("delimvectors", .{
+        .root_source_file = b.path("src/delimvectors.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    delimvectors_mod.addImport("zatex", mod);
+    const delimvectors_tests = b.addTest(.{ .root_module = delimvectors_mod });
+    const run_delimvectors_tests = b.addRunArtifact(delimvectors_tests);
+    run_delimvectors_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_delimvectors_tests.step);
+
+    // C-callable blessed provider (issue #256): the exported entries
+    // called the way a C host calls them, plus a `@cImport`
+    // machine-check that the bridge struct mirrors `zatex.h`.
+    // Test-only: the dist lib never imports this file.
+    const fpbridge_mod = b.addModule("fpbridge", .{
+        .root_source_file = b.path("src/fileprovider_c.zig"),
+        .target = target,
+        .optimize = optimize,
+        // `c_allocator` plus `@cImport` of the C headers.
+        .link_libc = true,
+    });
+    fpbridge_mod.addImport("zatex", mod);
+    fpbridge_mod.addImport("otmath", otmath_mod);
+    fpbridge_mod.addImport("fontstack", fontstack_mod);
+    fpbridge_mod.addImport("cff", cff_mod);
+    fpbridge_mod.addImport("fileprovider", fileprovider_mod);
+    fpbridge_mod.addIncludePath(b.path("src"));
+    const fpbridge_tests = b.addTest(.{ .root_module = fpbridge_mod });
+    const run_fpbridge_tests = b.addRunArtifact(fpbridge_tests);
+    run_fpbridge_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_fpbridge_tests.step);
+
+    // Real-font layout inspector (issue #264): one formula against
+    // the blessed provider, real runs/rules as JSON. A host tool
+    // (like `irdump`/`gallery`): the shipped lib is untouched, so the
+    // size gate cannot see it.
+    const inspect_mod = b.addModule("inspect", .{
+        .root_source_file = b.path("src/inspect.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inspect_mod.addImport("zatex", mod);
+    inspect_mod.addImport("otmath", otmath_mod);
+    inspect_mod.addImport("fontstack", fontstack_mod);
+    inspect_mod.addImport("cff", cff_mod);
+    inspect_mod.addImport("fileprovider", fileprovider_mod);
+    const inspect_exe = b.addExecutable(.{
+        .name = "inspect",
+        .root_module = inspect_mod,
+    });
+    const install_inspect = b.addInstallArtifact(inspect_exe, .{});
+    const inspect_step = b.step("inspect", "Dump real-font runs/rules JSON for one formula (host diagnostic, never a gate)");
+    inspect_step.dependOn(&install_inspect.step);
+
+    // Minimal C example host (issue #257): `examples/hello_formula.c`
+    // against the host bridge — the bridge's own static lib (engine
+    // included, so the example links nothing else) compiled with
+    // `zig cc`, so any host with Zig builds it. The lib is never
+    // installed (stays in the cache; the size gate measures only
+    // `zig-out/lib`), and the dist lib is untouched.
+    const bridge_lib = b.addLibrary(.{
+        .name = "hostbridge",
+        .root_module = fpbridge_mod,
+        .linkage = .static,
+    });
+    bridge_lib.installHeader(b.path("src/zatex.h"), "zatex.h");
+    bridge_lib.installHeader(b.path("src/zatex_fileprovider.h"), "zatex_fileprovider.h");
+    const cc_hello = b.addSystemCommand(&.{ b.graph.zig_exe, "cc" });
+    cc_hello.addArgs(&.{ "-O2", "-std=c11", "-Wall", "-Wextra" });
+    cc_hello.addPrefixedDirectoryArg("-I", bridge_lib.getEmittedIncludeTree());
+    cc_hello.addFileArg(b.path("../../examples/hello_formula.c"));
+    cc_hello.addFileArg(bridge_lib.getEmittedBin());
+    const hello_bin = cc_hello.addPrefixedOutputFileArg("-o", "hello-formula");
+    const install_hello = b.addInstallBinFile(hello_bin, "hello-formula");
+    const hello_step = b.step("hello", "Build the minimal C example host (issue #257; built in CI so it cannot rot)");
+    hello_step.dependOn(&install_hello.step);
     refhost_mod.addImport("fontstack", fontstack_mod);
     const refhost_tests = b.addTest(.{ .root_module = refhost_mod });
     const run_refhost_tests = b.addRunArtifact(refhost_tests);

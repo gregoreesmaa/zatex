@@ -119,6 +119,16 @@ typedef struct zatex_run {
     // every run past the first (issue #203). Must match cabi.zig
     // `CRun` field-for-field.
     uint16_t x_scale;
+    // Per-run paint in 0xRRGGBBAA (issue #251: `\color` scopes,
+    // issue #35). 0 is the ambient (host default) paint — resolved
+    // paints always carry opaque alpha, so 0 is unambiguous and
+    // unstylized formulas cross exactly as before. Written only when
+    // the host's run stride reaches past it (bytes 24..28, see
+    // zatex_layout_utf8_ex); 24-stride hosts stay bit-identical.
+    // (Layout: offset 24 — the 2-byte pad at 22..24 keeps this u32
+    // 4-aligned — sizeof 28.) Must match cabi.zig `CRun`
+    // field-for-field.
+    uint32_t color;
 } zatex_run_t;
 
 typedef struct zatex_rule {
@@ -145,20 +155,22 @@ typedef struct zatex_layout {
 } zatex_layout_t;
 
 // Caps: at most 256 runs / 64 rules per call; larger requests fail
-// with status 7 (limit) without touching the buffers. Status 6
-// (no_space) means need exceeds the smaller of caller buffers and
-// these ceilings: growing caller buffers helps, up to the ceilings.
-// Input is capped at 65536 bytes.
+// with status 7 (limit) without touching the runs buffer (the
+// measured needs still cross in out->nruns/nrules — see status 6/7
+// below). Status 6 (no_space) means need exceeds the smaller of
+// caller buffers and these ceilings: growing caller buffers helps,
+// up to the ceilings. Input is capped at 65536 bytes.
 //
 // Frozen v1 entry (issue #203): `runs` is an array of `runs_cap`
 // 20-byte v1 slots (`zatex_run_v1_t`). The engine strides 20 and
-// writes the v1 prefix only — never `x_scale` — so hosts compiled
-// against the old struct stay bit-identical across dylib updates
-// (they draw unstretched, exactly as before). Hosts compiled
-// against the 24-byte `zatex_run_t` call `zatex_layout_utf8_ex`.
+// writes the v1 prefix only — never `x_scale`, never `color` — so
+// hosts compiled against the old struct stay bit-identical across
+// dylib updates (they draw unstretched in the ambient paint, exactly
+// as before). Hosts compiled against the 28-byte `zatex_run_t` call
+// `zatex_layout_utf8_ex`.
 // (Declared with the v1 pointer type on purpose: passing a
 // `zatex_run_t` array here warns and scrambles — stride 20 over
-// 24-byte slots.)
+// 28-byte slots.)
 int32_t zatex_layout_utf8(const char *src, size_t src_len, bool display_mode,
                           const zatex_metrics_t *metrics,
                           zatex_run_v1_t *runs, size_t runs_cap,
@@ -169,26 +181,55 @@ int32_t zatex_layout_utf8(const char *src, size_t src_len, bool display_mode,
 // Stride-negotiated layout (issue #203): identical to
 // `zatex_layout_utf8`, except `runs` elements are `runs_stride`
 // bytes wide — pass sizeof() your run struct
-// (`sizeof(zatex_run_t)`, 24 today).
+// (`sizeof(zatex_run_t)`, 28 today).
 //
 // Stride contract: the engine writes the frozen v1 prefix (bytes
-// 0..20) into every element and `x_scale` (bytes 20..22) only when
-// `runs_stride >= 22`; every other tail byte (including struct
-// padding) is left untouched. Strides below 20 fail with status 7
-// (limit) without touching the runs buffer. A future wider host
-// struct keeps working: the engine never writes past its known 22
-// bytes and never strides wider than the host's own size.
+// 0..20) into every element, `x_scale` (bytes 20..22) only when
+// `runs_stride >= 22`, and `color` (bytes 24..28) only when
+// `runs_stride >= 28`; every other tail byte (including struct
+// padding at 22..24) is left untouched. Strides below 20 fail with
+// status 7 (limit) without touching the runs buffer. A future wider
+// host struct keeps working: the engine never writes past its known
+// 28 bytes and never strides wider than the host's own size.
 //
-// Pairing: hosts wanting `x_scale` need a dylib exporting this
-// entry — dlsym() it and fall back to `zatex_layout_utf8` when
-// absent (old dylib), drawing unstretched. The v1 entry is safe
-// with any dylib/host mix.
+// Pairing: hosts wanting `x_scale`/`color` need a dylib exporting
+// this entry — dlsym() it and fall back to `zatex_layout_utf8` when
+// absent (old dylib), drawing unstretched in the ambient paint — or
+// negotiate once via zatex_capabilities() (issue #262) and branch on
+// ZATEX_CAP_X_SCALE/ZATEX_CAP_RUN_COLOR. The v1 entry is safe with
+// any dylib/host mix.
 int32_t zatex_layout_utf8_ex(const char *src, size_t src_len, bool display_mode,
                              const zatex_metrics_t *metrics,
                              zatex_run_t *runs, size_t runs_cap, size_t runs_stride,
                              zatex_rule_t *rules, size_t rules_cap,
                              uint16_t *glyphs, size_t glyphs_cap,
                              zatex_layout_t *out);
+
+// Space-failure needs (issue #263): on status 6 (no_space) and
+// status 7 (limit), out->nruns/nrules carry the counts the formula
+// actually needs (rect-projected rule count — diagonal strikes have
+// no rect form and are skipped), so hosts allocate exactly once
+// instead of guess-and-double. Zeroed counts mean the need exceeds
+// the engine ceilings (even maximum buffers cannot succeed — fail
+// with a message) or the call never reached layout (null metrics or
+// source). Allocate out->nruns runs and out->nrules rules and retry
+// once: runs/rules needs are exact, so a second failure on the same
+// input means the glyph buffer is short — grow it (a few thousand
+// u16 covers every layable formula) and retry. A null runs/rules/
+// glyphs buffer is a sizing probe: status stays 6 with the needs
+// when measurable. Hosts tell meaningful zeros apart from an old
+// dylib (which always zeroes) via ZATEX_CAP_NEED_COUNTS below.
+
+// Capability word (issue #262): bitmask negotiated once, so hosts
+// branch on capability bits instead of per-symbol dlsym() probing.
+// The _ex pairing keeps working, but new extensions stop
+// multiplying loader paths: probe this one symbol and fall back to
+// the v1 surface when absent (old dylib: frozen prefix only, zeroed
+// counts on space failures).
+#define ZATEX_CAP_X_SCALE (1u << 0) // _ex tail x_scale (stride >= 22)
+#define ZATEX_CAP_RUN_COLOR (1u << 1) // run color tail (stride >= 28)
+#define ZATEX_CAP_NEED_COUNTS (1u << 2) // nruns/nrules needs on status 6/7
+uint32_t zatex_capabilities(void);
 
 // Packed semantic version: major << 16 | minor << 8 | patch.
 uint32_t zatex_version(void);
