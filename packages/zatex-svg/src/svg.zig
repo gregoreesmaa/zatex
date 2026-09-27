@@ -7,6 +7,7 @@ const std = @import("std");
 const zatex = @import("zatex");
 const cff = @import("cff");
 const outlines_mod = @import("outlines.zig");
+const golden_ids = @import("golden_ids.zig");
 
 /// Walk `layout` into a standalone SVG document in `out`: shift-fit
 /// the viewport, `skeletonHead`, rules loop, runs loop, `</svg>`.
@@ -984,4 +985,85 @@ test "translucent down rule paints stroke-opacity corner to corner" {
     try std.testing.expect(std.mem.indexOf(u8, got, "stroke-opacity=\"0.5\"") != null);
     // Translucent rect carries fill-opacity instead.
     try std.testing.expect(std.mem.indexOf(u8, got, "fill=\"#00ff00\" fill-opacity=\"0.5\"") != null);
+}
+
+fn lookup(corpus: []const u8, id: []const u8) []const u8 {
+    // Rows are `<id> <tex>`; split on the FIRST space (tex contains spaces).
+    var it = std.mem.splitScalar(u8, corpus, '\n');
+    while (it.next()) |row| {
+        if (row.len > id.len and std.mem.startsWith(u8, row, id) and row[id.len] == ' ')
+            return row[id.len + 1 ..];
+    }
+    unreachable; // regen and the id list are generated together
+}
+
+// Golden-fixture stack: same files, same roles, same order as the CLI
+// (`outlines_mod.CLI_STACK`), resolved through the
+// `build_options.fixture_font` directory (no CWD promise in tests).
+// File bytes stay alive in `file_held` for the stack/CFF borrow, so the
+// same-files agreement with `render` holds exactly as in the CLI.
+var file_so: outlines_mod.StackOutlines = .{};
+var file_held: [outlines_mod.CLI_STACK.len][]u8 = undefined;
+var file_n: usize = 0;
+
+fn loadFileFixtures() !void {
+    const dir = std.fs.path.dirname(@import("build_options").fixture_font) orelse ".";
+    const marker = "fixtures/fonts/";
+    var pathbuf: [1024]u8 = undefined;
+    for (outlines_mod.CLI_STACK) |entry| {
+        const full = if (std.mem.indexOf(u8, entry.path, marker)) |at|
+            try std.fmt.bufPrint(&pathbuf, "{s}/{s}", .{ dir, entry.path[at + marker.len ..] })
+        else
+            entry.path;
+        const bytes = readSvgTestFile(full) catch |e| {
+            if (!entry.required) continue;
+            return e;
+        };
+        errdefer std.testing.allocator.free(bytes);
+        file_so.addFile(entry.role, bytes) catch |e| {
+            std.testing.allocator.free(bytes);
+            return e;
+        };
+        file_held[file_n] = bytes;
+        file_n += 1;
+    }
+    // Every golden row renders ink through these faces; a face that
+    // failed to load would silently empty its rows, so require the
+    // full required stack (Task 3 probe precedent).
+    if (file_n == 0) return error.FontLoad;
+}
+
+fn fileProv() zatex.MetricsProvider {
+    return file_so.stack.provider();
+}
+
+fn fileOutlines() outlines_mod.Outlines {
+    return file_so.iface();
+}
+
+test "goldens byte-match" {
+    const corpus = @embedFile("corpus.txt");
+    try loadFileFixtures();
+    defer {
+        for (file_held[0..file_n]) |b| std.testing.allocator.free(b);
+    }
+    var runs: [2048]zatex.ir.Run = undefined;
+    var rules: [512]zatex.ir.Rule = undefined;
+    var glyphs: [16384]u16 = undefined;
+    // Test-only allocation (the library path still takes caller bufs):
+    // segs/out are too big for comfortable stack arrays.
+    const segs = try std.testing.allocator.alloc(cff.Seg, 8192);
+    defer std.testing.allocator.free(segs);
+    const out = try std.testing.allocator.alloc(u8, 1024 * 1024);
+    defer std.testing.allocator.free(out);
+    var diag = zatex.Diag.empty();
+    inline for (golden_ids.ids) |id| {
+        const want = @embedFile("goldens/" ++ id ++ ".svg");
+        // regen renders with `--display` iff the id ends in `-d`;
+        // the snapshot keys display mode off the same suffix.
+        const got = try render(lookup(corpus, id), .{ .display_mode = std.mem.endsWith(u8, id, "-d") }, fileProv(), fileOutlines(), &runs, &rules, &glyphs, segs, out, &diag);
+        try std.testing.expectEqualStrings(want, got);
+        try std.testing.expect(std.mem.indexOf(u8, want, "/Users/") == null);
+        try std.testing.expect(std.mem.indexOf(u8, want, "/home/") == null);
+    }
 }

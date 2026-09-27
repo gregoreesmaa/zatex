@@ -1,0 +1,42 @@
+x2 x^2
+frac \frac{a}{b}
+dfrac-d \dfrac{a}{b}
+sqrt \sqrt{x}
+sqrt-nest \sqrt{\sqrt{x}+1}
+sqrt-frac \sqrt{\frac{x+1}{x-1}}
+sum \sum_{i=1}^n i
+sum-d \sum_{i=1}^n i
+lim \lim_{x\to 0} f(x)
+int \int_0^1 x\,dx
+int-d \int_0^1 x^2\,dx
+hat \hat{x}
+tilde \tilde{x}
+vec \vec{v}
+wide-tilde \widetilde{AB}
+wide-hat \widehat{AB}
+color \color{red}{x}+y
+textcolor \textcolor{blue}{\frac{a}{b}}
+colorbox \colorbox{red}{x}
+cancel \cancel{x}
+xcancel \xcancel{x+y}
+matrix \begin{matrix}a&b\\c&d\end{matrix}
+pmatrix \begin{pmatrix}a&b\\c&d\end{pmatrix}
+scripts a_0+a_1^2+y_j
+supnest x^{2^3}
+mirror \reflectbox{x}
+mreflect \mathreflectbox{x+1}
+shear \imath+\jmath
+bf \mathbf{A}
+it \mathit{x}
+rm \mathrm{ABC}
+cal \mathcal{A}
+script \mathscr{A}
+frak \mathfrak{A}
+bb \mathbb{R}
+sf \mathsf{A}
+tt \mathtt{x}
+bsym \boldsymbol{\alpha}
+greek \alpha+\beta=\gamma
+delim \left(\frac{a}{b}\right)
+brack-d \left[\sum_{k=1}^n k\right]
+overline \overline{x}+\underline{y}
