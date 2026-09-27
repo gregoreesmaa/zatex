@@ -49,10 +49,16 @@ uint32_t (*ver)(void) = dlsym(h, "zatex_version");
 Then, per call:
 
 - With `_ex`: pass `sizeof(your run struct)` as the stride
-  (`sizeof(zatex_run_t)`, 24 today) to receive `x_scale`. With
-  the v1 entry: pass arrays of the frozen 20-byte
-  `zatex_run_v1_t` — never a `zatex_run_t` array (stride 20 over
-  24-byte slots warns and scrambles).
+  (`sizeof(zatex_run_t)`, 28 today) to receive the `x_scale` and
+  `color` tails. With the v1 entry: pass arrays of the frozen
+  20-byte `zatex_run_v1_t` — never a `zatex_run_t` array (stride
+  20 over 28-byte slots warns and scrambles).
+- Zero-initialize `zatex_layout_t` before each call and negotiate
+  `zatex_capabilities()` once: read `err_code` only when
+  `ZATEX_CAP_ERR_CODE` is set (an old dylib never writes the
+  field). Branch retry logic on the code (`OVERFLOW_*` carries the
+  `nruns`/`nrules` needs — retry once, grown; `NO_SPACE` with
+  zeroed counts means fail with a message).
 - Optional but recommended on first load: `zatex_conform_metrics`
   against your provider (issue #194) — a nonzero diagnostic count
   names the hook values to fix before you draw anything.

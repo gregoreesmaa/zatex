@@ -113,7 +113,15 @@ typedef struct zatex_run {
     // intra-run pen advances by x_scale/1000 about the run origin
     // (x, baseline_y) — CoreText: save, translate to the origin,
     // scale x, draw, restore (same recipe as zatex-png render.zig).
-    // Written only when the host's run stride admits it (see
+    // Rounding contract (issue #272, decided: u16 per-mille kept —
+    // float would only re-encode the truncated ratio with binary
+    // error, and the core stays integer-only). The engine computes
+    // trunc(span*1000/nat) — truncation toward zero, clamped to u16
+    // (stretch-only paths keep 1000 unless the span exceeds the
+    // natural width; fitting paths floor at 1). Hosts truncate pen
+    // advances the same way ((step*x_scale)/1000 in integer math, as
+    // zatex-png does) and use x_scale/1000.0 in double for raster
+    // scale. Written only when the host's run stride admits it (see
     // zatex_layout_utf8_ex): appending changes sizeof, so a new
     // dylib striding wider than an old host's slots would scramble
     // every run past the first (issue #203). Must match cabi.zig
@@ -136,6 +144,37 @@ typedef struct zatex_rule {
     uint32_t w, h;
 } zatex_rule_t;
 
+// Run element sizes (issue #271): the only two sizes a published
+// header ever produced. Pass one of them — normally
+// `sizeof(zatex_run_t)` — as the `_ex` stride; the engine delivers
+// the frozen prefix plus exactly the complete tail fields the stride
+// reaches (one field table behind every entry, never per-field
+// branches). The stride parameter IS the size negotiation for run
+// arrays: a first-field size cannot stride an array, so the run
+// struct carries no size field of its own — single structs
+// (`zatex_layout_t`, `zatex_metrics_t`) grow append-only instead.
+#define ZATEX_RUN_SIZE_V1 20
+#define ZATEX_RUN_SIZE_CUR 28
+
+// Typed failure codes for `zatex_layout_t.err_code` (issue #273):
+// each refines one `status` bucket so hosts branch on the retry
+// policy without parsing `err_msg`. Values are added, never
+// renumbered. The three OVERFLOW_* codes compose with the
+// need-counts (issue #263): they always carry the exact needs in
+// `nruns`/`nrules` (retry once, grown); NO_SPACE carries zeroed
+// counts (even maximum buffers cannot succeed).
+#define ZATEX_ERR_OK 0
+#define ZATEX_ERR_BAD_TEX 1 // malformed input (status 2)
+#define ZATEX_ERR_UNSUPPORTED_CMD 2 // outside scope, fall back (status 1)
+#define ZATEX_ERR_TOO_DEEP 3 // status 3
+#define ZATEX_ERR_OVERFLOW_INPUT 4 // input > 65536 bytes (status 4)
+#define ZATEX_ERR_EXPANSION_LIMIT 5 // status 5
+#define ZATEX_ERR_OVERFLOW_RUNS 6 // runs short, need in nruns (status 6)
+#define ZATEX_ERR_OVERFLOW_RULES 7 // rules short, need in nrules (status 6)
+#define ZATEX_ERR_OVERFLOW_GLYPHS 8 // glyphs short, grow+retry (status 6)
+#define ZATEX_ERR_NO_SPACE 9 // engine pools at ceiling, zeroed (status 6)
+#define ZATEX_ERR_LIMIT 10 // over-ceiling request shape (status 7)
+
 typedef struct zatex_layout {
     uint32_t width, height_above, depth_below;
     uint32_t nruns, nrules;
@@ -152,6 +191,13 @@ typedef struct zatex_layout {
     // docs/parity.md "Error fallback (host recipe)").
     const char *err_msg;
     size_t err_msg_len;
+    // Typed failure code (issue #273): one of ZATEX_ERR_* above, 0 on
+    // success. Appended — old readers ignore the tail, same rule as
+    // err_msg. Must match cabi.zig `CLayout` field-for-field.
+    // Old-dylib pairing: a dylib predating ZATEX_CAP_ERR_CODE never
+    // writes this field, so zero-initialize the whole struct before
+    // the call and read the code only when the capability bit is set.
+    int32_t err_code;
 } zatex_layout_t;
 
 // Caps: at most 256 runs / 64 rules per call; larger requests fail
@@ -229,6 +275,7 @@ int32_t zatex_layout_utf8_ex(const char *src, size_t src_len, bool display_mode,
 #define ZATEX_CAP_X_SCALE (1u << 0) // _ex tail x_scale (stride >= 22)
 #define ZATEX_CAP_RUN_COLOR (1u << 1) // run color tail (stride >= 28)
 #define ZATEX_CAP_NEED_COUNTS (1u << 2) // nruns/nrules needs on status 6/7
+#define ZATEX_CAP_ERR_CODE (1u << 3) // out->err_code written (issue #273)
 uint32_t zatex_capabilities(void);
 
 // Packed semantic version: major << 16 | minor << 8 | patch.

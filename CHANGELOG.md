@@ -24,8 +24,10 @@ hosts building from source:
   and `zatex_layout_utf8_ex` (stride-negotiated, carries `x_scale`);
   `zatex_version`; `zatex_conform_metrics` (provider conformance
   check, issue #194 — run it when bringing up a new font).
-- Run shape `zatex_run_t` is 24 bytes (`x_scale` appended, issue
-  #197); rules, layout, extents, and ink-box shapes are unchanged.
+- Run shape `zatex_run_t` is 28 bytes (`x_scale` appended, issue
+  #197; `color` tail, issue #251); the layout shape gains an
+  `err_code` tail (issue #273). Rules, extents, and ink-box shapes
+  are unchanged.
 - Unreleased additive ABI (issues #251, #262, #263; PR #268):
   `zatex_run_t` gains an optional 4-byte RGBA `color` tail at bytes
   24..28 (0 = ambient), written only when `runs_stride >= 28` —
@@ -49,6 +51,35 @@ hosts building from source:
 - Option knobs added since the freeze (all default-off, additive):
   `min_rule_thickness_milli_em`, `strict` + `StrictLog`,
   preset `macros`, `global_group`, `leqno`, `fleqn`.
+- Unreleased additive ABI (issues #271, #272, #273):
+  one run-tail field table behind every layout entry (issue #271;
+  `run_tail_fields` in `cabi.zig`, superseding the per-field stride
+  writes from #197/#203/#251 — behavior bit-identical, exercised
+  over every stride 20..40). The stride parameter IS the size
+  negotiation for run arrays (a first-field size cannot stride an
+  array); `ZATEX_RUN_SIZE_V1` (20) / `ZATEX_RUN_SIZE_CUR` (28) name
+  the only two published element sizes. Host action: none — old
+  hosts are bit-identical; new tails will append table rows, never
+  new branches.
+- `x_scale` rounding contract (issue #272, decided — no wire
+  change): u16 per-mille kept. The engine computes
+  `trunc(span*1000/nat)` (truncation toward zero, clamped to u16);
+  hosts truncate pen advances the same way and use
+  `x_scale/1000.0` in double for raster scale. Float was rejected:
+  it would only re-encode the truncated ratio with binary error,
+  and the core stays integer-only. Pinned by test (1000-span over a
+  600 advance lands exactly 1666, not 1667).
+- Typed `err_code` on `zatex_layout_t` (issue #273, additive tail —
+  old readers ignore it): one `ZATEX_ERR_*` value refines each
+  status (`BAD_TEX`, `UNSUPPORTED_CMD` (reserved), `TOO_DEEP`,
+  `OVERFLOW_INPUT`, `EXPANSION_LIMIT`, `OVERFLOW_RUNS/RULES/GLYPHS`
+  with the issue-#263 needs, `NO_SPACE` with zeroed counts,
+  `LIMIT`). New `ZATEX_CAP_ERR_CODE` bit guards reads: a dylib
+  predating it never writes the field, so zero-initialize the
+  layout struct and read the code only when the bit is set. Host
+  action: recompile against the new header (pre-1.0 exact-match
+  rule already requires it) and branch retries on the code instead
+  of parsing `err_msg`.
 
 ## 2026-09 — stride-safe run contract (issue #203, seeded entry)
 
