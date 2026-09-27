@@ -68,3 +68,41 @@ Zig 0.16.0, `cd packages/zatex && zig build` → `zig-out/lib/`
 (`libzatex.a` + `libzatex.dylib`/`.so`) with `src/zatex.h` as the
 header. Pin the source by tag, not by `main`, and record the tag
 where you record the `zatex_version()` you validated against.
+
+## 5. Host CI: the scripted test double (issue #274)
+
+Do not hand-roll engine stubs. `cd packages/zatex &&
+zig build test-double` produces `zig-out/test-double/` holding
+`libzatex_test.a`, `libzatex_test.dylib` (or `.so`), `zatex.h`,
+and `zatex_testdouble.h`. The double exports the same symbols as
+the engine with deterministic scripted responses — no layout
+math, and your metrics hooks are never called (NULL hooks are
+fine, so the double also proves you handle a hook-free path).
+
+Point your loader at the double and drive the four scripts from
+`zatex_testdouble.h`:
+
+```c
+void *h = dlopen("libzatex_test.dylib", RTLD_NOW | RTLD_LOCAL);
+// same dlsym order as section 3 (the double exports every entry)
+layout_ex_fn ex = (layout_ex_fn)dlsym(h, "zatex_layout_utf8_ex");
+
+// 1. OK path: ZATEX_TD_HELLO lays out (3 runs, 1 rule, fixed
+//    extents) — assert status 0 and draw it like a real formula.
+// 2. Grow-and-retry: ZATEX_TD_NOSPACE returns 6 with nruns/nrules
+//    needs and leaves your buffers untouched — assert the needs,
+//    realloc to them, and retry.
+// 3. Over-ceiling: ZATEX_TD_LIMIT returns 7 with needs past the
+//    256-run / 64-rule ceilings — assert you fail with a message
+//    instead of retrying forever.
+// 4. Bad input: ZATEX_TD_BAD returns 2 with err_offset 5 and a
+//    static message — assert you render the source plus the
+//    message bytes as real text (the throwOnError:false fallback).
+```
+
+Any other input is status 2 (the double only speaks its script),
+font 0 is a clean `zatex_conform_metrics` pass while any other
+font carries one diagnostic (cover both), and capabilities report
+all three bits. Keep the double out of release builds: gate the
+`dlopen` path on a test build flag so production can never load
+scripted geometry.

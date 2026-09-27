@@ -49,6 +49,21 @@ hosts building from source:
 - Option knobs added since the freeze (all default-off, additive):
   `min_rule_thickness_milli_em`, `strict` + `StrictLog`,
   preset `macros`, `global_group`, `leqno`, `fleqn`.
+- Scripted test double (issue #274): `cd packages/zatex &&
+  zig build test-double` produces `zig-out/test-double/`
+  (`libzatex_test.a` / `.dylib`/`.so` plus `zatex.h` and
+  `zatex_testdouble.h`). Same entry points as the engine, scripted
+  responses only — no layout math, metrics hooks never called.
+  `ZATEX_TD_HELLO` lays out OK (fixed 3-run / 1-rule geometry),
+  `ZATEX_TD_NOSPACE` forces `STATUS_NO_SPACE` with needs,
+  `ZATEX_TD_LIMIT` forces `STATUS_LIMIT` with over-ceiling needs,
+  `ZATEX_TD_BAD` forces `STATUS_INVALID` with `err_offset` 5.
+  Capabilities report all three bits; version packs 0.0.0. Host
+  action: `dlopen` the double in CI to cover OK and fallback paths
+  without hand-rolled stubs (recipe in `docs/install.md`). Not an
+  ABI change: the double is a separate artifact, never linked into
+  `libzatex` — the size gate is unaffected by construction
+  (it installs outside `zig-out/lib`).
 
 ## 2026-09 — stride-safe run contract (issue #203, seeded entry)
 
