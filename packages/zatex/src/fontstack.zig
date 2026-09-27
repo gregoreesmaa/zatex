@@ -176,9 +176,13 @@ pub const Stack = struct {
 
     /// Standalone provider (ctx borrows the stack): glyph identity,
     /// advances, rule constants, and variant/italic/kern routing plus
-    /// the constant 700/250 extents. Owners needing their own extents
-    /// (backend ink boxes) build the struct by hand from the `*For`
-    /// methods below with their own ctx.
+    /// ink bounds. Extents stay null so the core derives outline-exact
+    /// boxes from the same ink (issue #206; audit trio #253/#254/#255:
+    /// the constant 700/250 parked accents 519mu high, overlapped
+    /// limits, and clipped display integrals against KaTeX truth).
+    /// Owners needing their own extents (backend ink boxes, the C
+    /// adapter's legacy constant via `extentsFor`) build the struct by
+    /// hand from the `*For` methods below with their own ctx.
     pub fn provider(self: *Stack) contract.MetricsProvider {
         return .{
             .ctx = @ptrCast(self),
@@ -188,7 +192,7 @@ pub const Stack = struct {
             .glyphVariant = variant,
             .italicCorrection = italic,
             .kernCorrection = kern,
-            .extents = ext,
+            .extents = null,
             .inkBounds = ink,
         };
     }

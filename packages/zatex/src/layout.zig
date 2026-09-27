@@ -1738,7 +1738,12 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         .kind = .{ .rule = {} },
     });
     lc.bkids[s1 + 2] = .{ .box = ruleb, .dx = rule_dx, .dy = rule_y };
-    var ha = rule_top;
+    // KaTeX parity (pinned 0.18.7 `sqrt.ts`, audit #255): the vlist
+    // ends with a trailing `{kern: ruleWidth}` above the image, so the
+    // box top sits one rule thickness above the bar (800.28, not 760,
+    // for `\sqrt{x}`). Without it superscripts above a radical sit
+    // 40mu low against KaTeX.
+    var ha = rule_top + rw;
     var db = rb.db;
     const gtop = rad_dy + gha;
     if (gtop > ha) ha = gtop;
@@ -2089,27 +2094,33 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const kskew = @divTrunc(kskew1000 * @as(i32, size), 1000);
     const shift: i32 = if (shifty) @divTrunc(ic, 2) + kskew else 0;
     const wshift: i32 = if (a.wide and single) 2 * kskew else 0;
-    // v4 ink refinement (null hook = exact v3 behavior): the clipped
-    // extents above lose where ink really starts, so low-sitting
-    // accents (`~`, ink bottom +193mu) would nestle into the nucleus
-    // while high ones (`^`, ink bottom +562mu) clear it. Calibrated
-    // against pinned KaTeX 0.18.7 ground-truth pixels (check 94, hat
-    // 125, dot 141, vec 94, tilde ~160mu): accent ink must clear the
-    // nucleus top by at least `min_gap` (130mu), and zero-advance
+    // v4 ink refinement (null hook = exact v3 behavior): zero-advance
     // combining marks (U+20D7 ink hangs left of its origin) center by
-    // ink, not advance.
+    // ink, not advance. There is deliberately no minimum-gap lift on
+    // the accent itself: KaTeX stacks the accent box at nucleus-top
+    // minus clearance with no floor (pinned 0.18.7 `accent.ts`), and
+    // the visual gap is whatever each face's ink gives — measuring
+    // and inking through the same fixture faces reproduces KaTeX's
+    // gaps within ink-vs-metrics rounding (~11mu: hat 88, vec 74,
+    // wide-hat 80 box-relative; the U+007E tilde overlaps the
+    // nucleus top in both engines, audit #253).
+    // The 130mu floor survives only for the `\dddot` period row
+    // below: periods sit on their baseline, so unlike accent-designed
+    // glyphs they need the lift to clear the nucleus at all.
     const min_gap: i32 = @divTrunc(@as(i32, 130) * size, 1000);
     const ink = lc.ink(font, g);
     var ink_ax: ?i32 = null;
-    var ink_lift: ?i32 = null;
+    // Accent ink bottom, shared by the wide branch below (one hook
+    // call; the memo makes repeats cheap but the call itself costs
+    // bytes in the shipped artifact).
+    var ink_bottom: ?i32 = null;
     if (ink) |ib| {
         const ix0 = @divTrunc(ib[0] * size, 1000);
-        const iy0 = @divTrunc(ib[1] * size, 1000);
         const ix1 = @divTrunc(ib[2] * size, 1000);
         if (ix1 > ix0) {
             const inkw = ix1 - ix0;
             if (adv == 0) ink_ax = @divTrunc(nb.w - inkw, 2) - ix0 + shift;
-            ink_lift = nb.ha + min_gap - iy0;
+            ink_bottom = @divTrunc(ib[1] * size, 1000);
         }
     }
     // KaTeX parity (pinned 0.18.7 `defineMacro`): `\dddot` / `\ddddot`
@@ -2196,19 +2207,36 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
             lc.boxes[ab].w = nb.w;
         }
     }
+    // KaTeX Rule 12, no floor (audit #253): the accent box baseline
+    // sits exactly nucleus-top minus clearance; the faces' own ink
+    // sets the visual gap, as in KaTeX.
     var ay = nb.ha - clearance + adb;
-    if (ink_lift) |lift| {
-        // Ink must clear the nucleus top (uniform floor; the base
-        // rule already clears it for high-sitting accents, so this
-        // only ever lifts low ones).
-        if (lift > ay) ay = lift;
+    // Accent ink bottom below the main baseline (positive when the
+    // accent box dips under it). Box-derived by default; the wide
+    // branch below re-derives it from ink when the hook reports.
+    var accent_below = adb - ay;
+    if (a.wide and n_dots == 0) {
+        // KaTeX parity (pinned 0.18.7 `accent.ts` stretchy branch,
+        // audit #253): a stretchy accent takes NO clearance — the SVG
+        // box bottom sits at the body top — and the visual gap is the
+        // artwork's own ink-bottom offset above its box bottom. Our
+        // glyph accents take the same ink bottom (ay = body-top + gap
+        // - ink-bottom); the narrow rule would park the tall
+        // circumflex ink 51mu high and bury the wide tilde outright.
+        if (ink_bottom) |wiy0| {
+            const gap = @divTrunc(wideAccentGap(a.cp) * size, 1000);
+            ay = nb.ha + gap - wiy0;
+            accent_below = -(ay + wiy0);
+        }
     }
     if (n_dots > 0) {
         // Dot runs center like oversets: the box is the wider of the
         // nucleus and the row, both centered, so no run ever starts
         // left of the ink box (non-negativity invariant). Period ink
-        // sits on its baseline, so the row takes the same minimum-gap
-        // lift as low accents when the hook reports ink.
+        // sits on its baseline, so the row keeps the 130mu
+        // minimum-gap lift when the hook reports ink (audit #253:
+        // accents themselves carry no floor, but periods are not
+        // accent-designed glyphs and would bury without it).
         const dw = if (nb.w > dot_aw) nb.w else dot_aw;
         const dax = @divTrunc(dw - dot_aw, 2) + shift;
         var day = nb.ha - clearance + dot_adb;
@@ -2230,22 +2258,45 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
                 .dy = day,
             };
         }
+        // The parent must contain every child (KaTeX `makeVList`
+        // maxPos/minPos span the whole stack): a short row tops out
+        // below a tall nucleus top, and a deep row can dip below its
+        // depth. Audit #253 caught the clip: the tilde row (318) hid
+        // the x top (442) outside the parent box.
+        const dots_ha = day + dot_aha;
+        const dots_top = if (nb.ha > dots_ha) nb.ha else dots_ha;
+        const dots_bottom = dot_adb - day;
         return lc.allocBox(.{
             .w = dw,
-            .ha = day + dot_aha,
-            .db = nb.db,
+            .ha = dots_top,
+            .db = if (dots_bottom > nb.db) dots_bottom else nb.db,
             .kind = .{ .list = .{ .start = s, .len = @intCast(1 + n_dots) } },
         });
     }
     const s = try lc.allocKids(2);
     lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
     lc.bkids[s + 1] = .{ .box = ab, .dx = @divTrunc(w - nb.w, 2) + ax, .dy = ay };
+    // Same containment for the accent itself (audit #253): short
+    // accents (tilde aha 318) must not clip a tall nucleus (x 442).
+    const accent_ha = ay + aha;
+    const accent_top = if (nb.ha > accent_ha) nb.ha else accent_ha;
     return lc.allocBox(.{
         .w = w,
-        .ha = ay + aha,
-        .db = nb.db,
+        .ha = accent_top,
+        .db = if (accent_below > nb.db) accent_below else nb.db,
         .kind = .{ .list = .{ .start = s, .len = 2 } },
     });
+}
+
+/// KaTeX stretchy-accent ink-bottom offset above the SVG box bottom
+/// (== body top), in mu at text size, per family. Measured bounding
+/// boxes of the pinned 0.18.7 single-char `svgGeometry.ts` paths over
+/// their `stretchy.ts` viewBox/height (audit #253): widehat1 80,
+/// widecheck1 80, tilde1 131. Longer nuclei take wider KaTeX images
+/// with smaller offsets (tilde2 105); the single-char value is kept
+/// for all lengths (at most ~45mu high on 5+ char tildes).
+fn wideAccentGap(cp: u21) i32 {
+    return if (cp == 0x007E) 131 else 80;
 }
 
 /// First laid-out glyph of a nucleus box, for metric lookups that must

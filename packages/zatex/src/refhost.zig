@@ -887,25 +887,161 @@ test "calibration: italic correction centers accents" {
     try std.testing.expectEqual(@as(usize, 1), shifts);
 }
 
-// Layout-box vs ink-box split: advances drive widths, extents drive
-// heights. Doubling extents doubles the ink height; widths don't move.
-test "calibration: extents drive heights, advances drive widths" {
+// Layout-box vs ink-box split: advances drive widths, ink-derived
+// extents drive heights (audit trio #253/#254/#255: the native
+// provider leaves extents null, so the core derives ha/db from the
+// same ink it measures — bit-identical to outline extents per issue
+// #206. The 700/250 constant survives only as the no-ink fallback
+// and the C adapter's legacy `extentsFor`).
+test "calibration: ink-derived extents drive heights, advances drive widths" {
     var ref = try Ref.load();
     defer ref.free();
     var ra: [16]zatex.ir.Run = undefined;
     var la: [4]zatex.ir.Rule = undefined;
     var ga: [64]u16 = undefined;
     const a = try layoutCase(&ref, "x", false, &ra, &la, &ga);
-    try std.testing.expectEqual(@as(u32, 700), a.height_above);
-    try std.testing.expectEqual(@as(u32, 250), a.depth_below);
-    ref.stack.extents_mul = 2;
-    var rb: [16]zatex.ir.Run = undefined;
-    var lb: [4]zatex.ir.Rule = undefined;
-    var gb: [64]u16 = undefined;
-    const b = try layoutCase(&ref, "x", false, &rb, &lb, &gb);
-    try std.testing.expectEqual(@as(u32, 1400), b.height_above);
-    try std.testing.expectEqual(@as(u32, 500), b.depth_below);
-    try std.testing.expectEqual(a.width, b.width);
+    try std.testing.expectEqual(@as(usize, 1), a.runs.len);
+    try std.testing.expectEqual(@as(usize, 1), a.runs[0].glyphs.len);
+    const g = a.runs[0].glyphs[0];
+    const ink = ref.stack.inkFor(g);
+    try std.testing.expect(ink[3] > ink[1] and ink[2] > ink[0]);
+    try std.testing.expectEqual(@as(u32, @intCast(@max(@as(i32, 0), ink[3]))), a.height_above);
+    try std.testing.expectEqual(@as(u32, @intCast(@max(@as(i32, 0), -ink[1]))), a.depth_below);
+    try std.testing.expectEqual(ref.stack.advance1000(g), @as(i32, @intCast(a.width)));
+}
+
+// Audit trio issues #253/#254/#255: KaTeX-parity geometry through the
+// file stack. Each pins a pinned-KaTeX-0.18.7 builder truth; tolerances
+// cover only ink-vs-metrics font-data rounding (both engines measure
+// the same fixture files, but KaTeX stacks metrics boxes while the
+// core derives boxes from outlines), never layout decisions.
+
+// Issue #253: accent clearance is KaTeX Rule 12 (`accent.ts`:
+// clearance = min(body height, x-height), no gap floor). For
+// `\hat{x}` the accent-box baseline sits at body.height - clearance
+// = 0 above the main baseline: x is 430.56mu against x-height 431.
+test "audit 253: hat accent clears by KaTeX rule 12" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var runs: [16]zatex.ir.Run = undefined;
+    var rules: [4]zatex.ir.Rule = undefined;
+    var glyphs: [64]u16 = undefined;
+    const l = try layoutCase(&ref, "\\hat{x}", false, &runs, &rules, &glyphs);
+    try std.testing.expectEqual(@as(usize, 2), l.runs.len);
+    // Nucleus run sits on the main baseline; the accent run above it.
+    var body_by: ?i32 = null;
+    var accent_by: ?i32 = null;
+    for (l.runs) |r| {
+        if (r.baseline_y == @as(i32, @intCast(l.height_above))) body_by = r.baseline_y else accent_by = r.baseline_y;
+    }
+    const gap = body_by.? - accent_by.?;
+    try std.testing.expect(gap >= 0);
+    // Ink-vs-metrics rounding (~11mu on x) fits in 30; the 700/250
+    // provider extents parked the accent 519 above, the 130mu ink
+    // floor 42 above — both fail here.
+    try std.testing.expect(gap <= 30);
+}
+
+// Issue #253 (wide): a stretchy accent takes no clearance — the KaTeX
+// SVG box bottom sits at the body top — so our glyph accents take the
+// same ink bottom (body-top + artwork gap - ink-bottom). For
+// `\widehat{x}` the artwork gap is 80mu (pinned 0.18.7 widehat1 SVG),
+// for `\widetilde{x}` 131mu (tilde1 SVG).
+test "audit 253: wide accents align ink bottom to KaTeX SVG offset" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_]struct { tex: []const u8, gap: i64 }{
+        .{ .tex = "\\widehat{x}", .gap = 80 },
+        .{ .tex = "\\widetilde{x}", .gap = 131 },
+    };
+    for (cases) |c| {
+        var runs: [16]zatex.ir.Run = undefined;
+        var rules: [4]zatex.ir.Rule = undefined;
+        var glyphs: [64]u16 = undefined;
+        const l = try layoutCase(&ref, c.tex, false, &runs, &rules, &glyphs);
+        try std.testing.expectEqual(@as(usize, 2), l.runs.len);
+        const main = @as(i32, @intCast(l.height_above));
+        var body: ?zatex.ir.Run = null;
+        var accent: ?zatex.ir.Run = null;
+        for (l.runs) |r| {
+            if (r.baseline_y == main) body = r else accent = r;
+        }
+        // Ink gap between accent ink bottom and body ink top, in
+        // y-down absolute units (positive = accent clears the body).
+        const sa = accent.?;
+        const sb = body.?;
+        try std.testing.expectEqual(@as(usize, 1), sa.glyphs.len);
+        try std.testing.expectEqual(@as(usize, 1), sb.glyphs.len);
+        const ai = ref.stack.inkFor(sa.glyphs[0]);
+        const bi = ref.stack.inkFor(sb.glyphs[0]);
+        const ssa: i64 = sa.size_units;
+        const ssb: i64 = sb.size_units;
+        const accent_bottom = @as(i64, sa.baseline_y) - @divTrunc(@as(i64, ai[1]) * ssa, 1000);
+        const body_top = @as(i64, sb.baseline_y) - @divTrunc(@as(i64, bi[3]) * ssb, 1000);
+        // y-down: the accent clears the body when its ink bottom sits
+        // above (smaller than) the body ink top.
+        try std.testing.expect(@abs(body_top - accent_bottom - c.gap) <= 4);
+    }
+}
+
+// Issue #254: display limits follow KaTeX Rule 13a
+// (`assembleSupSub`: sup kern max(111, 200 - sup depth), sub kern
+// max(166, 600 - sub height), base unshifted). For
+// `\sum_{i=1}^{n}` the sup baseline sits 1250 above the main
+// baseline and the sub baseline 1178 below (Size2 sum 1050/550,
+// script n/i). Tolerance 120 covers the sum metrics-vs-ink
+// font-data delta (100mu: the metrics box clears 100 above its
+// ink), never layout.
+test "audit 254: display sum limits follow KaTeX rule 13a" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var runs: [16]zatex.ir.Run = undefined;
+    var rules: [4]zatex.ir.Rule = undefined;
+    var glyphs: [128]u16 = undefined;
+    const l = try layoutCase(&ref, "\\sum_{i=1}^{n}", true, &runs, &rules, &glyphs);
+    const main = @as(i32, @intCast(l.height_above));
+    // The limits are the extreme runs: sup highest, sub lowest.
+    var top = main;
+    var bottom = main;
+    for (l.runs) |r| {
+        if (r.baseline_y < top) top = r.baseline_y;
+        if (r.baseline_y > bottom) bottom = r.baseline_y;
+    }
+    try std.testing.expect(top < main and bottom > main);
+    const sup_off = main - top;
+    const sub_off = bottom - main;
+    try std.testing.expect(@abs(sup_off - 1250) <= 120);
+    try std.testing.expect(@abs(sub_off - 1178) <= 120);
+}
+
+// Issue #255: the sqrt vinculum must meet the surd hook ink (KaTeX
+// draws bar and surd as one `sqrtMain` path, so the junction is
+// exact by construction). The rule band must overlap the surd ink
+// top: rule top == surd ink top (the surd box top meets the rule by
+// construction, and the box is ink-derived). Horizontal start keeps
+// the issue-#56 inside-the-hook overlap as a regression guard.
+test "audit 255: sqrt vinculum meets surd hook ink" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var runs: [16]zatex.ir.Run = undefined;
+    var rules: [4]zatex.ir.Rule = undefined;
+    var glyphs: [64]u16 = undefined;
+    const l = try layoutCase(&ref, "\\sqrt{x}", false, &runs, &rules, &glyphs);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    const rule = l.rules[0];
+    try std.testing.expectEqual(@as(usize, 1), l.runs[0].glyphs.len);
+    const surd = l.runs[0];
+    const ink = ref.stack.inkFor(surd.glyphs[0]);
+    try std.testing.expect(ink[3] > ink[1] and ink[2] > ink[0]);
+    const s: i64 = surd.size_units;
+    const ink_top = surd.baseline_y - @divTrunc(@as(i64, ink[3]) * s, 1000);
+    const hook_right = surd.x + @divTrunc(@as(i64, ink[2]) * s, 1000);
+    // Vertical junction: rule top meets surd ink top (rounding only).
+    try std.testing.expect(@abs(ink_top - @as(i64, rule.y)) <= 4);
+    // Horizontal junction (issue #56 guard): rule starts inside the
+    // hook overhang, at most two rule widths left of its right ink.
+    try std.testing.expect(@as(i64, rule.x) <= hook_right);
+    try std.testing.expect(@as(i64, rule.x) >= hook_right - 2 * @as(i64, rule.h) - 2);
 }
 
 // Stretchy fences select taller variants through the provider.
@@ -1012,14 +1148,17 @@ test "issue196-b2: delimiter roles resolve KaTeX faces first" {
         try std.testing.expectEqual(@as(u16, 10), lay.runs[2].font_id);
         try std.testing.expectEqual(fontstack.Role.main, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
     }
-    // Grown parens walk past Size1 to Size2 (ZaTeX need exceeds Size1
-    // ink here; KaTeX's own need lands one step lower — pinned need
-    // formula territory, issues #102/#200, not outlines).
+    // Grown parens land on Size1 here — KaTeX-parity, not Size2 (audit
+    // trio #253/#254/#255: real ink-derived extents shrink ZaTeX need
+    // onto KaTeX's pick; the old Size2 came from phantom 700/250
+    // need. Pinned KaTeX 0.18.7 proof: the oracle renders
+    // `\left(\frac{a}{b}\right)` with `delimsizing size1` on both
+    // fences. Pinned need-formula territory stays issues #102/#200.)
     {
         const lay = try layoutCase(&ref, "\\left(\\frac{a}{b}\\right)", false, &runs, &rules, &glyphs);
-        try std.testing.expectEqual(@as(u16, 12), lay.runs[0].font_id);
-        try std.testing.expectEqual(@as(u16, 12), lay.runs[3].font_id);
-        try std.testing.expectEqual(fontstack.Role.size2, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
+        try std.testing.expectEqual(@as(u16, 11), lay.runs[0].font_id);
+        try std.testing.expectEqual(@as(u16, 11), lay.runs[3].font_id);
+        try std.testing.expectEqual(fontstack.Role.size1, ref.stack.roleOf(lay.runs[0].glyphs[0]).?);
     }
     // stackAlways `|` keeps the LM variant backstop (KaTeX stacks
     // Size4 pieces there; assembly is issues #102/#104).

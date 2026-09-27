@@ -604,11 +604,12 @@ test "issue37: sqrt root index is scriptscript, raised and tucked" {
     // bearings. Stub arithmetic for `\sqrt[3]{x}` (text style, so
     // phi = theta = 40): clearance0 = 40 + 40/4 = 50, and the stub
     // surd (950 tall) fits without the overshoot split, so rule_top
-    // = 700 + 50 + 40 = 790. Body depth 250, so the `3` baseline
-    // sits 6*(790-250)/10 = 324 above the main baseline (absolute y
-    // 790-324 = 466); bearings 277/-555 against a 250-wide index
-    // normalize the body to x 0 with the index at 305, and the width
-    // equals the plain root.
+    // = 700 + 50 + 40 = 790. The box top adds KaTeX's trailing
+    // ruleWidth kern (audit #255): ha = 790 + 40 = 830. Body depth
+    // 250, so the `3` baseline sits 6*(830-250)/10 = 348 above the
+    // main baseline (absolute y 830-348 = 482); bearings 277/-555
+    // against a 250-wide index normalize the body to x 0 with the
+    // index at 305, and the width equals the plain root.
     var runs_buf: [32]ir.Run = undefined;
     var rules_buf: [8]ir.Rule = undefined;
     var glyphs_buf: [128]u16 = undefined;
@@ -628,14 +629,15 @@ test "issue37: sqrt root index is scriptscript, raised and tucked" {
             if (g == @as(u16, '3')) {
                 try std.testing.expectEqual(@as(u16, 500), r.size_units);
                 try std.testing.expectEqual(@as(i32, 305), r.x);
-                try std.testing.expectEqual(@as(i32, 466), r.baseline_y);
+                try std.testing.expectEqual(@as(i32, 482), r.baseline_y);
                 saw_index = true;
             }
             if (g == @as(u16, 0xD465)) {
                 try std.testing.expectEqual(@as(i32, 550), r.x);
                 // Absolute from the ink-box top: the radicand sits at
-                // dy 0, so its baseline is the box height (rule_top).
-                try std.testing.expectEqual(@as(i32, 790), r.baseline_y);
+                // dy 0, so its baseline is the box height (rule_top
+                // plus KaTeX's trailing ruleWidth kern, audit #255).
+                try std.testing.expectEqual(@as(i32, 830), r.baseline_y);
                 saw_x = true;
             }
         }
@@ -663,12 +665,14 @@ test "issue204: sqrt index tuck ignores surd height (KaTeX-exact, wontfix)" {
     // 1000: clearance0 = 40 + 40/4 = 50; delim_depth = 1400 + 500
     // - 40 = 1860 > 700 + 250 + 50, so the KaTeX overshoot split
     // fires: clearance = (1860 + 50 - 700 - 250)/2 = 480, rule_top
-    // = 700 + 480 + 40 = 1220. The split adds 430 above and 430
-    // below, so ha - db = 1220 - 680 = 540 is unchanged and idx_dy
-    // = 6*540/10 = 324, exactly as with the short surd. Bearings
-    // 277/-555 against the 250-wide index normalize the body to x
-    // 0 (pad 28) with the index at 305; width equals the plain
-    // tall-surd root.
+    // = 700 + 480 + 40 = 1220. The box top adds KaTeX's trailing
+    // ruleWidth kern (audit #255): ha = 1220 + 40 = 1260. The split
+    // adds 430 above and 430 below, so ha - db = 1260 - 680 = 580
+    // and idx_dy = 6*580/10 = 348 — equal for the short surd too
+    // (6*(830-250)/10 = 348), so the wontfix contract (tuck ignores
+    // surd height) holds exactly as before. Bearings 277/-555
+    // against the 250-wide index normalize the body to x 0 (pad 28)
+    // with the index at 305; width equals the plain tall-surd root.
     const S = struct {
         fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
             return @intCast(cp & 0xFFFF);
@@ -702,7 +706,7 @@ test "issue204: sqrt index tuck ignores surd height (KaTeX-exact, wontfix)" {
     const p = try layoutFull("\\sqrt{x}", .{}, tall, &pruns_buf, &prules_buf, &pglyphs_buf);
     try std.testing.expectEqual(p.width, l.width);
     try std.testing.expectEqual(@as(u32, 1090), l.width);
-    try std.testing.expectEqual(@as(u32, 1220), l.height_above);
+    try std.testing.expectEqual(@as(u32, 1260), l.height_above);
     try std.testing.expectEqual(@as(u32, 680), l.depth_below);
     var saw_index = false;
     var saw_x = false;
@@ -714,12 +718,12 @@ test "issue204: sqrt index tuck ignores surd height (KaTeX-exact, wontfix)" {
                 // baseline re-based onto the taller rule_top.
                 try std.testing.expectEqual(@as(u16, 500), r.size_units);
                 try std.testing.expectEqual(@as(i32, 305), r.x);
-                try std.testing.expectEqual(@as(i32, 896), r.baseline_y);
+                try std.testing.expectEqual(@as(i32, 912), r.baseline_y);
                 saw_index = true;
             }
             if (g == @as(u16, 0xD465)) {
                 try std.testing.expectEqual(@as(i32, 550), r.x);
-                try std.testing.expectEqual(@as(i32, 1220), r.baseline_y);
+                try std.testing.expectEqual(@as(i32, 1260), r.baseline_y);
                 saw_x = true;
             }
         }

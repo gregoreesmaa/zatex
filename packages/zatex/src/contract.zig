@@ -217,9 +217,11 @@ pub const KernCorner = enum(u32) {
 ///   all-zero means blank (the core ignores it). Load-bearing
 ///   consumers: accent ink-centering for `adv == 0` combining marks
 ///   (U+20D7 ink `[-472, 521, -56, 711]` hangs left of its origin);
-///   low-accent lift (accent ink must clear the nucleus top by at
-///   least 130: `ay = max(ay, nucleus_top + 130 - ink_bottom)` —
-///   `~` ink bottom +193 would otherwise nestle into the nucleus);
+///   dot-stack lift (audit #253: accents themselves carry no floor —
+///   KaTeX Rule 12 stacks the accent box with no minimum gap, and the
+///   faces' ink sets the visual gap — but the `\dddot` period row
+///   takes `day = max(day, nucleus_top + 130 - ink_bottom)`, since
+///   periods sit on their baseline and would otherwise bury);
 ///   wide-accent ink scaling (KaTeX `preserveAspectRatio="none"`
 ///   parity: ink, not the advance box, spans the nucleus); dot-stack
 ///   lift (`\ddot` family via `.` ink); brace-label outer kern (0.2em
@@ -271,8 +273,11 @@ pub const MetricsProvider = struct {
     advance: *const fn (ctx: *const anyopaque, font: u16, glyph: u16) i32,
     ruleThickness: *const fn (ctx: *const anyopaque, font: u16, kind: RuleKind) i32,
     /// [height_above, depth_below] of `glyph` at 1000 units. When null
-    /// the core uses a uniform 700/250 approximation (deterministic;
-    /// hosts with outline metrics should supply the real extents).
+    /// the core derives the vertical slice of the `inkBounds` box
+    /// (`ha = max(0, y1)`, `db = max(0, -y0)`), falling back to the
+    /// uniform 700/250 approximation only when ink is absent too
+    /// (deterministic; hosts with outline metrics should supply the
+    /// real extents).
     /// All hook values are denominated at 1000 units; the core scales
     /// them to the ambient size itself.
     extents: ?*const fn (ctx: *const anyopaque, font: u16, glyph: u16) [2]i32 = null,

@@ -2109,20 +2109,23 @@ fn layInk(src: []const u8, b: *ProvBuf) !zatex.ir.Layout {
     return zatex.layoutDiag(src, .{}, inkProvider(), &b.runs, &b.rules, &b.glyphs, &diag);
 }
 
-test "qa48 ink lift raises low accents clear" {
-    // Tilde ink bottom (+193) would nestle into the nucleus under the
-    // v3 rule (ay = 700-431+250 = 519, bottom at 519+193 = 712 barely
-    // above the 700 top); the v4 hook lifts it to a uniform 130mu
-    // daylight: ay = 700+130-193 = 637. The accent box itself is
-    // ink-derived (issue #206: tilde ink top +307 replaces the 700
-    // stub), so height 637+307 = 944. KaTeX-side proof (pinned
-    // 0.18.7 metricMap, Main-Regular 126): height 0.31786 — both real
-    // fonts agree the tilde is ~0.31em tall, not 0.70.
-    // Calibrated against KaTeX ground-truth pixels (tilde ~160mu).
+test "qa48 accent box follows KaTeX rule 12 with no floor" {
+    // Audit trio #253: KaTeX stacks the accent box at nucleus-top
+    // minus clearance with no minimum-gap floor (`accent.ts`), so the
+    // stub tilde takes the bare v3 rule: ay = 700-431+0 = 269 (the
+    // stub `~` extents derive from its ink top +307 with depth 0, and
+    // the stub `x` nucleus is uncovered, so it keeps the 700/250
+    // fallback). The row tops out at 269+307 = 576, below the
+    // nucleus top, so containment keeps the parent at the nucleus
+    // 700; the old 130mu floor (ay 637, height 944) overshot KaTeX,
+    // whose own tilde sits with no box daylight at all. Real
+    // providers never hit this corner: covered nuclei derive real
+    // boxes, and uncovered nuclei are already tofu (conformance
+    // flags the missing ink).
     var b: ProvBuf = .{};
     const l = try layInk("\\tilde{x}", &b);
     try std.testing.expectEqual(@as(u32, 500), l.width);
-    try std.testing.expectEqual(@as(u32, 944), l.height_above);
+    try std.testing.expectEqual(@as(u32, 700), l.height_above);
     try std.testing.expectEqual(@as(u32, 250), l.depth_below);
     const ax = try glyphX(l, '~');
     // Issue #70: the tilde centers at nucleus-center + KaTeX skew
