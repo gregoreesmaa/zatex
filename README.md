@@ -125,6 +125,10 @@ CI, so contributors never have to touch them:
   editable source). `docs/katex-syntax.md` — its generated render mirror
   (do not edit; generated from the support table, renders by `zatex-png`).
   `docs/tolerance.md` — differential test policy.
+* Host integration: `docs/install.md` — versioned binaries + the
+  blessed install/load recipe; `docs/threading.md` — the threading
+  contract; `docs/unicode.md` — the NFC input contract;
+  [CHANGELOG.md](CHANGELOG.md) — host-facing ABI changelog.
 * `tools/katex/` — pinned-KaTeX sweep harness (`corpus.json`, `sweep.mjs`).
 
 See [AGENTS.md](AGENTS.md) for the contributor contract.
