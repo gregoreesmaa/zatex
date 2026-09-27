@@ -99,6 +99,46 @@ Two documented approximations (triage-grade, not proof-grade):
   Absolute-size divergences are out of scope here — layout-IR tests own
   those.
 
+## Render reuse
+
+Oracle renders are stable references: while their inputs are unchanged,
+re-rendering them every sweep only burns runner minutes. ZaTeX is the
+live signal and always re-renders; the four oracle engines skip rows
+whose output PNG already exists (`ORACLE_REUSE=1`, passed by the sweep
+only — off by default, so other batch consumers such as the tex-oracle
+workflow's force-refresh always re-extract).
+
+Trust is content-keyed, never mtime-keyed. `tools/diff-oracles.sh`
+fingerprints every input that can change an oracle PNG byte (corpus,
+drivers, Dockerfiles, harness, `crop.py`, the sweep script itself, the
+staged fonts incl. STIX presence) into `work/.inputs.sha`. A stamp
+match keeps the existing PNGs; any mismatch — or a first run — deletes the
+oracle renders and starts over, so a failed engine reports missing,
+never last run's PNG. Three properties make kept files whole: drivers
+publish PNGs atomically (tmp + rename), so a killed run leaves no
+partial PNG behind; `crop.py` deletes undecodable files so they surface
+as missing and retry next run; and the stamp is written only after
+render+crop+copy complete, so a killed sweep re-renders fully.
+
+A fresh workdir primes from this checkout's committed sweep output
+first (no network): resweep publishes commit `zig-out/oracle-diff/raw/`
+(the cropped finals) plus `oracle-inputs.sha`, and the triage report
+links those `raw/` files directly — the normalized PNGs are scoring
+scratch, ditched after the run, never committed (a normalized image
+fed back as render input would shift the joint per-case rescale and
+corrupt scores). Failing that, it primes from the latest successful
+sweep artifact (same branch, else main), which carries the same two.
+Either way the usual case — ZaTeX iterating with oracle inputs fixed —
+skips render and crop for all ~531 oracle rows and the sweep costs one
+ZaTeX pass plus the report. Editing the corpus or any driver
+invalidates everything (all-or-nothing by design: simpler than per-row
+hashes, and the common invalidation — ZaTeX changing — never touches
+oracle renders). Only rows the run actually rendered (the `== <id>`
+lines in each fresh engine log) are cropped; full runs copy exactly
+the selected rows after wiping `raw/`, while `--cases` runs merge into
+`raw/` and leave the stamp alone, so a filtered run neither drops rows
+from the next publish nor poisons reuse.
+
 ## Normalization and scoring (`tools/oracle-diff/report.py`, stdlib only)
 
 Per case: tight-crop each render to its ink bbox (luminance threshold),
@@ -117,7 +157,7 @@ missing strokes — a low score means genuinely different shapes).
   big shift + high score reads "same shape, offset somewhere".
 - Each row shows the LaTeX source, the score, all 4 per-oracle
   similarities (KaTeX, LuaTeX, TeX, MathJax), the spread (minimum over
-  all six oracle↔oracle pairs), the shift, and the 5 normalized renders.
+  all six oracle↔oracle pairs), the shift, and the 5 raw renders.
 
 ## Sanity check
 
