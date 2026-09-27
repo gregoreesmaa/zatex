@@ -17,6 +17,9 @@ cd "$here"
 
 zig build
 mkdir -p src/goldens
+# Clear stale goldens first: a deleted corpus row must not leave its
+# old `<id>.svg` behind to pass the snapshot test as a stray.
+rm -f src/goldens/*.svg
 
 ids=""
 while IFS= read -r row || [ -n "$row" ]; do

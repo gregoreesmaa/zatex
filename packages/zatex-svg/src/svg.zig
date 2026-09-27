@@ -275,9 +275,11 @@ fn emitRule(w: *W, r: zatex.ir.Rule) void {
 /// coordinates. X = ox + mx·s·kx·x + mx·kh·(y·s), Y = oy − s·y with
 /// s = size/unified-upm, kx = x_scale/1000, kh = x_shear/1000,
 /// mx = mirrored ? -1 : 1. `M` on pen mismatch (exact float compare),
-/// `L`/`C` continuations, `Z` when a segment ends at its subpath
-/// start. Glyphs with no segments still step the pen. A run with no
-/// ink emits nothing at all.
+/// `L`/`C` continuations, then an optional `Z` for path closedness
+/// when a segment ends at its subpath start (curves always emit
+/// their `C` data first; bare `Z` is reserved for straight closing
+/// edges). Glyphs with no segments still step the pen. A run with
+/// no ink emits nothing at all.
 fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.Run) void {
     if (run.glyphs.len == 0 or run.size_units == 0) return;
     const ambient = run.color == null;
@@ -339,9 +341,13 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
                 sub_x = bx[0];
                 sub_y = by[0];
             }
-            if (bx[3] == sub_x and by[3] == sub_y) {
-                w.byte('Z');
-            } else if (sg.is_curve) {
+            // Type 2 has no closepath operator: a closed loop routinely
+            // ends with a `curveto` back to its subpath start. The
+            // curve's own data must be emitted first; bare `Z` alone
+            // would discard it. Bare `Z` is reserved for straight
+            // closing edges (it draws that edge); curves emit `C`
+            // then an optional `Z` for path closedness.
+            if (sg.is_curve) {
                 w.byte('C');
                 w.num(bx[1]);
                 w.byte(' ');
@@ -354,6 +360,9 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
                 w.num(bx[3]);
                 w.byte(' ');
                 w.num(by[3]);
+                if (bx[3] == sub_x and by[3] == sub_y) w.byte('Z');
+            } else if (bx[3] == sub_x and by[3] == sub_y) {
+                w.byte('Z');
             } else {
                 w.byte('L');
                 w.num(bx[3]);
@@ -557,6 +566,25 @@ test "bake x_scale stretches ink and pen" {
     // advance 500, doubled pen step: second origin at 100+1000 = 1100.
     try std.testing.expect(std.mem.indexOf(u8, got, "L1100 -500") != null);
     try std.testing.expect(std.mem.indexOf(u8, got, "M1100 200") != null);
+}
+
+test "bake mirrored scale shear composes" {
+    // One glyph, all three x-transforms at once: the bake order
+    // `mx` applies to BOTH the scale and the shear term, so a bake
+    // that shears without mirroring (`kh` instead of `mx·kh`) lands
+    // 350 units off here. Hand-computed from the bake formula
+    // X = ox + mx·s·kx·x + mx·kh·(y·s), Y = oy − s·y with s = 1
+    // (size 1000 / upm 1000), kx = 2, kh = 0.25, mx = −1, ox = 100,
+    // oy = 200 over the stub line (0,0)->(500,700):
+    // start: X = 100, Y = 200; end: X = 100 − 1000 − 175 = −1075,
+    // Y = 200 − 700 = −500. (Unmirrored shear would give
+    // 100 − 1000 + 175 = −725 instead of −1075.)
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'}, .mirrored = true, .x_scale = 2000, .x_shear = 250 },
+    };
+    var out: [2048]u8 = undefined;
+    const got = try bakeLayout(&runs, &.{}, &out);
+    try std.testing.expect(std.mem.indexOf(u8, got, "M100 200L-1075 -500") != null);
 }
 
 test "left shift opens the viewBox for llap ink" {
@@ -1030,7 +1058,12 @@ fn loadFileFixtures() !void {
     // Every golden row renders ink through these faces; a face that
     // failed to load would silently empty its rows, so require the
     // full required stack (Task 3 probe precedent).
-    if (file_n == 0) return error.FontLoad;
+    // `file_n` also counts optional faces (e.g. the system STIX
+    // fallbacks when present), so the invariant is "at least every
+    // required face loaded", not an exact count.
+    var want: usize = 0;
+    for (outlines_mod.CLI_STACK) |entry| want += if (entry.required) 1 else 0;
+    if (file_n < want) return error.FontLoad;
 }
 
 fn fileProv() zatex.MetricsProvider {
