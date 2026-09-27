@@ -5,6 +5,16 @@
 // caller's buffers do. Status codes mirror LayoutError. Positions are
 // integer font units; y grows downward from the formula top-left and
 // glyphs sit on their alphabetic baseline (see docs/ir.md).
+//
+// Math-delimiter scanning is host-owned (issues #252, #277): there is
+// deliberately no zatex_detect/zatex_scan entry point — the engine
+// starts at already-extracted TeX. Hosts implement KaTeX auto-render
+// detection per the canonical spec in docs/delimiter-scan.md, with
+// conformance pinned by packages/zatex/goldens/delimiter_vectors.json
+// and enforced by packages/zatex/src/delimvectors.zig in
+// `zig build test`. Non-goal: the core never sees prose, code spans,
+// or unclosed fences — unclosed delimiters stay literal text, never
+// errors (see the spec).
 #ifndef ZATEX_H
 #define ZATEX_H
 

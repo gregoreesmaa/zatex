@@ -46,6 +46,19 @@ hosts building from source:
   shared ink walker; precedent: 9e70d53).
 - Caps (part of the contract): 256 runs / 64 rules per call,
   65536 input bytes, `maxExpand` 1000, nesting depth 32.
+- Delimiter-scanning contract, issues #252/#277 (docs only, no ABI
+  change): #252 left the canonical scanner spec
+  (`docs/delimiter-scan.md`) with no trace in `zatex.h`, so hosts
+  hand-rolled detection with divergence risk. Resolution is the
+  host-owned side of the either/or — still no
+  `zatex_detect`/`zatex_scan` entry point, by design. The contract is
+  now discoverable from the header: `zatex.h` names the spec, the
+  pinned conformance vectors
+  (`packages/zatex/goldens/delimiter_vectors.json`), and the
+  enforcing test (`packages/zatex/src/delimvectors.zig`), with
+  explicit non-goals (core starts at extracted TeX; unclosed
+  delimiters stay literal). Host recipe in `docs/install.md` §4;
+  vectors untouched (pinned KaTeX — no golden changes).
 - Option knobs added since the freeze (all default-off, additive):
   `min_rule_thickness_milli_em`, `strict` + `StrictLog`,
   preset `macros`, `global_group`, `leqno`, `fleqn`.

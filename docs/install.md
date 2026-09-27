@@ -62,7 +62,28 @@ Then, per call:
 - Input: normalize to NFC at your boundary (see
   `docs/unicode.md`).
 
-## 4. Building from source instead
+## 4. Delimiter scanning (host-owned, issues #252/#277)
+
+The engine starts at already-extracted TeX: there is deliberately no
+`zatex_detect`/`zatex_scan` entry point in `zatex.h`. Every host scans
+its own prose for math islands, and every independent reimplementation
+diverges — so all hosts follow one canonical rule instead of sharing
+code:
+
+- Spec: `docs/delimiter-scan.md` (pinned KaTeX 0.18.7 auto-render
+  behavior, plus the ZaTeX `$` currency-guard layer and the host
+  recipe: mask code spans, skip ignored tags, scan, filter, feed each
+  payload to the engine with its `display` flag).
+- Conformance suite: `packages/zatex/goldens/delimiter_vectors.json`
+  (pinned KaTeX output, never redefined — regenerate only via
+  `tools/katex/gen_delim_vectors.mjs`), enforced by
+  `packages/zatex/src/delimvectors.zig` in `zig build test`.
+- Non-goals: the core never sees prose, code spans, or unclosed
+  fences (unclosed delimiters stay literal text, never errors), and
+  engine errors stay host policy (render red or fall back to literal
+  — see `docs/parity.md` "Error fallback").
+
+## 5. Building from source instead
 
 Zig 0.16.0, `cd packages/zatex && zig build` → `zig-out/lib/`
 (`libzatex.a` + `libzatex.dylib`/`.so`) with `src/zatex.h` as the
