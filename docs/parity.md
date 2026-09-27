@@ -141,7 +141,11 @@ strings a host's sink may act on. Allowlist and filter at the sink.
   pattern shows how to sweep a corpus for misses).
 - Math-island detection is host-side: the core takes raw TeX and
   `parse.zig` rejects `$` inside math input — there is no
-  auto-render in the core; hosts own delimiter scanning.
+  auto-render in the core; hosts own delimiter scanning per the
+  canonical contract (`docs/delimiter-scan.md`, conformance vectors
+  in `packages/zatex/goldens/delimiter_vectors.json`, enforced by
+  `packages/zatex/src/delimvectors.zig`; contract summarized in
+  `zatex.h` and `docs/install.md` — issues #252/#277).
 
 ## Remaining gaps (exact)
 
