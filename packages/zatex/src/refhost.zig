@@ -942,6 +942,43 @@ test "audit 253: hat accent clears by KaTeX rule 12" {
     try std.testing.expect(gap <= 30);
 }
 
+// Issue #270 review: the narrow tilde floated on its ink depth (0),
+// kissing the nucleus (0.1mu), where KaTeX stacks the metrics box —
+// U+007E carries 350mu of metrics depth, so the item baseline rides
+// nucleus-top - clearance + 350 and the ink clears by ~134mu
+// (pinned 0.18.7 `accent.ts` row-top math + metrics table +
+// screenshots). Only the tilde overrides; hat/vec keep their boxes.
+test "audit 253: tilde floats on KaTeX metrics depth" {
+    var ref = try Ref.load();
+    defer ref.free();
+    var runs: [16]zatex.ir.Run = undefined;
+    var rules: [4]zatex.ir.Rule = undefined;
+    var glyphs: [64]u16 = undefined;
+    const l = try layoutCase(&ref, "\\tilde{x}", false, &runs, &rules, &glyphs);
+    try std.testing.expectEqual(@as(usize, 2), l.runs.len);
+    const main = @as(i32, @intCast(l.height_above));
+    var body: ?zatex.ir.Run = null;
+    var accent: ?zatex.ir.Run = null;
+    for (l.runs) |r| {
+        if (r.baseline_y == main) body = r else accent = r;
+    }
+    // Item baseline ~350 above the main baseline (ink-vs-metrics ±30
+    // like the hat probe above; the ink depth parked it 11 above).
+    const off = main - accent.?.baseline_y;
+    try std.testing.expect(off >= 320 and off <= 390);
+    // Strict ink clearance: the accent ink bottom (y-down) sits above
+    // the body ink top. The ink-derived depth overlapped here.
+    const sa = accent.?;
+    const sb = body.?;
+    try std.testing.expectEqual(@as(usize, 1), sa.glyphs.len);
+    try std.testing.expectEqual(@as(usize, 1), sb.glyphs.len);
+    const ai = ref.stack.inkFor(sa.glyphs[0]);
+    const bi = ref.stack.inkFor(sb.glyphs[0]);
+    const accent_bottom = sa.baseline_y - @divTrunc(@as(i64, ai[1]) * @as(i64, sa.size_units), 1000);
+    const body_top = sb.baseline_y - @divTrunc(@as(i64, bi[3]) * @as(i64, sb.size_units), 1000);
+    try std.testing.expect(accent_bottom < body_top);
+}
+
 // Issue #253 (wide): a stretchy accent takes no clearance — the KaTeX
 // SVG box bottom sits at the body top — so our glyph accents take the
 // same ink bottom (body-top + artwork gap - ink-bottom). For
@@ -1012,6 +1049,43 @@ test "audit 254: display sum limits follow KaTeX rule 13a" {
     const sub_off = bottom - main;
     try std.testing.expect(@abs(sup_off - 1250) <= 120);
     try std.testing.expect(@abs(sub_off - 1178) <= 120);
+}
+
+// Issue #270 review: side scripts on the integral cleared no italic
+// (the reference Size faces have no MATH table), parking the
+// superscript on the integral's upper slant. KaTeX stacks
+// `base.italic` (pinned 0.18.7 metrics table: 194 Size1, 444 Size2):
+// the sup starts one italic right of the sub, which pulls back under
+// the base (`supsub.ts` marginLeft:-italic on the sub row only).
+test "audit 254: int side scripts clear the symbol italic" {
+    var ref = try Ref.load();
+    defer ref.free();
+    const cases = [_]struct { tex: []const u8, display: bool, gap: i32 }{
+        .{ .tex = "\\int_0^1 x\\,dx", .display = false, .gap = 194 },
+        .{ .tex = "\\int_0^1 x^2\\,dx", .display = true, .gap = 444 },
+    };
+    for (cases) |c| {
+        var runs: [32]zatex.ir.Run = undefined;
+        var rules: [8]zatex.ir.Rule = undefined;
+        var glyphs: [256]u16 = undefined;
+        const l = try layoutCase(&ref, c.tex, c.display, &runs, &rules, &glyphs);
+        const main = @as(i32, @intCast(l.height_above));
+        // Leftmost single-glyph script above/below the main baseline:
+        // the integral's own limits (anything further right belongs
+        // to trailing nuclei like the display `x^2`).
+        var sup_x: ?i32 = null;
+        var sub_x: ?i32 = null;
+        for (l.runs) |r| {
+            if (r.glyphs.len != 1) continue;
+            if (r.baseline_y < main) {
+                if (sup_x == null or r.x < sup_x.?) sup_x = r.x;
+            } else if (r.baseline_y > main) {
+                if (sub_x == null or r.x < sub_x.?) sub_x = r.x;
+            }
+        }
+        try std.testing.expect(sup_x != null and sub_x != null);
+        try std.testing.expectEqual(c.gap, sup_x.? - sub_x.?);
+    }
 }
 
 // Issue #255: the sqrt vinculum must meet the surd hook ink (KaTeX

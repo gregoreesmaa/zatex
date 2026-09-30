@@ -726,18 +726,20 @@ test "qa43 int scripts sit aside in both modes" {
         const l = try lay("\\int_{0}^{1} x", display, &b);
         const base_w: i32 = 500;
         const x_base = try glyphX(l, 8747);
-        // No leading script gap (pinned KaTeX 0.18.7, issue #219: the
-        // stub italic is 0, so both scripts abut the base edge).
-        try std.testing.expectEqual(x_base + base_w, try glyphX(l, 49));
+        // KaTeX base.italic with no hook data (pinned 0.18.7 metrics
+        // table fallback, issue #270: 194 Size1 / 444 Size2). The sup
+        // clears base + italic; the sub pulls back under the base.
+        const italic: i32 = if (display) 444 else 194;
+        try std.testing.expectEqual(x_base + base_w + italic, try glyphX(l, 49));
         try std.testing.expectEqual(x_base + base_w, try glyphX(l, 48));
     }
     var bd: B = .{};
     var bt: B = .{};
     const d = try lay("\\int_{0}^{1} x", true, &bd);
     const t = try lay("\\int_{0}^{1} x", false, &bt);
-    // Same ambient size, same stub advance: only the face differs, so
-    // the stub boxes (and widths) coincide exactly (issue #101).
-    try std.testing.expectEqual(t.width, d.width);
+    // Same ambient size, same stub advance: only the face (and its
+    // table italic, 194 vs 444) differs, so display runs 250 wider.
+    try std.testing.expectEqual(t.width + 250, d.width);
 }
 
 /// Stub metrics plus KaTeX's Size2 integral italic correction
@@ -788,12 +790,12 @@ test "qa43 symbol-op side scripts use Rule 18 shifts and italic (issue #219)" {
     const y_base = try baseY(l, 8747);
     try std.testing.expectEqual(y_base - 519, try baseY(l, 49));
     try std.testing.expectEqual(y_base + 306, try baseY(l, 48));
-    // Scripts abut the base edge (no 60mu lead); the 50mu scriptspace
-    // trails the block: width 500 + 350 + 50 = 900.
+    // Scripts clear the table italic (no hook data: 444 on Size2);
+    // the 50mu scriptspace trails the block: width max(944, 1344).
     const x_base = try glyphX(l, 8747);
-    try std.testing.expectEqual(x_base + 500, try glyphX(l, 49));
+    try std.testing.expectEqual(x_base + 500 + 444, try glyphX(l, 49));
     try std.testing.expectEqual(x_base + 500, try glyphX(l, 48));
-    try std.testing.expectEqual(@as(u32, 900), l.width);
+    try std.testing.expectEqual(@as(u32, 1344), l.width);
     // With KaTeX's integral italic the sup clears base + italic
     // (NE: pinned HTML `margin-right:0.4445em` on the base, no
     // marginLeft on the sup) while the sub pulls back under the base
@@ -2110,22 +2112,22 @@ fn layInk(src: []const u8, b: *ProvBuf) !zatex.ir.Layout {
 }
 
 test "qa48 accent box follows KaTeX rule 12 with no floor" {
-    // Audit trio #253: KaTeX stacks the accent box at nucleus-top
-    // minus clearance with no minimum-gap floor (`accent.ts`), so the
-    // stub tilde takes the bare v3 rule: ay = 700-431+0 = 269 (the
-    // stub `~` extents derive from its ink top +307 with depth 0, and
-    // the stub `x` nucleus is uncovered, so it keeps the 700/250
-    // fallback). The row tops out at 269+307 = 576, below the
-    // nucleus top, so containment keeps the parent at the nucleus
-    // 700; the old 130mu floor (ay 637, height 944) overshot KaTeX,
-    // whose own tilde sits with no box daylight at all. Real
-    // providers never hit this corner: covered nuclei derive real
-    // boxes, and uncovered nuclei are already tofu (conformance
-    // flags the missing ink).
+    // Audit trio #253: KaTeX stacks the accent METRICS box at
+    // nucleus-top minus clearance with no minimum-gap floor, so the
+    // stub tilde takes ay = 700-431+350 = 619 (pinned metrics depth;
+    // the stub `~` ink gives top +307 with depth 0, and the stub `x`
+    // nucleus is uncovered, so it keeps the 700/250 fallback). The
+    // row tops out at 619+307 = 926, above the nucleus top, so
+    // containment raises the parent to 926 (issue #270 review: the
+    // ink-depth value parked the row at 576, kissing the nucleus).
+    // The old 130mu floor (ay 637, height 944) still overshoots.
+    // Real providers never hit this corner: covered nuclei derive
+    // real boxes, and uncovered nuclei are already tofu
+    // (conformance flags the missing ink).
     var b: ProvBuf = .{};
     const l = try layInk("\\tilde{x}", &b);
     try std.testing.expectEqual(@as(u32, 500), l.width);
-    try std.testing.expectEqual(@as(u32, 700), l.height_above);
+    try std.testing.expectEqual(@as(u32, 926), l.height_above);
     try std.testing.expectEqual(@as(u32, 250), l.depth_below);
     const ax = try glyphX(l, '~');
     // Issue #70: the tilde centers at nucleus-center + KaTeX skew

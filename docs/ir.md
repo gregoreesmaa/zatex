@@ -59,7 +59,7 @@ breaks when it is wrong.
 | `glyphVariant` (null ok) | Variant with extent `>= min_height` (thousandths), or the input glyph | Fences, radicals. Always-identity under-grows tall spans. |
 | `italicCorrection` (null ok) | MATH italic correction in thousandths, trunc-zero; null = 0 (no RSB fallback: issue #206 rejects it — measured RSB anti-correlates with MATH corrections) | Accent shift over slanted nuclei: the core halves it and adds the KaTeX Math-Italic skew (single-symbol nuclei only). Wrong glyph or wrong units shift every such accent. |
 | `kernCorrection` (null ok) | MathKern cut-in in thousandths; null/0 = none | Top-right tucks superscripts, bottom-right subscripts (clamped to the gap). Costs only looseness. |
-| `inkBounds` (null ok) | `[x_min, y_min, x_max, y_max]` at 1000 units, **y up**, unclipped (negatives kept); all-zero = blank, ignored; ±1 float rounding ok | Accent ink-centering, low-accent lift (≥ 130 clear), wide-accent ink scaling, dot lift, brace-label/brace kerns, sqrt junction, `\not` centering. Null = exact v3 behavior per construct (priced in `contract.zig`). |
+| `inkBounds` (null ok) | `[x_min, y_min, x_max, y_max]` at 1000 units, **y up**, unclipped (negatives kept); all-zero = blank, ignored; ±1 float rounding ok | Accent ink-centering, triple-dot lift (≥ 130 clear), wide-accent ink scaling, dot lift, brace-label/brace kerns, sqrt junction, `\not` centering. Null = exact v3 behavior per construct (priced in `contract.zig`). |
 
 ### Worked recipe: `\tilde{x}` and `\vec{v}` at text size
 
@@ -73,10 +73,10 @@ A new host must return these values — no engine reading required:
    its zero origin), the correct offset recenters that 416-wide ink
    over the nucleus; the fallback centers a phantom 500-wide box.
 2. `inkBounds` for `~` (`\tilde`) is `[0, 193, 555, 307]`, y up. The
-   core lifts low accents so ink clears the nucleus top by ≥ 130:
-   `ay = nucleus_top + 130 − 193`. For an `x` nucleus (top 700) that
-   is `ay = 637` (total height 1337) — without the hook the accent
-   would nestle to within 12 units of the nucleus.
+   core stacks the accent METRICS box: the item baseline rides
+   `ay = nucleus_top − clearance + metrics_depth`. For `~` the
+   metrics depth is 350 (KaTeX Main), so over an LM `x` top (442)
+   with clearance 431 that is `ay = 361` — the ink clears by 134.
 3. `italicCorrection` is looked up on the **laid-out** glyph, so the
    host just reports the MATH table value per glyph id (scaled,
    trunc-zero); the core does the halving and the skew. `x` carries

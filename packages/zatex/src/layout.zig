@@ -1200,12 +1200,16 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var word_base = false;
     var sym_op = false;
+    var sym_cp: u21 = 0;
     if (parse.opBase(lc.pctx, s.base)) |o| {
         if (parse.useLimits(style, o)) return layoutLimits(lc, style, s);
         // Single-glyph symbol operators take KaTeX Rule 18 shifts
         // with the symbol italic (issue #219); word operators keep
         // the legacy path below (KaTeX leaves their marginLeft null).
-        if (!o.func) sym_op = true else word_base = true;
+        if (!o.func) {
+            sym_op = true;
+            sym_cp = o.cp;
+        } else word_base = true;
     }
     const size = lc.effSize(style);
     const base = try layoutNode(lc, style, s.base);
@@ -1349,8 +1353,9 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
             // Rules 18c/d.
             sup_shift = @max(@max(sup0, min_sup_scaled), sup_db + x_height_q);
         }
-        // Symbol italic (KaTeX `base.italic`, 0.44445 on the Size2
-        // integral). The sym path only fires past a bare `.op` node
+        // Symbol italic (KaTeX `base.italic`: 0.44445 on the Size2
+        // integral, 0.19445 on Size1; MATH-less faces fall back below).
+        // The sym path only fires past a bare `.op` node
         // (`opBase` returns `func=false` solely from its `.op` arm),
         // every wrapper it sees through (`.style`, `.size`,
         // `.classwrap`, `.font`, `.color`, `.href`, `.htmlwrap`)
@@ -1363,7 +1368,15 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         // exact. Ambient size, clamped non-negative like every
         // other mu width. KaTeX applies no MathKern tuck here.
         const g = bb.kind.glyph;
-        const italic = @max(@divTrunc(lc.italicCorr(g.font, g.glyph) * @as(i32, size), 1000), 0);
+        var italic: i32 = @max(@divTrunc(lc.italicCorr(g.font, g.glyph) * @as(i32, size), 1000), 0);
+        if (italic == 0) {
+            // MATH-less reference faces (all KaTeX converts) read 0
+            // for the sized integrals; KaTeX stacks its metrics
+            // italic instead (issue #270 review).
+            if (symbolItalicFallback(sym_cp, g.font)) |tab| {
+                italic = @divTrunc(@as(i32, tab) * @as(i32, size), 1000);
+            }
+        }
         trail = @divTrunc(@as(i32, 50) * @as(i32, size), 1000);
         sup_dy = sup_shift;
         sub_dy = -sub_shift;
@@ -2102,12 +2115,28 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     // the visual gap is whatever each face's ink gives — measuring
     // and inking through the same fixture faces reproduces KaTeX's
     // gaps within ink-vs-metrics rounding (~11mu: hat 88, vec 74,
-    // wide-hat 80 box-relative; the U+007E tilde overlaps the
-    // nucleus top in both engines, audit #253).
+    // wide-hat 80 box-relative. The stacked box is the METRICS box
+    // (U+007E carries 350mu of metrics depth: see adb_place below).
     // The 130mu floor survives only for the `\dddot` period row
     // below: periods sit on their baseline, so unlike accent-designed
     // glyphs they need the lift to clear the nucleus at all.
     const min_gap: i32 = @divTrunc(@as(i32, 130) * size, 1000);
+    // Placement depth for the narrow accent box (issue #270 review):
+    // KaTeX stacks the accent's METRICS box, and the row-top math
+    // (`buildCommon.ts`: row top = -pstrut - pen - depth, pstrut
+    // bottom = item baseline) parks the item baseline one box depth
+    // above the pen — so ay adds the metrics depth, not the ink
+    // depth. U+007E is the only narrow accent whose metrics depth
+    // (350, pinned 0.18.7 metrics table) differs from its ink depth
+    // (0: the ink bottom sits 215 above its baseline); the
+    // ink-derived value kissed the nucleus (0.1mu) where KaTeX floats
+    // ~134mu clear (pinned screenshots). A host metrics depth wins
+    // automatically when it already reads 350; the wide branch below
+    // re-derives ay from ink and never reads this.
+    const adb_place: i32 = if (!a.wide and a.cp == 0x7E)
+        @divTrunc(@as(i32, 350) * size, 1000)
+    else
+        adb;
     const ink = lc.ink(font, g);
     var ink_ax: ?i32 = null;
     // Accent ink bottom, shared by the wide branch below (one hook
@@ -2207,14 +2236,14 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
             lc.boxes[ab].w = nb.w;
         }
     }
-    // KaTeX Rule 12, no floor (audit #253): the accent box baseline
-    // sits exactly nucleus-top minus clearance; the faces' own ink
+    // KaTeX Rule 12, no floor (audit #253): the accent ITEM baseline
+    // sits nucleus-top minus clearance PLUS the placement depth above;
     // sets the visual gap, as in KaTeX.
-    var ay = nb.ha - clearance + adb;
+    var ay = nb.ha - clearance + adb_place;
     // Accent ink bottom below the main baseline (positive when the
     // accent box dips under it). Box-derived by default; the wide
     // branch below re-derives it from ink when the hook reports.
-    var accent_below = adb - ay;
+    var accent_below = adb_place - ay;
     if (a.wide and n_dots == 0) {
         // KaTeX parity (pinned 0.18.7 `accent.ts` stretchy branch,
         // audit #253): a stretchy accent takes NO clearance — the SVG
@@ -2295,6 +2324,23 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
 /// widecheck1 80, tilde1 131. Longer nuclei take wider KaTeX images
 /// with smaller offsets (tilde2 105); the single-char value is kept
 /// for all lengths (at most ~45mu high on 5+ char tildes).
+/// KaTeX `base.italic` for the integral family (pinned 0.18.7 metrics
+/// table), in thousandths: 194 on Size1, 444 on Size2. The reference
+/// faces carrying these glyphs (KaTeX Size converts) have no MATH
+/// table, so the hook reads 0 where KaTeX stacks its metrics italic
+/// — text/display `\int` superscripts sat 194/444mu too far left
+/// (issue #270 review). A host MATH value wins when nonzero; every
+/// other symbol operator carries 0 in both KaTeX and MATH, so only
+/// U+222B–U+2230 falls back. Sized-face keying keeps LM/STIX-served
+/// integrals on their own MATH data.
+fn symbolItalicFallback(cp: u21, font: u16) ?i32 {
+    const integral = cp == 0x222B or cp == 0x222C or cp == 0x222D or cp == 0x222E or cp == 0x222F or cp == 0x2230;
+    if (!integral) return null;
+    if (font == @intFromEnum(contract.FontId.size2)) return 444;
+    if (font == @intFromEnum(contract.FontId.size1)) return 194;
+    return null;
+}
+
 fn wideAccentGap(cp: u21) i32 {
     return if (cp == 0x007E) 131 else 80;
 }
