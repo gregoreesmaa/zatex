@@ -4,7 +4,23 @@
 //! internal modules import this file directly (no import cycles).
 const std = @import("std");
 
+/// Library version. `zatex_version()` (cabi.zig, `zatex.h`) packs
+/// this word ABI-stably as `major << 16 | minor << 8 | patch`
+/// (issue #276): normative widths are major 16 bits, minor 8 bits,
+/// patch 8 bits, so `minor` and `patch` MUST stay below 256 (a
+/// larger patch would bleed into the minor field: 0.0.300 would
+/// read back as 0.1.44) and `major` below 65536. The comptime
+/// asserts below fail the build on any bump that violates the
+/// widths — widen the packing (an ABI break with compat notes),
+/// never silently bleed. `provider_version` below is a separate
+/// word with its own contract.
 pub const version: std.SemanticVersion = .{ .major = 0, .minor = 0, .patch = 0 };
+
+comptime {
+    if (version.major >= 65536) @compileError("contract.version.major exceeds the 16-bit zatex_version() field (issue #276)");
+    if (version.minor >= 256) @compileError("contract.version.minor exceeds the 8-bit zatex_version() field (issue #276)");
+    if (version.patch >= 256) @compileError("contract.version.patch exceeds the 8-bit zatex_version() field (issue #276)");
+}
 
 /// Hard caps. Part of the contract, not tunables.
 pub const max_input_len: usize = 64 * 1024;

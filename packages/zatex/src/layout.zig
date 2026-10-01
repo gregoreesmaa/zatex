@@ -1155,15 +1155,54 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     // below are the normal-size row of `fontMetrics.ts`
     // (111/166/200/600/100 mu). The base shifts so its center sits
     // on the math axis (Rule 13: baseShift = (h-d)/2 - axis).
+    // TFM-true stacking boxes (issues #254): the symbol-op base
+    // stacks limits off KaTeX TFM boxes (`symbols.opTfm`), limit
+    // boxes off ink (`boxInk`); uniform provider extents park
+    // display limits ~260mu too close (sup gap 31 vs 293, sub
+    // overlapping vs 262). Gated on a reporting base-ink hook, so
+    // hook-less providers keep exact legacy numbers.
+    var bha = bb.ha;
+    var bdb = bb.db;
+    if (boxInk(lc, base)) |bib| {
+        bha = bib[0];
+        bdb = if (bib[1] < 0) -bib[1] else 0;
+        if (parse.opBase(lc.pctx, s.base)) |o| {
+            // Rendered-face select (issues #254): `layoutOp` draws
+            // Size2 only for large ops in display style, Size1
+            // otherwise — the TFM box must be that same face, not the
+            // style-blind parse flag, or text-style limits stack off
+            // a glyph twice the drawn one.
+            if (symbols.opTfm(o.cp, o.large and style.isDisplay())) |t| {
+                bha = @divTrunc(t.h * @as(i32, size), 1000);
+                bdb = @divTrunc(t.d * @as(i32, size), 1000);
+            }
+        }
+    }
+    var sdb_i = sdb;
+    var uha_i = uha;
+    var sha_i = sha;
+    var udb_i = udb;
+    if (has_sup) {
+        if (boxInk(lc, sup)) |sib| {
+            sha_i = @max(0, sib[0]);
+            sdb_i = if (sib[1] < 0) -sib[1] else 0;
+        }
+    }
+    if (has_sub) {
+        if (boxInk(lc, sub)) |sib| {
+            uha_i = @max(0, sib[0]);
+            udb_i = if (sib[1] < 0) -sib[1] else 0;
+        }
+    }
     const axis = @divTrunc(@as(i32, 250) * size, 1000);
-    const base_shift = @divTrunc(bb.ha - bb.db, 2) - axis;
+    const base_shift = @divTrunc(bha - bdb, 2) - axis;
     const pad = @divTrunc(@as(i32, 100) * size, 1000);
     const sup_kern: i32 = if (has_sup)
-        @max(@divTrunc(@as(i32, 111) * size, 1000), @divTrunc(@as(i32, 200) * size, 1000) - sdb)
+        @max(@divTrunc(@as(i32, 111) * size, 1000), @divTrunc(@as(i32, 200) * size, 1000) - sdb_i)
     else
         0;
     const sub_kern: i32 = if (has_sub)
-        @max(@divTrunc(@as(i32, 166) * size, 1000), @divTrunc(@as(i32, 600) * size, 1000) - uha)
+        @max(@divTrunc(@as(i32, 166) * size, 1000), @divTrunc(@as(i32, 600) * size, 1000) - uha_i)
     else
         0;
     var w = bb.w;
@@ -1173,19 +1212,19 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var nparts: usize = 0;
     parts[0] = .{ .box = base, .dx = @divTrunc(w - bb.w, 2), .dy = -base_shift };
     nparts = 1;
-    var ha = bb.ha - base_shift;
-    var db = bb.db + base_shift;
+    var ha = bha - base_shift;
+    var db = bdb + base_shift;
     if (has_sup) {
-        const sy = -base_shift + bb.ha + sup_kern + sdb;
+        const sy = -base_shift + bha + sup_kern + sdb_i;
         parts[nparts] = .{ .box = sup, .dx = @divTrunc(w - sw, 2), .dy = sy };
         nparts += 1;
-        ha = sy + sha + pad;
+        ha = sy + sha_i + pad;
     }
     if (has_sub) {
-        const sy = -(base_shift + bb.db + sub_kern + uha);
+        const sy = -(base_shift + bdb + sub_kern + uha_i);
         parts[nparts] = .{ .box = sub, .dx = @divTrunc(w - uw, 2), .dy = sy };
         nparts += 1;
-        db = -sy + udb + pad;
+        db = -sy + udb_i + pad;
     }
     const sk = try lc.allocKids(nparts);
     @memcpy(lc.bkids[sk .. sk + nparts], parts[0..nparts]);
@@ -1200,16 +1239,16 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
 fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var word_base = false;
     var sym_op = false;
-    var sym_cp: u21 = 0;
+    var op_cp: u21 = 0;
+    var op_large = false;
     if (parse.opBase(lc.pctx, s.base)) |o| {
         if (parse.useLimits(style, o)) return layoutLimits(lc, style, s);
         // Single-glyph symbol operators take KaTeX Rule 18 shifts
         // with the symbol italic (issue #219); word operators keep
         // the legacy path below (KaTeX leaves their marginLeft null).
-        if (!o.func) {
-            sym_op = true;
-            sym_cp = o.cp;
-        } else word_base = true;
+        op_cp = o.cp;
+        op_large = o.large;
+        if (!o.func) sym_op = true else word_base = true;
     }
     const size = lc.effSize(style);
     const base = try layoutNode(lc, style, s.base);
@@ -1304,6 +1343,10 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var sub_dx: i32 = 0;
     var trail: i32 = 0;
     var w: i32 = bb.w;
+    // Symbol-op stacking base (ink/TFM-true when the hook reports,
+    // else the construction box, exactly like today).
+    var sym_bha: i32 = bb.ha;
+    var sym_bdb: i32 = bb.db;
     if (sym_op) {
         // Side scripts on a single-glyph symbol operator (`\int`,
         // text-style `\sum`, ...): KaTeX Rules 18a/c/d/e (pinned
@@ -1320,11 +1363,41 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         // `fontMetrics.ts` in thousandths of an em; the two inverted
         // display-integral shifts (sup 1.1129 = 1.36 - 0.353*0.7, sub
         // 0.9119 = 0.86225 + 0.071*0.7) pin the script row choice.
+        // TFM-true stacking boxes (issues #254): KaTeX stacks scripts
+        // off TFM boxes (`symbols.opTfm` for Size-face symbol ops —
+        // outline ink understates Size2 `\sum` by 100mu) and script
+        // boxes off ink (`boxInk`); uniform provider extents corrupt
+        // every base (display scripts park ~600mu too close, inline
+        // spuriously trips Rule 18e). Gated on a reporting base-ink
+        // hook, so hook-less providers keep the exact #219 numbers.
+        if (boxInk(lc, base)) |bib| {
+            sym_bha = bib[0];
+            sym_bdb = if (bib[1] < 0) -bib[1] else 0;
+            // Rendered-face select (issues #254): same predicate as
+            // `layoutOp` — text-style scripts stack off the drawn
+            // Size1 face (805/306 for the integral), never Size2.
+            if (symbols.opTfm(op_cp, op_large and style.isDisplay())) |t| {
+                sym_bha = @divTrunc(t.h * @as(i32, size), 1000);
+                sym_bdb = @divTrunc(t.d * @as(i32, size), 1000);
+            }
+        }
+        if (has_sup) {
+            if (boxInk(lc, sup)) |sib| {
+                sup_ha = @max(0, sib[0]);
+                sup_db = if (sib[1] < 0) -sib[1] else 0;
+            }
+        }
+        if (has_sub) {
+            if (boxInk(lc, sub)) |sib| {
+                sub_ha = @max(0, sib[0]);
+                sub_db = if (sib[1] < 0) -sib[1] else 0;
+            }
+        }
         const ss_script = sc_style.sizeUnits() == 500;
         const sup_drop: i32 = if (ss_script) 494 else 353;
         const sub_drop: i32 = if (ss_script) 100 else 71;
-        const sup0 = bb.ha - @divTrunc(sup_drop * @as(i32, sc_size), 1000);
-        const sub0 = bb.db + @divTrunc(sub_drop * @as(i32, sc_size), 1000);
+        const sup0 = sym_bha - @divTrunc(sup_drop * @as(i32, sc_size), 1000);
+        const sub0 = sym_bdb + @divTrunc(sub_drop * @as(i32, sc_size), 1000);
         const cramped = style == .Dc or style == .Tc or style == .Sc or style == .SSc;
         const min_sup: i32 = if (style.isDisplay()) 413 else if (cramped) 289 else 363;
         const min_sup_scaled = @divTrunc(min_sup * @as(i32, size), 1000);
@@ -1353,8 +1426,8 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
             // Rules 18c/d.
             sup_shift = @max(@max(sup0, min_sup_scaled), sup_db + x_height_q);
         }
-        // Symbol italic (KaTeX `base.italic`: 0.44445 on the Size2
-        // integral, 0.19445 on Size1; MATH-less faces fall back below).
+        // Symbol italic (KaTeX `base.italic`, pinned 0.18.7 metrics
+        // table: 0.44445 on the Size2 integral, 0.19445 on Size1).
         // The sym path only fires past a bare `.op` node
         // (`opBase` returns `func=false` solely from its `.op` arm),
         // every wrapper it sees through (`.style`, `.size`,
@@ -1373,7 +1446,7 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
             // MATH-less reference faces (all KaTeX converts) read 0
             // for the sized integrals; KaTeX stacks its metrics
             // italic instead (issue #270 review).
-            if (symbolItalicFallback(sym_cp, g.font)) |tab| {
+            if (symbolItalicFallback(op_cp, g.font)) |tab| {
                 italic = @divTrunc(@as(i32, tab) * @as(i32, size), 1000);
             }
         }
@@ -1423,8 +1496,8 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     var nparts: usize = 0;
     parts[0] = .{ .box = base, .dx = 0, .dy = 0 };
     nparts = 1;
-    var ha = bb.ha;
-    var db = bb.db;
+    var ha = if (sym_op) sym_bha else bb.ha;
+    var db = if (sym_op) sym_bdb else bb.db;
     if (has_sup) {
         parts[nparts] = .{ .box = sup, .dx = sup_dx, .dy = sup_dy };
         nparts += 1;
@@ -1683,7 +1756,19 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     // i64 with saturation: adversarial providers may return huge
     // rules or extents, and layout must stay total (never panic).
     const g0 = lc.glyphId(font, 0x221A);
-    const need64: i64 = @as(i64, rb.ha) + rb.db + clearance0 + th;
+    // Ink-true stacking boxes (issues #255): the radicand TFM height
+    // comes from its ink (`boxInk`), the surd box from its outline —
+    // uniform provider extents inflate `need` past the surd size (a
+    // spurious Size1 hop for `\sqrt{x}`) and park the bar 150mu below
+    // the surd ink top (disconnected junction, clipped ink). Without
+    // reporting hooks every term below keeps its exact legacy value.
+    var rha = rb.ha;
+    var rdb = rb.db;
+    if (boxInk(lc, rad)) |rib| {
+        rha = rib[0];
+        rdb = if (rib[1] < 0) -rib[1] else 0;
+    }
+    const need64: i64 = @as(i64, rha) + rdb + clearance0 + th;
     const arg64 = @divTrunc(need64 * 1000, size);
     const argcut = std.math.clamp(arg64, @as(i64, std.math.minInt(i32)), @as(i64, std.math.maxInt(i32)));
     const g = lc.variant(font, g0, @intCast(argcut));
@@ -1691,20 +1776,33 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     const gadv = gm.adv;
     const ge = gm.ext;
     const gw = @divTrunc(gadv * size, 1000);
-    const gha = @divTrunc(ge[0] * size, 1000);
-    const gdb = @divTrunc(ge[1] * size, 1000);
+    var sgha = @divTrunc(ge[0] * size, 1000);
+    var sgdb = @divTrunc(ge[1] * size, 1000);
+    if (lc.ink(font, g)) |sib| {
+        if (sib[3] > sib[1] and sib[2] > sib[0]) {
+            sgha = @max(0, @divTrunc(sib[3] * size, 1000));
+            sgdb = @max(0, -@divTrunc(sib[1] * size, 1000));
+        }
+    }
+    const gha = sgha;
+    const gdb = sgdb;
     // An oversized radical splits its excess half above (the clearance
     // grows, lifting the rule) and half below — KaTeX's `delimDepth`
     // adjustment, so the tail never takes the whole overshoot.
     const delim_depth: i64 = @as(i64, gha) + gdb - rw;
     var clearance = clearance0;
-    if (delim_depth > @as(i64, rb.ha) + rb.db + clearance0) {
-        const grown = @divTrunc(delim_depth + clearance0 - rb.ha - rb.db, 2);
+    if (delim_depth > @as(i64, rha) + rdb + clearance0) {
+        const grown = @divTrunc(delim_depth + clearance0 - rha - rdb, 2);
         const growncut = std.math.clamp(grown, @as(i64, std.math.minInt(i32)), @as(i64, std.math.maxInt(i32)));
         clearance = @intCast(growncut);
     }
     // Rule sits above the radicand; the radical rises to meet it.
-    const rule_top = rb.ha + clearance + rw;
+    // Merge #270/#269: `rule_top` is ink-derived (main) — never
+    // construction slack — so the `sqrt{\frac}` dead-space max stays
+    // dropped and the top gains exactly the KaTeX trailing kern
+    // (this branch: `rule_top + rw`, pinned 0.18.7 `sqrt.ts` +
+    // `buildCommon.ts` firstBaseline vlist, issue #255).
+    const rule_top = rha + clearance + rw;
     const kern: i32 = @divTrunc((@as(i32, 50) * size), 1000);
     const over: i32 = @divTrunc((@as(i32, 40) * size), 1000);
     const rad_x = gw + kern;
@@ -1751,13 +1849,15 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         .kind = .{ .rule = {} },
     });
     lc.bkids[s1 + 2] = .{ .box = ruleb, .dx = rule_dx, .dy = rule_y };
-    // KaTeX parity (pinned 0.18.7 `sqrt.ts`, audit #255): the vlist
-    // ends with a trailing `{kern: ruleWidth}` above the image, so the
-    // box top sits one rule thickness above the bar (800.28, not 760,
-    // for `\sqrt{x}`). Without it superscripts above a radical sit
-    // 40mu low against KaTeX.
+    // KaTeX parity (pinned 0.18.7 `sqrt.ts` + `buildCommon.ts`
+    // firstBaseline vlist, issue #255): the vlist ends with a trailing
+    // `{kern: ruleWidth}` above the image, so the box top sits one
+    // rule thickness above the bar (800.28, not 760, for `\sqrt{x}`).
+    // Without it superscripts above a radical sit 40mu low against
+    // KaTeX.
     var ha = rule_top + rw;
-    var db = rb.db;
+    var db = rdb;
+    if (rb.db > db) db = rb.db;
     const gtop = rad_dy + gha;
     if (gtop > ha) ha = gtop;
     const gbot = -(rad_dy - gdb);
@@ -2107,51 +2207,61 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     const kskew = @divTrunc(kskew1000 * @as(i32, size), 1000);
     const shift: i32 = if (shifty) @divTrunc(ic, 2) + kskew else 0;
     const wshift: i32 = if (a.wide and single) 2 * kskew else 0;
-    // v4 ink refinement (null hook = exact v3 behavior): zero-advance
-    // combining marks (U+20D7 ink hangs left of its origin) center by
-    // ink, not advance. There is deliberately no minimum-gap lift on
-    // the accent itself: KaTeX stacks the accent box at nucleus-top
-    // minus clearance with no floor (pinned 0.18.7 `accent.ts`), and
-    // the visual gap is whatever each face's ink gives — measuring
-    // and inking through the same fixture faces reproduces KaTeX's
-    // gaps within ink-vs-metrics rounding (~11mu: hat 88, vec 74,
-    // wide-hat 80 box-relative. The stacked box is the METRICS box
-    // (U+007E carries 350mu of metrics depth: see adb_place below).
-    // The 130mu floor survives only for the `\dddot` period row
-    // below: periods sit on their baseline, so unlike accent-designed
-    // glyphs they need the lift to clear the nucleus at all.
+    // Placement is KaTeX's `accent` builder (pinned 0.18.7): the
+    // accent ITEM (metrics box) sits nucleus-top minus clearance
+    // above the nucleus baseline; no minimum-gap floor on the accent
+    // itself (audit #253). h1 (body TFM height) comes from the
+    // nucleus INK top and d2 (accent TFM depth, `symbols.accentDepth`;
+    // only `~` is nonzero) stacks the box (main's (h1-clearance)+d2
+    // rule, identical to the box-relative Rule 12 + metrics depth
+    // below once ha/db are metrics boxes, not ink). The TFM/ink
+    // confusion it replaces (extent bottom for TFM depth: 0 vs 531
+    // for `^`, 350 vs 215 for `~`) parked every accent ~500mu too
+    // high (hat gap 608 vs KaTeX 93, vec 594 vs 76). Without nucleus
+    // ink the legacy base + uniform daylight floor below stay
+    // bit-identical (v3); zero-advance combining marks (U+20D7 ink
+    // hangs left of its origin) still center by ink, not advance
+    // (qa48 covers no-opaque-box, v3-without-ink, degenerate-ink,
+    // and operator-context cases).
     const min_gap: i32 = @divTrunc(@as(i32, 130) * size, 1000);
-    // Placement depth for the narrow accent box (issue #270 review):
-    // KaTeX stacks the accent's METRICS box, and the row-top math
-    // (`buildCommon.ts`: row top = -pstrut - pen - depth, pstrut
-    // bottom = item baseline) parks the item baseline one box depth
-    // above the pen — so ay adds the metrics depth, not the ink
-    // depth. U+007E is the only narrow accent whose metrics depth
-    // (350, pinned 0.18.7 metrics table) differs from its ink depth
-    // (0: the ink bottom sits 215 above its baseline); the
-    // ink-derived value kissed the nucleus (0.1mu) where KaTeX floats
-    // ~134mu clear (pinned screenshots). A host metrics depth wins
-    // automatically when it already reads 350; the wide branch below
-    // re-derives ay from ink and never reads this.
-    const adb_place: i32 = if (!a.wide and a.cp == 0x7E)
-        @divTrunc(@as(i32, 350) * size, 1000)
-    else
-        adb;
     const ink = lc.ink(font, g);
     var ink_ax: ?i32 = null;
-    // Accent ink bottom, shared by the wide branch below (one hook
-    // call; the memo makes repeats cheap but the call itself costs
-    // bytes in the shipped artifact).
+    // Accent ink edges, shared by the placement + wide arms below
+    // (one hook call; the memo makes repeats cheap but the call
+    // itself costs bytes in the shipped artifact). Null unless the
+    // hook reports non-degenerate ink.
     var ink_bottom: ?i32 = null;
+    var ink_top: ?i32 = null;
     if (ink) |ib| {
         const ix0 = @divTrunc(ib[0] * size, 1000);
+        const iy0 = @divTrunc(ib[1] * size, 1000);
         const ix1 = @divTrunc(ib[2] * size, 1000);
+        const iy1 = @divTrunc(ib[3] * size, 1000);
         if (ix1 > ix0) {
             const inkw = ix1 - ix0;
             if (adv == 0) ink_ax = @divTrunc(nb.w - inkw, 2) - ix0 + shift;
-            ink_bottom = @divTrunc(ib[1] * size, 1000);
+            ink_bottom = iy0;
+            ink_top = iy1;
         }
     }
+    // KaTeX parity (pinned 0.18.7 `accent.ts`): the accent box is
+    // the provider-extents box (ink-sized under #206 NULL
+    // derivation, NOT the lying constant: the FullInk issue253 tests
+    // serve the pre-#206 constant precisely so placement proves off
+    // ink). The TFM placement depth (`adb_use`, issue #270 review)
+    // rides ay only — the box keeps provider extents, ink-sized when
+    // the hook reports (main), the v3 extents otherwise.
+    const adb_place: i32 = adb;
+    // Merge #270/#269: `adb_use` IS the TFM depth when the accent
+    // ink hook reports (hook-gated for bit-identical v3) — KaTeX
+    // stacks the accent's METRICS box, whose depth is the TFM depth
+    // (0 for every narrow accent but `~`), NOT the provider box
+    // depth (lying 250 under the pre-#206 constant). The provider
+    // box depth feeds the containment below, never the placement.
+    const adb_use: i32 = if (!a.wide and ink_top != null)
+        @divTrunc(symbols.accentDepth(a.cp) * size, 1000)
+    else
+        adb_place;
     // KaTeX parity (pinned 0.18.7 `defineMacro`): `\dddot` / `\ddddot`
     // stack three / four period glyphs, not the combining marks
     // U+20DB/U+20DC. The row behaves like one accent glyph below.
@@ -2168,6 +2278,13 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
         dot_aw = dadv * @as(i32, @intCast(n_dots));
         dot_aha = @divTrunc(de[0] * size, 1000);
         dot_adb = @divTrunc(de[1] * size, 1000);
+        // Ink-sized dot boxes, like the accent box above.
+        if (lc.ink(font, dg)) |pib2| {
+            if (pib2[2] > pib2[0]) {
+                dot_aha = @max(0, @divTrunc(pib2[3] * size, 1000));
+                dot_adb = @max(0, -@divTrunc(pib2[1] * size, 1000));
+            }
+        }
         for (dot_boxes[0..n_dots], 0..) |*db, i| {
             db.* = try lc.allocBox(.{
                 .w = dadv,
@@ -2239,23 +2356,65 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     // KaTeX Rule 12, no floor (audit #253): the accent ITEM baseline
     // sits nucleus-top minus clearance PLUS the placement depth above;
     // sets the visual gap, as in KaTeX.
-    var ay = nb.ha - clearance + adb_place;
+    // Ink-true nucleus top for the rules below; the kern-tolerant
+    // `boxInk` resolves through glue kerns, while a null keeps every
+    // legacy base bit-identical (v3, hook-less providers).
+    const nib = boxInk(lc, nuc);
+    if (a.cp == 0x5E and !a.wide) {
+    }
+    // Placement depth is the provider box depth above (KaTeX stacks
+    // the accent's METRICS box: ay = nb.ha - clearance + adb_use;
+    // issue #270 review lifts only the tilde placement to the TFM
+    // 350 via `adb_use`). Host metrics depths win automatically
+    // (the FileStack path).
+    var ay = nb.ha - clearance + adb_use;
     // Accent ink bottom below the main baseline (positive when the
     // accent box dips under it). Box-derived by default; the wide
     // branch below re-derives it from ink when the hook reports.
-    var accent_below = adb_place - ay;
+    var accent_below = adb_use - ay;
+    if (nib) |nbib| {
+        // (h1 - clearance) + d2 for the narrow path: the body TFM
+        // height read off the nucleus ink top, the accent TFM depth
+        // compiled in (same `adb_use` term as above — stated ink-true
+        // so hook-less providers provably keep the legacy base).
+        const over: i32 = if (nbib[0] > xh) nbib[0] - xh else 0;
+        ay = over + adb_use;
+        accent_below = adb_use - ay;
+    } else if (ink_bottom) |_| {
+        // No nucleus ink: the accent hook reported but the nucleus
+        // has no ink top to clear (uncovered `x` in the qa48
+        // InkStub). There is nothing to lift off — the legacy base
+        // `ay` stands (merge #270/#269: main's construction-top
+        // lift parks the accent 250mu high here, the 944-vs-926
+        // qa48 regression). The period row below keeps its own
+        // 130mu lift; hook-less providers never reach this arm
+        // (ink_bottom is null without a hook).
+    }
     if (a.wide and n_dots == 0) {
         // KaTeX parity (pinned 0.18.7 `accent.ts` stretchy branch,
         // audit #253): a stretchy accent takes NO clearance — the SVG
         // box bottom sits at the body top — and the visual gap is the
-        // artwork's own ink-bottom offset above its box bottom. Our
-        // glyph accents take the same ink bottom (ay = body-top + gap
-        // - ink-bottom); the narrow rule would park the tall
-        // circumflex ink 51mu high and bury the wide tilde outright.
-        if (ink_bottom) |wiy0| {
-            const gap = @divTrunc(wideAccentGap(a.cp) * size, 1000);
-            ay = nb.ha + gap - wiy0;
-            accent_below = -(ay + wiy0);
+        // artwork's own ink-bottom offset above its box bottom.
+        // `symbols.wideInkBottom` carries the per-image artwork gap
+        // (widehat/widecheck 80, tilde 131/105/89/86); the image index
+        // is KaTeX's `stretchy` count rule (numChars > 5 takes image
+        // 4, else [1,1,2,2,3,3][numChars]). Our glyph accents take the
+        // same ink bottom (ay = body-ink-top + gap - ink-bottom); the
+        // narrow rule would park the tall circumflex ink 51mu high
+        // and bury the wide tilde outright. Without full ink the
+        // legacy base above stays.
+        if (nib) |nbib| {
+            if (ink_bottom) |wiy0| {
+                const nchars: usize = if (single) 1 else switch (parse.nodeAt(lc.pctx, a.nucleus)) {
+                    .group => |gg| parse.kidsOf(lc.pctx, gg).len,
+                    else => 1,
+                };
+                const img_table = [_]u8{ 1, 1, 2, 2, 3, 3 };
+                const img: u8 = if (nchars > 5) 4 else img_table[@min(nchars, 5)];
+                const gap = @divTrunc(symbols.wideInkBottom(a.cp, img) * size, 1000);
+                ay = nbib[0] + gap - wiy0;
+                accent_below = -(ay + wiy0);
+            }
         }
     }
     if (n_dots > 0) {
@@ -2269,12 +2428,32 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
         const dw = if (nb.w > dot_aw) nb.w else dot_aw;
         const dax = @divTrunc(dw - dot_aw, 2) + shift;
         var day = nb.ha - clearance + dot_adb;
-        if (lc.ink(font, lc.glyphId(font, '.'))) |pib| {
-            const piy0 = @divTrunc(pib[1] * size, 1000);
-            const pix1 = @divTrunc(pib[2] * size, 1000);
-            if (pix1 > @divTrunc(pib[0] * size, 1000)) {
-                const plift = nb.ha + min_gap - piy0;
-                if (plift > day) day = plift;
+        var day_placed = false;
+        if (nib) |nbib| {
+            // Nested-accent emulation (KaTeX `defineMacro`: dddot is
+            // outer dots over an inner dot accent): the row sits one
+            // inner-dot (U+02D9) height above the capped nucleus term.
+            // Period ink sits on its baseline, so without full ink the
+            // legacy minimum-gap lift below stays.
+            const dotg = lc.glyphId(font, 0x02D9);
+            if (lc.ink(font, dotg)) |dib| {
+                if (dib[2] > dib[0]) {
+                    const dot_top = @divTrunc(dib[3] * size, 1000);
+                    const inner: i32 = if (nbib[0] > xh) nbib[0] - xh else 0;
+                    const outer = inner + dot_top - xh;
+                    day = if (outer > 0) outer else 0;
+                    day_placed = true;
+                }
+            }
+        }
+        if (!day_placed) {
+            if (lc.ink(font, lc.glyphId(font, '.'))) |pib| {
+                const piy0 = @divTrunc(pib[1] * size, 1000);
+                const pix1 = @divTrunc(pib[2] * size, 1000);
+                if (pix1 > @divTrunc(pib[0] * size, 1000)) {
+                    const plift = nb.ha + min_gap - piy0;
+                    if (plift > day) day = plift;
+                }
             }
         }
         const s = try lc.allocKids(1 + n_dots);
@@ -2290,8 +2469,10 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
         // The parent must contain every child (KaTeX `makeVList`
         // maxPos/minPos span the whole stack): a short row tops out
         // below a tall nucleus top, and a deep row can dip below its
-        // depth. Audit #253 caught the clip: the tilde row (318) hid
-        // the x top (442) outside the parent box.
+        // depth. Audit #253 caught the clip: the tilde row hid the x
+        // top outside the parent box. Under lying provider extents
+        // the row top is day + the PROVIDER extents top (merge
+        // #270/#269 — same corner as the accent containment below).
         const dots_ha = day + dot_aha;
         const dots_top = if (nb.ha > dots_ha) nb.ha else dots_ha;
         const dots_bottom = dot_adb - day;
@@ -2306,7 +2487,16 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
     lc.bkids[s + 1] = .{ .box = ab, .dx = @divTrunc(w - nb.w, 2) + ax, .dy = ay };
     // Same containment for the accent itself (audit #253): short
-    // accents (tilde aha 318) must not clip a tall nucleus (x 442).
+    // accents must not clip a tall nucleus top. KaTeX `makeVList`
+    // maxPos spans the whole stack: parent top = max(nucleus top,
+    // accent row top). The accent row top above the main baseline is
+    // the item baseline (ay) plus the item height above its own
+    // baseline. Under lying provider extents the item height is the
+    // PROVIDER extents top (aha, e.g. tilde 700): the row tops at
+    // 361+700 = 1061 (FullInk tilde). Under #206 NULL derivation the
+    // extents ARE the ink slice, so the row tops at ay + ink top
+    // (hat 11+694 = 705; FileStack tilde 361+318 = 679) — same
+    // formula, KaTeX-exact in both corners (merge #270/#269).
     const accent_ha = ay + aha;
     const accent_top = if (nb.ha > accent_ha) nb.ha else accent_ha;
     return lc.allocBox(.{
@@ -2317,13 +2507,6 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
     });
 }
 
-/// KaTeX stretchy-accent ink-bottom offset above the SVG box bottom
-/// (== body top), in mu at text size, per family. Measured bounding
-/// boxes of the pinned 0.18.7 single-char `svgGeometry.ts` paths over
-/// their `stretchy.ts` viewBox/height (audit #253): widehat1 80,
-/// widecheck1 80, tilde1 131. Longer nuclei take wider KaTeX images
-/// with smaller offsets (tilde2 105); the single-char value is kept
-/// for all lengths (at most ~45mu high on 5+ char tildes).
 /// KaTeX `base.italic` for the integral family (pinned 0.18.7 metrics
 /// table), in thousandths: 194 on Size1, 444 on Size2. The reference
 /// faces carrying these glyphs (KaTeX Size converts) have no MATH
@@ -2341,8 +2524,61 @@ fn symbolItalicFallback(cp: u21, font: u16) ?i32 {
     return null;
 }
 
-fn wideAccentGap(cp: u21) i32 {
-    return if (cp == 0x007E) 131 else 80;
+/// True ink top/bottom of a laid-out box in layout units, y-up from
+/// the box emission base (the baseline for glyph boxes, the rule
+/// center line otherwise): single glyphs report the provider hook
+/// scaled to their size, solid rules report their construction box,
+/// lists take the extreme over reporting kids (offset by `dy`, the
+/// same `base - dy` composition `emitBox` applies). Null when no
+/// hook answers or no kid reports, and callers then fall back to
+/// construction extents bit-identically — so hook-less providers
+/// keep exact v3 behavior while ink-reporting stacks clear true ink
+/// (issues #253/#254/#255).
+fn boxInk(lc: *LayCtx, id: u16) ?[2]i32 {
+    // Hook-gated and all-or-nothing: without an ink hook there is no
+    // true ink anywhere (v3 bit-identical null), and a list resolves
+    // only when every ink-carrying kid does — a rule-only partial
+    // would understate glyph tops it cannot see (fuzz totality).
+    // Kern/empty kids carry no ink and are skipped, never fatal:
+    // inter-atom glue kerns sit between every pair of atoms (a kerned
+    // row still resolves through its reporting glyph kids). A glyph
+    // whose ink is degenerate (all-zero: blank-or-uncovered) still
+    // fails the list: callers must never fabricate ink for tofu.
+    if (lc.provider.inkBounds == null) return null;
+    const b = lc.boxes[id];
+    switch (b.kind) {
+        .glyph => |g| {
+            const ib = lc.ink(g.font, g.glyph) orelse return null;
+            if (ib[0] == 0 and ib[1] == 0 and ib[2] == 0 and ib[3] == 0) return null;
+            if (ib[2] <= ib[0]) return null;
+            return .{
+                @divTrunc(ib[3] * @as(i32, g.size), 1000),
+                @divTrunc(ib[1] * @as(i32, g.size), 1000),
+            };
+        },
+        .rule, .diag => return .{ b.ha, -b.db },
+        .list => |r| {
+            // Kid emission is `base - dy`, and `base` grows
+            // downward, so a positive `dy` lifts the kid above the
+            // parent base: ink edges add the offset.
+            var top: ?i32 = null;
+            var bot: ?i32 = null;
+            for (lc.bkids[r.start .. r.start + r.len]) |k| {
+                switch (lc.boxes[k.box].kind) {
+                    .kern, .empty => continue,
+                    else => {},
+                }
+                const sub = boxInk(lc, k.box) orelse return null;
+                const t = sub[0] + k.dy;
+                const o = sub[1] + k.dy;
+                if (top == null or t > top.?) top = t;
+                if (bot == null or o < bot.?) bot = o;
+            }
+            if (top == null) return null;
+            return .{ top.?, bot.? };
+        },
+        .kern, .empty => return null,
+    }
 }
 
 /// First laid-out glyph of a nucleus box, for metric lookups that must

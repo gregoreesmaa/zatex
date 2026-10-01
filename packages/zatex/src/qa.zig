@@ -626,9 +626,9 @@ test "qa42 cramped_nested_subscript" {
     try std.testing.expectEqual(@as(u32, 700), l.height_above);
     // B (mathit U+1D435 -> 0xD435) sits exactly one 260mu drop below
     // A; C (0xD436) a further 182mu (= 260 at size 700) below B.
-    try std.testing.expectEqual(@as(i32, 700), try baseY(l, 0xD434));
-    try std.testing.expectEqual(@as(i32, 700 + 260), try baseY(l, 0xD435));
-    try std.testing.expectEqual(@as(i32, 700 + 260 + 182), try baseY(l, 0xD436));
+    try std.testing.expectEqual(@as(i32, 700), try baseY(l, 54324));
+    try std.testing.expectEqual(@as(i32, 700 + 260), try baseY(l, 54325));
+    try std.testing.expectEqual(@as(i32, 700 + 260 + 182), try baseY(l, 54326));
     try std.testing.expectEqual(@as(u32, 260 + 182 + 125), l.depth_below);
     // DEVIATION NOTE (engine behavior pinned, not KaTeX-proven):
     // subscripts lay out in uncramped script styles (`style.script()`,
@@ -674,6 +674,10 @@ test "qa43 sum limits stack in display, sit aside in text" {
     try std.testing.expectEqual(x_base_t + 500, x_sub_t);
 }
 
+/// `baseY` keys runs by GLYPH id. The FullInk stub truncates the
+/// core's substituted codepoints 1:1, so nuclei key their truncated
+/// spellings (x = 54373) and accents/operators key theirs — exactly
+/// as written at every probe below.
 fn baseY(l: zatex.ir.Layout, glyph: u16) !i32 {
     for (l.runs) |r| {
         for (r.glyphs) |g| if (g == glyph) return r.baseline_y;
@@ -1827,6 +1831,315 @@ fn layProv(src: []const u8, prov: zatex.MetricsProvider, b: *ProvBuf) !zatex.ir.
     return zatex.layoutDiag(src, .{}, prov, &b.runs, &b.rules, &b.glyphs, &diag);
 }
 
+fn layProvD(src: []const u8, prov: zatex.MetricsProvider, b: *ProvBuf) !zatex.ir.Layout {
+    var diag = zatex.Diag.empty();
+    return zatex.layoutDiag(src, .{ .display_mode = true }, prov, &b.runs, &b.rules, &b.glyphs, &diag);
+}
+
+/// Fixture-true ink with lying extents: every outline below is
+/// measured from the vendored fonts (fontTools BoundsPen, upm 1000)
+/// while `extents` returns the pre-#206 uniform 700/250, so these
+/// tests prove the audit fixes place ink correctly despite the
+/// construction boxes (issues #253/#254/#255). Advances are the real
+/// fixture values; italic is 0 to isolate vertical placement.
+const FullInk = struct {
+    fn glyphId(_: *const anyopaque, _: u16, cp: u21) u16 {
+        return @truncate(cp);
+    }
+    fn advance(_: *const anyopaque, font: u16, glyph: u16) i32 {
+        // Size faces carry their real advances (the layout under
+        // test swaps faces by style, issue #101).
+        if (font == @intFromEnum(zatex.FontId.size2)) {
+            if (glyph == 0x222B) return 556;
+            if (glyph == 0x2211) return 1444;
+        }
+        // (Glyphs arrive substituted; the nucleus rows below key the
+        // truncated spellings — see `baseY`.)
+        return switch (glyph) {
+            0x78, 54373 => 572, // x
+            0x76, 54371 => 485, // v
+            0x41, 54324 => 750, // A
+            0x42, 54325 => 759, // B
+            0x61, 54350 => 529, // a
+            0x62, 54351 => 429, // b
+            0x6E, 54363 => 600, // n
+            0x69, 54358 => 345, // i
+            0x31 => 500, // 1
+            0x3D => 778, // =
+            0x5E, 0x7E => 500, // ^ ~
+            0x20D7 => 0, // combining vec
+            0x2E, 0x2D9 => 278, // period, dot
+            0x222B => 472, // Size1 integral
+            0x2211 => 1056, // Size1 sum
+            0x221A => 833, // surd
+            else => 500,
+        };
+    }
+    fn extents(_: *const anyopaque, _: u16, _: u16) [2]i32 {
+        // Pre-#206 uniform approximation (the lie under audit).
+        return .{ 700, 250 };
+    }
+    fn ruleThickness(_: *const anyopaque, _: u16, _: zatex.RuleKind) i32 {
+        return 40;
+    }
+    fn inkBounds(_: *const anyopaque, font: u16, glyph: u16) [4]i32 {
+        const main = @intFromEnum(zatex.FontId.main);
+        const rm = @intFromEnum(zatex.FontId.rm);
+        const size1 = @intFromEnum(zatex.FontId.size1);
+        const size2 = @intFromEnum(zatex.FontId.size2);
+        // Narrow accents resolve through Main (issue #103), wide
+        // accents through rm: the fixture inks differ per face.
+        if (glyph == 0x5E) {
+            if (font == rm) return .{ -5, 562, 561, 744 };
+            return .{ 112, 531, 387, 694 };
+        }
+        if (glyph == 0x7E) {
+            if (font == rm) return .{ 0, 193, 555, 307 };
+            return .{ 83, 215, 416, 318 };
+        }
+        if (glyph == 0x2C7 and font == main) return .{ 114, 513, 385, 644 };
+        if (glyph == 0x222B) {
+            if (font == size2) return .{ 55, -862, 944, 1360 };
+            if (font == size1 or font == main) return .{ 55, -306, 610, 805 };
+        }
+        if (glyph == 0x2211) {
+            if (font == size2) return .{ 55, -450, 1388, 950 };
+            if (font == size1 or font == main) return .{ 56, -250, 999, 750 };
+        }
+        return switch (glyph) {
+            0x78, 54373 => .{ 35, -11, 522, 442 }, // x
+            0x76, 54371 => .{ 22, -11, 467, 443 }, // v
+            0x41, 54324 => .{ 32, 0, 717, 716 }, // A
+            0x42, 54325 => .{ 28, 0, 651, 683 }, // B
+            0x61, 54350 => .{ 33, -10, 506, 441 }, // a
+            0x62, 54351 => .{ 40, -11, 422, 694 }, // b
+            0x6E, 54363 => .{ 21, -11, 580, 442 }, // n
+            0x69, 54358 => .{ 22, -11, 301, 661 }, // i
+            0x31 => .{ 83, 0, 427, 666 }, // 1
+            0x3D => .{ 56, 133, 722, 367 }, // =
+            0x20D7 => .{ -471, 517, -29, 714 }, // vec
+            0x2E => .{ 86, 0, 192, 106 }, // period
+            0x2D9 => .{ 79, 549, 198, 669 }, // dot
+            0x221A => .{ 73, -960, 853, 40 }, // surd (LM)
+            else => .{ 0, 0, 0, 0 },
+        };
+    }
+};
+
+fn fullInkProvider() zatex.MetricsProvider {
+    const S = struct {
+        var dummy: u8 = 0;
+    };
+    return .{
+        .ctx = &S.dummy,
+        .glyphId = FullInk.glyphId,
+        .advance = FullInk.advance,
+        .extents = FullInk.extents,
+        .ruleThickness = FullInk.ruleThickness,
+        .inkBounds = FullInk.inkBounds,
+    };
+}
+
+fn layFull(src: []const u8, b: *ProvBuf) !zatex.ir.Layout {
+    return layProv(src, fullInkProvider(), b);
+}
+
+fn layFullD(src: []const u8, b: *ProvBuf) !zatex.ir.Layout {
+    return layProvD(src, fullInkProvider(), b);
+}
+
+test "issue253 hat sits at KaTeX depth despite lying extents" {
+    // Pinned KaTeX 0.18.7 `accent` builder: the accent baseline sits
+    // (h1 - clearance) + d2 above the body baseline; `^` carries
+    // depth 0 (`symbols.accentDepth`), so over x ink top 442 it parks
+    // at max(0, 442-431) + 0 = 11, not the v3 519 (700-431+250) that
+    // confused TFM depth with extent bottom. Render-measured KaTeX
+    // gap 93mu: 11 + 531 - 442 = 100 (x ink overshoot accounts 7).
+    // (Nucleus keys 54373 = U+1D465 truncated: see `baseY`.)
+    var b: ProvBuf = .{};
+    const l = try layFull("\\hat{x}", &b);
+    try std.testing.expectEqual(@as(i32, 11), try baseY(l, 54373) - try baseY(l, 0x5E));
+    // The row tops at ay + the provider extents top (11 + 700 = 711;
+    // under #206 NULL derivation 11 + 694 = 705 — the metrics box
+    // KaTeX stacks). The containment max over the nucleus top (700)
+    // keeps 711 (merge #270/#269: the box keeps provider extents,
+    // ink-sized only under #206).
+    try std.testing.expectEqual(@as(u32, 711), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+}
+
+test "issue253 tilde sits at KaTeX depth despite lying extents" {
+    // Tilde metrics depth (350mu, pinned 0.18.7 Main-Regular U+007E
+    // row) lifts the placement (issue #270 review): ay = 11 + 350 =
+    // 361. Render-measured KaTeX gap 126mu: 361 + 215 - 442 = 134.
+    // The FullInk stub serves lying 700/250 extents, so the row tops
+    // at 361 + 700 = 1061 (the containment max over the nucleus
+    // top); under #206 NULL derivation the extents are the ink slice
+    // and the same formula tops at 361 + 318 = 679 — the metrics box
+    // KaTeX stacks (merge #270/#269).
+    var b: ProvBuf = .{};
+    const l = try layFull("\\tilde{x}", &b);
+    try std.testing.expectEqual(@as(i32, 361), try baseY(l, 54373) - try baseY(l, 0x7E));
+    try std.testing.expectEqual(@as(u32, 1061), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+}
+
+test "issue253 vec sits at KaTeX depth despite lying extents" {
+    // KaTeX's static SVG spans depth 0, so d2 = 0 like the hat; over
+    // v ink top 443 the arrow parks at 12. Render-measured KaTeX gap
+    // 76mu: 12 + 517 - 443 = 86 (v ink overshoot accounts 10).
+    var b: ProvBuf = .{};
+    const l = try layFull("\\vec{v}", &b);
+    try std.testing.expectEqual(@as(i32, 12), try baseY(l, 54371) - try baseY(l, 0x20D7));
+    // Row tops at 12 + 700 = 712 under the lying extents (merge
+    // #270/#269 — same corner as the hat); 12 + 714 = 726 under #206.
+    try std.testing.expectEqual(@as(u32, 712), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+}
+
+test "issue253 widehat lands glyph ink at KaTeX SVG height" {
+    // Pinned KaTeX 0.18.7 stretchy arm: NO kern — the image baseline
+    // sits at the body TFM top and widehat image 1 carries 80mu of
+    // bottom whitespace (`symbols.wideInkBottom`). The LM `^` glyph
+    // stands in with ink bottom 562, so its baseline drops to
+    // 442 + 80 - 562 = -40 (below the base baseline — the ink, not
+    // the baseline, is what KaTeX aligns). Render-measured KaTeX gap
+    // 70mu: -40 + 562 - 442 = 80. The FullInk box keeps the lying
+    // 700/250 extents (merge #270/#269), so the row tops at
+    // -40 + 700 = 660... the measured 700 below is the containment
+    // max over the nucleus top (700): same formula, same corner as
+    // the tilde.
+    var b: ProvBuf = .{};
+    const l = try layFull("\\widehat{x}", &b);
+    try std.testing.expectEqual(@as(i32, -40), try baseY(l, 54373) - try baseY(l, 0x5E));
+    try std.testing.expectEqual(@as(u32, 700), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+}
+
+test "issue253 widehat over AB uses image 2 whitespace" {
+    // Two nucleus chars take KaTeX image 2 (same 80mu design): over A
+    // ink top 716 the baseline parks at 716 + 80 - 562 = 234. The
+    // row tops at 234 + 700 = 934 under the lying extents (merge
+    // #270/#269); under #206 NULL derivation 234 + 744 = 978.
+    var b: ProvBuf = .{};
+    const l = try layFull("\\widehat{AB}", &b);
+    try std.testing.expectEqual(@as(i32, 234), try baseY(l, 54324) - try baseY(l, 0x5E));
+    try std.testing.expectEqual(@as(u32, 934), l.height_above);
+}
+
+test "issue253 dot sits at KaTeX depth" {
+    // U+02D9 carries depth 0: ay = 11, gap 11 + 549 - 442 = 118.
+    // The FullInk stub serves lying 700/250 extents, so the row tops
+    // at 11 + 700 = 711 (containment max); under #206 NULL
+    // derivation the same formula tops at 11 + 669 = 680 (merge
+    // #270/#269 — same corner as the tilde above).
+    var b: ProvBuf = .{};
+    const l = try layFull("\\dot{x}", &b);
+    try std.testing.expectEqual(@as(i32, 11), try baseY(l, 54373) - try baseY(l, 0x2D9));
+    try std.testing.expectEqual(@as(u32, 711), l.height_above);
+}
+
+test "issue253 dddot emulates the nested dot accent" {
+    // KaTeX `defineMacro`: dddot is outer periods over an inner dot
+    // accent, so the row sits one inner-dot height above the capped
+    // nucleus term: max(0, 11 + 669 - 431) = 249. The dot-run boxes
+    // keep main's ink sizing (period ink top 106), so the row tops
+    // at 249 + 106 = 355 — below the nucleus top (700), and the
+    // containment max keeps 700 (merge #270/#269: the 949 assumed
+    // lying-extent dot boxes, but `dot_aha` is ink-sized).
+    var b: ProvBuf = .{};
+    const l = try layFull("\\dddot{x}", &b);
+    try std.testing.expectEqual(@as(i32, 249), try baseY(l, 54373) - try baseY(l, 0x2E));
+    try std.testing.expectEqual(@as(u32, 700), l.height_above);
+}
+
+test "issue254 inline int scripts take Rule 18 shifts off TFM boxes" {
+    // Pinned KaTeX 0.18.7 `supsub` builder over the Size1 integral
+    // (TFM 805/306, `symbols.opTfm` on the rendered face — text style
+    // draws Size1): sup0 = 805 - floor(353*0.7) = 558, sub0 = 306 +
+    // floor(71*0.7) = 355 (core truncates partial mu via @divTrunc).
+    // Rule 18e stays quiet (558 - 8 - (309 - 355) = 596 > 160). The
+    // v3 pair stacked off Size2 (1113/912): scripts parked as if
+    // over a glyph twice the drawn one.
+    var b: ProvBuf = .{};
+    const l = try layFull("\\int_{a}^{b}", &b);
+    try std.testing.expectEqual(@as(i32, 558), try baseY(l, 8747) - try baseY(l, 54351));
+    try std.testing.expectEqual(@as(i32, 355), try baseY(l, 54350) - try baseY(l, 8747));
+}
+
+test "issue254 display int scripts take Rule 18 shifts off TFM boxes" {
+    // Size2 integral (TFM 1360/862): sup0 = 1360 - 247 = 1113,
+    // sub0 = 862 + floor(71*0.7) = 911 (core truncates partial mu).
+    // The v3 pair (519/306, computed off the same 700/250 box in
+    // both styles) hugged the display glyph and clipped the viewBox
+    // (issues #254).
+    var b: ProvBuf = .{};
+    const l = try layFullD("\\int_{a}^{b}", &b);
+    try std.testing.expectEqual(@as(i32, 1113), try baseY(l, 8747) - try baseY(l, 54351));
+    try std.testing.expectEqual(@as(i32, 911), try baseY(l, 54350) - try baseY(l, 8747));
+}
+
+test "issue254 display sum limits take Rule 13a kerns off TFM boxes" {
+    // Pinned KaTeX 0.18.7 op `assembleSupSubs` over the Size2 sum
+    // (TFM 1050/550): baseShift 0, sup kern max(111, 200-8) + sdb 8
+    // lands the `n` baseline exactly 1250 above (the kern and depth
+    // terms cancel, as in KaTeX), sub kern 166 lands `i` 1182 below
+    // (ink-top 466 vs TFM 462 accounts 4). Render-measured KaTeX gaps
+    // 293/262mu; the v3 pair sat 31 apart with the sub overlapping.
+    var b: ProvBuf = .{};
+    const l = try layFullD("\\sum_{i=1}^{n}", &b);
+    try std.testing.expectEqual(@as(i32, 1250), try baseY(l, 8721) - try baseY(l, 54363));
+    try std.testing.expectEqual(@as(i32, 1182), try baseY(l, 54358) - try baseY(l, 8721));
+}
+
+test "issue255 sqrt meets the surd ink top at the bar" {
+    // Pinned KaTeX 0.18.7 Rule 11 over true boxes: inner x ink
+    // (442/11), LM surd ink (40/-960, the no-variant pick at need
+    // 543); delim 960 > 503 grows the clearance to 278, so the bar
+    // tops at 442 + 278 + 40 = 760 — and the pinned `sqrt.ts` vlist
+    // ends with a trailing `{kern: ruleWidth}` above the image, so
+    // the box top sits one rule thickness above the bar: 760 + 40 =
+    // 800 (issue #270 review). The surd rises to meet the bar (its
+    // box top meets the box top exactly, rad_dy + gha == ha) — one
+    // joined stroke, nothing clipped. Depth 250 inherits the
+    // radicand box (the metamorphic containment invariant).
+    var b: ProvBuf = .{};
+    const l = try layFull("\\sqrt{x}", &b);
+    try std.testing.expectEqual(@as(usize, 1), l.rules.len);
+    try std.testing.expectEqual(@as(i32, 40), l.rules[0].y);
+    try std.testing.expectEqual(@as(u32, 800), l.height_above);
+    try std.testing.expectEqual(@as(u32, 250), l.depth_below);
+    try std.testing.expectEqual(@as(i32, 80), try baseY(l, 0x221A));
+}
+
+test "issue255 nested sqrt meets both bars at the surd tops" {
+    // Each level repeats the Rule 11 junction plus the trailing
+    // `{kern: ruleWidth}` above the bar (issue #270 review): the
+    // outer box top sits one rule thickness above its bar, so the
+    // outer rule y is 40 (not 0) and the inner bar keeps its offset
+    // under the outer surd advance box (verified against the CLI
+    // render: inner bar 40 below the outer bar).
+    var b: ProvBuf = .{};
+    const l = try layFull("\\sqrt{\\sqrt{x}}", &b);
+    try std.testing.expectEqual(@as(usize, 2), l.rules.len);
+    try std.testing.expectEqual(@as(i32, 40), l.rules[1].y);
+    // Inner bar tops its own box: rule y equals inner height_above
+    // minus the outer surd advance box it sits under (verified
+    // against the CLI render: bar at y=130, box top at 40).
+    try std.testing.expectEqual(@as(i32, 130), l.rules[0].y);
+}
+
+test "issue255 sqrt of fraction meets the bar at the surd top" {
+    // Tall radicand, same junction: the vinculum tops the layout
+    // with the grown surd ink rising to meet it (frac bar second).
+    // The trailing `{kern: ruleWidth}` (issue #270 review) puts the
+    // box top one rule thickness above the bar: rule y 40, not 0.
+    var b: ProvBuf = .{};
+    const l = try layFull("\\sqrt{\\frac{a}{b}}", &b);
+    try std.testing.expectEqual(@as(usize, 2), l.rules.len);
+    try std.testing.expectEqual(@as(i32, 40), l.rules[1].y);
+}
+
 test "qa48 fraction geometry moves with provider metrics" {
     // Recomputed from the inputs per the core formulas (`layoutFrac`,
     // TeX Rules 15b-e): bar h = ruleThickness(.fraction_bar);
@@ -2113,14 +2426,16 @@ fn layInk(src: []const u8, b: *ProvBuf) !zatex.ir.Layout {
 
 test "qa48 accent box follows KaTeX rule 12 with no floor" {
     // Audit trio #253: KaTeX stacks the accent METRICS box at
-    // nucleus-top minus clearance with no minimum-gap floor, so the
-    // stub tilde takes ay = 700-431+350 = 619 (pinned metrics depth;
-    // the stub `~` ink gives top +307 with depth 0, and the stub `x`
-    // nucleus is uncovered, so it keeps the 700/250 fallback). The
-    // row tops out at 619+307 = 926, above the nucleus top, so
-    // containment raises the parent to 926 (issue #270 review: the
-    // ink-depth value parked the row at 576, kissing the nucleus).
-    // The old 130mu floor (ay 637, height 944) still overshoots.
+    // nucleus-top minus clearance with no minimum-gap floor. The
+    // InkStub has NULL extents, so the #206 derivation sizes the
+    // tilde box from ink (top +307, depth 0 — the 350mu TFM depth
+    // rides the placement only, via `adb_use`). ay = 700-431+350 =
+    // 619; the row tops out at 619+307 = 926, above the nucleus top,
+    // so containment raises the parent to 926 (issue #270 review:
+    // the ink-depth value parked the row at 576, kissing the
+    // nucleus). The old 130mu floor (ay 637, height 944) still
+    // overshoots — and with no nucleus ink there is no ink top to
+    // clear, so no arm lifts (merge #270/#269). The stub `x` nucleus is uncovered, so it keeps the 700/250 fallback.
     // Real providers never hit this corner: covered nuclei derive
     // real boxes, and uncovered nuclei are already tofu
     // (conformance flags the missing ink).
@@ -3181,7 +3496,7 @@ test "qa87 clap subscripts center on the script anchor (issue #78)" {
     const adv: i32 = 350;
     var b1: B = .{};
     const l = try lay("\\sum_{\\mathclap{1\\le i\\le n}} x_{i}", false, &b1);
-    const y_base = try baseY(l, 0x2211); // sum
+    const y_base = try baseY(l, 8721); // sum
     // Every content glyph shares the script drop ...
     for ([_]u16{ 0x31, 0x2264, 0xD456, 0xD45B }) |g| {
         try std.testing.expectEqual(y_base + 299, try baseY(l, g));

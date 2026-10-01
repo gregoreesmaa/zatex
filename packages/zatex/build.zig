@@ -57,6 +57,55 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
 
+    // Scripted test double for hosts (issue #274): `testdouble.zig`
+    // implements the SAME zatex.h entry points with deterministic
+    // scripted responses (fixed OK layout, forced no_space/limit
+    // with needs, forced bad-input with err_offset), so hosts
+    // `dlopen` the double in CI instead of hand-rolling stubs. A
+    // stub, not a second engine: no layout math, scripted bytes
+    // only — the module never imports the engine, and the dist lib
+    // never imports it (the size gate proves it: artifacts install
+    // to zig-out/test-double, never zig-out/lib).
+    const td_mod = b.addModule("testdouble", .{
+        .root_source_file = b.path("src/testdouble.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const td_tests = b.addTest(.{ .root_module = td_mod });
+    const run_td_tests = b.addRunArtifact(td_tests);
+    test_step.dependOn(&run_td_tests.step);
+    const td_dir: std.Build.InstallDir = .{ .custom = "test-double" };
+    // ReleaseSmall, like the dist lib: the double is a CI fixture,
+    // not a debug target — it should stay a small static file hosts
+    // can vendor without thinking.
+    const td_dist_mod = b.addModule("testdouble_dist", .{
+        .root_source_file = b.path("src/testdouble.zig"),
+        .target = target,
+        .optimize = .ReleaseSmall,
+    });
+    const td_static = b.addLibrary(.{
+        .name = "zatex_test",
+        .root_module = td_dist_mod,
+        .linkage = .static,
+    });
+    td_static.installHeader(b.path("src/zatex.h"), "zatex.h");
+    td_static.installHeader(b.path("src/zatex_testdouble.h"), "zatex_testdouble.h");
+    const install_td_static = b.addInstallArtifact(td_static, .{
+        .dest_dir = .{ .override = td_dir },
+        .h_dir = .{ .override = td_dir },
+    });
+    const td_shared = b.addLibrary(.{
+        .name = "zatex_test",
+        .root_module = td_dist_mod,
+        .linkage = .dynamic,
+    });
+    const install_td_shared = b.addInstallArtifact(td_shared, .{
+        .dest_dir = .{ .override = td_dir },
+    });
+    const td_step = b.step("test-double", "Build the scripted host test double (issue #274; installs to zig-out/test-double, never zig-out/lib)");
+    td_step.dependOn(&install_td_static.step);
+    td_step.dependOn(&install_td_shared.step);
+
     // MathML emitter (lives in packages/zatex-mathml): test and
     // support modules render through it. Wired by source path, not by
     // package dependency — zatex-mathml depends on the zatex package,
@@ -339,7 +388,7 @@ pub fn build(b: *std.Build) void {
     // engine (full profile), whose suite runs in its own targets.
     const qa_tests = b.addTest(.{
         .root_module = qa_mod,
-        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa81", "qa82", "qa83", "qa84", "qa85", "qa86", "qa87", "qa88", "qa218", "qa219", "qa220", "qa139", "qa140", "qa141", "qa144", "qa dump", "qa101", "qa104", "qa96", "qa107", "qa108", "qa113", "qa114", "qa115", "oracle-geometry", "trip", "issue200", "issue246" },
+        .filters = &.{ "qa40", "qa41", "qa42", "qa43", "qa44", "qa45", "qa46", "qa47", "qa48", "qa49", "qa50", "qa51", "qa52", "qa53", "qa54", "qa55", "qa56", "qa57", "qa58", "qa59", "qa60", "qa61", "qa62", "qa63", "qa64", "qa65", "qa66", "qa67", "qa68", "qa69", "qa70", "qa71", "qa72", "qa73", "qa74", "qa75", "qa76", "qa77", "qa78", "qa79", "qa80", "qa81", "qa82", "qa83", "qa84", "qa85", "qa86", "qa87", "qa88", "qa218", "qa219", "qa220", "qa139", "qa140", "qa141", "qa144", "qa dump", "qa101", "qa104", "qa96", "qa107", "qa108", "qa113", "qa114", "qa115", "oracle-geometry", "trip", "issue200", "issue246", "issue253", "issue254", "issue255" },
     });
     const run_qa_tests = b.addRunArtifact(qa_tests);
     run_qa_tests.setCwd(b.path("."));

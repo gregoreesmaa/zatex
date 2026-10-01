@@ -103,6 +103,17 @@ by `x_scale`/1000 about the run origin (`x`, `baseline_y`) —
 CoreText: save, translate to the origin, scale x, draw, restore.
 Without it wide accents render at natural size, off-span.
 
+Rounding contract (issue #272, decided: u16 per-mille kept — float
+would only re-encode the truncated ratio with binary error, and the
+core stays integer-only). The engine computes
+`trunc(span*1000/nat)` — truncation toward zero, clamped to u16
+(stretch-only paths keep 1000 unless the span exceeds the natural
+width; fitting paths floor at 1). Hosts truncate pen advances the
+same way (`(step*x_scale)/1000` in integer math, as zatex-png
+`render.zig` does) and use `x_scale/1000.0` in double for raster
+scale. Pinned by the `cabi x_scale is truncated per-mille` test
+(1000-span over a 600 advance lands exactly 1666, not 1667).
+
 Stride contract (issue #203): appending `x_scale` changed the array
 stride (20 → 24 → 28 with the `color` tail, issue #251), so a new
 dylib writing full structs into an old host's 20-byte slots would
@@ -122,6 +133,17 @@ fall back to the v1 entry when absent (old dylib) — or negotiate
 once via `zatex_capabilities()` (issue #262) and branch on
 `ZATEX_CAP_X_SCALE`/`ZATEX_CAP_RUN_COLOR` instead of per-symbol
 probing.
+
+One mechanism (issue #271): the per-field stride writes from
+#197/#203/#251 now live in a single field table (`run_tail_fields`
+in `cabi.zig`, exercised by the `cabi run tails cross complete
+fields only` test over every stride 20..40) — future tails append
+table rows, never new branches. The stride parameter IS the size
+negotiation for run arrays (a first-field size cannot stride an
+array, so the run struct carries none — single structs grow
+append-only instead). `ZATEX_RUN_SIZE_V1` (20) and
+`ZATEX_RUN_SIZE_CUR` (28) name the only two sizes a published header
+ever produced; old hosts stay bit-identical.
 
 Space failures (issue #263): on status 6 (no_space) and 7 (limit),
 `out->nruns`/`nrules` carry the counts the formula actually needs,
@@ -145,6 +167,21 @@ conventionally painted `#cc0000` — the full recipe lives in
 (living in `packages/zatex-mathml`, alongside the core library)
 returns only a status (bytes written or `-status`); hosts needing the
 message call the layout entry for the same input.
+
+Typed code (issue #273): `zatex_layout_t.err_code` refines `status`
+with one `ZATEX_ERR_*` value (0 on success) so hosts branch on the
+retry policy without parsing the message. The three `OVERFLOW_*`
+codes compose with the need-counts above — they always carry the
+exact needs in `nruns`/`nrules` (retry once, grown; the code names
+the first short buffer in runs/rules/glyphs priority, and a
+null-buffer probe names its first null the same way).
+`ERR_NO_SPACE` carries zeroed counts (even maximum buffers cannot
+succeed — fail with a message) and `ERR_LIMIT` names a request-shape
+problem (over-ceiling caps, short stride). The field is append-only
+(old readers ignore the tail); gate reads on
+`ZATEX_CAP_ERR_CODE` and zero-initialize the layout struct, since a
+dylib predating the bit never writes the field. Pinned by the
+`cabi err_code refines status` test.
 
 ## Metrics conformance
 
