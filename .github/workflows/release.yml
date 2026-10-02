@@ -1,13 +1,38 @@
-# Per-release versioned libzatex binaries (issue #259).
+# Versioned release binaries for every package (issue #259 and follow-ups).
 #
-# On every `v*` tag push: build the static + dynamic engine on each
-# release runner (native targets only — no cross-link surprises),
-# stage them under versioned filenames documented in
-# `docs/install.md`, and attach them to the GitHub release for the
-# tag (creating it when the tag has none yet). Docs-only otherwise:
-# this workflow never runs on `main` pushes or PRs and touches no
-# build input, so `zig build test` and `tools/size_gate.sh` cannot
-# see it.
+# On every `v*` tag push: build all shippable outputs on every OS/CPU
+# combination below, stage them under the versioned filenames
+# documented in `docs/install.md`, and attach them to the GitHub
+# release for the tag (creating it when the tag has none yet).
+# Docs-only otherwise: this workflow never runs on `main` pushes or
+# PRs and touches no build input, so `zig build test` and
+# `tools/size_gate.sh` cannot see it.
+#
+# Shipped per package (only what each build.zig installs — nothing invented):
+#   zatex ......... libzatex static + dynamic, zatex.h (+ zatex_fileprovider.h,
+#                   the blessed provider surface for source-build hosts)
+#   zatex-mathml .. libzatex_mathml static + dynamic, zatex_mathml.h
+#   zatex-svg ..... libzatex_svg static + dynamic, zatex-svg CLI (pure Zig
+#                   module: no C header exists to ship)
+#   zatex-png ..... zatex-png CLI (no library target in its build.zig)
+# The scripted test double (`zig build test-double`) and the `hello` /
+# `inspect` diagnostics stay source-built CI fixtures — never release assets.
+#
+# How each leg builds (all verified by cross-compiling the full matrix
+# from one host before merging):
+#   - Libraries and the zatex-svg CLI are backend-free and cross-link
+#     cleanly, so one ubuntu runner builds all six OS/CPU targets.
+#   - The zatex-png CLI links CoreGraphics on Apple targets
+#     (`-Dbackend=auto` = cg there), which needs the macOS SDK — so the
+#     two macOS png binaries build natively on macos-14 (which carries
+#     both arch SDK slices), while Linux/Windows png binaries
+#     cross-build with `-Dbackend=software` (libc-only, zero host
+#     dependencies). Layout dimensions are backend-independent
+#     (see packages/zatex-png/README.md).
+#   - On Windows targets the DLL import library and the static archive
+#     both install as `<name>.lib`, so build.zig installs the static
+#     archive as `<name>_static.lib` there (classic name elsewhere);
+#     the staging below renames to the documented `-static.lib` infix.
 name: release
 on:
   push:
@@ -17,46 +42,185 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  # Libraries + zatex-svg CLI: backend-free, cross-built from ubuntu.
+  libs:
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - runner: macos-14
-            target: aarch64-macos
-            dyn_ext: dylib
-          - runner: ubuntu-latest
-            target: x86_64-linux
-            dyn_ext: so
-    runs-on: ${{ matrix.runner }}
+        target:
+          - x86_64-linux
+          - aarch64-linux
+          - x86_64-macos
+          - aarch64-macos
+          - x86_64-windows
+          - aarch64-windows
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
-      - name: Build libzatex (native release target)
-        working-directory: packages/zatex
-        run: zig build -Dtarget=${{ matrix.target }}
-      - name: Stage versioned artifacts
-        working-directory: packages/zatex
+      - name: Build zatex, zatex-mathml, zatex-svg (${{ matrix.target }})
+        run: |
+          for pkg in zatex zatex-mathml zatex-svg; do
+            (cd packages/$pkg && zig build -Dtarget=${{ matrix.target }})
+          done
+        shell: bash
+      - name: Stage versioned artifacts (${{ matrix.target }})
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
           TAG="${GITHUB_REF_NAME}"
-          cp "zig-out/lib/libzatex.a" \
-            "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${{ matrix.target }}.a"
-          cp "zig-out/lib/libzatex.${{ matrix.dyn_ext }}" \
-            "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${{ matrix.target }}.${{ matrix.dyn_ext }}"
-      - name: Stage C header (macOS leg only; identical everywhere)
-        if: matrix.target == 'aarch64-macos'
-        working-directory: packages/zatex
-        run: |
-          cp "src/zatex.h" "$GITHUB_WORKSPACE/dist/zatex-${GITHUB_REF_NAME}.h"
+          T="${{ matrix.target }}"
+          case "$T" in
+            *-windows)
+              cp "packages/zatex/zig-out/lib/zatex_static.lib" \
+                "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${T}-static.lib"
+              cp "packages/zatex/zig-out/lib/zatex.lib" \
+                "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${T}-import.lib"
+              cp "packages/zatex/zig-out/bin/zatex.dll" \
+                "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${T}.dll"
+              cp "packages/zatex-mathml/zig-out/lib/zatex_mathml_static.lib" \
+                "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}-static.lib"
+              cp "packages/zatex-mathml/zig-out/lib/zatex_mathml.lib" \
+                "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}-import.lib"
+              cp "packages/zatex-mathml/zig-out/bin/zatex_mathml.dll" \
+                "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.dll"
+              cp "packages/zatex-svg/zig-out/lib/zatex_svg_static.lib" \
+                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}-static.lib"
+              cp "packages/zatex-svg/zig-out/lib/zatex_svg.lib" \
+                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}-import.lib"
+              cp "packages/zatex-svg/zig-out/bin/zatex_svg.dll" \
+                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.dll"
+              cp "packages/zatex-svg/zig-out/bin/zatex-svg.exe" \
+                "$GITHUB_WORKSPACE/dist/zatex-svg-${TAG}-${T}.exe"
+              ;;
+            *-macos)
+              cp "packages/zatex/zig-out/lib/libzatex.a" \
+                "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${T}.a"
+              cp "packages/zatex/zig-out/lib/libzatex.dylib" \
+                "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${T}.dylib"
+              cp "packages/zatex-mathml/zig-out/lib/libzatex_mathml.a" \
+                "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.a"
+              cp "packages/zatex-mathml/zig-out/lib/libzatex_mathml.dylib" \
+                "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.dylib"
+              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.a" \
+                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.a"
+              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.dylib" \
+                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.dylib"
+              cp "packages/zatex-svg/zig-out/bin/zatex-svg" \
+                "$GITHUB_WORKSPACE/dist/zatex-svg-${TAG}-${T}"
+              ;;
+            *-linux)
+              cp "packages/zatex/zig-out/lib/libzatex.a" \
+                "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${T}.a"
+              cp "packages/zatex/zig-out/lib/libzatex.so" \
+                "$GITHUB_WORKSPACE/dist/libzatex-${TAG}-${T}.so"
+              cp "packages/zatex-mathml/zig-out/lib/libzatex_mathml.a" \
+                "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.a"
+              cp "packages/zatex-mathml/zig-out/lib/libzatex_mathml.so" \
+                "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.so"
+              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.a" \
+                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.a"
+              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.so" \
+                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.so"
+              cp "packages/zatex-svg/zig-out/bin/zatex-svg" \
+                "$GITHUB_WORKSPACE/dist/zatex-svg-${TAG}-${T}"
+              ;;
+          esac
+        shell: bash
       - uses: actions/upload-artifact@v4
         with:
-          name: libzatex-${{ matrix.target }}
+          name: libs-${{ matrix.target }}
+          path: dist/
+
+  # zatex-png CLI for Linux/Windows: software backend (libc-only),
+  # cross-built from ubuntu alongside the libs.
+  png-cross:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-linux
+          - aarch64-linux
+          - x86_64-windows
+          - aarch64-windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Build zatex-png (software backend, ${{ matrix.target }})
+        working-directory: packages/zatex-png
+        run: zig build -Dtarget=${{ matrix.target }} -Dbackend=software
+      - name: Stage versioned CLI (${{ matrix.target }})
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          TAG="${GITHUB_REF_NAME}"
+          T="${{ matrix.target }}"
+          case "$T" in
+            *-windows) cp "packages/zatex-png/zig-out/bin/zatex-png.exe" \
+              "$GITHUB_WORKSPACE/dist/zatex-png-${TAG}-${T}.exe" ;;
+            *) cp "packages/zatex-png/zig-out/bin/zatex-png" \
+              "$GITHUB_WORKSPACE/dist/zatex-png-${TAG}-${T}" ;;
+          esac
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: png-${{ matrix.target }}
+          path: dist/
+
+  # zatex-png CLI for macOS: CoreGraphics backend needs the macOS SDK,
+  # so both archs build natively on macos-14 (arm64 runner ships both
+  # SDK slices; Zig targets each arch explicitly).
+  png-macos:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-macos, x86_64-macos]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Build zatex-png (CoreGraphics backend, ${{ matrix.target }})
+        working-directory: packages/zatex-png
+        run: zig build -Dtarget=${{ matrix.target }}
+      - name: Stage versioned CLI (${{ matrix.target }})
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "packages/zatex-png/zig-out/bin/zatex-png" \
+            "$GITHUB_WORKSPACE/dist/zatex-png-${GITHUB_REF_NAME}-${{ matrix.target }}"
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: png-${{ matrix.target }}
+          path: dist/
+
+  # C headers (identical on every target — staged once).
+  headers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage C headers
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          TAG="${GITHUB_REF_NAME}"
+          cp "packages/zatex/src/zatex.h" \
+            "$GITHUB_WORKSPACE/dist/zatex-${TAG}.h"
+          cp "packages/zatex/src/zatex_fileprovider.h" \
+            "$GITHUB_WORKSPACE/dist/zatex_fileprovider-${TAG}.h"
+          cp "packages/zatex-mathml/src/zatex_mathml.h" \
+            "$GITHUB_WORKSPACE/dist/zatex_mathml-${TAG}.h"
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: headers
           path: dist/
 
   publish:
-    needs: build
+    needs: [libs, png-cross, png-macos, headers]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,7 +234,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --title "$TAG" \
-              --notes "libzatex $TAG. Install/load recipe: docs/install.md at this tag. ABI notes: CHANGELOG.md at this tag."
+              --notes "ZaTeX $TAG. Install/load recipe: docs/install.md at this tag. ABI notes: CHANGELOG.md at this tag."
           fi
           gh release upload "$TAG" dist/* --clobber
         env:

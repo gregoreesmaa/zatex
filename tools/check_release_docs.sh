@@ -7,7 +7,8 @@
 # The workflow exists; only the first `v*` tag is still missing. This
 # gate fails loudly if the three surfaces ever disagree again:
 #   - .github/workflows/release.yml publishes on `v*` tags with
-#     versioned libzatex-<tag>-<target> assets + header + SHA256SUMS,
+#     versioned libzatex-<tag>-<target> assets (plus mathml/svg libs,
+#     both CLI tools, headers) + SHA256SUMS,
 #   - docs/install.md names those same assets and states the same
 #     first-tag trigger plus the until-then source-pin recipe,
 #   - CHANGELOG.md states #259 closed / first-tag trigger,
@@ -34,9 +35,16 @@ CABI=packages/zatex/src/cabi.zig
 HEADER=packages/zatex/src/zatex.h
 
 need "$WF" 'tags: ["v*"]'
-need "$WF" 'libzatex-${TAG}-${{ matrix.target }}'
+need "$WF" 'libzatex-${TAG}-${T}'
+need "$WF" 'libzatex_mathml-${TAG}-${T}'
+need "$WF" 'libzatex_svg-${TAG}-${T}'
+need "$WF" 'zatex-png-${TAG}-${T}'
+need "$WF" 'zatex-svg-${TAG}-${T}'
 need "$WF" 'SHA256SUMS'
 need "$INSTALL" 'libzatex-<tag>-<target>'
+need "$INSTALL" 'libzatex_mathml-vX.Y.Z-<target>'
+need "$INSTALL" 'zatex-png-vX.Y.Z-<target>'
+need "$INSTALL" 'zatex-svg-vX.Y.Z-<target>'
 need "$INSTALL" 'SHA256SUMS'
 need "$INSTALL" 'first `v*` tag'
 need "$INSTALL" 'issue #259 is closed'

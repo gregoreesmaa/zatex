@@ -11,8 +11,13 @@ No versioned binaries are published yet — not a contradiction:
 issue #259 is closed (the release workflow
 `.github/workflows/release.yml` exists), but no `v*` tag has been
 pushed, so no GitHub release assets exist. The first `v*` tag
-publishes the first binaries (`libzatex-<tag>-<target>.{a,dylib,so}`
-+ `zatex-<tag>.h` + `SHA256SUMS`, per `docs/install.md`); until
+publishes the first binaries for every package on all six
+`x86_64`/`aarch64` × `linux`/`macos`/`windows` targets —
+`libzatex` / `libzatex_mathml` / `libzatex_svg` static + dynamic
+(`-static.lib` + `.dll` + `-import.lib` on Windows),
+`zatex-png` / `zatex-svg` CLIs (CoreGraphics backend on macOS,
+software elsewhere), headers (`zatex`, `zatex_fileprovider`,
+`zatex_mathml`) + `SHA256SUMS`, per `docs/install.md`); until
 then hosts pin from source (§4 of that recipe: commit SHA +
 local checksums + `zatex_version()` word). Current source state
 for hosts building from source:

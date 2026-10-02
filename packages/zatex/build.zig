@@ -40,7 +40,18 @@ pub fn build(b: *std.Build) void {
         .root_module = dist_mod,
         .linkage = .static,
     });
-    b.installArtifact(lib);
+    // On Windows the DLL import library and the static archive both
+    // install as `zatex.lib` (one clobbers the other in zig-out/lib —
+    // the release workflow ships both), so the static archive takes
+    // the `_static` suffix there. Everywhere else the classic
+    // `libzatex.a` name is untouched, and the size gate only measures
+    // the default (native) artifact.
+    if (target.result.os.tag == .windows) {
+        const install_lib = b.addInstallArtifact(lib, .{ .dest_sub_path = "zatex_static.lib" });
+        b.getInstallStep().dependOn(&install_lib.step);
+    } else {
+        b.installArtifact(lib);
+    }
 
     // Dynamic plugin artifact (issue 12): hosts like `read` load the
     // engine at RUNTIME via dlopen, never at link time — plugins live

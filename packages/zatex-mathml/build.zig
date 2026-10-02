@@ -37,7 +37,16 @@ pub fn build(b: *std.Build) void {
         .root_module = dist_mod,
         .linkage = .static,
     });
-    b.installArtifact(lib);
+    // Windows ships both the static archive and the DLL import
+    // library as `zatex_mathml.lib` (core precedent in
+    // `packages/zatex/build.zig`), so the static archive takes the
+    // `_static` suffix there; the classic name holds everywhere else.
+    if (target.result.os.tag == .windows) {
+        const install_lib = b.addInstallArtifact(lib, .{ .dest_sub_path = "zatex_mathml_static.lib" });
+        b.getInstallStep().dependOn(&install_lib.step);
+    } else {
+        b.installArtifact(lib);
+    }
 
     const dylib = b.addLibrary(.{
         .name = "zatex_mathml",
