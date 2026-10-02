@@ -133,7 +133,7 @@ directly — the normalized PNGs are scoring
 scratch, ditched after the run, never committed (a normalized image
 fed back as render input would shift the joint per-case rescale and
 corrupt scores).
-Either way the usual case — ZaTeX iterating with oracle inputs fixed —
+As a result the usual case — ZaTeX iterating with oracle inputs fixed —
 skips render and crop for all ~531 oracle rows and the sweep costs one
 ZaTeX pass plus the report. Editing the corpus or any driver
 invalidates everything (all-or-nothing by design: simpler than per-row

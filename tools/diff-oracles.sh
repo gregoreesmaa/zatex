@@ -88,22 +88,29 @@ have=""
 # `zig-out/` is gitignored — the workflow artifact is the cache.)
 if [ "$have" != "$want" ] && command -v gh >/dev/null 2>&1; then
   branch=${GITHUB_REF_NAME:-$(git branch --show-current 2>/dev/null || true)}
+  prev=""
   for b in "$branch" main; do
     [ -n "$b" ] || continue
+    # On main the branch == fallback: query once, not twice.
+    if [ "$b" = "$prev" ]; then continue; fi
+    prev="$b"
     run=$(gh run list --workflow oracle-diff.yml --branch "$b" \
       --status success --limit 1 --json databaseId \
       --jq '.[0].databaseId' 2>/dev/null || true)
     [ -n "$run" ] && [ "$run" != "null" ] || continue
     pdir=$(mktemp -d)
+    # `gh run download -n <single-artifact>` extracts the artifact
+    # contents directly into -D (no per-artifact subdir), so the sha
+    # and raw/ PNGs sit at $pdir/<...>, not $pdir/oracle-diff/<...>.
     if gh run download "$run" -n oracle-diff -D "$pdir" >/dev/null 2>&1 \
-       && [ -f "$pdir/oracle-diff/oracle-inputs.sha" ]; then
-      for f in "$pdir"/oracle-diff/raw/*.katex.png \
-               "$pdir"/oracle-diff/raw/*.mathjax.png \
-               "$pdir"/oracle-diff/raw/*.luatex.png \
-               "$pdir"/oracle-diff/raw/*.tex.png; do
+       && [ -f "$pdir/oracle-inputs.sha" ]; then
+      for f in "$pdir"/raw/*.katex.png \
+               "$pdir"/raw/*.mathjax.png \
+               "$pdir"/raw/*.luatex.png \
+               "$pdir"/raw/*.tex.png; do
         [ -f "$f" ] && cp "$f" "$od/work/"
       done
-      cp "$pdir/oracle-diff/oracle-inputs.sha" "$od/work/.inputs.sha"
+      cp "$pdir/oracle-inputs.sha" "$od/work/.inputs.sha"
       have=$(cat "$od/work/.inputs.sha")
       echo "diff-oracles: primed oracle renders from run $run (branch $b)" >&2
       rm -rf "$pdir"
@@ -214,8 +221,8 @@ while read -r id _rest; do
   done
 done < "$od/work/cases.tsv"
 
-# Record the inputs fingerprint for the next run (and for checkout and
-# artifact primes via oracle-inputs.sha in the report dir): written
+# Record the inputs fingerprint for the next run (and for artifact
+# primes via oracle-inputs.sha in the report dir): written
 # only after render+crop+copy complete, so a killed sweep leaves the
 # old stamp and re-renders fully rather than trusting half-finished
 # outputs. Full runs only: a filtered run proves nothing about the
