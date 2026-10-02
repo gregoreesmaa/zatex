@@ -39,8 +39,20 @@ pub fn renderToPng(
     // edge did before #71 — widen the canvas past advance+pad.
     const rshift: f64 = @as(f64, @floatFromInt(rightShiftUnits(fontShiftMetrics(font), layout.runs, layout.rules, layout.width))) * s;
     const w: usize = @max(1, ceilU(@as(f64, @floatFromInt(layout.width)) * s + 2 * pad + shift + rshift));
+    // Top/bottom rule fit (issue #270 review): diagonal cancel
+    // strikes overhang the layout box by KaTeX's 0.2em pad (pinned
+    // 0.18.7 `enclose.ts`), and a standalone bitmap must contain its
+    // ink — KaTeX HTML overflows visibly instead of clipping. Rules
+    // only (run ink is contained by construction); zero keeps every
+    // other bitmap bit-identical.
+    const top_units = topShiftUnits(layout.rules);
+    const box_units: i64 = @as(i64, layout.height_above) + @as(i64, layout.depth_below);
+    const bot_units = bottomShiftUnits(layout.rules, box_units);
+    const top_px: f64 = @as(f64, @floatFromInt(top_units)) * s;
+    const bot_px: f64 = @as(f64, @floatFromInt(bot_units)) * s;
+    const pad_top: f64 = pad + top_px;
     const h: usize = @max(1, ceilU((@as(f64, @floatFromInt(layout.height_above)) +
-        @as(f64, @floatFromInt(layout.depth_below))) * s + 2 * pad));
+        @as(f64, @floatFromInt(layout.depth_below))) * s + 2 * pad + top_px + bot_px));
 
     var canvas = try backend.impl.Canvas.create(w, h);
     defer canvas.close();
@@ -59,17 +71,26 @@ pub fn renderToPng(
     // strikes (issue #107) stroke corner-to-corner across the same
     // rect instead: `up` from bottom-left, `down` from top-left.
     for (layout.rules) |r| {
+        if (r.diag != .none) continue;
         const rx = @as(f64, @floatFromInt(r.x)) * s + pad + shift;
         const rw = @as(f64, @floatFromInt(r.w)) * s;
         const rh = @as(f64, @floatFromInt(r.h)) * s;
-        const ry = ruleOriginY(r.y, r.h, s, pad, H);
+        const ry = ruleOriginY(r.y, r.h, s, pad_top, H);
         setPaint(&canvas, r.color);
-        if (r.diag == .none) {
-            canvas.fillRect(rx, ry, rw, rh);
-            continue;
-        }
+        canvas.fillRect(rx, ry, rw, rh);
+    }
+
+    // Cancel strikes paint over the body (pinned 0.18.7 `enclose.ts`:
+    // "Write the \cancel stroke on top of inner"); rect rules never
+    // overlap ink and stay underneath.
+    for (layout.rules) |r| {
+        if (r.diag == .none) continue;
+        const rx = @as(f64, @floatFromInt(r.x)) * s + pad + shift;
+        const rw = @as(f64, @floatFromInt(r.w)) * s;
+        const rh = @as(f64, @floatFromInt(r.h)) * s;
+        setPaint(&canvas, r.color);
         // Canvas y of the rect's top and bottom edges (Quartz y-up).
-        const y_top = H - (@as(f64, @floatFromInt(r.y)) * s + pad);
+        const y_top = H - (@as(f64, @floatFromInt(r.y)) * s + pad_top);
         const y_bot = y_top - rh;
         const t = @as(f64, @floatFromInt(r.thick)) * s;
         if (r.diag == .up) canvas.strokeLine(rx, y_bot, rx + rw, y_top, t) else canvas.strokeLine(rx, y_top, rx + rw, y_bot, t);
@@ -91,7 +112,7 @@ pub fn renderToPng(
         const sh: f64 = @as(f64, @floatFromInt(run.x_shear)) / 1000.0;
         setPaint(&canvas, run.color);
         var x_units: i64 = run.x;
-        const base_y: f64 = glyphBaseY(run.baseline_y, s, pad, H);
+        const base_y: f64 = glyphBaseY(run.baseline_y, s, pad_top, H);
         // Multi-face (issue #92): consecutive glyphs from one face
         // draw under one backend run; the pen still steps with the
         // unified advances, so split points stay exact.
@@ -266,6 +287,51 @@ fn leftShiftUnits(m: ShiftMetrics, runs: []const zatex.ir.Run, rules: []const za
         }
     }
     return if (left < 0) @intCast(-left) else 0;
+}
+
+/// Top-overflow shift in layout units (>= 0): diagonal cancel strikes
+/// overhang the layout box top by KaTeX's 0.2em pad (pinned 0.18.7
+/// `enclose.ts`), and a standalone bitmap must contain its ink —
+/// KaTeX HTML overflows visibly instead of clipping. Rules only (run
+/// ink is contained by construction); zero keeps every other bitmap
+/// bit-identical.
+fn topShiftUnits(rules: []const zatex.ir.Rule) u32 {
+    var top: i64 = 0;
+    for (rules) |r| {
+        if (@as(i64, r.y) < top) top = @as(i64, r.y);
+    }
+    return if (top < 0) @intCast(-top) else 0;
+}
+
+/// Bottom-overflow shift in layout units (>= 0): mirror of
+/// `topShiftUnits` for rule ink past the box bottom.
+fn bottomShiftUnits(rules: []const zatex.ir.Rule, box_units: i64) u32 {
+    var bot: i64 = box_units;
+    for (rules) |r| {
+        const edge: i64 = @as(i64, r.y) + @as(i64, r.h);
+        if (edge > bot) bot = edge;
+    }
+    return if (bot > box_units) @intCast(bot - box_units) else 0;
+}
+
+test "vertical shifts cover rule overhang, else zero" {
+    // A cancel-style diagonal overhanging the box both ways (pinned
+    // 0.18.7 `enclose.ts`: the vlist keeps the inner box while the
+    // strike laps 0.2em past it): the canvas grows to contain the
+    // rule instead of clipping it (issue #270 review).
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = 0, .y = -200, .w = 572, .h = 853, .diag = .up, .thick = 46 },
+    };
+    try std.testing.expectEqual(@as(u32, 200), topShiftUnits(&rules));
+    try std.testing.expectEqual(@as(u32, 200), bottomShiftUnits(&rules, 453));
+    try std.testing.expectEqual(@as(u32, 0), topShiftUnits(&[_]zatex.ir.Rule{}));
+    try std.testing.expectEqual(@as(u32, 0), bottomShiftUnits(&[_]zatex.ir.Rule{}, 453));
+    // Contained rules shift nothing.
+    const inside = [_]zatex.ir.Rule{
+        .{ .x = 0, .y = 0, .w = 100, .h = 40 },
+    };
+    try std.testing.expectEqual(@as(u32, 0), topShiftUnits(&inside));
+    try std.testing.expectEqual(@as(u32, 0), bottomShiftUnits(&inside, 453));
 }
 
 test "left shift covers runs and rules, else zero" {
