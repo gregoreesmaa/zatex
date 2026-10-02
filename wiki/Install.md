@@ -1,14 +1,10 @@
----
-layout: page
-title: Install and load recipe: ZaTeX versioned binaries
----
 
-# Install and load recipe: ZaTeX versioned binaries (issue #259)
+# Install and load recipe: libzatex versioned binaries (issue #259)
 
-Each `v*` tag publishes versioned binaries for every package as
-GitHub release assets (built by `.github/workflows/release.yml`);
-this is the blessed path from release asset to working host setup.
-No more hand-rolled install locations or per-host dlopen snowflakes.
+Each `v*` tag publishes versioned `libzatex` binaries as GitHub
+release assets (built by `.github/workflows/release.yml`); this is
+the blessed path from release asset to working host setup. No more
+hand-rolled install locations or per-host dlopen snowflakes.
 
 Status: issue #259 is closed (the release workflow above exists),
 but no `v*` tag has been pushed yet, so no release assets exist.
@@ -17,43 +13,18 @@ host builds from source and pins per §4 below.
 
 ## 1. Get the asset
 
-Targets are `<arch>-<os>` for `x86_64` / `aarch64` × `linux` /
-`macos` / `windows`, and every release carries a `SHA256SUMS` file.
-Verify with it before installing. The asset pattern throughout is
-`libzatex-<tag>-<target>.<ext>` (same shape for every library).
+Release assets are named
+`libzatex-<tag>-<target>.{a,dylib,so}` plus the matching
+`zatex-<tag>.h` header and a `SHA256SUMS` file:
 
-Libraries (link statically, or ship the dynamic library with your
-app — either is a complete engine: zero dependencies, no bundled
-fonts). The core's header is `zatex-<tag>.h`; `zatex_mathml-<tag>.h`
-goes with `libzatex_mathml`; `zatex_fileprovider-<tag>.h` documents
-the blessed provider surface for hosts building the bridge from
-source (`packages/zatex/build.zig` `hello` step). `zatex-svg` is a
-pure Zig module plus CLI, so it ships libraries but no C header.
-
-| Target | `libzatex` static | `libzatex` dynamic |
+| Runner target | Static | Dynamic |
 | --- | --- | --- |
-| `x86_64-linux` / `aarch64-linux` | `libzatex-vX.Y.Z-<target>.a` | `libzatex-vX.Y.Z-<target>.so` |
-| `x86_64-macos` / `aarch64-macos` | `libzatex-vX.Y.Z-<target>.a` | `libzatex-vX.Y.Z-<target>.dylib` |
-| `x86_64-windows` / `aarch64-windows` | `libzatex-vX.Y.Z-<target>-static.lib` | `libzatex-vX.Y.Z-<target>.dll` + `libzatex-vX.Y.Z-<target>-import.lib` |
+| `aarch64-macos` | `libzatex-vX.Y.Z-aarch64-macos.a` | `libzatex-vX.Y.Z-aarch64-macos.dylib` |
+| `x86_64-linux` | `libzatex-vX.Y.Z-x86_64-linux.a` | `libzatex-vX.Y.Z-x86_64-linux.so` |
 
-`libzatex_mathml` and `libzatex_svg` follow the same shape with
-their own infix (`libzatex_mathml-vX.Y.Z-<target>.{a,so,dylib}`,
-`...-static.lib` / `.dll` + `-import.lib` on Windows).
-
-On Windows link either the static archive or the DLL's import
-library — never both in one binary (duplicate symbols). The import
-library is link-time only; ship the `.dll` with your app.
-
-CLI tools (single-file, zero-dependency binaries):
-
-| Tool | Linux / macOS asset | Windows asset | Notes |
-| --- | --- | --- | --- |
-| `zatex-png` | `zatex-png-vX.Y.Z-<target>` | `zatex-png-vX.Y.Z-<target>.exe` | macOS builds use the CoreGraphics backend; Linux/Windows builds use the portable software backend (same layout dimensions — see `packages/zatex-png/README.md`). |
-| `zatex-svg` | `zatex-svg-vX.Y.Z-<target>` | `zatex-svg-vX.Y.Z-<target>.exe` | Outlined-path SVG, no font dependency at view time. |
-
-Run CLIs from the package directory (font paths are CWD-relative —
-see `packages/zatex-png/README.md` and
-`packages/zatex-svg/README.md`).
+Link statically, or ship the dynamic library with your app —
+either is a complete engine (zero dependencies, no bundled fonts).
+Verify with `SHA256SUMS` before installing.
 
 ## 2. Where to install (blessed order)
 

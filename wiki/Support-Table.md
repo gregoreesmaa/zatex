@@ -1,7 +1,3 @@
----
-layout: page
-title: KaTeX support table
----
 
 # KaTeX support table (editable source)
 

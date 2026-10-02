@@ -1,0 +1,46 @@
+# Docs: GitHub Pages (docs/ Jekyll) + wiki/ drift check.
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "examples/**", "wiki/**", "CHANGELOG.md", "AGENTS.md", ".github/workflows/docs.yml", "tools/sync_wiki.sh"]
+  pull_request:
+    paths: ["docs/**", "examples/**", "wiki/**", "CHANGELOG.md", "AGENTS.md", "tools/sync_wiki.sh"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # wiki/ is a mirror of docs/ (+ examples/README, CHANGELOG, AGENTS):
+  # fail when the mirror is stale so the wiki never rots.
+  wiki-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resync wiki and fail on drift
+        run: |
+          sh tools/sync_wiki.sh
+          git diff --exit-code wiki/
+
+  pages:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

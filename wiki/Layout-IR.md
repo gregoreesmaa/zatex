@@ -1,7 +1,3 @@
----
-layout: page
-title: ir.md — ZaTeX layout IR
----
 
 # docs/ir.md — ZaTeX layout IR (output contract)
 

@@ -756,6 +756,7 @@ def main():
         os.rename(src, dst)
     gap_info = gaps
     with open(MD, "w") as out:
+        out.write("---\nlayout: page\ntitle: KaTeX syntax mirror\n---\n\n")
         out.write("# KaTeX syntax mirror (generated — do not edit)\n\n")
         out.write("A render of every accepted function, generated from "
                   "`docs/support-table.md` by `tools/gen_doc_renders.py` "

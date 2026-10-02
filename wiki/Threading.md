@@ -1,7 +1,3 @@
----
-layout: page
-title: Threading contract
----
 
 # Threading contract (issue #261)
 

@@ -1,7 +1,3 @@
----
-layout: page
-title: file-provider.md — blessed file-based MetricsProvider
----
 
 # docs/file-provider.md — blessed file-based MetricsProvider (issue #192)
 

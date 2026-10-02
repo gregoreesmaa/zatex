@@ -1,3 +1,8 @@
+---
+layout: page
+title: trip.md — Knuth's TRIP test, mapped to the ZaTeX contract
+---
+
 # docs/trip.md — Knuth's TRIP test, mapped to the ZaTeX contract (issue #177)
 
 ## Sources
@@ -80,3 +85,4 @@ the output routine, file I/O, TFM fonts, and interaction modes. The pure-TeX
 geometry oracle (issue #178, `docs/tex-oracle.md`) covers the Knuth-lineage
 second opinion where it matters — box/glue/kern construction — without
 making TeX-the-program a gate.
+

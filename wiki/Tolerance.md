@@ -1,7 +1,3 @@
----
-layout: page
-title: tolerance.md — Differential tolerance policy
----
 
 # docs/tolerance.md — Differential tolerance policy (issue #11)
 
