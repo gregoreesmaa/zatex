@@ -31,10 +31,15 @@ jobs:
             tools/diff-oracles.sh
           fi
 
+      # 90-day retention: this artifact IS the render-reuse cache —
+      # `tools/diff-oracles.sh` primes fresh workdirs from the latest
+      # successful sweep artifact (same branch, else main), so oracle
+      # rows skip re-render while inputs are unchanged. Sweep output is
+      # never committed (zig-out/ is gitignored).
       - name: Upload triage report (markdown + normalized renders)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: oracle-diff
           path: zig-out/oracle-diff
-          retention-days: 14
+          retention-days: 90

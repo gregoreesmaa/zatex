@@ -1,3 +1,8 @@
+---
+layout: page
+title: oracle-diff.md — On-demand multi-engine differential renders
+---
+
 # docs/oracle-diff.md — On-demand multi-engine differential renders (issue #39)
 
 `tools/diff-oracles.sh` renders each corpus case in ZaTeX plus 3
@@ -6,13 +11,14 @@ independent oracle engines and emits `zig-out/oracle-diff/report.md`
 offset first) so investigator attention goes to the biggest offsets. It pre-sorts a review queue; it decides nothing.
 
 Staging: per-case renders live in `tools/oracle-diff/work/` (gitignored
-staging, never committed). The latest full-sweep triage report is
-checked in at `zig-out/oracle-diff/report.md` (+ `png/`) so reviewers
-can browse it without running Docker. `zig-out/` is gitignored, so a
-sweep commit must force-add the whole referenced set (`git add -f
-zig-out/oracle-diff/report.md zig-out/oracle-diff/png`) — a partial
-add leaves dead images on GitHub. `report.py` asserts every `png/`
-link resolves and fails the sweep otherwise. Corpus ids must be unique
+staging, never committed). The full-sweep triage report lands in
+`zig-out/oracle-diff/report.md` (+ `raw/`) locally and uploads as the
+ `oracle-diff` workflow artifact (90-day retention) — never committed:
+`zig-out/` is gitignored, so sweep output never bloats the repo.
+`report.py` asserts every `raw/` link resolves and fails the sweep
+otherwise. Reuse across sweeps primes from the latest successful sweep
+artifact (same branch, else main), content-checked via the primed
+`.inputs.sha`, so a stale prime only costs render time. Corpus ids must be unique
 case-insensitively: each id derives staged/render filenames, and two
 ids differing only by case clobber each other on case-insensitive
 filesystems while producing dead links on case-sensitive hosts. Each engine renders the whole
@@ -120,14 +126,13 @@ partial PNG behind; `crop.py` deletes undecodable files so they surface
 as missing and retry next run; and the stamp is written only after
 render+crop+copy complete, so a killed sweep re-renders fully.
 
-A fresh workdir primes from this checkout's committed sweep output
-first (no network): resweep publishes commit `zig-out/oracle-diff/raw/`
-(the cropped finals) plus `oracle-inputs.sha`, and the triage report
-links those `raw/` files directly — the normalized PNGs are scoring
+A fresh workdir primes from the latest successful sweep artifact
+(same branch, else main), which carries the cropped finals plus
+`oracle-inputs.sha`, and the triage report links those `raw/` files
+directly — the normalized PNGs are scoring
 scratch, ditched after the run, never committed (a normalized image
 fed back as render input would shift the joint per-case rescale and
-corrupt scores). Failing that, it primes from the latest successful
-sweep artifact (same branch, else main), which carries the same two.
+corrupt scores).
 Either way the usual case — ZaTeX iterating with oracle inputs fixed —
 skips render and crop for all ~531 oracle rows and the sweep costs one
 ZaTeX pass plus the report. Editing the corpus or any driver
@@ -256,3 +261,4 @@ zero `katex-outlier` rows remaining:
 fixture report: sorting, scoring, ambiguous tagging) runs anywhere;
 `docker compose config` validates the sweep plumbing without a daemon.
 Full sweeps need the daemon (`tools/diff-oracles.sh` builds the images).
+

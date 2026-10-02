@@ -5,9 +5,9 @@
 # MathJax v3, TeX Live pdflatex, TeX Live DVI route), each in Docker from pinned images with
 # no network at run time, then writes the worst-first triage report.
 # Oracle renders are reused across runs while their inputs are
-# unchanged (content-stamped, primed from this checkout's committed
-# sweep output, else the last successful sweep artifact); ZaTeX always
-# re-renders — it is the live signal, never a stable reference.
+# unchanged (content-stamped, primed from the last successful sweep
+# artifact); ZaTeX always re-renders — it is the live signal, never a
+# stable reference.
 # See "Render reuse" in docs/oracle-diff.md.
 #
 # INFORMATIONAL ONLY. This is never a CI gate (AGENTS.md section 4 bans
@@ -78,35 +78,14 @@ want="$(for f in $stamp_files; do [ -f "$root/$f" ] && cat "$root/$f"; done | sh
 have=""
 [ -f "$od/work/.inputs.sha" ] && have=$(cat "$od/work/.inputs.sha")
 
-# Prime work/ from this checkout's committed sweep output first (no
-# network): resweep publishes commit raw/ (the cropped finals) plus
-# oracle-inputs.sha beside the report. Oracle engines only — never
-# ZaTeX, the live signal. Content-checked via the copied .inputs.sha
-# below, so a stale checkout only costs render time, never a wrong
-# comparison. Skipped when there is no committed output yet, and when
-# the local workdir already matches (consecutive runs reuse as-is).
-if [ "$have" != "$want" ]; then
-  committed="$root/zig-out/oracle-diff"
-  if [ -f "$committed/oracle-inputs.sha" ]; then
-    for f in "$committed"/raw/*.katex.png \
-             "$committed"/raw/*.mathjax.png \
-             "$committed"/raw/*.luatex.png \
-             "$committed"/raw/*.tex.png; do
-      [ -f "$f" ] && cp "$f" "$od/work/"
-    done
-    cp "$committed/oracle-inputs.sha" "$od/work/.inputs.sha"
-    have=$(cat "$od/work/.inputs.sha")
-    echo "diff-oracles: primed oracle renders from this checkout" >&2
-  fi
-fi
-
-# Fall back to the latest successful sweep artifact (same branch,
+# Prime work/ from the latest successful sweep artifact (same branch,
 # else main): the artifact's raw/ holds the cropped finals, byte-ready
 # for reuse. Content-checked via the primed .inputs.sha below, so a
 # stale prime only costs a download, never a wrong comparison. Skipped
 # silently without `gh`, without auth, or with no prior artifact — and
 # skipped entirely when the local workdir already matches (consecutive
-# runs reuse with no download at all).
+# runs reuse with no download at all). (Sweep output is NOT committed:
+# `zig-out/` is gitignored — the workflow artifact is the cache.)
 if [ "$have" != "$want" ] && command -v gh >/dev/null 2>&1; then
   branch=${GITHUB_REF_NAME:-$(git branch --show-current 2>/dev/null || true)}
   for b in "$branch" main; do
