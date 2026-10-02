@@ -1,3 +1,8 @@
+---
+layout: page
+title: KaTeX syntax mirror
+---
+
 # KaTeX syntax mirror (generated — do not edit)
 
 A render of every accepted function, generated from `docs/support-table.md` by `tools/gen_doc_renders.py` (renders via `zatex-png` into `docs/renders/`; expected render gaps live in `tools/doc_gaps.json`). Status, evidence, and ownership live in the support table — edit that, never this file. Examples use KaTeX's own equations (Source column of the vendored pinned table, else its Rendered column); rows whose KaTeX example this engine cannot render yet are gap-listed with KaTeX's equation.
