@@ -5,8 +5,10 @@ node_modules/
 zatex_stub.h
 docs/renders/.tmp/
 # oracle-diff sweep staging (issue #39): case files, staged fonts, and
-# per-run renders. (Committed copies predate this rule; untrack with
-# `git rm -r --cached` if they churn.)
+# per-run renders. `diff-oracles.sh` stages fonts from the vendored
+# fixture + host STIX on every run, so nothing here is committed.
+# Sweep output (`zig-out/oracle-diff/`) is gitignored too — the
+# workflow artifact (90-day retention) is the cache for render reuse.
 tools/oracle-diff/work/
 tools/oracle-diff/fonts/
 tools/oracle-diff/webshot/public/

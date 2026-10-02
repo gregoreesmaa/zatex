@@ -1,7 +1,3 @@
----
-layout: page
-title: delimiter-scan.md — canonical math-delimiter scanning
----
 
 # docs/delimiter-scan.md — canonical math-delimiter scanning (issue #252)
 

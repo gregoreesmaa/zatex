@@ -1,7 +1,3 @@
----
-layout: page
-title: Install and load recipe: ZaTeX versioned binaries
----
 
 # Install and load recipe: ZaTeX versioned binaries (issue #259)
 

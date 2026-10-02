@@ -1,7 +1,3 @@
----
-layout: page
-title: KaTeX syntax mirror
----
 
 # KaTeX syntax mirror (generated — do not edit)
 

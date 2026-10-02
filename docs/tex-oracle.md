@@ -1,3 +1,8 @@
+---
+layout: page
+title: tex-oracle.md — Pure-TeX geometry oracle
+---
+
 # docs/tex-oracle.md — Pure-TeX geometry oracle (issue #178)
 
 Knuth-lineage second opinion on box/glue/kern *construction*: stock TeX
@@ -109,7 +114,8 @@ This oracle is **triage-grade, never a gate** — the same standing as
 ## In the results table
 
 TeX is a first-class column of the pixel-sweep triage table
-(`zig-out/oracle-diff/report.md`): the sweep drives this same image as
+(`zig-out/oracle-diff/report.md`, uploaded as the `oracle-diff`
+workflow artifact): the sweep drives this same image as
 its `tex-shot` service in batch over the full corpus, and `report.py`
 scores the raw `<id>.tex.png` renders through the shared
 normalize+SSIM math — a TeX column and inline `![T]` renders per row,
@@ -147,3 +153,4 @@ uncompared — see above); pinning apt package versions beyond the base
 digest (the runtime version record covers it); making this a required
 check (stays informational until stable, and pixel-grade stability is
 explicitly not the bar — construction agreement is).
+

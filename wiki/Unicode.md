@@ -1,7 +1,3 @@
----
-layout: page
-title: Unicode normalization expectation
----
 
 # Unicode normalization expectation (issue #265)
 

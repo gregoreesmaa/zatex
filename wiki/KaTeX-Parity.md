@@ -1,7 +1,3 @@
----
-layout: page
-title: parity.md — KaTeX parity beyond the support table
----
 
 # docs/parity.md — KaTeX parity beyond the support table (issue #51)
 
