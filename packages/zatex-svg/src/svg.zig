@@ -21,16 +21,37 @@ pub fn renderLayout(
     const left = leftShiftUnits(ol, layout.runs, layout.rules);
     const right = rightShiftUnits(ol, layout.runs, layout.rules, layout.width);
     const total_w = satI32(@as(i64, layout.width) + @as(i64, left) + @as(i64, right));
-    const total_h = satI32(@as(i64, layout.height_above) + @as(i64, layout.depth_below));
+    const box_h = satI32(@as(i64, layout.height_above) + @as(i64, layout.depth_below));
+    // Vertical rule fit (issue #270 review): diagonal cancel strikes
+    // overhang the layout box by KaTeX's 0.2em pad (pinned 0.18.7
+    // `enclose.ts`: the vlist keeps the inner box), and a standalone
+    // file must contain its ink — KaTeX HTML overflows visibly
+    // instead of clipping. Rules only (run ink is contained by
+    // construction: ink-derived boxes plus max() containment); zero
+    // keeps every other golden bit-identical.
+    const top = topShiftUnits(layout.rules);
+    const bottom = bottomShiftUnits(layout.rules, box_h);
+    const total_h = satI32(@as(i64, box_h) + @as(i64, top) + @as(i64, bottom));
+    const neg_top = satI32(-@as(i64, top));
     w.skeletonHead(
         satI32(-@as(i64, left)),
+        neg_top,
         total_w,
         total_h,
         @as(f64, @floatFromInt(total_w)) / 1000.0,
         @as(f64, @floatFromInt(total_h)) / 1000.0,
     );
-    for (layout.rules) |r| emitRule(&w, r);
+    for (layout.rules) |r| {
+        if (r.diag == .none) emitRule(&w, r);
+    }
     for (layout.runs) |run| emitRun(&w, ol, segs, run);
+    // Cancel strikes paint over the body (pinned 0.18.7 `enclose.ts`:
+    // "Write the \cancel stroke on top of inner"); rect rules never
+    // overlap ink and stay underneath (a colorbox background must not
+    // cover its content).
+    for (layout.rules) |r| {
+        if (r.diag != .none) emitRule(&w, r);
+    }
     w.str("</svg>");
     if (w.overflow) return error.NoSpace;
     return w.done();
@@ -174,12 +195,14 @@ const W = struct {
         self.num(@as(f64, @floatFromInt(a)) / 255.0);
     }
 
-    /// `<svg … viewBox="minX 0 totalW totalH" width="w_em em" …>` open tag.
+    /// `<svg … viewBox="minX minY totalW totalH" width="w_em em" …>` open tag.
     /// Width/height arrive as `units / 1000` through `num`.
-    fn skeletonHead(self: *W, minX: i32, totalW: i32, totalH: i32, w_em: f64, h_em: f64) void {
+    fn skeletonHead(self: *W, minX: i32, minY: i32, totalW: i32, totalH: i32, w_em: f64, h_em: f64) void {
         self.str("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"");
         self.int(minX);
-        self.str(" 0 ");
+        self.byte(' ');
+        self.int(minY);
+        self.byte(' ');
         self.int(totalW);
         self.byte(' ');
         self.int(totalH);
@@ -456,6 +479,29 @@ fn rightShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules:
     return if (edge > @as(i64, width)) @intCast(edge - @as(i64, width)) else 0;
 }
 
+/// Top-overflow shift in layout units (>= 0): diagonal cancel strikes
+/// overhang the layout box top by KaTeX's 0.2em pad (pinned 0.18.7
+/// `enclose.ts`). Rules only, like the render walk; zero keeps the
+/// viewport bit-identical.
+fn topShiftUnits(rules: []const zatex.ir.Rule) u32 {
+    var top: i32 = 0;
+    for (rules) |r| {
+        if (r.y < top) top = r.y;
+    }
+    return if (top < 0) @intCast(-top) else 0;
+}
+
+/// Bottom-overflow shift in layout units (>= 0): mirror of
+/// `topShiftUnits` for rule ink past the box bottom.
+fn bottomShiftUnits(rules: []const zatex.ir.Rule, box_h: i32) u32 {
+    var bot: i64 = box_h;
+    for (rules) |r| {
+        const edge: i64 = @as(i64, r.y) + @as(i64, r.h);
+        if (edge > bot) bot = edge;
+    }
+    return if (bot > box_h) @intCast(bot - box_h) else 0;
+}
+
 /// Shared stub seam for walker tests: one line seg `(0,0)->(500,700)`
 /// in font units for every glyph, upm 1000. Advances and ink boxes
 /// mirror `zatex-png`'s shift-twin stubs (`x` overhangs by 50 each
@@ -703,10 +749,10 @@ test "num formats fixed 2-decimal stripped" {
 }
 
 test "skeleton wraps body with integer viewBox" {
-    // head(minX, totalW, totalH, w_em, h_em) then body then "</svg>"
+    // head(minX, minY, totalW, totalH, w_em, h_em) then body then "</svg>"
     var buf: [256]u8 = undefined;
     var w = W{ .buf = &buf };
-    w.skeletonHead(-550, 1050, 900, 1.05, 0.9);
+    w.skeletonHead(-550, 0, 1050, 900, 1.05, 0.9);
     w.str("<rect/>");
     w.str("</svg>");
     try std.testing.expectEqualStrings(
@@ -1013,6 +1059,46 @@ test "translucent down rule paints stroke-opacity corner to corner" {
     try std.testing.expect(std.mem.indexOf(u8, got, "stroke-opacity=\"0.5\"") != null);
     // Translucent rect carries fill-opacity instead.
     try std.testing.expect(std.mem.indexOf(u8, got, "fill=\"#00ff00\" fill-opacity=\"0.5\"") != null);
+}
+
+test "viewport contains rule overhang top and bottom" {
+    // A cancel-style diagonal overhanging the box both ways (pinned
+    // 0.18.7 `enclose.ts`: the vlist keeps the inner box while the
+    // strike laps 0.2em past it): the viewport grows to contain the
+    // rule instead of clipping it (issue #270 review).
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = 0, .y = -200, .w = 572, .h = 853, .diag = .up, .thick = 46 },
+    };
+    const l = zatex.ir.Layout{ .width = 572, .height_above = 442, .depth_below = 11, .runs = &.{}, .rules = &rules };
+    var segs: [8]cff.Seg = undefined;
+    var out: [2048]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    try std.testing.expect(std.mem.indexOf(u8, got, "viewBox=\"0 -200 572 853\"") != null);
+}
+
+test "diag strikes paint after runs, rects before" {
+    // Pinned 0.18.7 `enclose.ts` ("Write the \cancel stroke on top
+    // of inner"): a strike overlapping its body must not hide under
+    // the glyph fill (issue #270 review: the cancel strike was
+    // invisible where it crossed the x). Rect rules never overlap
+    // ink and stay underneath (a colorbox background must not cover
+    // its content).
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'x'} },
+    };
+    const rules = [_]zatex.ir.Rule{
+        .{ .x = 0, .y = 0, .w = 100, .h = 40 },
+        .{ .x = 0, .y = -200, .w = 572, .h = 853, .diag = .up, .thick = 46 },
+    };
+    const l = zatex.ir.Layout{ .width = 572, .height_above = 442, .depth_below = 11, .runs = &runs, .rules = &rules };
+    var segs: [8]cff.Seg = undefined;
+    var out: [4096]u8 = undefined;
+    const got = try renderLayout(l, stubOutlines(), &segs, &out);
+    const rect_i = std.mem.indexOf(u8, got, "<rect").?;
+    const path_i = std.mem.indexOf(u8, got, "<path").?;
+    const line_i = std.mem.indexOf(u8, got, "<line").?;
+    try std.testing.expect(rect_i < path_i);
+    try std.testing.expect(path_i < line_i);
 }
 
 fn lookup(corpus: []const u8, id: []const u8) []const u8 {
