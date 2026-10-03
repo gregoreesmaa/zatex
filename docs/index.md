@@ -29,7 +29,7 @@ not megabytes.
 - **[KaTeX parity](parity.md)** — options/error/font behavior beyond the support table.
 - **[Support table](support-table.md)** — per-function coverage (editable source).
 - **[Syntax mirror](katex-syntax.md)** — a render of every accepted function.
-- **[Examples](../../examples/)** — minimal hosts: C, Zig, CLI, MathML, SVG.
+- **[Examples](https://github.com/gregoreesmaa/zatex/tree/main/examples)** — minimal hosts: C, Zig, CLI, MathML, SVG.
 
 ## Embed
 
@@ -70,5 +70,5 @@ File provider ([file-provider](file-provider.md)) ·
 error tolerance ([tolerance](tolerance.md)) ·
 oracle sweeps ([oracle-diff](oracle-diff.md), [tex-oracle](tex-oracle.md)) ·
 TRIP mapping ([trip](trip.md)) ·
-host changelog ([../CHANGELOG.md](../CHANGELOG.md)) ·
-contributors ([../AGENTS.md](../AGENTS.md)).
+host changelog ([CHANGELOG.md](https://github.com/gregoreesmaa/zatex/blob/main/CHANGELOG.md)) ·
+contributors ([AGENTS.md](https://github.com/gregoreesmaa/zatex/blob/main/AGENTS.md)).

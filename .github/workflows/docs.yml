@@ -30,17 +30,31 @@ jobs:
           sh tools/sync_wiki.sh
           git diff --exit-code wiki/
 
+  # Split build/deploy: deploy-pages must wait on the Jekyll build,
+  # so PRs exercise the build (fail on broken front-matter/links)
+  # while only main deploys. The failure it fixes: this job used to
+  # upload raw markdown and rely on an implicit build step.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Build Jekyll site
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: docs
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
   pages:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
       - id: deployment
         uses: actions/deploy-pages@v4
