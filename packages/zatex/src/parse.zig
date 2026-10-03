@@ -749,10 +749,10 @@ const Def = struct {
 };
 
 /// Fixed pool sizes. Large enough for real formulas, small enough for
-/// a bounded stack frame (~100 KB total).
+/// a bounded stack frame (~77 KB total, issue #287).
 pub const max_nodes: usize = 768;
 pub const max_kids: usize = 2048;
-pub const max_toks: usize = 1536;
+pub const max_toks: usize = 1024;
 pub const max_pushback: usize = 384;
 pub const max_defs: usize = 48;
 pub const max_rows: usize = 192;
@@ -1215,7 +1215,7 @@ pub const ParseCtx = struct {
     /// Budgets mirror lazy expansion (`expansions`, the token pool).
     fn eagerExpand(self: *ParseCtx, body: Range) Error!Range {
         const ExpFrame = struct { start: u16, len: u16, at: u16, args: [9]Range, nargs: u3, has_args: bool };
-        var stack: [65]ExpFrame = undefined;
+        var stack: [40]ExpFrame = undefined;
         stack[0] = .{ .start = body.start, .len = body.len, .at = 0, .args = undefined, .nargs = 0, .has_args = false };
         var nstack: u8 = 1;
         const out_start = try self.allocToks(0);
@@ -2864,7 +2864,7 @@ fn pushTemplateToks(ctx: *ParseCtx, use: Tok, template: []const u8) Error!void {
     ctx.keep_spaces = false;
     // Lex the whole run into the token arena first (last-first
     // push needs it all buffered): templates are bounded by the
-    // arena's 1536 cap like every other capture — the old 64-slot
+    // arena's max_toks cap like every other capture — the old 64-slot
     // stack buffer overflowed on `\minuso` (pinned 0.18.7).
     const start = try ctx.allocToks(0);
     var n: u16 = 0;
@@ -2913,8 +2913,8 @@ fn pushExpansionArg(ctx: *ParseCtx, use: Tok, prefix: []const u8, arg: Range, su
 /// spaces survive (`\text{a b}` keeps its space).
 fn pushRangeClean(ctx: *ParseCtx, arg: Range, from: usize, to: usize) Error!void {
     const n = to - from;
-    if (n > 1536) return error.NoSpace;
-    var skip: [24]u64 = .{0} ** 24;
+    if (n > max_toks) return error.NoSpace;
+    var skip: [16]u64 = .{0} ** 16;
     var bdepth: usize = 0;
     var j: usize = 0;
     while (j < n) : (j += 1) {
