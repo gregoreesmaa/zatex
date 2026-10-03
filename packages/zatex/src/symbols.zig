@@ -760,6 +760,176 @@ pub fn lookup(name: []const u8) ?Sym {
 /// Every named symbol, for coverage probes and documentation sweeps.
 pub const all_symbols = greek_lower ++ greek_upper ++ operators;
 
+// ---------------------------------------------------------------------------
+// Hash dispatch (issue #283).
+//
+// `lookup` above linear-scans ~450 rows per control token (called 2-3x
+// per command), and `isTextord` re-scans 70 names after a hit. These
+// hash tables answer the same queries with no allocation and no heap:
+// one u32 key (len + first/last byte + FNV-1a of the middle) probes a
+// dense open-addressing index over the existing row arrays, so payload
+// bytes live in exactly one place (no table duplication, size-gate
+// friendly). Tables build once on first use (thread-unsafe init is
+// fine: the parser is single-threaded per ParseCtx) and stay in BSS.
+// Duplicate names keep the FIRST row's payload (linear-scan parity);
+// `commandFor`/`delimFor`/`accentFor` codepoint walks stay linear
+// (cold copy-as-LaTeX paths, never on the layout hot path).
+// ---------------------------------------------------------------------------
+
+/// FNV-1a over bytes 1..len-2 (first/last bytes ride in the key).
+fn hashMid(name: []const u8) u32 {
+    var h: u32 = 0x811C_9DC5;
+    if (name.len > 2) {
+        for (name[1 .. name.len - 1]) |b| {
+            h ^= b;
+            h *%= 0x0100_0193;
+        }
+    }
+    return h;
+}
+
+/// Dispatch key: length (8 bits), first byte (8 bits), last byte
+/// (8 bits), low 8 bits of the middle hash. Collisions resolve by
+/// linear probing against the full stored name, so correctness never
+/// depends on key width — only probe length does.
+fn keyOf(name: []const u8) u32 {
+    if (name.len == 0) return 0xFFFF_FFFF;
+    const last = name[name.len - 1];
+    const mid: u8 = @truncate(hashMid(name));
+    return (@as(u32, @intCast(name.len & 0xFF)) << 24) |
+        (@as(u32, name[0]) << 16) |
+        (@as(u32, last) << 8) | @as(u32, mid);
+}
+
+const sym_map_len = 1021;
+const delim_map_len = 79;
+const accent_map_len = 37;
+const textord_map_len = 149;
+
+/// Open-addressing name index over a canonical row array (issue
+/// #283). One u32 key (len + first/last byte + FNV-1a of the middle)
+/// probes a dense u16 row-number table (0 = empty), so payload bytes
+/// live in exactly one place (no table duplication, size-gate
+/// friendly). Tables build once on first use and stay in BSS; the
+/// parser is single-threaded per ParseCtx so the lazy init is safe.
+/// `nameOf` maps a row number to its name for probe verification;
+/// duplicate names keep the FIRST row (linear-scan parity).
+pub fn NameIndex(
+    comptime size: usize,
+    comptime count: usize,
+    comptime nameOf: fn (usize) []const u8,
+) type {
+    return struct {
+        var idx: [size]u16 = .{0} ** size;
+        var built: bool = false;
+
+        fn ensure() void {
+            if (built) return;
+            var i: usize = 0;
+            while (i < count) : (i += 1) {
+                var slot: usize = keyOf(nameOf(i)) % size;
+                while (true) {
+                    if (idx[slot] == 0) {
+                        idx[slot] = @intCast(i + 1);
+                        break;
+                    }
+                    // First-match-wins: a duplicate keeps the earlier row.
+                    if (eq(nameOf(idx[slot] - 1), nameOf(i))) break;
+                    slot = (slot + 1) % size;
+                }
+            }
+            built = true;
+        }
+
+        /// Row number for `name`, or null (probes verify by full name,
+        /// so key collisions only cost probe steps, never correctness).
+        pub fn rowOf(name: []const u8) ?usize {
+            if (name.len == 0) return null;
+            ensure();
+            var slot: usize = keyOf(name) % size;
+            var i: usize = 0;
+            while (i < size) : (i += 1) {
+                const row = idx[slot];
+                if (row == 0) return null;
+                if (eq(nameOf(row - 1), name)) return row - 1;
+                slot = (slot + 1) % size;
+            }
+            return null;
+        }
+
+        pub fn contains(name: []const u8) bool {
+            return rowOf(name) != null;
+        }
+    };
+}
+
+fn symName(i: usize) []const u8 {
+    return all_symbols[i].name;
+}
+fn delimName(i: usize) []const u8 {
+    return delims[i].name;
+}
+fn accentName(i: usize) []const u8 {
+    return accents[i].name;
+}
+fn textordName(i: usize) []const u8 {
+    return textord_names[i];
+}
+
+const SymIndex = NameIndex(sym_map_len, all_symbols.len, symName);
+const DelimIndex = NameIndex(delim_map_len, delims.len, delimName);
+const AccentIndex = NameIndex(accent_map_len, accents.len, accentName);
+const TextordIndex = NameIndex(textord_map_len, textord_names.len, textordName);
+
+const textord_names = [_][]const u8{
+    "Box",          "Delta",        "Diamond",      "Finv",
+    "Game",         "Gamma",        "Im",           "Lambda",
+    "Omega",        "P",            "Phi",          "Pi",
+    "Psi",          "Re",           "S",            "Sigma",
+    "Theta",        "Upsilon",      "Vert",         "Xi",
+    "aleph",        "angle",        "backprime",    "backslash",
+    "beth",         "bigstar",      "blacklozenge", "blacksquare",
+    "blacktriangle", "blacktriangledown", "bot",    "checkmark",
+    "circledR",     "circledS",     "clubsuit",     "complement",
+    "dag",          "daleth",       "ddag",         "degree",
+    "diagdown",     "diagup",       "diamondsuit",  "digamma",
+    "ell",          "emptyset",     "eth",          "exists",
+    "flat",         "forall",       "gimel",        "hbar",
+    "heartsuit",    "hslash",       "infty",        "lnot",
+    "lozenge",      "maltese",      "mathsterling", "measuredangle",
+    "mho",          "nabla",        "natural",      "neg",
+    "nexists",      "partial",      "pounds",       "prime",
+    "sharp",        "spadesuit",    "sphericalangle", "square",
+    "surd",         "top",          "triangle",     "triangledown",
+    "varkappa",     "varnothing",   "vert",         "wp",
+    "yen",
+};
+
+/// Hash textord probe: same accept set as `isTextord`.
+pub fn isTextordFast(name: []const u8) bool {
+    return TextordIndex.contains(name);
+}
+
+/// Hash symbol lookup: same accept set and same first-match payload
+/// as `lookup` (probes verify by full name, duplicates keep row 0).
+pub fn lookupFast(name: []const u8) ?Sym {
+    const row = SymIndex.rowOf(name) orelse return null;
+    return all_symbols[row].sym;
+}
+
+/// Hash delimiter lookup: same accept set as `lookupDelim`.
+pub fn lookupDelimFast(name: []const u8) ?DelimEntry {
+    const row = DelimIndex.rowOf(name) orelse return null;
+    return delims[row];
+}
+
+/// Hash accent lookup: same accept set as `lookupAccent`.
+pub fn lookupAccentFast(name: []const u8) ?Accent {
+    const row = AccentIndex.rowOf(name) orelse return null;
+    const e = accents[row];
+    return .{ .cp = e.cp, .wide = e.wide };
+}
+
 /// KaTeX math-mode textords (issue #109, pinned 0.18.7
 /// `symbols.ts`): symbol-table names whose ParseNodes are `textord`,
 /// rendered `mi` with an explicit variant (single-char escapes like
@@ -768,29 +938,10 @@ pub const all_symbols = greek_lower ++ greek_upper ++ operators;
 /// in the issue — every supported name below, every other KaTeX
 /// textord rejected or accent-pathed.
 pub fn isTextord(name: []const u8) bool {
-    for ([_][]const u8{
-        "Box",          "Delta",        "Diamond",      "Finv",
-        "Game",         "Gamma",        "Im",           "Lambda",
-        "Omega",        "P",            "Phi",          "Pi",
-        "Psi",          "Re",           "S",            "Sigma",
-        "Theta",        "Upsilon",      "Vert",         "Xi",
-        "aleph",        "angle",        "backprime",    "backslash",
-        "beth",         "bigstar",      "blacklozenge", "blacksquare",
-        "blacktriangle", "blacktriangledown", "bot",    "checkmark",
-        "circledR",     "circledS",     "clubsuit",     "complement",
-        "dag",          "daleth",       "ddag",         "degree",
-        "diagdown",     "diagup",       "diamondsuit",  "digamma",
-        "ell",          "emptyset",     "eth",          "exists",
-        "flat",         "forall",       "gimel",        "hbar",
-        "heartsuit",    "hslash",       "infty",        "lnot",
-        "lozenge",      "maltese",      "mathsterling", "measuredangle",
-        "mho",          "nabla",        "natural",      "neg",
-        "nexists",      "partial",      "pounds",       "prime",
-        "sharp",        "spadesuit",    "sphericalangle", "square",
-        "surd",         "top",          "triangle",     "triangledown",
-        "varkappa",     "varnothing",   "vert",         "wp",
-        "yen",
-    }) |n| if (eq(n, name)) return true;
+    // Single source of truth lives in `textord_names` (the fast map
+    // above); this keeps the linear scan for probes while the hot
+    // path uses `isTextordFast`.
+    for (textord_names) |n| if (eq(n, name)) return true;
     return false;
 }
 
@@ -1300,6 +1451,34 @@ pub fn bigStep(level: u2) u16 {
         2 => 2400,
         3 => 3000,
     };
+}
+
+test "dispatch probes agree with linear scan" {
+    const std = @import("std");
+    // RED for #283: the hash/comptime dispatch (lookupFast,
+    // lookupDelimFast, lookupAccentFast, isTextordFast) must agree
+    // with the linear tables on every supported name plus misses.
+    for (all_symbols) |e| {
+        try std.testing.expectEqual(e.sym.cp, lookupFast(e.name).?.cp);
+        try std.testing.expectEqual(e.sym.class, lookupFast(e.name).?.class);
+        try std.testing.expectEqual(isTextord(e.name), isTextordFast(e.name));
+    }
+    for (all_delims) |d| {
+        try std.testing.expectEqual(d.cp, lookupDelimFast(d.name).?.cp);
+        try std.testing.expectEqual(d.cls, lookupDelimFast(d.name).?.cls);
+    }
+    for (all_accents) |a| {
+        try std.testing.expectEqual(a.cp, lookupAccentFast(a.name).?.cp);
+        try std.testing.expectEqual(a.wide, lookupAccentFast(a.name).?.wide);
+    }
+    try std.testing.expect(lookupFast("nope") == null);
+    try std.testing.expect(lookupFast("") == null);
+    try std.testing.expect(lookupDelimFast("nope") == null);
+    try std.testing.expect(lookupAccentFast("nope") == null);
+    try std.testing.expect(!isTextordFast("nope"));
+    // First-match-wins duplicates keep the first row's payload.
+    try std.testing.expectEqual(@as(u21, 0x22C5), lookupFast("cdot").?.cp);
+    try std.testing.expectEqual(@as(u21, 0x0131), lookupFast("imath").?.cp);
 }
 
 test "greek lookup hits both cases" {
