@@ -28,6 +28,8 @@ jobs:
         run: tools/check_test_roots.sh
       - name: Distribution size gate (no artifact growth)
         run: tools/size_gate.sh
+      - name: Dist closure audit (no test-only symbols, issue #288)
+        run: tools/check_dist_closure.sh
 
   # Host-facing tooling (issues #252/#256/#257/#258/#264/#274):
   # the C example builds and runs, the inspector dumps real
