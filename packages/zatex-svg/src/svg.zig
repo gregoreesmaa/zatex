@@ -262,15 +262,15 @@ const W = struct {
     }
 };
 
-/// Split paint: `0xRRGGBBAA`; null is ambient black ink.
+/// Split paint: `0xRRGGBBAA`; 0 is ambient black ink.
 const Paint = struct {
     rgb: u24,
     a: u8,
 };
 
-fn paintOf(color: ?u32) Paint {
-    const c = color orelse return .{ .rgb = 0x000000, .a = 0xFF };
-    return .{ .rgb = @intCast(c >> 8), .a = @intCast(c & 0xFF) };
+fn paintOf(color: u32) Paint {
+    if (color == 0) return .{ .rgb = 0x000000, .a = 0xFF };
+    return .{ .rgb = @intCast(color >> 8), .a = @intCast(color & 0xFF) };
 }
 
 /// Saturating i64 to i32: adversarial box sums stay total.
@@ -426,7 +426,7 @@ const GlyphCache = struct {
 /// exactly like before.
 fn emitRun(w: *W, ol: outlines_mod.Outlines, cache: *GlyphCache, scratch: []cff.Seg, run: zatex.ir.Run) void {
     if (run.glyphs.len == 0 or run.size_units == 0) return;
-    const ambient = run.color == null;
+    const ambient = run.color == 0;
     const mark = w.pos;
     // `total` mirrors `pos` in write mode (every stored byte is also
     // counted) and is the only progress signal in measure mode (where
@@ -1069,8 +1069,8 @@ test "skeleton wraps body with integer viewBox" {
         w.done());
 }
 
-test "paintOf splits color and defaults null to black" {
-    const ambient = paintOf(null);
+test "paintOf splits color and defaults 0 to black" {
+    const ambient = paintOf(0);
     try std.testing.expectEqual(@as(u24, 0x000000), ambient.rgb);
     try std.testing.expectEqual(@as(u8, 0xFF), ambient.a);
     const red = paintOf(0xFF0000FF);

@@ -230,7 +230,7 @@ test "qa40 color is geometry-transparent" {
             // The paint must actually be there: every colored run
             // carries opaque red (0xFF0000FF RRGGBBAA).
             try std.testing.expect(c.runs.len > 0);
-            for (c.runs) |r| try std.testing.expectEqual(@as(?u32, 0xFF0000FF), r.color);
+            for (c.runs) |r| try std.testing.expectEqual(@as(u32, 0xFF0000FF), r.color);
             var da: [4096]u8 = undefined;
             var dc: [4096]u8 = undefined;
             try inv.expectSameDump(a, c, &da, &dc);
@@ -2313,7 +2313,7 @@ test "qa219 fcolorbox frame draws with unresolvable specs" {
         try std.testing.expectEqual(w[1], r.y);
         try std.testing.expectEqual(@as(u32, @intCast(w[2])), r.w);
         try std.testing.expectEqual(@as(u32, @intCast(w[3])), r.h);
-        try std.testing.expectEqual(@as(?u32, null), r.color);
+        try std.testing.expectEqual(@as(u32, 0), r.color);
     }
 }
 

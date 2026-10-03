@@ -73,7 +73,7 @@ pub const LayoutOptions = struct {
 
 /// KaTeX `strict` modes (`boolean|string` values; function handlers
 /// have no native analog — see `LayoutOptions.strict`).
-pub const StrictMode = enum {
+pub const StrictMode = enum(u8) {
     ignore,
     warn,
     /// KaTeX `"error"` (spelled `err`: `error` is a keyword).
@@ -84,7 +84,7 @@ pub const StrictMode = enum {
 /// codes mappable to this engine; the remainder
 /// (`mathVsTextUnits`, `unicodeTextInMathMode`, `unknownSymbol`,
 /// `commentAtEnd`) is documented in `docs/parity.md`, not emitted.
-pub const StrictCode = enum {
+pub const StrictCode = enum(u8) {
     /// `\htmlClass`/`\htmlId`/`\htmlStyle`/`\htmlData` (KaTeX
     /// `htmlExtension`).
     html_extension,
@@ -139,7 +139,7 @@ pub const max_presets: usize = 16;
 /// 0 = fraction_bar, 1 = radical, 2 = overline, 3 = underline.
 /// Underlines reuse the overline weight today (KaTeX parity), so the
 /// core never requests `underline` yet — it stays reserved.
-pub const RuleKind = enum { fraction_bar, radical, overline, underline };
+pub const RuleKind = enum(u8) { fraction_bar, radical, overline, underline };
 
 /// MathKern corner for script cut-ins (v3 hook below).
 pub const KernCorner = enum(u32) {

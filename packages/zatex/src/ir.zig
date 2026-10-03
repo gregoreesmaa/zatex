@@ -5,17 +5,26 @@
 //! runs through their own glyph cache and fonts; future MathML/SVG/PNG
 //! writers walk this same structure. See docs/ir.md.
 
+/// Ambient-paint sentinel shared by the layout core (`Box.color`)
+/// and the native IR (`Run.color`/`Rule.color`): 0 can never be a
+/// resolved paint (every resolution sets opaque alpha), so plain u32
+/// words carry the paint with no optional tag (issue #287). The C ABI
+/// copies this word verbatim (0 = ambient, same contract).
+pub const no_color: u32 = 0x00000000;
+
 /// One positioned run of glyphs from a single host font at one size.
 /// Coordinates are integer font units; y is the alphabetic baseline.
-/// `color` is 0xRRGGBBAA paint (`\color` scope, issue #35); null means
-/// the ambient (host default) paint. Runs never merge across colors.
+/// `color` is 0xRRGGBBAA paint (`\color` scope, issue #35); 0 means
+/// the ambient (host default) paint — resolved paints always carry
+/// opaque alpha, so 0 is unambiguous (energy pins white #ffffff as a
+/// real paint, issue #287). Runs never merge across colors.
 pub const Run = struct {
     font_id: u16,
     size_units: u16,
     x: i32,
     baseline_y: i32,
     glyphs: []const u16,
-    color: ?u32 = null,
+    color: u32 = 0,
     /// Horizontal raster scale in per-mille (1000 = identity): wide
     /// accents and brace spans stretch one glyph to the construction
     /// width (issues #31/#37). Additive: existing constructions omit
@@ -41,11 +50,11 @@ pub const Run = struct {
 /// issue #107): `up` runs bottom-left to top-right (`\cancel`),
 /// `down` runs top-left to bottom-right (`\bcancel`); `\xcancel`
 /// emits one rule of each. `none` fills the rect as before.
-pub const Diag = enum { none, up, down };
+pub const Diag = enum(u8) { none, up, down };
 
 /// One filled rect in font units (fraction bars, radical vincula, rules).
 /// `color` paints `\colorbox` backgrounds and `\fcolorbox` frames
-/// (issue #35); null means the ambient paint. A non-`none` `diag` draws
+/// (issue #35); 0 means the ambient paint. A non-`none` `diag` draws
 /// a `thick`-wide butt-cap diagonal across the rect instead of filling
 /// it (the `\cancel` SVG line, pinned KaTeX 0.18.7 `stretchyEnclose`).
 /// Additive like `Run.x_shear`: existing constructions omit both fields
@@ -55,7 +64,7 @@ pub const Rule = struct {
     y: i32,
     w: u32,
     h: u32,
-    color: ?u32 = null,
+    color: u32 = 0,
     diag: Diag = .none,
     thick: u32 = 0,
 };

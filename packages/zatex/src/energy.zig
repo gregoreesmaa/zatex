@@ -156,6 +156,11 @@ test "energy struct sizes ratchet" {
     // the ratchet pins the floor against future growth).
     try std.testing.expect(@sizeOf(engine.Box) <= 36);
     try std.testing.expect(@sizeOf(parse.Tok) <= 32);
+    // Issue #287: Run/Rule carry paint as a plain u32 word (0 is the
+    // ambient sentinel, never an optional tag) and the five hot enums
+    // are enum(u8). Growth past these floors fails the test.
+    try std.testing.expect(@sizeOf(ir.Run) <= 40);
+    try std.testing.expect(@sizeOf(ir.Rule) <= 28);
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +355,7 @@ test "energy color sentinel survives white" {
     try std.testing.expectEqual(@as(usize, 1), ckids.len);
     const spec = parse.nodeAt(&pcc, ckids[0]).color.spec;
     try std.testing.expect(parse.resolveColorSpec(&pcc, spec) != engine.no_color);
-    try std.testing.expectEqual(@as(?u32, 0xFFFFFFFF), parse.resolveColorSpec(&pcc, spec));
+    try std.testing.expectEqual(@as(u32, 0xFFFFFFFF), parse.resolveColorSpec(&pcc, spec).?);
 
     counters = .{};
     var runs_buf: [8]ir.Run = undefined;
@@ -359,7 +364,7 @@ test "energy color sentinel survives white" {
     var lc = engine.LayCtx.init(&pcc, countProvider());
     const l = try engine.layout(&lc, croot, .T, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(usize, 1), l.runs.len);
-    try std.testing.expectEqual(@as(?u32, 0xFFFFFFFF), l.runs[0].color);
+    try std.testing.expectEqual(@as(u32, 0xFFFFFFFF), l.runs[0].color);
 }
 
 // ---------------------------------------------------------------------------

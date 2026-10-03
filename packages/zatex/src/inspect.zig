@@ -158,7 +158,7 @@ pub fn main(min: std.process.Init.Minimal) !void {
             try w.print("{d}", .{g});
         }
         try w.print("]", .{});
-        if (r.color) |c| try w.print(",\"color\":{d}", .{c});
+        if (r.color != 0) try w.print(",\"color\":{d}", .{r.color});
         try w.print("}}", .{});
     }
     try w.print("],\"rules\":[", .{});
