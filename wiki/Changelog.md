@@ -127,8 +127,8 @@ for hosts building from source:
   action: `dlopen` the double in CI to cover OK and fallback paths
   without hand-rolled stubs (recipe in `docs/install.md`). Not an
   ABI change: the double is a separate artifact, never linked into
-   `libzatex` — the size gate is unaffected by construction
-   (it installs outside `zig-out/lib`).
+  `libzatex` — the size gate is unaffected by construction
+  (it installs outside `zig-out/lib`).
 - `zatex-svg` ships no library (withdrawn v0.0.0 hollow assets):
   the package is a pure Zig module with no C ABI — the published
   `libzatex_svg-*` archives (4.6 KB DLL exporting only CRT
@@ -141,6 +141,23 @@ for hosts building from source:
   `packages/zatex-svg/README.md`), everyone else uses the
   `zatex-svg-<tag>-<target>` CLI. `libzatex` and
   `libzatex_mathml` are real linkable libraries and keep shipping.
+- Scratch budgets, issue #284 (Zig-surface change, no ABI change):
+  `Outlines.inkThou` (zatex-svg seam) takes a caller outline scratch
+  (`512` segs hold every fixture-stack glyph, worst `164`) instead
+  of burning a per-call `8192`-seg (`~590KB`) stack frame; the shift
+  walks thread the draw walk's buffer through it. Additive:
+  `svg.measureLayout` (exact byte count, so the CLI allocates
+  exactly what it writes instead of a fixed `1MB`) and
+  `render.renderToPngPooled` + `render.CanvasPool` (single-slot
+  same-size canvas reuse across batch renders). CLI buffers are the
+  contract ceilings (`256` runs / `64` rules / `4096` glyphs /
+  `512` segs); software-canvas scratch is `512` segs / `8192`
+  lines. Overflow policy unchanged (blank/zero ink, never an
+  error). Host action: Zig hosts implementing `Outlines` add the
+  `scratch` parameter (use it for the outline walk); C hosts see
+  nothing. Renders are byte-identical (pinned by the SVG goldens
+  through the measure+exact path and a `154`-row PNG batch
+  old-vs-new comparison).
 
 ## 2026-09 — stride-safe run contract (issue #203, seeded entry)
 
