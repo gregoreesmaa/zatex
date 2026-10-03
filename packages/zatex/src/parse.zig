@@ -3116,9 +3116,18 @@ fn parseCharPrimitive(ctx: *ParseCtx, cmd: Tok) Error!Idx {
 // (`\html@mathml{<at>}{<alias>}` format + pushExpansion + reparse) and differ
 // only in the two strings, so they forward here instead of triplicating it.
 fn aliasNode(ctx: *ParseCtx, depth: u8, t: Tok, html_at: []const u8, math_alias: []const u8) Error!Idx {
+    // Hand-rolled `\html@mathml{<at>}{<alias>}` splice (issue #288):
+    // the only `std.fmt` use on the layout path, and the format
+    // machinery rides the dist lib for one static template.
+    // `pushExpansion` re-lexes bytes, so memcpy the pieces in order.
     var tpl: [80]u8 = undefined;
-    const text = std.fmt.bufPrint(&tpl, "\\html@mathml{{{s}}}{{{s}}}", .{ html_at, math_alias }) catch return error.NoSpace;
-    try pushExpansion(ctx, t, text);
+    var n: usize = 0;
+    for ([_][]const u8{ "\\html@mathml{", html_at, "}{", math_alias, "}" }) |piece| {
+        if (n + piece.len > tpl.len) return error.NoSpace;
+        @memcpy(tpl[n..][0..piece.len], piece);
+        n += piece.len;
+    }
+    try pushExpansion(ctx, t, tpl[0..n]);
     return (try parseSingle(ctx, depth)).?;
 }
 
