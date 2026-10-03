@@ -66,7 +66,11 @@ jobs:
       - name: Build zatex, zatex-mathml, zatex-svg (${{ matrix.target }})
         run: |
           for pkg in zatex zatex-mathml zatex-svg; do
-            (cd packages/$pkg && zig build -Dtarget=${{ matrix.target }})
+            # ReleaseSmall (issue #288): the dist libs already force
+            # it per-module, so this flag only diets the CLIs
+            # (zatex-svg: ~2.9MB -> ~0.7MB measured) — verified by
+            # rendering the corpus with a ReleaseSmall CLI build.
+            (cd packages/$pkg && zig build -Doptimize=ReleaseSmall -Dtarget=${{ matrix.target }})
           done
         shell: bash
       - name: Stage versioned artifacts (${{ matrix.target }})
@@ -141,7 +145,10 @@ jobs:
           version: 0.16.0
       - name: Build zatex-png (software backend, ${{ matrix.target }})
         working-directory: packages/zatex-png
-        run: zig build -Dtarget=${{ matrix.target }} -Dbackend=software
+        # ReleaseSmall (issue #288): diets the shipped CLI (~3.3MB ->
+        # ~0.8MB measured) — verified by rendering the full corpus
+        # with a ReleaseSmall CLI build (154 rendered, 0 failed).
+        run: zig build -Doptimize=ReleaseSmall -Dtarget=${{ matrix.target }} -Dbackend=software
       - name: Stage versioned CLI (${{ matrix.target }})
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
@@ -175,7 +182,8 @@ jobs:
           version: 0.16.0
       - name: Build zatex-png natively (CoreGraphics backend)
         working-directory: packages/zatex-png
-        run: zig build
+        # ReleaseSmall (issue #288, same diet as the cross-built CLIs).
+        run: zig build -Doptimize=ReleaseSmall
       - name: Stage versioned CLI (runner arch)
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"

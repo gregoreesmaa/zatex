@@ -29,6 +29,9 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/zatex_mathml.zig"),
         .target = target,
         .optimize = .ReleaseSmall,
+        // Shipped-artifact diet (issue #288, core precedent): strip the
+        // debug info that otherwise rides the static archive.
+        .strip = true,
     });
     dist_mod.addImport("zatex", zatex_dep.module("zatex"));
 
@@ -37,6 +40,9 @@ pub fn build(b: *std.Build) void {
         .root_module = dist_mod,
         .linkage = .static,
     });
+    // No LTO on the static dist lib (issue #288): same COFF/bitcode
+    // measurement as the core — LTO grows archives, so strip (above)
+    // is the static diet.
     // Windows ships both the static archive and the DLL import
     // library as `zatex_mathml.lib` (core precedent in
     // `packages/zatex/build.zig`), so the static archive takes the
@@ -53,6 +59,8 @@ pub fn build(b: *std.Build) void {
         .root_module = dist_mod,
         .linkage = .dynamic,
     });
+    // Same diet as the static dist lib (issue #288).
+    dylib.lto = .full;
     b.installArtifact(dylib);
 
     const mod_tests = b.addTest(.{ .root_module = mod });
