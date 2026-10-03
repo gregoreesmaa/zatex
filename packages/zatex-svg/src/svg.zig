@@ -18,9 +18,12 @@ pub fn renderLayout(
     out: []u8,
 ) zatex.LayoutError![]u8 {
     var w = W{ .buf = out };
-    const left = leftShiftUnits(ol, layout.runs, layout.rules);
-    const right = rightShiftUnits(ol, layout.runs, layout.rules, layout.width);
-    const total_w = satI32(@as(i64, layout.width) + @as(i64, left) + @as(i64, right));
+    // Per-render glyph cache (issue #282): the fused shift pass warms
+    // it (one outline parse per distinct glyph), the runs loop reuses
+    // it — repeat glyphs never re-parse. Stack-local, zero heap.
+    var cache = GlyphCache{};
+    const sh = shiftUnits(ol, &cache, layout.runs, layout.rules, layout.width);
+    const total_w = satI32(@as(i64, layout.width) + @as(i64, sh.left) + @as(i64, sh.right));
     const box_h = satI32(@as(i64, layout.height_above) + @as(i64, layout.depth_below));
     // Vertical rule fit (issue #270 review): diagonal cancel strikes
     // overhang the layout box by KaTeX's 0.2em pad (pinned 0.18.7
@@ -34,7 +37,7 @@ pub fn renderLayout(
     const total_h = satI32(@as(i64, box_h) + @as(i64, top) + @as(i64, bottom));
     const neg_top = satI32(-@as(i64, top));
     w.skeletonHead(
-        satI32(-@as(i64, left)),
+        satI32(-@as(i64, sh.left)),
         neg_top,
         total_w,
         total_h,
@@ -44,7 +47,7 @@ pub fn renderLayout(
     for (layout.rules) |r| {
         if (r.diag == .none) emitRule(&w, r);
     }
-    for (layout.runs) |run| emitRun(&w, ol, segs, run);
+    for (layout.runs) |run| emitRun(&w, ol, &cache, segs, run);
     // Cancel strikes paint over the body (pinned 0.18.7 `enclose.ts`:
     // "Write the \cancel stroke on top of inner"); rect rules never
     // overlap ink and stay underneath (a colorbox background must not
@@ -293,6 +296,80 @@ fn emitRule(w: *W, r: zatex.ir.Rule) void {
     w.str("\" stroke-linecap=\"butt\"/>");
 }
 
+/// Per-render glyph cache (issue #282): one outline parse per
+/// distinct unified glyph per render instead of one per occurrence
+/// per walk (left shift + right shift + draw = 3 parses each).
+///
+/// Direct-mapped 16-entry array keyed on the unified glyph id (the
+/// #159 memo precedent: collisions only evict, the key is always
+/// validated, so output is bit-identical). Each entry holds the
+/// advance, the units-per-em, the thousandths ink box, and the parsed
+/// segments (copied in, so hook-owned static slices are safe to keep).
+/// Stack-local in `renderLayout`; zero heap allocation.
+///
+/// Segment cap: 128 per entry (~9 KiB each). The probed KaTeX faces
+/// peak at 146 segments (one glyph overflows); anything larger — the
+/// Latin Modern giants included — bypasses the segment store and
+/// parses per occurrence exactly like before, while its advance/upm/
+/// ink stay cached. Bypass glyphs are bit-identical by construction
+/// (same hooks, same values, only fewer calls for the cached parts).
+const cache_slots: usize = 16;
+const cache_segs: usize = 128;
+
+const CacheEntry = struct {
+    used: bool = false,
+    unified: u16 = 0,
+    adv: i32 = 0,
+    upm: u16 = 0,
+    ink: [4]i32 = .{ 0, 0, 0, 0 },
+    has_segs: bool = false,
+    nsegs: usize = 0,
+    segs: [cache_segs]cff.Seg = undefined,
+};
+
+const GlyphCache = struct {
+    entries: [cache_slots]CacheEntry = [_]CacheEntry{.{}} ** cache_slots,
+
+    /// Cached metrics + segments for one glyph. Misses query each
+    /// hook at most once and fill the slot:
+    /// - advance/upm/ink come straight from their hooks (same values
+    ///   the walks would read per occurrence, so shifts stay
+    ///   bit-identical even for seams whose ink box is not derived
+    ///   from the served segments).
+    /// - the outline then parses once into the slot for the draw loop
+    ///   (null or over-cap outlines skip the segment store and parse
+    ///   per occurrence, as before; empty outlines store nothing —
+    ///   a full parse would bbox to null and report zero ink too).
+    fn lookup(self: *GlyphCache, ol: outlines_mod.Outlines, g: u16) *CacheEntry {
+        const slot = @as(usize, g) % cache_slots;
+        const e = &self.entries[slot];
+        if (e.used and e.unified == g) return e;
+        e.used = true;
+        e.unified = g;
+        e.adv = ol.advance1000(ol.ptr, g);
+        e.upm = ol.upmOf(ol.ptr, g);
+        e.ink = ol.inkThou(ol.ptr, g);
+        e.has_segs = false;
+        e.nsegs = 0;
+        if (e.upm == 0) return e;
+        const got = ol.glyphSegs(ol.ptr, g, &e.segs) orelse return e;
+        if (got.len == 0 or got.len > cache_segs) return e;
+        // Hook-owned slices (stubs serve statics) must be copied: the
+        // file impl already wrote into `e.segs` (self-copy), anything
+        // else lands there now. Lengths match, so this is exact.
+        if (got.ptr != e.segs[0..].ptr) @memcpy(e.segs[0..got.len], got);
+        e.nsegs = got.len;
+        e.has_segs = true;
+        return e;
+    }
+
+    fn cachedSegs(self: *GlyphCache, ol: outlines_mod.Outlines, scratch: []cff.Seg, g: u16) ?[]const cff.Seg {
+        const e = self.lookup(ol, g);
+        if (e.has_segs) return e.segs[0..e.nsegs];
+        return ol.glyphSegs(ol.ptr, g, scratch);
+    }
+};
+
 /// One run: `<g>` carrying only the fill (omitted for ambient black),
 /// wrapping a single soup `<path>` with every transform baked into
 /// coordinates. X = ox + mx·s·kx·x + mx·kh·(y·s), Y = oy − s·y with
@@ -302,8 +379,11 @@ fn emitRule(w: *W, r: zatex.ir.Rule) void {
 /// when a segment ends at its subpath start (curves always emit
 /// their `C` data first; bare `Z` is reserved for straight closing
 /// edges). Glyphs with no segments still step the pen. A run with
-/// no ink emits nothing at all.
-fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.Run) void {
+/// no ink emits nothing at all. Metrics and segments come from the
+/// per-render `GlyphCache` (warmed by the shift pass); bypass glyphs
+/// (null or over-cap outlines) parse into `scratch` per occurrence,
+/// exactly like before.
+fn emitRun(w: *W, ol: outlines_mod.Outlines, cache: *GlyphCache, scratch: []cff.Seg, run: zatex.ir.Run) void {
     if (run.glyphs.len == 0 or run.size_units == 0) return;
     const ambient = run.color == null;
     const mark = w.pos;
@@ -329,17 +409,16 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
     var sub_x: f64 = 0;
     var sub_y: f64 = 0;
     for (run.glyphs) |g| {
-        const adv = ol.advance1000(ol.ptr, g);
-        const upm = ol.upmOf(ol.ptr, g);
-        if (upm == 0) {
-            x_units = stepPen(x_units, adv, run);
+        const e = cache.lookup(ol, g);
+        if (e.upm == 0) {
+            x_units = stepPen(x_units, e.adv, run);
             continue;
         }
-        const got = ol.glyphSegs(ol.ptr, g, scratch) orelse {
-            x_units = stepPen(x_units, adv, run);
+        const got = cache.cachedSegs(ol, scratch, g) orelse {
+            x_units = stepPen(x_units, e.adv, run);
             continue;
         };
-        const s: f64 = @as(f64, @floatFromInt(run.size_units)) / @as(f64, @floatFromInt(upm));
+        const s: f64 = @as(f64, @floatFromInt(run.size_units)) / @as(f64, @floatFromInt(e.upm));
         const kx: f64 = @as(f64, @floatFromInt(run.x_scale)) / 1000.0;
         const kh: f64 = @as(f64, @floatFromInt(run.x_shear)) / 1000.0;
         const mx: f64 = if (run.mirrored) -1.0 else 1.0;
@@ -396,7 +475,7 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
             pen_y = by[3];
             have_pen = true;
         }
-        x_units = stepPen(x_units, adv, run);
+        x_units = stepPen(x_units, e.adv, run);
     }
     if (w.pos == dmark) {
         w.pos = mark; // no ink: drop the empty path (and its group)
@@ -406,77 +485,70 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
     if (!ambient) w.str("</g>");
 }
 
-/// Left-overflow shift in layout units (>= 0): the walk mirrors the
-/// draw loop's origin stepping, and each glyph contributes its true
-/// ink-left edge (`inkThou` [l,b,r,t], y-up, origin-relative).
-/// Mirrored ink spans [-r,-l] about the origin, so its left edge hangs
-/// off the ink right; shear slides ink with height, so the extremes
-/// sit at the ink top/bottom. Rules contribute their rect left edge.
-/// Transcribes `zatex-png`'s `leftShiftUnits`; zero keeps the viewport
-/// bit-identical.
-fn leftShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule) u32 {
+/// Fused viewport shift in layout units (issue #282): one pass over
+/// runs/glyphs computing BOTH the left overflow (ink past the origin)
+/// and the right overflow (ink past the advance width). Transcribes
+/// `zatex-png`'s twin walks; the per-glyph arithmetic below is their
+/// two bodies sharing one origin step and one cache lookup, so the
+/// values equal `leftShiftUnits`/`rightShiftUnits` exactly while each
+/// glyph's outline parses once per render (via `cache`) instead of
+/// twice here plus once in the draw loop.
+///
+/// Per glyph the walk mirrors the draw loop's origin stepping, and
+/// the glyph contributes its true ink edges (`inkThou` [l,b,r,t],
+/// y-up, origin-relative): mirrored ink spans [-r,-l] about the
+/// origin, so the left edge hangs off the ink right and the right
+/// edge off the negated ink left; shear slides ink with height, so
+/// the extremes sit at the ink top/bottom. Rules contribute their
+/// rect edges. Zero keeps the viewport bit-identical.
+fn shiftUnits(
+    ol: outlines_mod.Outlines,
+    cache: *GlyphCache,
+    runs: []const zatex.ir.Run,
+    rules: []const zatex.ir.Rule,
+    width: u32,
+) struct { left: u32, right: u32 } {
     var left: i64 = 0;
-    for (rules) |r| {
-        if (@as(i64, r.x) < left) left = @as(i64, r.x);
-    }
-    for (runs) |run| {
-        if (run.glyphs.len == 0) continue;
-        var x_units: i64 = run.x;
-        for (run.glyphs) |g| {
-            const ink = ol.inkThou(ol.ptr, g);
-            const ink_o: i64 = if (run.mirrored) ink[2] else ink[0];
-            const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
-            var edge = if (run.mirrored) x_units - ink_e else x_units + ink_e;
-            if (run.x_shear != 0) {
-                const top_u = @divTrunc(@as(i64, ink[3]) * @as(i64, run.size_units), 1000);
-                const bot_u = @divTrunc(@as(i64, ink[1]) * @as(i64, run.size_units), 1000);
-                const sh_top = @divFloor(@as(i64, run.x_shear) * top_u, 1000);
-                const sh_bot = @divFloor(@as(i64, run.x_shear) * bot_u, 1000);
-                if (run.mirrored) {
-                    edge -= @max(@as(i64, 0), @max(sh_top, sh_bot));
-                } else {
-                    edge += @min(@as(i64, 0), @min(sh_top, sh_bot));
-                }
-            }
-            if (edge < left) left = edge;
-            x_units = stepPen(x_units, ol.advance1000(ol.ptr, g), run);
-        }
-    }
-    return if (left < 0) @intCast(-left) else 0;
-}
-
-/// Right-overflow shift: mirror of `leftShiftUnits` for ink past the
-/// advance width. Transcribes `zatex-png`'s `rightShiftUnits`.
-fn rightShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule, width: u32) u32 {
     var edge: i64 = width;
     for (rules) |r| {
-        const right: i64 = @as(i64, r.x) + @as(i64, r.w);
-        if (right > edge) edge = right;
+        if (@as(i64, r.x) < left) left = @as(i64, r.x);
+        const rright: i64 = @as(i64, r.x) + @as(i64, r.w);
+        if (rright > edge) edge = rright;
     }
     for (runs) |run| {
         if (run.glyphs.len == 0) continue;
         var x_units: i64 = run.x;
         for (run.glyphs) |g| {
-            const ink = ol.inkThou(ol.ptr, g);
-            const ink_o: i64 = if (run.mirrored) -@as(i64, ink[0]) else ink[2];
-            const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
-            var right = x_units + ink_e;
+            const e = cache.lookup(ol, g);
+            const ink = e.ink;
+            const ink_l: i64 = if (run.mirrored) ink[2] else ink[0];
+            const ink_r: i64 = if (run.mirrored) -@as(i64, ink[0]) else ink[2];
+            const ink_le = @divTrunc(ink_l * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
+            const ink_re = @divTrunc(ink_r * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
+            var ledge = if (run.mirrored) x_units - ink_le else x_units + ink_le;
+            var redge = x_units + ink_re;
             if (run.x_shear != 0) {
                 const top_u = @divTrunc(@as(i64, ink[3]) * @as(i64, run.size_units), 1000);
                 const bot_u = @divTrunc(@as(i64, ink[1]) * @as(i64, run.size_units), 1000);
                 const sh_top = @divFloor(@as(i64, run.x_shear) * top_u, 1000);
                 const sh_bot = @divFloor(@as(i64, run.x_shear) * bot_u, 1000);
                 if (run.mirrored) {
-                    right -= @min(@as(i64, 0), @min(sh_top, sh_bot));
+                    ledge -= @max(@as(i64, 0), @max(sh_top, sh_bot));
+                    redge -= @min(@as(i64, 0), @min(sh_top, sh_bot));
                 } else {
-                    right += @max(@as(i64, 0), @max(sh_top, sh_bot));
+                    ledge += @min(@as(i64, 0), @min(sh_top, sh_bot));
+                    redge += @max(@as(i64, 0), @max(sh_top, sh_bot));
                 }
             }
-            if (right > edge) edge = right;
-            x_units = stepPen(x_units, ol.advance1000(ol.ptr, g), run);
+            if (ledge < left) left = ledge;
+            if (redge > edge) edge = redge;
+            x_units = stepPen(x_units, e.adv, run);
         }
     }
-    return if (edge > @as(i64, width)) @intCast(edge - @as(i64, width)) else 0;
+    return .{
+        .left = if (left < 0) @intCast(-left) else 0,
+        .right = if (edge > @as(i64, width)) @intCast(edge - @as(i64, width)) else 0,
+    };
 }
 
 /// Top-overflow shift in layout units (>= 0): diagonal cancel strikes
@@ -733,6 +805,149 @@ test "shift walks follow shear and mirror extremes" {
     const got_mir = try renderLayout(lm, stubOutlines(), &segs, &out);
     // Mirrored shear leans the other way: 0-346-110 = -456.
     try std.testing.expect(std.mem.indexOf(u8, got_mir, "viewBox=\"-456 0 856 1000\"") != null);
+}
+
+/// Counting outline seam for the #282 energy pins: fixed segs/ink
+/// per glyph like `stubOutlines`, plus per-hook call counters. Pins
+/// below assert exact counts (#159 style), so unfusing the shift
+/// pass or dropping the cache fails the suite like a correctness
+/// regression.
+const CountOutlines = struct {
+    segs_calls: usize = 0,
+    adv_calls: usize = 0,
+    upm_calls: usize = 0,
+    ink_calls: usize = 0,
+
+    var segbuf: [1]cff.Seg = .{.{
+        .x = .{ 0, 0, 0, 500 },
+        .y = .{ 0, 0, 0, 700 },
+        .is_curve = false,
+    }};
+
+    fn segs(ptr: *const anyopaque, _: u16, _: []cff.Seg) ?[]const cff.Seg {
+        const self: *CountOutlines = @ptrCast(@alignCast(@constCast(ptr)));
+        self.segs_calls += 1;
+        return &segbuf;
+    }
+    fn adv(ptr: *const anyopaque, g: u16) i32 {
+        const self: *CountOutlines = @ptrCast(@alignCast(@constCast(ptr)));
+        self.adv_calls += 1;
+        return if (g == 'x') 500 else 400;
+    }
+    fn upm(ptr: *const anyopaque, _: u16) u16 {
+        const self: *CountOutlines = @ptrCast(@alignCast(@constCast(ptr)));
+        self.upm_calls += 1;
+        return 1000;
+    }
+    fn ink(ptr: *const anyopaque, g: u16) [4]i32 {
+        const self: *CountOutlines = @ptrCast(@alignCast(@constCast(ptr)));
+        self.ink_calls += 1;
+        return if (g == 'x') .{ -50, 0, 550, 700 } else .{ 10, 0, 390, 0 };
+    }
+
+    fn iface(self: *CountOutlines) outlines_mod.Outlines {
+        return .{
+            .ptr = @ptrCast(self),
+            .glyphSegs = segs,
+            .advance1000 = adv,
+            .upmOf = upm,
+            .inkThou = ink,
+        };
+    }
+};
+
+test "energy fused shift parses each distinct glyph once" {
+    // Two `x` plus one `y` across two runs: the fused pass warms the
+    // cache (one outline query per hook per distinct glyph) and the
+    // draw loop reuses it. Unfused (left+right+draw walks) would cost
+    // 2 ink calls per occurrence (6) plus a segs parse per
+    // occurrence (3); uncached-but-fused would cost 3 per hook.
+    var co = CountOutlines{};
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{ 'x', 'x' } },
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{'y'} },
+    };
+    const l = zatex.ir.Layout{ .width = 1000, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var scratch: [8]cff.Seg = undefined;
+    var out: [4096]u8 = undefined;
+    const got = try renderLayout(l, co.iface(), &scratch, &out);
+    // Ink overhangs pin the fused viewport (bit-identical contract):
+    // `x` ink-left -50 at the origin opens minX -50, and ink-right
+    // 550 past the second origin (500) reaches 1050: width 1000 plus
+    // 50 left plus 50 right.
+    try std.testing.expect(std.mem.indexOf(u8, got, "viewBox=\"-50 0 1100 1000\"") != null);
+    try std.testing.expectEqual(@as(usize, 2), co.segs_calls);
+    try std.testing.expectEqual(@as(usize, 2), co.adv_calls);
+    try std.testing.expectEqual(@as(usize, 2), co.upm_calls);
+    try std.testing.expectEqual(@as(usize, 2), co.ink_calls);
+}
+
+test "energy cache bypass keeps hook ink and re-parses segs" {
+    // Null-seg glyphs skip the segment store: ink still comes from
+    // the hook (viewport honors it), while the draw loop parses per
+    // occurrence exactly like before the cache.
+    const S = struct {
+        var n_ink: usize = 0;
+        var n_segs: usize = 0;
+        fn segs(_: *const anyopaque, _: u16, _: []cff.Seg) ?[]const cff.Seg {
+            n_segs += 1;
+            return null;
+        }
+        fn adv(_: *const anyopaque, _: u16) i32 {
+            return 500;
+        }
+        fn upm(_: *const anyopaque, _: u16) u16 {
+            return 1000;
+        }
+        fn ink(_: *const anyopaque, _: u16) [4]i32 {
+            n_ink += 1;
+            return .{ -50, 0, 550, 700 };
+        }
+    };
+    S.n_ink = 0;
+    S.n_segs = 0;
+    const ol = outlines_mod.Outlines{ .ptr = &S.n_ink, .glyphSegs = S.segs, .advance1000 = S.adv, .upmOf = S.upm, .inkThou = S.ink };
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &[_]u16{ 'x', 'x' } },
+    };
+    const l = zatex.ir.Layout{ .width = 500, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var scratch: [8]cff.Seg = undefined;
+    var out: [4096]u8 = undefined;
+    const got = try renderLayout(l, ol, &scratch, &out);
+    // Hook ink still fits the viewport (ink-left -50 opens minX -50;
+    // the second `x` at 500 reaches ink-right 1050: 500 + 50 + 550).
+    try std.testing.expect(std.mem.indexOf(u8, got, "viewBox=\"-50 0 1100 1000\"") != null);
+    // One hook-ink call for the distinct glyph; the draw loop
+    // re-parses null segs per occurrence (no store to reuse).
+    try std.testing.expectEqual(@as(usize, 1), S.n_ink);
+    try std.testing.expectEqual(@as(usize, 3), S.n_segs);
+}
+
+test "energy cache evicts on collision without corrupting ink" {
+    // Glyphs 16 apart share a slot: alternating them evicts every
+    // time (each lookup re-queries), but the validated key keeps
+    // every edge exact.
+    var co = CountOutlines{};
+    var glyphs: [34]u16 = undefined;
+    var i: usize = 0;
+    while (i < glyphs.len) : (i += 1) glyphs[i] = if (i % 2 == 0) 'x' else 'x' + 16;
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 0, .glyphs = &glyphs },
+    };
+    const l = zatex.ir.Layout{ .width = 20000, .height_above = 800, .depth_below = 200, .runs = &runs, .rules = &.{} };
+    var scratch: [8]cff.Seg = undefined;
+    var out: [65536]u8 = undefined;
+    const got = try renderLayout(l, co.iface(), &scratch, &out);
+    // Every `x` (advance 500, ink-right 550) still reaches past its
+    // successor's origin: the last one ends the line at its ink edge.
+    try std.testing.expect(std.mem.indexOf(u8, got, "<path") != null);
+    // 34 alternating colliding lookups in the shift pass plus 34
+    // more in the draw loop (which re-looks-up per glyph): no hits
+    // possible, every hook fires per occurrence in both passes —
+    // while 3 repeats of one glyph cost exactly 1 per hook per pass
+    // (pinned above in fused form).
+    try std.testing.expectEqual(@as(usize, 68), co.segs_calls);
+    try std.testing.expectEqual(@as(usize, 68), co.ink_calls);
 }
 
 test "num formats fixed 2-decimal stripped" {
