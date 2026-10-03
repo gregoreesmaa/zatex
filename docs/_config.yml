@@ -1,4 +1,5 @@
-# GitHub Pages (Jekyll minima). Served from /docs on pushes to main.
+# GitHub Pages (Jekyll minima). Built by actions/jekyll-build-pages
+# from docs/ on pushes to main; served at gregoreesmaa.github.io/zatex.
 # Local preview: `cd docs && bundle exec jekyll serve` (or any static server).
 title: ZaTeX
 tagline: KaTeX-compatible math, native in Zig
@@ -8,12 +9,7 @@ description: >-
   One layout core; MathML, SVG, and PNG emitters.
 url: https://gregoreesmaa.github.io
 baseurl: /zatex
-remote_theme: jekyll/minima
-plugins:
-  - jekyll-relative-links
-relative_links:
-  enabled: true
-  collections: true
+theme: jekyll-theme-minima
 exclude:
   - renders/.tmp
   - superpowers
