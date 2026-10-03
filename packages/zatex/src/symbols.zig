@@ -1396,10 +1396,50 @@ test "large operators carry limit defaults" {
     try std.testing.expect(lookup("sin").?.func);
 }
 
+test "splitLimitOp misses on length and prefix (issue #290)" {
+    const std = @import("std");
+    // Length-gated misses: no word of another length can split,
+    // whatever its prefix (`eq` checks length first).
+    for ([_][]const u8{ "", "s", "sin", "lim", "limin", "liminff", "projli", "projlimm" }) |name| {
+        try std.testing.expect(splitLimitOp(name) == null);
+    }
+    // Prefix misses on 6-letter non-split words.
+    for ([_][]const u8{ "sinxxx", "cosxxx", "detxxx", "supxxx", "maxxxx" }) |name| {
+        try std.testing.expect(splitLimitOp(name) == null);
+    }
+}
+
+test "splitLimitOp maps the six split ops to their word pairs (issue #290)" {
+    const std = @import("std");
+    const cases = [_]struct { name: []const u8, a: []const u8, b: []const u8 }{
+        .{ .name = "liminf", .a = "lim", .b = "inf" },
+        .{ .name = "limsup", .a = "lim", .b = "sup" },
+        .{ .name = "injlim", .a = "inj", .b = "lim" },
+        .{ .name = "projlim", .a = "proj", .b = "lim" },
+        .{ .name = "argmax", .a = "arg", .b = "max" },
+        .{ .name = "argmin", .a = "arg", .b = "min" },
+    };
+    for (cases) |c| {
+        const halves = splitLimitOp(c.name) orelse return error.TestUnexpectedResult;
+        try std.testing.expectEqualStrings(c.a, halves[0]);
+        try std.testing.expectEqualStrings(c.b, halves[1]);
+    }
+    // Non-split words (and near-misses by length/prefix) miss.
+    for ([_][]const u8{ "sin", "lim", "sup", "inf", "max", "min", "sum", "limin", "liminff", "argma", "", "projli" }) |name| {
+        try std.testing.expect(splitLimitOp(name) == null);
+    }
+}
+
 /// Two-word limit operators (`lim inf`, ...): KaTeX macro expansion of
 /// `\liminf`, `\limsup` (and amsopn `\injlim`, `\projlim`). Single
 /// source of truth for the layout core (thin-kern join) and the
 /// MathML walker (U+2009 join); issue #36.
+///
+/// (Issue #290 measured a length + first-byte dispatch here and
+/// rejected it: +118 bytes against the `size_gate.sh` ceiling for a
+/// lookup that already misses after one length check per candidate
+/// — the six-compare chain stays. A `split` bit on `Sym` was
+/// likewise rejected: +~5.6KB const data.)
 pub fn splitLimitOp(text: []const u8) ?[2][]const u8 {
     if (eq(text, "liminf")) return .{ "lim", "inf" };
     if (eq(text, "limsup")) return .{ "lim", "sup" };
