@@ -191,9 +191,13 @@ jobs:
       - name: Stage versioned CLI (runner arch)
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          T="$(uname -m)-macos"
+          # `uname -m` says `arm64` on Apple silicon; Zig targets and
+          # every other release asset say `aarch64` — normalize so the
+          # asset keeps the documented `<arch>-<os>` shape.
+          ARCH="$(uname -m)"
+          if [ "$ARCH" = "arm64" ]; then ARCH="aarch64"; fi
           cp "packages/zatex-png/zig-out/bin/zatex-png" \
-            "$GITHUB_WORKSPACE/dist/zatex-png-${GITHUB_REF_NAME}-${T}"
+            "$GITHUB_WORKSPACE/dist/zatex-png-${GITHUB_REF_NAME}-${ARCH}-macos"
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
