@@ -56,9 +56,12 @@ pub const BoxKind = union(enum) {
 /// `Box.color` sentinel for "ambient paint" (issue #35): resolved
 /// colors are 0xRRGGBBAA with opaque alpha (`parse.resolveColorSpec`
 /// always sets the low byte to 0xFF), so transparent black can never
-/// be a real paint and marks "no override". Pinned by an energy test
-/// (white `#ffffff` resolves to 0xFFFFFFFF, never the sentinel).
-pub const no_color: u32 = 0x00000000;
+/// be a real paint and marks "no override". The native IR reuses the
+/// same word (`ir.Run.color`/`ir.Rule.color`, 0 = ambient) instead of
+/// an optional, saving the tag byte on every run and rule (issue
+/// #287). Pinned by an energy test (white `#ffffff` resolves to
+/// 0xFFFFFFFF, never the sentinel).
+pub const no_color: u32 = ir.no_color;
 
 /// `Box.flags` bits (energy, issue #150): the two rare booleans share
 /// one byte instead of riding as padded fields on every box copy.
@@ -99,15 +102,10 @@ pub const Box = struct {
     pub fn isMirror(self: Box) bool {
         return (self.flags & flag_mirror) != 0;
     }
-
-    /// `color` as the IR optional (`null` = ambient paint).
-    pub fn optColor(self: Box) ?u32 {
-        return if (self.color == no_color) null else self.color;
-    }
 };
 
-pub const max_boxes: usize = 640;
-pub const max_bkids: usize = 1536;
+pub const max_boxes: usize = 448;
+pub const max_bkids: usize = 1024;
 
 /// Energy (#159): one direct-mapped metric-memo slot. Word loops
 /// and repeated glyphs re-query the same `(font, glyph)` for
@@ -137,8 +135,8 @@ pub const LayCtx = struct {
     /// Nearest enclosing font override (`\mathrm{...}` etc.).
     fam_subst: ?parse.FontFam = null,
     /// Ambient paint (`\color` scope, issue #35) plus its stack.
-    cur_color: ?u32 = null,
-    color_stack: [32]?u32 = undefined,
+    cur_color: u32 = no_color,
+    color_stack: [32]u32 = undefined,
     ncolors: u8 = 0,
     /// Ambient font-size multiplier in per-mille (1000 = identity),
     /// set by `.size` nodes (`\tiny`…`\Huge`, issue #73). Absolute
@@ -163,12 +161,12 @@ pub const LayCtx = struct {
         self.boxes[id] = b;
         // Ambient paint stamps every box; box backgrounds/frames
         // override afterwards (issue #35).
-        if (self.boxes[id].color == no_color) self.boxes[id].color = self.cur_color orelse no_color;
+        if (self.boxes[id].color == no_color) self.boxes[id].color = self.cur_color;
         self.nboxes += 1;
         return id;
     }
 
-    fn pushColor(self: *LayCtx, c: ?u32) Error!void {
+    fn pushColor(self: *LayCtx, c: u32) Error!void {
         if (self.ncolors >= self.color_stack.len) return error.NoSpace;
         self.color_stack[self.ncolors] = self.cur_color;
         self.ncolors += 1;
@@ -487,7 +485,7 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .color => |c| {
             // Paint the body (KaTeX parity, issue #35): nested scopes
             // win; unresolvable specs keep the ambient paint.
-            try lc.pushColor(parse.resolveColorSpec(lc.pctx, c.spec));
+            try lc.pushColor(parse.resolveColorSpec(lc.pctx, c.spec) orelse no_color);
             const b = try layoutNode(lc, style, c.body);
             lc.popColor();
             return b;
@@ -4218,7 +4216,7 @@ const EmitCtx = struct {
                 .x = self.open_run_x,
                 .baseline_y = self.open_y,
                 .glyphs = self.glyphs[self.open_start..self.ng],
-                .color = if (self.open_color == no_color) null else self.open_color,
+                .color = self.open_color,
                 .x_scale = self.open_scale,
                 .x_shear = self.open_shear,
                 .mirrored = self.open_mirrored,
@@ -4277,7 +4275,7 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     .y = base - b.ha,
                     .w = w,
                     .h = if (b.ha + b.db < 0) 0 else @intCast(b.ha + b.db),
-                    .color = b.optColor(),
+                    .color = b.color,
                 };
                 ec.nl += 1;
             }
@@ -4304,7 +4302,7 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                     .y = base - b.ha,
                     .w = w,
                     .h = if (b.ha + b.db < 0) 0 else @intCast(b.ha + b.db),
-                    .color = b.optColor(),
+                    .color = b.color,
                     .diag = dir,
                     .thick = d.thick,
                 };

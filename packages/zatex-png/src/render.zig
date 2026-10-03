@@ -463,17 +463,18 @@ test "left shift follows shear at ink extremes (issue #77)" {
     try std.testing.expectEqual(@as(u32, 346), leftShiftUnits(m, &runs_mir, &.{}));
 }
 
-/// Select the paint for one IR run/rule: ambient (null) is black ink;
+/// Select the paint for one IR run/rule: ambient (0) is black ink;
 /// otherwise the 0xRRGGBBAA word the core stamped (issue #35).
-fn setPaint(canvas: *backend.impl.Canvas, color: ?u32) void {
+fn setPaint(canvas: *backend.impl.Canvas, color: u32) void {
     // Strokes carry the same paint (diagonal strikes, issue #107):
     // single-state canvases alias the two, split-state ones (Quartz)
     // need both calls.
-    const c = color orelse {
+    if (color == 0) {
         canvas.setFill(0, 0, 0, 1);
         canvas.setStroke(0, 0, 0, 1);
         return;
-    };
+    }
+    const c = color;
     const f = struct {
         fn b(v: u32) f64 {
             return @as(f64, @floatFromInt(v)) / 255.0;
