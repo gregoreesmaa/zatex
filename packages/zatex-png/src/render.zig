@@ -57,7 +57,12 @@ pub fn renderToPng(
     var canvas = try backend.impl.Canvas.create(w, h);
     defer canvas.close();
 
-    // White background, black ink.
+    // White background, black ink. The software canvas allocates
+    // pre-cleared white (issue #285), so the explicit clear below is
+    // a no-op blit for it (integer fast path in `fillRect` rewrites
+    // the same bytes) and stays the real clear for backends whose
+    // `create` leaves pixels undefined (CoreGraphics bitmaps start
+    // zeroed = transparent black there).
     canvas.setFill(1, 1, 1, 1);
     canvas.fillRect(0, 0, @floatFromInt(w), @floatFromInt(h));
     canvas.setFill(0, 0, 0, 1);

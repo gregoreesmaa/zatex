@@ -76,6 +76,10 @@ pub const Canvas = struct {
 
     pub fn create(w: usize, h: usize) error{RenderInit}!Canvas {
         const alloc = std.heap.c_allocator;
+        // White by construction (issue #285): the only caller
+        // (`render.zig`) clears every canvas to white before drawing,
+        // so start cleared and drop the second clear — one memset
+        // instead of memset + a full-image blended `fillRect`.
         const pixels = alloc.alloc(u8, w * h * 4) catch return error.RenderInit;
         @memset(pixels, 255);
         errdefer alloc.free(pixels);
