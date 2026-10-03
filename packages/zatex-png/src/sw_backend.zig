@@ -16,11 +16,17 @@ const cff = @import("cff");
 const sw_raster = @import("sw_raster.zig");
 const sw_png = @import("sw_png.zig");
 
-/// Segments reused across glyphs of one canvas (sized so the fixture's
-/// worst glyph fits several times over; overflow blanks that glyph).
-const SCRATCH_SEGS = 8192;
-/// Flattened lines per glyph draw (same policy as segments).
-const SCRATCH_LINES = 16384;
+/// Segments reused across glyphs of one canvas: 512 holds every
+/// fixture-stack glyph (worst is 164 segs across all 15 loadable
+/// faces, 3x headroom — pinned by the test below); overflow blanks
+/// that glyph, exactly like the measure path (extents/ink use the
+/// same 512 budget), so layout and pixels stay consistent.
+/// Flattened lines per glyph draw (same policy as segments): 8192
+/// holds the worst fixture glyph even at the CLI's `--px 512` max
+/// with a 16x brace stretch plus shear (5219 measured, 1.5x
+/// headroom); overflow truncates deterministically.
+const SCRATCH_SEGS = 512;
+const SCRATCH_LINES = 8192;
 
 pub const Font = struct {
     alloc: std.mem.Allocator,
@@ -216,20 +222,59 @@ test "mirrored runs negate x-scale and slant about the origin (issue #97)" {
 
 // extents1000 uses a 512-segment stack scratch: assert every fixture
 // glyph's outline fits, so layout never silently shrinks a glyph whose
-// rasterizer drew it fully.
+// rasterizer drew it fully. (`big` is the measuring stick, not a cap:
+// it stays oversized so the bound is a real measurement.)
 test "512 outline segments hold every fixture glyph" {
     const alloc = std.testing.allocator;
     const bytes = try fixtureBytes(alloc);
     defer alloc.free(bytes);
     const outlines = try cff.load(bytes);
     var scratch: [512]cff.Seg = undefined;
-    var big: [8192]cff.Seg = undefined;
+    var big: [1024]cff.Seg = undefined;
     var g: usize = 0;
     while (g < outlines.num_glyphs) : (g += 1) {
         const full = cff.outline(&outlines, @intCast(g), &big) catch continue;
         if (full.len > 512) std.debug.print("glyph {d} needs {d} segs\n", .{ g, full.len });
         try std.testing.expect(full.len <= 512);
         _ = try cff.outlineBbox(&outlines, @intCast(g), &scratch);
+    }
+}
+
+// SCRATCH_LINES (8192) holds every fixture glyph's flattening even at
+// the CLI's `--px 512` max with a 16x brace stretch plus shear (the
+// absolute worst case; the default `--px 48` peaks at hundreds). The
+// stick is heap-allocated so the bound is a real measurement, and the
+// outline scratch is the production 512 (every glyph fits it per the
+// test above, so flatten sees full paths here).
+test "8192 flattened lines hold every fixture glyph at CLI extremes" {
+    const alloc = std.testing.allocator;
+    const bytes = try fixtureBytes(alloc);
+    defer alloc.free(bytes);
+    const outlines = try cff.load(bytes);
+    var scratch: [512]cff.Seg = undefined;
+    const stick = try alloc.alloc(sw_raster.Line, 16384);
+    defer alloc.free(stick);
+    // px per em, x-stretch, shear: default, max, and max with the
+    // brace-span/shear extremes the backends support.
+    const scales = [_]struct { px: f64, xs: f64, sh: f64 }{
+        .{ .px = 48, .xs = 1, .sh = 0 },
+        .{ .px = 512, .xs = 1, .sh = 0 },
+        .{ .px = 512, .xs = 16, .sh = 0 },
+        .{ .px = 512, .xs = 16, .sh = 0.5 },
+        .{ .px = 512, .xs = 1, .sh = 0.5 },
+    };
+    for (scales) |sc| {
+        var worst: usize = 0;
+        var g: usize = 0;
+        while (g < outlines.num_glyphs) : (g += 1) {
+            const segs = cff.outline(&outlines, @intCast(g), &scratch) catch continue;
+            if (segs.len == 0) continue;
+            const s = sc.px / 1000.0;
+            const lines = sw_raster.flatten(segs, s * sc.xs, s, 0, 0, sc.sh, stick);
+            if (lines.len > worst) worst = lines.len;
+        }
+        if (worst > SCRATCH_LINES) std.debug.print("px={d} xs={d} sh={d}: worst {d} lines\n", .{ sc.px, sc.xs, sc.sh, worst });
+        try std.testing.expect(worst <= SCRATCH_LINES);
     }
 }
 

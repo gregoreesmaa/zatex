@@ -11,6 +11,10 @@ const golden_ids = @import("golden_ids.zig");
 
 /// Walk `layout` into a standalone SVG document in `out`: shift-fit
 /// the viewport, `skeletonHead`, rules loop, runs loop, `</svg>`.
+/// `segs` is the single outline scratch shared by the draw walk and
+/// the shift walks (sequential reuse, never nested): the shift walks
+/// thread a slice of it through `inkThou` instead of burning a
+/// per-glyph stack frame per call.
 pub fn renderLayout(
     layout: zatex.ir.Layout,
     ol: outlines_mod.Outlines,
@@ -18,8 +22,31 @@ pub fn renderLayout(
     out: []u8,
 ) zatex.LayoutError![]u8 {
     var w = W{ .buf = out };
-    const left = leftShiftUnits(ol, layout.runs, layout.rules);
-    const right = rightShiftUnits(ol, layout.runs, layout.rules, layout.width);
+    return renderLayoutW(layout, ol, segs, &w);
+}
+
+/// Byte count the layout renders to: the same walk as
+/// `renderLayout` through a measuring writer, so the CLI allocates
+/// exactly what it writes instead of a fixed 1MB. Deterministic:
+/// same input + same faces measure and write identical bytes.
+pub fn measureLayout(
+    layout: zatex.ir.Layout,
+    ol: outlines_mod.Outlines,
+    segs: []cff.Seg,
+) zatex.LayoutError!usize {
+    var w = W{ .buf = &.{}, .measure = true };
+    _ = try renderLayoutW(layout, ol, segs, &w);
+    return w.total;
+}
+
+fn renderLayoutW(
+    layout: zatex.ir.Layout,
+    ol: outlines_mod.Outlines,
+    segs: []cff.Seg,
+    w: *W,
+) zatex.LayoutError![]u8 {
+    const left = leftShiftUnits(ol, segs, layout.runs, layout.rules);
+    const right = rightShiftUnits(ol, segs, layout.runs, layout.rules, layout.width);
     const total_w = satI32(@as(i64, layout.width) + @as(i64, left) + @as(i64, right));
     const box_h = satI32(@as(i64, layout.height_above) + @as(i64, layout.depth_below));
     // Vertical rule fit (issue #270 review): diagonal cancel strikes
@@ -42,15 +69,15 @@ pub fn renderLayout(
         @as(f64, @floatFromInt(total_h)) / 1000.0,
     );
     for (layout.rules) |r| {
-        if (r.diag == .none) emitRule(&w, r);
+        if (r.diag == .none) emitRule(w, r);
     }
-    for (layout.runs) |run| emitRun(&w, ol, segs, run);
+    for (layout.runs) |run| emitRun(w, ol, segs, run);
     // Cancel strikes paint over the body (pinned 0.18.7 `enclose.ts`:
     // "Write the \cancel stroke on top of inner"); rect rules never
     // overlap ink and stay underneath (a colorbox background must not
     // cover its content).
     for (layout.rules) |r| {
-        if (r.diag != .none) emitRule(&w, r);
+        if (r.diag != .none) emitRule(w, r);
     }
     w.str("</svg>");
     if (w.overflow) return error.NoSpace;
@@ -95,12 +122,21 @@ fn mapErr(err: zatex.LayoutError) zatex.LayoutError {
 /// Fixed-precision buffer writer (mathml `Writer` shape, extended
 /// with `num`/`hexColor`/`opacity`). Zero allocation; any write past
 /// the buffer sets `overflow` and stops (surfaces as `error.NoSpace`).
+/// In `measure` mode nothing is stored: every byte is only counted
+/// into `total`, so `measureLayout` learns the exact size first and
+/// the CLI allocates exactly that (overflow never sets there).
 const W = struct {
     buf: []u8,
     pos: usize = 0,
     overflow: bool = false,
+    measure: bool = false,
+    total: usize = 0,
 
     fn str(self: *W, s: []const u8) void {
+        if (self.measure) {
+            self.total += s.len;
+            return;
+        }
         if (self.overflow) return;
         if (self.pos + s.len > self.buf.len) {
             self.overflow = true;
@@ -108,9 +144,14 @@ const W = struct {
         }
         @memcpy(self.buf[self.pos .. self.pos + s.len], s);
         self.pos += s.len;
+        self.total += s.len;
     }
 
     fn byte(self: *W, c: u8) void {
+        if (self.measure) {
+            self.total += 1;
+            return;
+        }
         if (self.overflow) return;
         if (self.pos + 1 > self.buf.len) {
             self.overflow = true;
@@ -118,6 +159,7 @@ const W = struct {
         }
         self.buf[self.pos] = c;
         self.pos += 1;
+        self.total += 1;
     }
 
     fn uint(self: *W, v: u32) void {
@@ -307,6 +349,12 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
     if (run.glyphs.len == 0 or run.size_units == 0) return;
     const ambient = run.color == null;
     const mark = w.pos;
+    // `total` mirrors `pos` in write mode (every stored byte is also
+    // counted) and is the only progress signal in measure mode (where
+    // `pos` stays 0): the empty-path check below must compare totals,
+    // and the rollback must restore both, or the measure pass drops
+    // every run's closer and undercounts.
+    const mark_total = w.total;
     if (!ambient) {
         const p = paintOf(run.color);
         w.str("<g fill=\"");
@@ -320,7 +368,7 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
         w.byte('>');
     }
     w.str("<path d=\"");
-    const dmark = w.pos;
+    const dmark_total = w.total;
     const oy: f64 = @floatFromInt(run.baseline_y);
     var x_units: i64 = run.x;
     var pen_x: f64 = 0;
@@ -398,8 +446,9 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
         }
         x_units = stepPen(x_units, adv, run);
     }
-    if (w.pos == dmark) {
+    if (w.total == dmark_total) {
         w.pos = mark; // no ink: drop the empty path (and its group)
+        w.total = mark_total;
         return;
     }
     w.str("\"/>");
@@ -413,8 +462,10 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, scratch: []cff.Seg, run: zatex.ir.R
 /// off the ink right; shear slides ink with height, so the extremes
 /// sit at the ink top/bottom. Rules contribute their rect left edge.
 /// Transcribes `zatex-png`'s `leftShiftUnits`; zero keeps the viewport
-/// bit-identical.
-fn leftShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule) u32 {
+/// bit-identical. `scratch` threads the caller's outline buffer
+/// through `inkThou` (shared with the draw walk's `segs`, sequential
+/// reuse — no per-glyph stack frame).
+fn leftShiftUnits(ol: outlines_mod.Outlines, scratch: []cff.Seg, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule) u32 {
     var left: i64 = 0;
     for (rules) |r| {
         if (@as(i64, r.x) < left) left = @as(i64, r.x);
@@ -423,7 +474,7 @@ fn leftShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: 
         if (run.glyphs.len == 0) continue;
         var x_units: i64 = run.x;
         for (run.glyphs) |g| {
-            const ink = ol.inkThou(ol.ptr, g);
+            const ink = ol.inkThou(ol.ptr, g, scratch);
             const ink_o: i64 = if (run.mirrored) ink[2] else ink[0];
             const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
             var edge = if (run.mirrored) x_units - ink_e else x_units + ink_e;
@@ -447,7 +498,7 @@ fn leftShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: 
 
 /// Right-overflow shift: mirror of `leftShiftUnits` for ink past the
 /// advance width. Transcribes `zatex-png`'s `rightShiftUnits`.
-fn rightShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule, width: u32) u32 {
+fn rightShiftUnits(ol: outlines_mod.Outlines, scratch: []cff.Seg, runs: []const zatex.ir.Run, rules: []const zatex.ir.Rule, width: u32) u32 {
     var edge: i64 = width;
     for (rules) |r| {
         const right: i64 = @as(i64, r.x) + @as(i64, r.w);
@@ -457,7 +508,7 @@ fn rightShiftUnits(ol: outlines_mod.Outlines, runs: []const zatex.ir.Run, rules:
         if (run.glyphs.len == 0) continue;
         var x_units: i64 = run.x;
         for (run.glyphs) |g| {
-            const ink = ol.inkThou(ol.ptr, g);
+            const ink = ol.inkThou(ol.ptr, g, scratch);
             const ink_o: i64 = if (run.mirrored) -@as(i64, ink[0]) else ink[2];
             const ink_e = @divTrunc(ink_o * @as(i64, run.size_units) * @as(i64, run.x_scale), 1000 * 1000);
             var right = x_units + ink_e;
@@ -526,7 +577,7 @@ fn stubOutlines() outlines_mod.Outlines {
         fn upm(_: *const anyopaque, _: u16) u16 {
             return 1000;
         }
-        fn ink(_: *const anyopaque, g: u16) [4]i32 {
+        fn ink(_: *const anyopaque, g: u16, _: []cff.Seg) [4]i32 {
             return switch (g) {
                 'x' => .{ -50, 0, 550, 700 },
                 's' => .{ -40, -205, 346, 442 },
@@ -696,7 +747,7 @@ test "runs with no ink emit nothing" {
         fn upm(_: *const anyopaque, _: u16) u16 {
             return 1000;
         }
-        fn ink(_: *const anyopaque, _: u16) [4]i32 {
+        fn ink(_: *const anyopaque, _: u16, _: []cff.Seg) [4]i32 {
             return .{ 0, 0, 0, 0 };
         }
         var tag: u8 = 0;
@@ -711,6 +762,51 @@ test "runs with no ink emit nothing" {
     const got = try renderLayout(l, ol, &segs, &out);
     try std.testing.expect(std.mem.indexOf(u8, got, "<path") == null);
     try std.testing.expect(std.mem.indexOf(u8, got, "<g") == null);
+    try std.testing.expect(std.mem.endsWith(u8, got, "</svg>"));
+}
+
+test "measure agrees with write, inked and inkless runs" {
+    // The measure pass must count exactly what the write pass stores:
+    // the empty-path rollback compares totals (in measure mode `pos`
+    // never advances, so a `pos` comparison drops every closer).
+    // One inked run, one colored inked run, one inkless run.
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'} },
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'x'}, .color = 0xFF0000FF },
+        .{ .font_id = 0, .size_units = 1000, .x = 100, .baseline_y = 200, .glyphs = &[_]u16{'n'} },
+    };
+    const S = struct {
+        var segbuf: [1]cff.Seg = .{.{
+            .x = .{ 0, 0, 0, 500 },
+            .y = .{ 0, 0, 0, 700 },
+            .is_curve = false,
+        }};
+        fn segs(_: *const anyopaque, g: u16, _: []cff.Seg) ?[]const cff.Seg {
+            // 'n' draws nothing (inkless run exercises the rollback).
+            if (g == 'n') return null;
+            return &segbuf;
+        }
+        fn adv(_: *const anyopaque, _: u16) i32 {
+            return 500;
+        }
+        fn upm(_: *const anyopaque, _: u16) u16 {
+            return 1000;
+        }
+        fn ink(_: *const anyopaque, _: u16, _: []cff.Seg) [4]i32 {
+            return .{ 0, 0, 500, 700 };
+        }
+        var tag: u8 = 0;
+    };
+    const ol = outlines_mod.Outlines{ .ptr = &S.tag, .glyphSegs = S.segs, .advance1000 = S.adv, .upmOf = S.upm, .inkThou = S.ink };
+    const l = zatex.ir.Layout{ .width = 1000, .height_above = 1000, .depth_below = 500, .runs = &runs, .rules = &.{} };
+    var segs: [8]cff.Seg = undefined;
+    const n = try measureLayout(l, ol, &segs);
+    var out: [2048]u8 = undefined;
+    const got = try renderLayout(l, ol, &segs, &out);
+    try std.testing.expectEqual(got.len, n);
+    // Inkless run emitted nothing: two paths, one group.
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, got, "<path"));
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, got, "<g fill="));
     try std.testing.expect(std.mem.endsWith(u8, got, "</svg>"));
 }
 
@@ -1166,21 +1262,26 @@ test "goldens byte-match" {
     defer {
         for (file_held[0..file_n]) |b| std.testing.allocator.free(b);
     }
-    var runs: [2048]zatex.ir.Run = undefined;
-    var rules: [512]zatex.ir.Rule = undefined;
-    var glyphs: [16384]u16 = undefined;
-    // Test-only allocation (the library path still takes caller bufs):
-    // segs/out are too big for comfortable stack arrays.
-    const segs = try std.testing.allocator.alloc(cff.Seg, 8192);
-    defer std.testing.allocator.free(segs);
-    const out = try std.testing.allocator.alloc(u8, 1024 * 1024);
-    defer std.testing.allocator.free(out);
+    // CLI-ceiling buffers (main.zig): every golden fits the 256-run /
+    // 64-rule / 4096-glyph / 512-seg caps the CLI allocates, and `out`
+    // is measure-then-exact (never the old fixed 1MB) — so this test
+    // proves the production-sized path byte-matches, not an
+    // over-provisioned one.
+    var runs: [256]zatex.ir.Run = undefined;
+    var rules: [64]zatex.ir.Rule = undefined;
+    var glyphs: [4096]u16 = undefined;
+    var segs: [512]cff.Seg = undefined;
     var diag = zatex.Diag.empty();
     inline for (golden_ids.ids) |id| {
         const want = @embedFile("goldens/" ++ id ++ ".svg");
+        const src = lookup(corpus, id);
         // regen renders with `--display` iff the id ends in `-d`;
         // the snapshot keys display mode off the same suffix.
-        const got = try render(lookup(corpus, id), .{ .display_mode = std.mem.endsWith(u8, id, "-d") }, fileProv(), fileOutlines(), &runs, &rules, &glyphs, segs, out, &diag);
+        const layout = try zatex.layoutDiag(src, .{ .display_mode = std.mem.endsWith(u8, id, "-d") }, fileProv(), &runs, &rules, &glyphs, &diag);
+        const n = try measureLayout(layout, fileOutlines(), &segs);
+        const out = try std.testing.allocator.alloc(u8, n);
+        defer std.testing.allocator.free(out);
+        const got = try renderLayout(layout, fileOutlines(), &segs, out);
         try std.testing.expectEqualStrings(want, got);
         try std.testing.expect(std.mem.indexOf(u8, want, "/Users/") == null);
         try std.testing.expect(std.mem.indexOf(u8, want, "/home/") == null);

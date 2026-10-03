@@ -13,7 +13,10 @@ pub const Outlines = struct {
     // Per-face units-per-em (1000 when unknown; ink is skipped anyway then).
     upmOf: *const fn (ptr: *const anyopaque, unified: u16) u16,
     // Ink box in thousandths, y-up, origin-relative [l, b, r, t]; zeros on failure.
-    inkThou: *const fn (ptr: *const anyopaque, unified: u16) [4]i32,
+    // `scratch` is caller-owned outline scratch (512 segs hold every
+    // fixture-stack glyph: worst is 164 — so this never allocates;
+    // too-small resolves to zeros, never an error).
+    inkThou: *const fn (ptr: *const anyopaque, unified: u16, scratch: []cff.Seg) [4]i32,
 };
 
 pub const StackFile = struct {
@@ -89,18 +92,17 @@ pub const StackOutlines = struct {
         return self.stack.faces[r.index].font.upm;
     }
 
-    fn inkThou(ptr: *const anyopaque, unified: u16) [4]i32 {
+    fn inkThou(ptr: *const anyopaque, unified: u16, scratch: []cff.Seg) [4]i32 {
         const self: *const StackOutlines = @ptrCast(@alignCast(ptr));
         const r = self.stack.faceOf(unified) orelse return .{ 0, 0, 0, 0 };
         const slot = &self.cffs[r.index];
         if (slot.* == null) return .{ 0, 0, 0, 0 };
         const upm = self.stack.faces[r.index].font.upm;
         if (upm == 0) return .{ 0, 0, 0, 0 };
-        // Stack-local scratch (cff's own 8K-segments precedent covers
-        // the fixture's worst glyph several times over); too-small
-        // resolves to zeros, never an error.
-        var scratch: [8192]cff.Seg = undefined;
-        const bb = cff.outlineBbox(&slot.*.?, r.gid, &scratch) catch return .{ 0, 0, 0, 0 };
+        // Caller scratch, never a per-call frame (the old 8192-seg
+        // frame was ~590KB per glyph per walk); too-small resolves
+        // to zeros, never an error.
+        const bb = cff.outlineBbox(&slot.*.?, r.gid, scratch) catch return .{ 0, 0, 0, 0 };
         const b = bb orelse return .{ 0, 0, 0, 0 };
         return .{
             thou(b[0], upm),
@@ -134,7 +136,7 @@ test "stub outlines serve fixed segs" {
         fn segs(_: *const anyopaque, _: u16, _: []cff.Seg) ?[]const cff.Seg { return &segbuf; }
         fn adv(_: *const anyopaque, _: u16) i32 { return 500; }
         fn upm(_: *const anyopaque, _: u16) u16 { return 1000; }
-        fn ink(_: *const anyopaque, _: u16) [4]i32 { return .{ 0, 0, 100, 100 }; }
+        fn ink(_: *const anyopaque, _: u16, _: []cff.Seg) [4]i32 { return .{ 0, 0, 100, 100 }; }
         var tag: u8 = 0;
     };
     const ol = Outlines{ .ptr = &S.tag, .glyphSegs = S.segs, .advance1000 = S.adv, .upmOf = S.upm, .inkThou = S.ink };
@@ -207,7 +209,7 @@ test "stack outlines demux faces and skip unknown" {
     try std.testing.expect(segs.len > 0);
     try std.testing.expect(ol.advance1000(ol.ptr, gid_a) > 0);
     try std.testing.expectEqual(so.stack.faces[0].font.upm, ol.upmOf(ol.ptr, gid_a));
-    const ink = ol.inkThou(ol.ptr, gid_a);
+    const ink = ol.inkThou(ol.ptr, gid_a, &segbuf);
     try std.testing.expect(ink[2] > ink[0] and ink[3] > ink[1]);
     // KaTeX-only codepoint demuxes to the Main face with real ink.
     const gid_macron = so.stack.glyphIdFor(0, 0x02C9);
@@ -218,7 +220,7 @@ test "stack outlines demux faces and skip unknown" {
     try std.testing.expect(ol.glyphSegs(ol.ptr, 0xFFFF, &segbuf) == null);
     try std.testing.expectEqual(@as(i32, 500), ol.advance1000(ol.ptr, 0xFFFF));
     try std.testing.expectEqual(@as(u16, 1000), ol.upmOf(ol.ptr, 0xFFFF));
-    try std.testing.expectEqual([4]i32{ 0, 0, 0, 0 }, ol.inkThou(ol.ptr, 0xFFFF));
+    try std.testing.expectEqual([4]i32{ 0, 0, 0, 0 }, ol.inkThou(ol.ptr, 0xFFFF, &segbuf));
     // Edge calls never error: a zero-length seg buffer (OutOfSpace
     // inside) resolves to null rather than failing.
     var empty: [0]cff.Seg = .{};
@@ -226,5 +228,8 @@ test "stack outlines demux faces and skip unknown" {
     // A face whose CFF would not load serves null ink too.
     so.cffs[0] = null;
     try std.testing.expect(ol.glyphSegs(ol.ptr, gid_a, &segbuf) == null);
-    try std.testing.expectEqual([4]i32{ 0, 0, 0, 0 }, ol.inkThou(ol.ptr, gid_a));
+    try std.testing.expectEqual([4]i32{ 0, 0, 0, 0 }, ol.inkThou(ol.ptr, gid_a, &segbuf));
+    // Too-small scratch (a zero-length buffer forces OutOfSpace
+    // inside) resolves to zero ink, never an error.
+    try std.testing.expectEqual([4]i32{ 0, 0, 0, 0 }, ol.inkThou(ol.ptr, gid_macron, &empty));
 }
