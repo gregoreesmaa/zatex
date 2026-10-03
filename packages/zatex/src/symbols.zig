@@ -1024,9 +1024,109 @@ const text_cmds = [_]TextCmd{
 
 /// Look up a text-mode command. Returns null for math-only names
 /// (callers report KaTeX-parity `Invalid`).
+///
+/// Energy (issue #289): hashed dispatch over the same `text_cmds`
+/// table — one hash over the name picks a short bucket, so the common
+/// miss (math commands in text, single-char escapes) fails fast
+/// instead of scanning all 38 entries, and hits compare against 1–5
+/// candidates. Every result comes from the table (same order, same
+/// values — bit-identical by construction); the hash only selects
+/// which slice to scan.
 pub fn lookupText(name: []const u8) ?u21 {
-    for (text_cmds) |e| if (eq(e.name, name)) return e.cp;
+    // Longest table name is 17 chars (`textquotedblleft/right`); the
+    // bound only guards the prefix index below, never real names.
+    if (name.len == 0 or name.len > 24) return null;
+    const h = textHash(name);
+    // Buckets by (first byte, length class): each arm scans its table
+    // slice in table order via `lookupTextIn`. Indices are positions
+    // in `text_cmds` above (0-based: i=0, j=1, o=2, O=3, ae=4, AE=5,
+    // ss=6, oe=7, OE=8, aa=9, AA=10, S=11, P=12, sect=13,
+    // textdollar=14, ...).
+    switch (h) {
+        // 1-char names: i j o O S P (+`sect`, same codepoint as S).
+        0x0131 => return lookupTextIn(name, &.{ 0, 11, 13 }),
+        0x0237 => return lookupTextIn(name, &.{1}),
+        0x00F8 => return lookupTextIn(name, &.{2}),
+        0x00D8 => return lookupTextIn(name, &.{3}),
+        0x00A7 => return lookupTextIn(name, &.{ 11, 13 }),
+        0x00B6 => return lookupTextIn(name, &.{12}),
+        // 2-char names: ae/aa, AE/AA, ss, oe/OE.
+        0x00E6 => return lookupTextIn(name, &.{ 4, 9 }),
+        0x00C6 => return lookupTextIn(name, &.{ 5, 10 }),
+        0x00DF => return lookupTextIn(name, &.{6}),
+        0x0153 => return lookupTextIn(name, &.{ 7, 8 }),
+        // `sect` shares S's codepoint; hashed on its own first byte.
+        0x0073 => return lookupTextIn(name, &.{13}),
+        else => {},
+    }
+    // `text*` names: dispatch on the distinguishing byte (index 4 —
+    // the first byte past the shared `text` prefix), then scan the
+    // slice in table order (textdollar=14, textsterling=15,
+    // textellipsis=16, textendash=17, textemdash=18,
+    // textquoteleft=19, textquoteright=20, textquotedblleft=21,
+    // textquotedblright=22, textasciitilde=23, textasciicircum=24,
+    // textbar=25, textbardbl=26, textbraceleft=27, textbraceright=28,
+    // textbackslash=29, textdagger=30, textdaggerdbl=31,
+    // textdegree=32, textgreater=33, textless=34, textunderscore=35,
+    // textcopyright=36, textregistered=37).
+    if (name.len >= 5 and name[0] == 't' and name[1] == 'e' and name[2] == 'x' and name[3] == 't') {
+        switch (name[4]) {
+            'd' => return lookupTextIn(name, &.{ 14, 30, 31, 32 }),
+            's' => return lookupTextIn(name, &.{15}),
+            'e' => return lookupTextIn(name, &.{ 16, 17, 18 }),
+            'q' => return lookupTextIn(name, &.{ 19, 20, 21, 22 }),
+            'a' => return lookupTextIn(name, &.{ 23, 24 }),
+            'b' => return lookupTextIn(name, &.{ 25, 26, 27, 28, 29 }),
+            'g' => return lookupTextIn(name, &.{33}),
+            'l' => return lookupTextIn(name, &.{34}),
+            'u' => return lookupTextIn(name, &.{35}),
+            'c' => return lookupTextIn(name, &.{36}),
+            'r' => return lookupTextIn(name, &.{37}),
+            else => return null,
+        }
+    }
     return null;
+}
+
+/// Scan one bucket slice of `text_cmds` in table order (issue #289):
+/// the single choke point behind every `lookupText` arm, so results
+/// can never drift from the table.
+fn lookupTextIn(name: []const u8, idxs: []const usize) ?u21 {
+    for (idxs) |i| {
+        const e = text_cmds[i];
+        if (eq(e.name, name)) return e.cp;
+    }
+    return null;
+}
+
+/// Perfect discriminator for the short text-command names (issue
+/// #289): single-char names map to their own codepoint (distinct
+/// first bytes), two-char names to the lowercase member's codepoint
+/// (pairs share it). Collisions with `text*` names are impossible
+/// (those dispatch on the prefix arm above, never this hash).
+fn textHash(name: []const u8) u21 {
+    if (name.len == 1) {
+        return switch (name[0]) {
+            'i' => 0x0131,
+            'j' => 0x0237,
+            'o' => 0x00F8,
+            'O' => 0x00D8,
+            'S' => 0x00A7,
+            'P' => 0x00B6,
+            else => 0,
+        };
+    }
+    // `sect` is the only 4-char short name; hash on its own first byte.
+    if (eq("sect", name)) return 0x0073;
+    if (name.len == 2) {
+        if (name[0] == 'a' and (name[1] == 'e' or name[1] == 'a')) return 0x00E6;
+        if (name[0] == 'A' and (name[1] == 'E' or name[1] == 'A')) return 0x00C6;
+        if (name[0] == 's' and name[1] == 's') return 0x00DF;
+        if (name[0] == 'o' and name[1] == 'e') return 0x0153;
+        if (name[0] == 'O' and name[1] == 'E') return 0x0153;
+        return 0;
+    }
+    return 0;
 }
 
 // Text-mode commands that take an argument (they cannot live in the
@@ -1572,8 +1672,19 @@ test "pinned KaTeX codepoints and classes" {
     try std.testing.expectEqual(@as(u21, 0x0024), lookupText("textdollar").?);
     try std.testing.expectEqual(@as(u21, 0x00B0), lookupText("textdegree").?);
     try std.testing.expectEqual(@as(u21, 0x005C), lookupText("textbackslash").?);
+    // Full-table cross-check: every entry resolves through the
+    // hashed dispatch to its own codepoint (bucket coverage), and
+    // near-misses still return null. This pins the index slices in
+    // `lookupText` against the table — a wrong index fails here, not
+    // in a golden.
+    try std.testing.expectEqual(@as(usize, 38), text_cmds.len);
+    for (text_cmds) |e| try std.testing.expectEqual(e.cp, lookupText(e.name).?);
     try std.testing.expect(lookupText("alpha") == null);
     try std.testing.expect(lookupText("sum") == null);
+    try std.testing.expect(lookupText("") == null);
+    try std.testing.expect(lookupText("textcircles") == null);
+    try std.testing.expect(lookupText("textcircled") == null);
+    try std.testing.expect(lookupText("i ") == null);
 }
 
 test "large operators carry limit defaults" {
