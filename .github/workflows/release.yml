@@ -24,11 +24,12 @@
 #     cleanly, so one ubuntu runner builds all six OS/CPU targets.
 #   - The zatex-png CLI links CoreGraphics on Apple targets
 #     (`-Dbackend=auto` = cg there), which needs the macOS SDK — so the
-#     two macOS png binaries build natively on macos-14 (which carries
-#     both arch SDK slices), while Linux/Windows png binaries
-#     cross-build with `-Dbackend=software` (libc-only, zero host
-#     dependencies). Layout dimensions are backend-independent
-#     (see packages/zatex-png/README.md).
+#     macOS png binary builds natively on macos-14 with no `-Dtarget`
+#     (an explicit target makes Zig skip the Xcode SDK framework
+#     paths), while Linux/Windows png binaries cross-build with
+#     `-Dbackend=software` (libc-only, zero host dependencies).
+#     Only the runner's own macOS arch ships. Layout dimensions are
+#     backend-independent (see packages/zatex-png/README.md).
 #   - On Windows targets the DLL import library and the static archive
 #     both install as `<name>.lib`, so build.zig installs the static
 #     archive as `<name>_static.lib` there (classic name elsewhere);
@@ -170,32 +171,33 @@ jobs:
           name: png-${{ matrix.target }}
           path: dist/
 
-  # zatex-png CLI for macOS: CoreGraphics backend needs the macOS SDK,
-  # so both archs build natively on macos-14 (arm64 runner ships both
-  # SDK slices; Zig targets each arch explicitly).
+  # zatex-png CLI for macOS: CoreGraphics backend needs the macOS SDK.
+  # An explicit `-Dtarget=` makes Zig resolve frameworks from its own
+  # bundle instead of the Xcode SDK (v0.0.0: `unable to find framework
+  # 'CoreGraphics' ... searched paths: none`), so this builds natively
+  # with no `-Dtarget` — the same plain `zig build` CI uses — and
+  # derives the asset's `<target>` infix from the runner arch. Only
+  # the runner's own arch ships (today: aarch64-macos on macos-14).
   png-macos:
     runs-on: macos-14
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [aarch64-macos, x86_64-macos]
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
-      - name: Build zatex-png (CoreGraphics backend, ${{ matrix.target }})
+      - name: Build zatex-png natively (CoreGraphics backend)
         working-directory: packages/zatex-png
-        run: zig build -Dtarget=${{ matrix.target }}
-      - name: Stage versioned CLI (${{ matrix.target }})
+        run: zig build
+      - name: Stage versioned CLI (runner arch)
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
+          T="$(uname -m)-macos"
           cp "packages/zatex-png/zig-out/bin/zatex-png" \
-            "$GITHUB_WORKSPACE/dist/zatex-png-${GITHUB_REF_NAME}-${{ matrix.target }}"
+            "$GITHUB_WORKSPACE/dist/zatex-png-${GITHUB_REF_NAME}-${T}"
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
-          name: png-${{ matrix.target }}
+          name: png-macos
           path: dist/
 
   # C headers (identical on every target — staged once).

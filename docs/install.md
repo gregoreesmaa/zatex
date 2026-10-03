@@ -21,6 +21,10 @@ Targets are `<arch>-<os>` for `x86_64` / `aarch64` × `linux` /
 `macos` / `windows`, and every release carries a `SHA256SUMS` file.
 Verify with it before installing. The asset pattern throughout is
 `libzatex-<tag>-<target>.<ext>` (same shape for every library).
+One exception: `zatex-png` ships no `x86_64-macos` binary — the
+macOS CLI needs the Xcode SDK, so it builds natively on the release
+runner and only that runner's arch is published (today:
+`aarch64-macos`).
 
 Libraries (link statically, or ship the dynamic library with your
 app — either is a complete engine: zero dependencies, no bundled
@@ -48,7 +52,7 @@ CLI tools (single-file, zero-dependency binaries):
 
 | Tool | Linux / macOS asset | Windows asset | Notes |
 | --- | --- | --- | --- |
-| `zatex-png` | `zatex-png-vX.Y.Z-<target>` | `zatex-png-vX.Y.Z-<target>.exe` | macOS builds use the CoreGraphics backend; Linux/Windows builds use the portable software backend (same layout dimensions — see `packages/zatex-png/README.md`). |
+| `zatex-png` | `zatex-png-vX.Y.Z-<target>` | `zatex-png-vX.Y.Z-<target>.exe` | macOS builds use the CoreGraphics backend (runner arch only, no `x86_64-macos` asset); Linux/Windows builds use the portable software backend (same layout dimensions — see `packages/zatex-png/README.md`). |
 | `zatex-svg` | `zatex-svg-vX.Y.Z-<target>` | `zatex-svg-vX.Y.Z-<target>.exe` | Outlined-path SVG, no font dependency at view time. |
 
 Run CLIs from the package directory (font paths are CWD-relative —
