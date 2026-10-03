@@ -65,6 +65,12 @@ pub const no_color: u32 = 0x00000000;
 pub const flag_invisible: u8 = 0x01;
 pub const flag_mirror: u8 = 0x02;
 
+/// Bottom-up true-ink cache flags (issue #289): stored per box in the
+/// `LayCtx.ink_flags` side table (see above). Bit 0 = known
+/// (resolved, including known-null); bit 1 = null.
+pub const ink_known: u8 = 0x04;
+pub const ink_null: u8 = 0x08;
+
 pub const Box = struct {
     w: i32,
     ha: i32,
@@ -114,7 +120,13 @@ pub const max_bkids: usize = 1536;
 /// advance+extents; the memo collapses repeats toward
 /// distinct-glyph cost. Fixed struct, per-layout only, no heap —
 /// and bit-identical output (same hook values, fewer calls).
-const memo_slots: usize = 4;
+///
+/// Energy (issue #289): 16 slots. The old 4-slot table thrashed past
+/// 4 live glyphs (`font ^ glyph` colliding every 4th entry — a
+/// `\text{abcdef}` word re-queried every char); 16 covers a full
+/// lowercase run plus digits with no eviction, at 16×20 = 320 bytes
+/// of context state. Lookup is still one validated slot probe.
+pub const memo_slots: usize = 16;
 const MemoEntry = struct {
     font: u16 = 0,
     glyph: u16 = 0,
@@ -131,6 +143,18 @@ pub const LayCtx = struct {
     pctx: *const parse.ParseCtx,
     provider: contract.MetricsProvider,
     memo: [memo_slots]MemoEntry = [_]MemoEntry{.{}} ** memo_slots,
+    /// Bottom-up true-ink cache (issue #289): `boxInk` resolves each
+    /// box once on its first probe and stores the pair here, never on
+    /// `Box` (the 36-byte energy ratchet holds — this table is context
+    /// state like `memo`, not per-box layout data). `ink_flags` bit 0
+    /// (`ink_known`) means resolved including known-null; bit 1
+    /// (`ink_null`) means the pair is null (hook-gated null stays
+    /// null, bit-identical — no hook means known-null on first probe
+    /// without a hook call). Repeat probes are table reads, never
+    /// subtree re-walks.
+    ink_top: [max_boxes]i32 = [_]i32{0} ** max_boxes,
+    ink_bot: [max_boxes]i32 = [_]i32{0} ** max_boxes,
+    ink_flags: [max_boxes]u8 = [_]u8{0} ** max_boxes,
     /// Minimum fence height requested by an enclosing `\left..\right`
     /// (consumed by `\middle`), in font units.
     fence_need: i32 = 0,
@@ -149,7 +173,13 @@ pub const LayCtx = struct {
     /// size multiplier. Identity (1000) reproduces `sizeUnits`
     /// bit-exactly (`u*1000/1000 == u`), so unsized layout is
     /// untouched by construction.
+    ///
+    /// Energy (issue #289): the identity fast-path. `cur_mult` is 1000
+    /// unless a `\tiny`…`\Huge` scope is open, so most calls skip the
+    /// multiply/divide entirely and return the style constant — same
+    /// value, no `@divTrunc`.
     fn effSize(self: *LayCtx, style: parse.Style) u16 {
+        if (self.cur_mult == 1000) return style.sizeUnits();
         return @intCast(@divTrunc(@as(i32, style.sizeUnits()) * self.cur_mult, 1000));
     }
 
@@ -164,6 +194,13 @@ pub const LayCtx = struct {
         // Ambient paint stamps every box; box backgrounds/frames
         // override afterwards (issue #35).
         if (self.boxes[id].color == no_color) self.boxes[id].color = self.cur_color orelse no_color;
+        // Ink stays unresolved here (issue #289): `boxInk` folds each
+        // subtree bottom-up on its first probe and caches the pair on
+        // the box, so repeat probes (limits base/sup/sub, supsub symbol
+        // arms, sqrt, accents) are cache reads. Eager resolution would
+        // spend hook calls on leaves no probe ever visits (the energy
+        // brace-label budget pins exactly one ink call) — lazy keeps
+        // hook-call counts monotonically down.
         self.nboxes += 1;
         return id;
     }
@@ -187,6 +224,65 @@ pub const LayCtx = struct {
         return s;
     }
 
+    /// Record a finished list range's ink fold for `parent` (issue
+    /// #289): the bottom-up composition the old `boxInk` recursion
+    /// recomputed per probe. Kids are already laid out when the parent
+    /// allocates, so a single forward fold stores the exact pair; the
+    /// first `boxInk` probe of a stale subtree (e.g. mutated leaves,
+    /// phantom/smashed shape copies) folds depth-first instead — see
+    /// `foldInkDeep`. Hook-less parents are known-null without walking
+    /// (the old recursion returned null before touching kids).
+    fn foldKidsInk(self: *LayCtx, parent: u16, start: u16, len: usize) void {
+        if (self.ink_flags[parent] & ink_known != 0) return;
+        if (self.provider.inkBounds == null) {
+            self.ink_flags[parent] |= ink_known | ink_null;
+            return;
+        }
+        var top: ?i32 = null;
+        var bot: ?i32 = null;
+        for (self.bkids[start .. start + len]) |k| {
+            switch (self.boxes[k.box].kind) {
+                .kern, .empty => continue,
+                else => {},
+            }
+            if (self.ink_flags[k.box] & ink_known == 0) {
+                // Unknown kid (a stale subtree the fold sites never
+                // saw): the first `boxInk` probe folds depth-first —
+                // see `foldInkDeep`.
+                return;
+            }
+            if (self.ink_flags[k.box] & ink_null != 0) {
+                // All-or-nothing (the old recursion returned null when
+                // any ink-carrying kid did): a null kid nulls the
+                // parent, exactly as before.
+                self.ink_flags[parent] |= ink_known | ink_null;
+                return;
+            }
+            const t = self.ink_top[k.box] + k.dy;
+            const o = self.ink_bot[k.box] + k.dy;
+            if (top == null or t > top.?) top = t;
+            if (bot == null or o < bot.?) bot = o;
+        }
+        if (top == null) {
+            self.ink_flags[parent] |= ink_known | ink_null;
+        } else {
+            self.ink_top[parent] = top.?;
+            self.ink_bot[parent] = bot.?;
+            self.ink_flags[parent] |= ink_known;
+        }
+    }
+
+    /// Copy one shape-shared box's resolved pair (`phantom`/`smash`
+    /// keep the body kind, issue #289): the cache is keyed by box id,
+    /// so the copy needs its own entry. Unknown sources stay unknown
+    /// for the first `boxInk` probe.
+    fn copyInk(self: *LayCtx, dst: u16, src: u16) void {
+        if (self.ink_flags[src] & ink_known == 0) return;
+        self.ink_top[dst] = self.ink_top[src];
+        self.ink_bot[dst] = self.ink_bot[src];
+        self.ink_flags[dst] |= ink_known | (self.ink_flags[src] & ink_null);
+    }
+
     fn glyphId(self: *LayCtx, font: u16, cp: u21) u16 {
         return self.provider.glyphId(self.provider.ctx, font, cp);
     }
@@ -198,7 +294,13 @@ pub const LayCtx = struct {
     /// hook once and fill the slot; collisions only evict (the key is
     /// always validated, so output is bit-identical).
     fn advExt(self: *LayCtx, font: u16, glyph: u16) struct { adv: i32, ext: [2]i32 } {
-        const slot = @as(usize, font ^ glyph) % memo_slots;
+        // Better hash (issue #289): the old `font ^ glyph` folded
+        // adjacent glyphs onto the same 2-bit lane (ASCII runs differ
+        // only in low bits, so `x`/`y`/`z` collided). Multiply-mix the
+        // pair so sequential glyphs spread across all 16 slots; the
+        // key is still validated, so output is bit-identical.
+        const key = @as(usize, font) * 131 + @as(usize, glyph);
+        const slot = (key ^ (key >> 4)) % memo_slots;
         const e = self.memo[slot];
         if (e.valid and e.font == font and e.glyph == glyph) return .{ .adv = e.adv, .ext = e.ext };
         const adv = self.advance(font, glyph);
@@ -261,6 +363,30 @@ pub const LayCtx = struct {
         return null;
     }
 };
+
+/// Leaf half of the bottom-up ink cache (issue #289): glyph/rule
+/// boxes resolve from the hooks on first probe — the same tests the
+/// old recursive `boxInk` applied, computed once and stored in the
+/// `LayCtx` side table. Returns null for lists (folded in
+/// `foldKidsInk`/`foldInkDeep`), kern/empty leaves, degenerate ink,
+/// and hook-less providers (known-null without a hook call).
+fn resolveLeafInk(lc: *LayCtx, b: *const Box) ?[2]i32 {
+    if (lc.provider.inkBounds == null) return null;
+    switch (b.kind) {
+        .glyph => |g| {
+            const ib = lc.ink(g.font, g.glyph) orelse return null;
+            if (ib[0] == 0 and ib[1] == 0 and ib[2] == 0 and ib[3] == 0) return null;
+            if (ib[2] <= ib[0]) return null;
+            return .{
+                @divTrunc(ib[3] * @as(i32, g.size), 1000),
+                @divTrunc(ib[1] * @as(i32, g.size), 1000),
+            };
+        },
+        .rule, .diag => return .{ b.ha, -b.db },
+        .list => return null,
+        .kern, .empty => return null,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Entry
@@ -345,13 +471,15 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             const bb = lc.boxes[b];
             const s = try lc.allocKids(1);
             lc.bkids[s] = .{ .box = b, .dx = 0, .dy = 0 };
-            return lc.allocBox(.{
+            const mir_parent = try lc.allocBox(.{
                 .w = bb.w,
                 .ha = bb.ha,
                 .db = bb.db,
                 .kind = .{ .list = .{ .start = s, .len = 1 } },
                 .flags = flag_mirror,
             });
+            lc.foldKidsInk(mir_parent, s, 1);
+            return mir_parent;
         },
         .circled => |c| {
             // Enclosing ring (issue #80, pinned 0.18.7 browser
@@ -407,12 +535,14 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             var db = bb.db;
             const cabot = cadb - cdy;
             if (cabot > db) db = cabot;
-            return lc.allocBox(.{
+            const ring_parent = try lc.allocBox(.{
                 .w = w,
                 .ha = ha,
                 .db = db,
                 .kind = .{ .list = .{ .start = s, .len = 2 } },
             });
+            lc.foldKidsInk(ring_parent, s, 2);
+            return ring_parent;
         },
         .vcenter => |v| {
             // KaTeX parity (pinned 0.18.7 HTML, issue #51): shift
@@ -425,12 +555,14 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             const half = @divTrunc(bb.ha + bb.db + 1, 2);
             const s = try lc.allocKids(1);
             lc.bkids[s] = .{ .box = body, .dx = 0, .dy = axis + half - bb.ha };
-            return lc.allocBox(.{
+            const vc_parent = try lc.allocBox(.{
                 .w = bb.w,
                 .ha = axis + half,
                 .db = half - axis,
                 .kind = .{ .list = .{ .start = s, .len = 1 } },
             });
+            lc.foldKidsInk(vc_parent, s, 1);
+            return vc_parent;
         },
         .text => |t| return layoutText(lc, style, t.toks, t.fam),
         .env => |e| return layoutEnv(lc, style, e),
@@ -501,13 +633,17 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .phantom => |p| {
             const b = try layoutNode(lc, style, p.body);
             const bb = lc.boxes[b];
-            return lc.allocBox(.{
+            const ph_parent = try lc.allocBox(.{
                 .w = if (p.keep_h) bb.w else 0,
                 .ha = if (p.keep_v) bb.ha else 0,
                 .db = if (p.keep_v) bb.db else 0,
                 .kind = bb.kind,
                 .flags = flag_invisible,
             });
+            // Phantom keeps the body shape (invisible): the ink cache
+            // is the body's own pair, resolved bottom-up here.
+            lc.copyInk(ph_parent, b);
+            return ph_parent;
         },
         .boxed => |b| return layoutBoxed(lc, style, b),
         // Framed text measures like a box around its text body.
@@ -527,13 +663,17 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
         .smash => |s| {
             const b = try layoutNode(lc, style, s.body);
             const bb = lc.boxes[b];
-            return lc.allocBox(.{
+            const sm_parent = try lc.allocBox(.{
                 .w = bb.w,
                 .ha = if (s.keep_t) bb.ha else 0,
                 .db = if (s.keep_b) bb.db else 0,
                 .kind = bb.kind,
                 .flags = bb.flags & flag_invisible,
             });
+            // Smash keeps the body shape (possibly re-listed): same
+            // body-pair copy as `.phantom` above.
+            lc.copyInk(sm_parent, b);
+            return sm_parent;
         },
         .raisebox => |r| {
             const b = try layoutNode(lc, style, r.body);
@@ -541,12 +681,14 @@ fn layoutNode(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
             const dh = scale(lc, r.dh, style);
             const s = try lc.allocKids(1);
             lc.bkids[s] = .{ .box = b, .dx = 0, .dy = dh };
-            return lc.allocBox(.{
+            const rb_parent = try lc.allocBox(.{
                 .w = bb.w,
                 .ha = bb.ha + dh,
                 .db = bb.db - dh,
                 .kind = .{ .list = .{ .start = s, .len = 1 } },
             });
+            lc.foldKidsInk(rb_parent, s, 1);
+            return rb_parent;
         },
         .rule => |r| {
             // The bracket raises the bar (KaTeX `bottom:<raise>`): ink
@@ -804,12 +946,14 @@ fn layoutGroup(lc: *LayCtx, style: parse.Style, g: parse.Range) Error!u16 {
             if (bb.db > db) db = bb.db;
         }
     }
-    return lc.allocBox(.{
+    const parent = try lc.allocBox(.{
         .w = x,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(parent, s, nparts);
+    return parent;
 }
 
 /// Spacing class of a `\html@mathml` branch: KaTeX splices the
@@ -980,12 +1124,14 @@ fn layoutColorBox(lc: *LayCtx, style: parse.Style, c: anytype) Error!u16 {
     const fw = if (has_frame) bgw + 2 * th else bgw;
     const fha = if (has_frame) bgha + th else bgha;
     const fdb = if (has_frame) bgdb + th else bgdb;
-    return lc.allocBox(.{
+    const cb_parent = try lc.allocBox(.{
         .w = fw,
         .ha = fha,
         .db = fdb,
         .kind = .{ .list = .{ .start = s, .len = @intCast(n) } },
     });
+    lc.foldKidsInk(cb_parent, s, n);
+    return cb_parent;
 }
 
 fn layoutOp(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
@@ -1052,12 +1198,14 @@ fn layoutWord(lc: *LayCtx, size: u16, fam: parse.FontFam, text: []const u8) Erro
         if (bb.ha > ha) ha = bb.ha;
         if (bb.db > db) db = bb.db;
     }
-    return lc.allocBox(.{
+    const parent = try lc.allocBox(.{
         .w = x,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(parent, s, nparts);
+    return parent;
 }
 
 /// Two roman words joined by a thin kern (KaTeX `\,` = 3mu).
@@ -1081,12 +1229,14 @@ fn layoutSplitWord(lc: *LayCtx, size: u16, fam: parse.FontFam, a: []const u8, b:
     var db = ab.db;
     if (bb.ha > ha) ha = bb.ha;
     if (bb.db > db) db = bb.db;
-    return lc.allocBox(.{
+    const parent = try lc.allocBox(.{
         .w = ab.w + gap + bb.w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
     });
+    lc.foldKidsInk(parent, s, 3);
+    return parent;
 }
 
 fn layoutOpName(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
@@ -1228,12 +1378,14 @@ fn layoutLimits(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     }
     const sk = try lc.allocKids(nparts);
     @memcpy(lc.bkids[sk .. sk + nparts], parts[0..nparts]);
-    return lc.allocBox(.{
+    const lim_parent = try lc.allocBox(.{
         .w = w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = sk, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(lim_parent, sk, nparts);
+    return lim_parent;
 }
 
 fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
@@ -1514,12 +1666,14 @@ fn layoutSupSub(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
     if (has_sub and sub_dx + sub_w + trail > w) w = sub_dx + sub_w + trail;
     const s2 = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s2 .. s2 + nparts], parts[0..nparts]);
-    return lc.allocBox(.{
+    const ss_parent = try lc.allocBox(.{
         .w = w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s2, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(ss_parent, s2, nparts);
+    return ss_parent;
 }
 
 /// Brace-label stacking for `\overbrace{..}^` / `\underbrace{..}_`
@@ -1571,12 +1725,14 @@ fn layoutBraceLabel(
         lc.bkids[k + i] = .{ .box = sub, .dx = @divTrunc(w - sub_w, 2), .dy = sy };
         db = -sy + sub_db;
     }
-    return lc.allocBox(.{
+    const bl_parent = try lc.allocBox(.{
         .w = w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = k, .len = @intCast(n) } },
     });
+    lc.foldKidsInk(bl_parent, k, n);
+    return bl_parent;
 }
 
 fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
@@ -1652,12 +1808,14 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
         const s = try lc.allocKids(2);
         lc.bkids[s] = .{ .box = num, .dx = @divTrunc(content - nb.w, 2), .dy = ns };
         lc.bkids[s + 1] = .{ .box = den, .dx = @divTrunc(content - dbx.w, 2), .dy = -ds };
-        var b = try lc.allocBox(.{
+        const atop_parent = try lc.allocBox(.{
             .w = content,
             .ha = ns + nb.ha,
             .db = ds + dbx.db,
             .kind = .{ .list = .{ .start = s, .len = 2 } },
         });
+        lc.foldKidsInk(atop_parent, s, 2);
+        var b = atop_parent;
         switch (f.kind.fence) {
             .none => {},
             .parens => b = try wrapFence(lc, style, b, '(', ')'),
@@ -1676,12 +1834,14 @@ fn layoutFrac(lc: *LayCtx, style: parse.Style, f: anytype) Error!u16 {
         .kind = .{ .rule = {} },
     });
     lc.bkids[s + 2] = .{ .box = rb, .dx = 0, .dy = axis };
-    return lc.allocBox(.{
+    const frac_parent = try lc.allocBox(.{
         .w = content,
         .ha = ns + nb.ha,
         .db = ds + dbx.db,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
     });
+    lc.foldKidsInk(frac_parent, s, 3);
+    return frac_parent;
 }
 
 /// TeX Rule 15e (KaTeX `genfrac.ts`, cmex sigma20/21 in thousandths
@@ -1718,12 +1878,14 @@ fn wrapFence(lc: *LayCtx, style: parse.Style, inner: u16, left: u21, right: u21)
     if (lb.db > db) db = lb.db;
     if (rb.ha > ha) ha = rb.ha;
     if (rb.db > db) db = rb.db;
-    return lc.allocBox(.{
+    const fence_parent = try lc.allocBox(.{
         .w = lb.w + ib.w + rb.w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
     });
+    lc.foldKidsInk(fence_parent, s, 3);
+    return fence_parent;
 }
 
 fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
@@ -1878,19 +2040,23 @@ fn layoutSqrt(lc: *LayCtx, style: parse.Style, s: anytype) Error!u16 {
         total_w = pad + body_dx + content_w;
         const itop = idx_dy + ib.ha;
         if (itop > ha) ha = itop;
-        return lc.allocBox(.{
+        const sqrt_idx_parent = try lc.allocBox(.{
             .w = total_w,
             .ha = ha,
             .db = db,
             .kind = .{ .list = .{ .start = s2, .len = 4 } },
         });
+        lc.foldKidsInk(sqrt_idx_parent, s2, 4);
+        return sqrt_idx_parent;
     }
-    return lc.allocBox(.{
+    const sqrt_parent = try lc.allocBox(.{
         .w = total_w,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s1, .len = 3 } },
     });
+    lc.foldKidsInk(sqrt_parent, s1, 3);
+    return sqrt_parent;
 }
 
 // ---------------------------------------------------------------------------
@@ -2087,12 +2253,14 @@ fn layoutDelim(lc: *LayCtx, style: parse.Style, d: anytype) Error!u16 {
     } else {
         lc.bkids[s + 2] = .{ .box = try emptyBox(lc), .dx = x, .dy = 0 };
     }
-    return lc.allocBox(.{
+    const delim_parent = try lc.allocBox(.{
         .w = x,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
     });
+    lc.foldKidsInk(delim_parent, s, 3);
+    return delim_parent;
 }
 
 fn emptyBox(lc: *LayCtx) Error!u16 {
@@ -2413,22 +2581,26 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
                 .dy = day,
             };
         }
-        return lc.allocBox(.{
+        const dots_parent = try lc.allocBox(.{
             .w = dw,
             .ha = day + dot_aha,
             .db = nb.db,
             .kind = .{ .list = .{ .start = s, .len = @intCast(1 + n_dots) } },
         });
+        lc.foldKidsInk(dots_parent, s, 1 + n_dots);
+        return dots_parent;
     }
     const s = try lc.allocKids(2);
     lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
     lc.bkids[s + 1] = .{ .box = ab, .dx = @divTrunc(w - nb.w, 2) + ax, .dy = ay };
-    return lc.allocBox(.{
+    const acc_parent = try lc.allocBox(.{
         .w = w,
         .ha = ay + aha,
         .db = nb.db,
         .kind = .{ .list = .{ .start = s, .len = 2 } },
     });
+    lc.foldKidsInk(acc_parent, s, 2);
+    return acc_parent;
 }
 
 /// True ink top/bottom of a laid-out box in layout units, y-up from
@@ -2441,45 +2613,62 @@ fn layoutAccent(lc: *LayCtx, style: parse.Style, a: anytype) Error!u16 {
 /// to construction extents bit-identically — so hook-less providers
 /// keep exact v3 behavior while CFF-only stacks (uniform 700/250
 /// extents, true outline ink) clear true ink (issues #253/#254/#255).
+///
+/// Energy (issue #289): the pair is cached bottom-up on every `Box`
+/// at allocation (`allocBox` for leaves, `foldKidsInk` for parents),
+/// so repeat probes (limits base/sup/sub, supsub symbol arms, sqrt,
+/// accents, and the emit walk) read two fields. Unknown parents fold
+/// depth-first on the first probe and are never walked again.
 fn boxInk(lc: *LayCtx, id: u16) ?[2]i32 {
     // Hook-gated and all-or-nothing: without an ink hook there is no
     // true ink anywhere (v3 bit-identical null), and a list resolves
     // only when every ink-carrying kid does — a rule-only partial
     // would understate glyph tops it cannot see (fuzz totality).
     if (lc.provider.inkBounds == null) return null;
+    foldInkDeep(lc, id);
+    if (lc.ink_flags[id] & ink_known == 0) return null;
+    if (lc.ink_flags[id] & ink_null != 0) return null;
+    return .{ lc.ink_top[id], lc.ink_bot[id] };
+}
+
+/// Depth-first fold for the first probe of a stale subtree (issue
+/// #289): kids fold before parents, so one pass resolves the whole
+/// family bottom-up; every later probe is a cache read. Hook-less
+/// providers return before touching kids (known-null, zero hook
+/// calls — the old recursion's first test). Post-alloc leaf
+/// mutations (`x_scale`/`w` patches) never change the size-derived
+/// ink pair, so folds always see current leaves — the numbers equal
+/// the old recursive walk exactly.
+fn foldInkDeep(lc: *LayCtx, id: u16) void {
+    if (lc.provider.inkBounds == null) {
+        lc.ink_flags[id] |= ink_known | ink_null;
+        return;
+    }
+    if (lc.ink_flags[id] & ink_known != 0) return;
     const b = lc.boxes[id];
     switch (b.kind) {
-        .glyph => |g| {
-            const ib = lc.ink(g.font, g.glyph) orelse return null;
-            if (ib[0] == 0 and ib[1] == 0 and ib[2] == 0 and ib[3] == 0) return null;
-            if (ib[2] <= ib[0]) return null;
-            return .{
-                @divTrunc(ib[3] * @as(i32, g.size), 1000),
-                @divTrunc(ib[1] * @as(i32, g.size), 1000),
-            };
-        },
-        .rule, .diag => return .{ b.ha, -b.db },
         .list => |r| {
-            // Kid emission is `base - dy`, and `base` grows
-            // downward, so a positive `dy` lifts the kid above the
-            // parent base: ink edges add the offset.
-            var top: ?i32 = null;
-            var bot: ?i32 = null;
             for (lc.bkids[r.start .. r.start + r.len]) |k| {
                 switch (lc.boxes[k.box].kind) {
                     .kern, .empty => continue,
                     else => {},
                 }
-                const sub = boxInk(lc, k.box) orelse return null;
-                const t = sub[0] + k.dy;
-                const o = sub[1] + k.dy;
-                if (top == null or t > top.?) top = t;
-                if (bot == null or o < bot.?) bot = o;
+                foldInkDeep(lc, k.box);
             }
-            if (top == null) return null;
-            return .{ top.?, bot.? };
+            lc.foldKidsInk(id, r.start, r.len);
         },
-        .kern, .empty => return null,
+        else => {
+            // Unknown non-lists are leaves never resolved (fold sites
+            // cover parents; leaves resolve here on first probe):
+            // resolve into the side table, in place.
+            if (resolveLeafInk(lc, &b)) |pair| {
+                lc.ink_top[id] = pair[0];
+                lc.ink_bot[id] = pair[1];
+                lc.ink_flags[id] |= ink_known;
+            } else {
+                lc.ink_flags[id] |= ink_known | ink_null;
+            }
+        },
     }
 }
 
@@ -2621,22 +2810,26 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 const ry = nb.ha + gap + @divTrunc(th, 2);
                 lc.bkids[s] = .{ .box = nuc, .dx = 0, .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = rb, .dx = 0, .dy = ry };
-                return lc.allocBox(.{
+                const ob_parent = try lc.allocBox(.{
                     .w = nb.w,
                     .ha = ry + @divTrunc(th + 1, 2),
                     .db = nb.db,
                     .kind = .{ .list = .{ .start = s, .len = 2 } },
                 });
+                lc.foldKidsInk(ob_parent, s, 2);
+                return ob_parent;
             } else {
                 const ry = -(nb.db + gap + @divTrunc(th, 2));
                 lc.bkids[s] = .{ .box = nuc, .dx = 0, .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = rb, .dx = 0, .dy = ry };
-                return lc.allocBox(.{
+                const ub_parent = try lc.allocBox(.{
                     .w = nb.w,
                     .ha = nb.ha,
                     .db = -ry + th,
                     .kind = .{ .list = .{ .start = s, .len = 2 } },
                 });
+                lc.foldKidsInk(ub_parent, s, 2);
+                return ub_parent;
             }
         },
         .overset, .underset, .stackrel => {
@@ -2652,22 +2845,26 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 const sy = nb.ha + gap + sb.db;
                 lc.bkids[s] = .{ .box = nuc, .dx = nx, .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = sup, .dx = sx, .dy = sy };
-                return lc.allocBox(.{
+                const os_parent = try lc.allocBox(.{
                     .w = w,
                     .ha = sy + sb.ha,
                     .db = nb.db,
                     .kind = .{ .list = .{ .start = s, .len = 2 } },
                 });
+                lc.foldKidsInk(os_parent, s, 2);
+                return os_parent;
             } else {
                 const sy = -(nb.db + gap + sb.ha);
                 lc.bkids[s] = .{ .box = nuc, .dx = nx, .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = sup, .dx = sx, .dy = sy };
-                return lc.allocBox(.{
+                const us_parent = try lc.allocBox(.{
                     .w = w,
                     .ha = nb.ha,
                     .db = -sy + sb.db,
                     .kind = .{ .list = .{ .start = s, .len = 2 } },
                 });
+                lc.foldKidsInk(us_parent, s, 2);
+                return us_parent;
             }
         },
         .angl => {
@@ -2715,22 +2912,26 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                     lc.bkids[s + 1] = .{ .box = shaft, .dx = 0, .dy = nb.ha + shaft_lo + sh_db };
                     lc.bkids[s + 2] = .{ .box = cap, .dx = 0, .dy = nb.ha + cap_lo };
                     lc.bkids[s + 3] = .{ .box = cap, .dx = w - bar40, .dy = nb.ha + cap_lo };
-                    return lc.allocBox(.{
+                    const seg_parent = try lc.allocBox(.{
                         .w = w,
                         .ha = nb.ha + img522,
                         .db = nb.db,
                         .kind = .{ .list = .{ .start = s, .len = 4 } },
                     });
+                    lc.foldKidsInk(seg_parent, s, 4);
+                    return seg_parent;
                 } else {
                     lc.bkids[s + 1] = .{ .box = shaft, .dx = 0, .dy = -(nb.db + shaft_lo + sh_ha) };
                     lc.bkids[s + 2] = .{ .box = cap, .dx = 0, .dy = -(nb.db + cap_lo + cap_hi) };
                     lc.bkids[s + 3] = .{ .box = cap, .dx = w - bar40, .dy = -(nb.db + cap_lo + cap_hi) };
-                    return lc.allocBox(.{
+                    const segu_parent = try lc.allocBox(.{
                         .w = w,
                         .ha = nb.ha,
                         .db = nb.db + img522,
                         .kind = .{ .list = .{ .start = s, .len = 4 } },
                     });
+                    lc.foldKidsInk(segu_parent, s, 4);
+                    return segu_parent;
                 }
             }
             if (o.kind == .overbracket or o.kind == .underbracket) {
@@ -2771,23 +2972,27 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                     lc.bkids[s + 1] = .{ .box = bar, .dx = 0, .dy = ly + drop };
                     lc.bkids[s + 2] = .{ .box = leg, .dx = 0, .dy = ly };
                     lc.bkids[s + 3] = .{ .box = leg, .dx = w - sth, .dy = ly };
-                    return lc.allocBox(.{
+                    const brk_parent = try lc.allocBox(.{
                         .w = w,
                         .ha = ly + drop + sth + tpad,
                         .db = nb.db,
                         .kind = .{ .list = .{ .start = s, .len = 4 } },
                     });
+                    lc.foldKidsInk(brk_parent, s, 4);
+                    return brk_parent;
                 } else {
                     const ly = -(nb.db + cgap);
                     lc.bkids[s + 1] = .{ .box = bar, .dx = 0, .dy = ly - drop - sth };
                     lc.bkids[s + 2] = .{ .box = leg, .dx = 0, .dy = ly - drop };
                     lc.bkids[s + 3] = .{ .box = leg, .dx = w - sth, .dy = ly - drop };
-                    return lc.allocBox(.{
+                    const brku_parent = try lc.allocBox(.{
                         .w = w,
                         .ha = nb.ha,
                         .db = -ly + drop + sth,
                         .kind = .{ .list = .{ .start = s, .len = 4 } },
                     });
+                    lc.foldKidsInk(brku_parent, s, 4);
+                    return brku_parent;
                 }
             }
             const is_under = o.kind == .underbrace or o.kind == .underleft or
@@ -2886,12 +3091,15 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                     lc.bkids[s + 2] = .{ .box = below, .dx = @divTrunc(w - below_w, 2), .dy = by };
                     db = -by + below_db;
                 }
-                return lc.allocBox(.{
+                const xn_parts: usize = if (has_below) 3 else 2;
+                const xn_parent = try lc.allocBox(.{
                     .w = w,
                     .ha = ha,
                     .db = db,
-                    .kind = .{ .list = .{ .start = s, .len = if (has_below) 3 else 2 } },
+                    .kind = .{ .list = .{ .start = s, .len = @intCast(xn_parts) } },
                 });
+                lc.foldKidsInk(xn_parent, s, xn_parts);
+                return xn_parent;
             }
             const nuc = try layoutNode(lc, style, o.nucleus);
             const nb = lc.boxes[nuc];
@@ -2969,12 +3177,14 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 }
                 lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = gb, .dx = gx, .dy = gy };
-                return lc.allocBox(.{
+                const over_parent = try lc.allocBox(.{
                     .w = w,
                     .ha = gy + gha,
                     .db = nb.db,
                     .kind = .{ .list = .{ .start = s, .len = 2 } },
                 });
+                lc.foldKidsInk(over_parent, s, 2);
+                return over_parent;
             } else {
                 var gy = -(nb.db + gap + gha);
                 if (bink_ok) {
@@ -2983,12 +3193,14 @@ fn layoutOver(lc: *LayCtx, style: parse.Style, o: anytype) Error!u16 {
                 }
                 lc.bkids[s] = .{ .box = nuc, .dx = @divTrunc(w - nb.w, 2), .dy = 0 };
                 lc.bkids[s + 1] = .{ .box = gb, .dx = gx, .dy = gy };
-                return lc.allocBox(.{
+                const under_parent = try lc.allocBox(.{
                     .w = w,
                     .ha = nb.ha,
                     .db = -gy + gdb,
                     .kind = .{ .list = .{ .start = s, .len = 2 } },
                 });
+                lc.foldKidsInk(under_parent, s, 2);
+                return under_parent;
             }
         },
     }
@@ -3076,6 +3288,15 @@ fn emitTextSpan(lc: *LayCtx, font: u16, size: u16, px0: i32, is_circle: bool,
 fn layoutText(lc: *LayCtx, style: parse.Style, rng: parse.Range, fam: parse.FontFam) Error!u16 {
     const size = lc.effSize(style);
     const font = (lc.fam_subst orelse fam).id();
+    // Hoisted scalings (issue #289): `size` is loop-invariant, so the
+    // interword gap, the thin/med/thick text spacings, and the
+    // x-height terms below divide once, not per token. Bit-identical:
+    // same dividends, same `@divTrunc` order.
+    const interword_w: i32 = @divTrunc(@as(i32, parse.space_interword) * size, 1000);
+    const thin_w: i32 = @divTrunc(@as(i32, parse.space_thin) * size, 1000);
+    const med_w: i32 = @divTrunc(@as(i32, parse.space_med) * size, 1000);
+    const thick_w: i32 = @divTrunc(@as(i32, parse.space_thick) * size, 1000);
+    const neg_thin_w: i32 = @divTrunc(@as(i32, -parse.space_thin) * size, 1000);
     var parts: [256]BKid = undefined;
     var nparts: usize = 0;
     var x: i32 = 0;
@@ -3121,6 +3342,13 @@ fn layoutText(lc: *LayCtx, style: parse.Style, rng: parse.Range, fam: parse.Font
                 // or braced group argument (KaTeX parity: a missing
                 // argument rejects, an empty group is fine).
                 if (symbols.lookupTextArg(tk.name)) |ta| {
+                    // Balanced-group end, shared with the parse-time
+                    // `arrayArg` shape (issue #289): scan depth from
+                    // the opening brace; `j` lands just past the
+                    // closing brace (or `toks.len` when unbalanced —
+                    // `Invalid`, exactly as before). No second scan:
+                    // the old code re-walked the same span per nested
+                    // command; this walk is the single forward pass.
                     var j = i + 1;
                     if (j < toks.len and toks[j].kind == .lbrace) {
                         var depth: usize = 1;
@@ -3168,13 +3396,14 @@ fn layoutText(lc: *LayCtx, style: parse.Style, rng: parse.Range, fam: parse.Font
                         // (KaTeX `mspace`), never literal `,`/`:`/`;`
                         // glyphs (issues #36, #38).
                         ',', ':', ';', '!', '>' => {
-                            const w: i16 = switch (c) {
-                                ',' => parse.space_thin,
-                                ':', '>' => parse.space_med,
-                                ';' => parse.space_thick,
-                                else => -parse.space_thin,
+                            // Hoisted widths (issue #289): same values
+                            // the per-token `@divTrunc` computed.
+                            const kw: i32 = switch (c) {
+                                ',' => thin_w,
+                                ':', '>' => med_w,
+                                ';' => thick_w,
+                                else => neg_thin_w,
                             };
-                            const kw = @divTrunc(@as(i32, w) * size, 1000);
                             const kb = try lc.allocBox(.{
                                 .w = kw,
                                 .ha = 0,
@@ -3270,9 +3499,8 @@ fn layoutText(lc: *LayCtx, style: parse.Style, rng: parse.Range, fam: parse.Font
             else => return error.Invalid,
         }
         if (is_space) {
-            const sw = @divTrunc((@as(i32, parse.space_interword) * size), 1000);
             const kb = try lc.allocBox(.{
-                .w = sw,
+                .w = interword_w,
                 .ha = 0,
                 .db = 0,
                 .kind = .{ .kern = {} },
@@ -3280,7 +3508,7 @@ fn layoutText(lc: *LayCtx, style: parse.Style, rng: parse.Range, fam: parse.Font
             if (nparts >= 256) return error.NoSpace;
             parts[nparts] = .{ .box = kb, .dx = x, .dy = 0 };
             nparts += 1;
-            x += sw;
+            x += interword_w;
             continue;
         }
         const g = lc.glyphId(font, cp);
@@ -3312,12 +3540,14 @@ fn layoutText(lc: *LayCtx, style: parse.Style, rng: parse.Range, fam: parse.Font
 
     const s = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
-    return lc.allocBox(.{
+    const text_parent = try lc.allocBox(.{
         .w = x,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(text_parent, s, nparts);
+    return text_parent;
 }
 
 /// Display equation tag (`\tag`, issue #73): the formula box with
@@ -3374,12 +3604,14 @@ fn layoutTag(lc: *LayCtx, style: parse.Style, tg: anytype) Error!u16 {
     }
     const s = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
-    return lc.allocBox(.{
+    const tag_parent = try lc.allocBox(.{
         .w = x,
         .ha = ha,
         .db = db,
         .kind = .{ .list = .{ .start = s, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(tag_parent, s, nparts);
+    return tag_parent;
 }
 
 /// Energy (#153): the env stage keeps only per-cell identity —
@@ -3747,12 +3979,14 @@ fn layoutEnv(lc: *LayCtx, style: parse.Style, e: anytype) Error!u16 {
     // shifts above are already axis-rebased, so the box is symmetric
     // about the math axis (KaTeX parity, issue #33).
     const box_ha = axis + @divTrunc(total_h, 2);
-    return lc.allocBox(.{
+    const env_parent = try lc.allocBox(.{
         .w = total_w,
         .ha = box_ha,
         .db = total_h - box_ha,
         .kind = .{ .list = .{ .start = s, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(env_parent, s, nparts);
+    return env_parent;
 }
 
 /// Row-rule detection: a bare rule node, or a group wrapping exactly
@@ -3804,12 +4038,14 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
                 if (cbb.ha > ha) ha = cbb.ha;
                 if (cbb.db > db) db = cbb.db;
             }
-            break :blk try lc.allocBox(.{
+            const row_parent = try lc.allocBox(.{
                 .w = x,
                 .ha = ha,
                 .db = db,
                 .kind = .{ .list = .{ .start = ks, .len = @intCast(kids.len) } },
             });
+            lc.foldKidsInk(row_parent, ks, kids.len);
+            break :blk row_parent;
         };
         const bb = lc.boxes[b];
         ids[n] = b;
@@ -3845,12 +4081,14 @@ fn layoutSubstack(lc: *LayCtx, style: parse.Style, r: parse.Range) Error!u16 {
     }
     const s = try lc.allocKids(nparts);
     @memcpy(lc.bkids[s .. s + nparts], parts[0..nparts]);
-    return lc.allocBox(.{
+    const sub_parent = try lc.allocBox(.{
         .w = w,
         .ha = total - first_base,
         .db = first_base,
         .kind = .{ .list = .{ .start = s, .len = @intCast(nparts) } },
     });
+    lc.foldKidsInk(sub_parent, s, nparts);
+    return sub_parent;
 }
 
 fn layoutBoxed(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
@@ -3886,12 +4124,14 @@ fn layoutBoxed(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     lc.bkids[s + 2] = .{ .box = bot, .dx = 0, .dy = -db + th };
     lc.bkids[s + 3] = .{ .box = side, .dx = 0, .dy = 0 };
     lc.bkids[s + 4] = .{ .box = side, .dx = w - th, .dy = 0 };
-    return lc.allocBox(.{
+    const box_parent = try lc.allocBox(.{
         .w = w,
         .ha = ha + th,
         .db = db + th,
         .kind = .{ .list = .{ .start = s, .len = 5 } },
     });
+    lc.foldKidsInk(box_parent, s, 5);
+    return box_parent;
 }
 
 /// KaTeX `isCharacterBox` (pinned 0.18.7 `buildCommon`: unwrap
@@ -3963,12 +4203,14 @@ fn layoutAngl(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     lc.bkids[s] = .{ .box = b, .dx = padL, .dy = 0 };
     lc.bkids[s + 1] = .{ .box = top, .dx = 0, .dy = markTop - t };
     lc.bkids[s + 2] = .{ .box = right, .dx = totalW - t, .dy = 0 };
-    return lc.allocBox(.{
+    const angl_parent = try lc.allocBox(.{
         .w = totalW,
         .ha = markTop,
         .db = markBot,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
     });
+    lc.foldKidsInk(angl_parent, s, 3);
+    return angl_parent;
 }
 
 fn layoutCancel(lc: *LayCtx, style: parse.Style, id: Idx, down: bool, both: bool) Error!u16 {
@@ -4021,12 +4263,14 @@ fn layoutCancel(lc: *LayCtx, style: parse.Style, id: Idx, down: bool, both: bool
             .dy = 0,
         };
     }
-    return lc.allocBox(.{
+    const cancel_parent = try lc.allocBox(.{
         .w = bb.w,
         .ha = bb.ha,
         .db = bb.db,
         .kind = .{ .list = .{ .start = s, .len = @intCast(1 + nDiag) } },
     });
+    lc.foldKidsInk(cancel_parent, s, 1 + nDiag);
+    return cancel_parent;
 }
 
 /// Phasor angle (`\phase{X}`, issue #51): KaTeX draws a full-height
@@ -4083,12 +4327,14 @@ fn layoutPhase(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     var ha = bb.ha;
     const mtop = gdb - ndb + gha;
     if (mtop > ha) ha = mtop;
-    return lc.allocBox(.{
+    const phase_parent = try lc.allocBox(.{
         .w = pad + bb.w,
         .ha = ha,
         .db = ndb,
         .kind = .{ .list = .{ .start = s, .len = 3 } },
     });
+    lc.foldKidsInk(phase_parent, s, 3);
+    return phase_parent;
 }
 
 /// Negation overlay (`\not X`, issue #36): the U+0338 slash struck
@@ -4118,12 +4364,14 @@ fn layoutSout(lc: *LayCtx, style: parse.Style, id: Idx) Error!u16 {
     lc.bkids[s] = .{ .box = b, .dx = 0, .dy = 0 };
     lc.bkids[s + 1] = .{ .box = rb, .dx = 0, .dy = strike };
     const top = strike + @divTrunc(th + 1, 2);
-    return lc.allocBox(.{
+    const sout_parent = try lc.allocBox(.{
         .w = bb.w,
         .ha = if (bb.ha > top) bb.ha else top,
         .db = bb.db,
         .kind = .{ .list = .{ .start = s, .len = 2 } },
     });
+    lc.foldKidsInk(sout_parent, s, 2);
+    return sout_parent;
 }
 
 fn layoutNot(lc: *LayCtx, style: parse.Style, n: anytype) Error!u16 {
@@ -4153,12 +4401,14 @@ fn layoutNot(lc: *LayCtx, style: parse.Style, n: anytype) Error!u16 {
     const s = try lc.allocKids(2);
     lc.bkids[s] = .{ .box = base, .dx = 0, .dy = 0 };
     lc.bkids[s + 1] = .{ .box = sb, .dx = dx, .dy = 0 };
-    return lc.allocBox(.{
+    const not_parent = try lc.allocBox(.{
         .w = bb.w,
         .ha = if (bb.ha > sha) bb.ha else sha,
         .db = if (bb.db > sdb) bb.db else sdb,
         .kind = .{ .list = .{ .start = s, .len = 2 } },
     });
+    lc.foldKidsInk(not_parent, s, 2);
+    return not_parent;
 }
 
 fn layoutLap(lc: *LayCtx, style: parse.Style, l: anytype) Error!u16 {
@@ -4171,12 +4421,14 @@ fn layoutLap(lc: *LayCtx, style: parse.Style, l: anytype) Error!u16 {
     };
     const s = try lc.allocKids(1);
     lc.bkids[s] = .{ .box = b, .dx = dx, .dy = 0 };
-    return lc.allocBox(.{
+    const lap_parent = try lc.allocBox(.{
         .w = 0,
         .ha = bb.ha,
         .db = bb.db,
         .kind = .{ .list = .{ .start = s, .len = 1 } },
     });
+    lc.foldKidsInk(lap_parent, s, 1);
+    return lap_parent;
 }
 
 // ---------------------------------------------------------------------------
@@ -4227,6 +4479,45 @@ const EmitCtx = struct {
         }
         self.has_open = false;
     }
+
+    /// Packed run-break key (issue #289): the 7-way field compare on
+    /// the hottest per-glyph branch becomes one packed key compare.
+    /// `y` (baseline) and `x` (pen) need full i32 width; the paint
+    /// fields pack into 64 bits (font 16 + size 16 + color 32); scale,
+    /// shear, and mirror pack into 32 bits (16 + 16 + 1). Bit-identical
+    /// breaks: key equality iff every field is equal.
+    const RunKey = struct {
+        paint: u64,
+        geom: u32,
+        y: i32,
+        x: i32,
+    };
+
+    fn runKey(self: *const EmitCtx) RunKey {
+        return .{
+            .paint = (@as(u64, self.open_font) << 48) |
+                (@as(u64, self.open_size) << 32) |
+                @as(u64, self.open_color),
+            .geom = (@as(u32, self.open_scale) << 16) |
+                @as(u32, @as(u16, @bitCast(self.open_shear))) |
+                (if (self.open_mirrored) @as(u32, 1) << 31 else 0),
+            .y = self.open_y,
+            .x = self.open_x,
+        };
+    }
+
+    fn glyphKey(font: u16, size: u16, color: u32, x_scale: u16, x_shear: i16, mirrored: bool, y: i32, x: i32) RunKey {
+        return .{
+            .paint = (@as(u64, font) << 48) |
+                (@as(u64, size) << 32) |
+                @as(u64, color),
+            .geom = (@as(u32, x_scale) << 16) |
+                @as(u32, @as(u16, @bitCast(x_shear))) |
+                (if (mirrored) @as(u32, 1) << 31 else 0),
+            .y = y,
+            .x = x,
+        };
+    }
 };
 
 fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
@@ -4240,9 +4531,12 @@ fn emitBox(lc: *LayCtx, ec: *EmitCtx, id: u16, x: i32, base: i32) Error!void {
                 const ex = if (ec.m_neg) ec.m_off - x else x + ec.m_off;
                 // Break runs on position gaps: expected pen must equal x.
                 // Color, raster-scale, shear, and mirror boundaries
-                // split runs too (issues #35, #31, #77, #97).
-                if (ec.has_open and (ec.open_font != g.font or ec.open_size != g.size or ec.open_color != b.color or ec.open_scale != b.x_scale or ec.open_shear != b.x_shear or ec.open_mirrored != ec.m_neg or ec.open_y != base or ec.open_x != ex)) {
-                    ec.closeRun();
+                // split runs too (issues #35, #31, #77, #97). One
+                // packed key compare (issue #289), not a 7-way branch.
+                const want = EmitCtx.glyphKey(g.font, g.size, b.color, b.x_scale, b.x_shear, ec.m_neg, base, ex);
+                if (ec.has_open) {
+                    const have = ec.runKey();
+                    if (!std.meta.eql(have, want)) ec.closeRun();
                 }
                 if (!ec.has_open) {
                     if (ec.nr >= ec.runs.len) return error.NoSpace;

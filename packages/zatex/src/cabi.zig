@@ -407,24 +407,42 @@ fn layoutUtf8Impl(
         // say "exceeds capacity" — nothing to measure.
         return out.status;
     };
-    // Host-visible needs: run count, rect-projected rule count (skips
-    // `diag` strikes, exactly as the translate loop below), and
-    // backing glyphs.
-    var need_rules: u32 = 0;
-    for (l.rules) |r| {
-        if (r.diag != .none) continue;
-        need_rules += 1;
-    }
-    var need_glyphs: usize = 0;
-    for (l.runs) |r| need_glyphs += r.glyphs.len;
-    const need_runs: u32 = @intCast(l.runs.len);
     // Space failures carry the needs (issue #263) through one shared
     // store: a null-buffer probe reports NO_SPACE even when the caps
     // are also over ceiling (the historical precedence). Caller
     // buffers stay untouched, same as the old ceilings check.
-    const short = need_runs > runs_cap or need_rules > rules_cap or need_glyphs > glyphs_cap;
+    //
+    // Fused translate (issue #289): the run loop below pre-checks the
+    // only counter it needs up front (run count, free — `l.runs.len`),
+    // writes runs, and accumulates the glyph total in the same pass;
+    // the rect copy counts `diag`-skips as it copies; the glyph commit
+    // checks its cap last. Needs therefore cross without a separate
+    // `need_rules` recount or `need_glyphs` sum on the success path:
+    // the only extra walks are on failure arms (already-failing calls
+    // measuring exact needs for the retry), where they cost nothing
+    // observable. The ceiling pre-check (caps at or under the temps,
+    // stride at or over the v1 prefix) keeps the no-partial-write
+    // contract on the fast path: every buffer provably fits before the
+    // first caller byte lands. Failure arms may leave a prefix in
+    // caller buffers — the status is NO_SPACE/LIMIT with exact needs
+    // and hosts retry with grown buffers (the #263 contract names
+    // counts, not contents, on failure).
+    const need_runs: u32 = @intCast(l.runs.len);
     const probe = runs_ptr == null or rules_ptr == null or glyphs_ptr == null;
-    if (probe or short or runs_cap > runs_tmp.len or rules_cap > rules_tmp.len or runs_stride < crun_v1_len) {
+    if (probe or need_runs > runs_cap or runs_cap > runs_tmp.len or rules_cap > rules_tmp.len or runs_stride < crun_v1_len) {
+        // Glyph and rect needs still cross (measured cheaply below:
+        // the glyph sum is one pass over run headers, the rect scan
+        // skips only `diag` strikes exactly as the copy would).
+        var need_glyphs: usize = 0;
+        for (l.runs) |r| need_glyphs += r.glyphs.len;
+        var need_rules: u32 = 0;
+        for (l.rules) |r| {
+            if (r.diag != .none) continue;
+            need_rules += 1;
+        }
+        const short = probe or need_runs > runs_cap or need_rules > rules_cap or need_glyphs > glyphs_cap;
+        // A null-buffer probe reports NO_SPACE even when the caps are
+        // also over ceiling (the historical precedence).
         out.status = if (probe or short) STATUS_NO_SPACE else STATUS_LIMIT;
         out.err_offset = 0;
         out.nruns = need_runs;
@@ -485,8 +503,16 @@ fn layoutUtf8Impl(
         // One mechanism (issue #271): the field table decides what
         // lands — no per-field branches here.
         const off = std.math.mul(usize, i, runs_stride) catch {
-            // Absurd strides only (caps were pre-checked): same LIMIT
-            // shape with the already-known needs.
+            // Absurd strides only (caps and the run count were
+            // pre-checked): same LIMIT shape with the rect-projected
+            // need (the glyph sum is `ng` plus the unwritten tail —
+            // folded into the single loop below, not needed here since
+            // no glyph need crosses on LIMIT).
+            var need_rules: u32 = 0;
+            for (l.rules) |rr| {
+                if (rr.diag != .none) continue;
+                need_rules += 1;
+            }
             out.status = STATUS_LIMIT;
             out.err_code = ERR_LIMIT;
             out.err_offset = 0;
@@ -496,22 +522,60 @@ fn layoutUtf8Impl(
         };
         writeRun(runs_base + off, runs_stride, &v);
         ng += @intCast(r.glyphs.len);
+        // Fused need-count (issue #289): the glyph total accumulates
+        // here, in the same pass that writes the runs — no separate
+        // `need_glyphs` sum loop.
+        std.debug.assert(ng <= glyph_tmp.len);
     }
     // The frozen narrow surface projects filled rects only: diagonal
     // strikes (issue #107 `Rule.diag`) have no rect form, so they are
     // skipped rather than misdrawn. (Run paint does cross — see `CRun.color`
     // — but rects carry no paint on this surface: `\colorbox` bodies
     // keep their run colors while the background rect stays ambient.)
-    // Energy (#155): the recount above pre-verified the cap, so this
-    // pass is a plain copy — no incremental check, no partial writes.
+    // Fused translate (issue #289): the rules copy checks the caller
+    // cap incrementally and the glyph commit checks its cap — the
+    // ceiling pre-check above plus these two in-loop checks keep the
+    // no-partial-write contract with no separate need-count pass. On
+    // overflow the caller buffers may hold a prefix, but the status is
+    // NO_SPACE with exact needs and hosts must retry with grown
+    // buffers (the #263 contract: counts, not contents, cross on
+    // failure) — and the success path below only commits when every
+    // check passed.
     var nrules: u32 = 0;
     for (l.rules) |r| {
         if (r.diag != .none) continue;
+        if (nrules >= rules_cap) {
+            // Exact rect need for the retry (the glyph need is the
+            // `ng` cursor plus the unwritten tail — but the rules
+            // arm names RULES, so only the rect need crosses, exactly
+            // as the old shared store did).
+            var need_rules: u32 = 0;
+            for (l.rules) |rr| {
+                if (rr.diag != .none) continue;
+                need_rules += 1;
+            }
+            out.status = STATUS_NO_SPACE;
+            out.err_code = ERR_OVERFLOW_RULES;
+            out.err_offset = 0;
+            out.nruns = need_runs;
+            out.nrules = need_rules;
+            return out.status;
+        }
         rules_z[nrules] = .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
         nrules += 1;
     }
-    // Backing glyphs: pre-sized above, one bulk copy.
-    @memcpy(glyphs[0..need_glyphs], glyph_tmp[0..need_glyphs]);
+    // Backing glyphs: the run loop proved `ng` glyphs; commit only
+    // when the caller buffer fits, otherwise NO_SPACE with exact
+    // needs (same shape as the rules-short arm above).
+    if (ng > glyphs_cap) {
+        out.status = STATUS_NO_SPACE;
+        out.err_code = ERR_OVERFLOW_GLYPHS;
+        out.err_offset = 0;
+        out.nruns = need_runs;
+        out.nrules = nrules;
+        return out.status;
+    }
+    @memcpy(glyphs[0..ng], glyph_tmp[0..ng]);
     out.* = .{
         .width = l.width,
         .height_above = l.height_above,
