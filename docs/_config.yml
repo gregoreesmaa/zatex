@@ -9,7 +9,7 @@ description: >-
   One layout core; MathML, SVG, and PNG emitters.
 url: https://gregoreesmaa.github.io
 baseurl: /zatex
-theme: jekyll-theme-minima
+theme: minima
 exclude:
   - renders/.tmp
   - superpowers
