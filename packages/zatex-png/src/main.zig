@@ -175,6 +175,10 @@ fn batch(
     var ubuf: [2048]u8 = undefined;
     var namebuf: [128]u8 = undefined;
     var pathbuf: [512]u8 = undefined;
+    // One canvas pool across the batch (issue #284): same-size images
+    // reuse the canvas (pixels + scratch) instead of alloc/free per row.
+    var pool = render.CanvasPool{};
+    defer pool.deinit();
     while (nextRow(corpus, &pos)) |row| {
         if (!std.mem.eql(u8, row.expect, "accept")) {
             skipped += 1;
@@ -205,7 +209,7 @@ fn batch(
             skipped += 1;
             continue;
         };
-        render.renderToPng(font, layout, px, 16, dst) catch |e| {
+        render.renderToPngPooled(font, layout, px, 16, dst, &pool) catch |e| {
             std.debug.print("zatex-png: row '{s}' write failed ({s})\n", .{ row.id, @errorName(e) });
             failed += 1;
             continue;

@@ -118,35 +118,40 @@ pub fn main(min: std.process.Init.Minimal) !void {
     const prov = so.stack.provider();
     const ol = so.iface();
 
-    // Fixed caps; exhaustion is an honest NoSpace usage error below.
-    const runs = try alloc.alloc(zatex.ir.Run, 2048);
+    // Contract-ceiling caps (CHANGELOG "Caps": 256 runs / 64 rules
+    // per call; 4096 glyphs and 512 outline segs match the engine's
+    // working sizes — exhaustion is an honest NoSpace usage error
+    // below). The SVG document itself is measure-then-exact, never a
+    // fixed 1MB: two deterministic passes over the same layout.
+    const runs = try alloc.alloc(zatex.ir.Run, 256);
     defer alloc.free(runs);
-    const rules = try alloc.alloc(zatex.ir.Rule, 512);
+    const rules = try alloc.alloc(zatex.ir.Rule, 64);
     defer alloc.free(rules);
-    const glyphs = try alloc.alloc(u16, 16384);
+    const glyphs = try alloc.alloc(u16, 4096);
     defer alloc.free(glyphs);
-    const segs = try alloc.alloc(cff.Seg, 8192);
+    const segs = try alloc.alloc(cff.Seg, 512);
     defer alloc.free(segs);
-    const out = try alloc.alloc(u8, 1024 * 1024);
-    defer alloc.free(out);
 
     var diag = zatex.Diag.empty();
-    const doc = svg.render(
-        src,
-        .{ .display_mode = args.display_mode },
-        prov,
-        ol,
-        runs,
-        rules,
-        glyphs,
-        segs,
-        out,
-        &diag,
-    ) catch |e| {
+    if (src.len > zatex.max_input_len) {
+        std.debug.print("zatex-svg: render failed: TooLong at offset 0: \n", .{});
+        return error.TooLong;
+    }
+    const layout = zatex.layoutDiag(src, .{ .display_mode = args.display_mode }, prov, runs, rules, glyphs, &diag) catch |e| {
         // No new errors: every engine rejection (including engine-scope
         // Unsupported) surfaces here as a usage error with the diag
         // offset/message — the same bytes a host renders as real text
         // in its error fallback (zatex-png parity).
+        std.debug.print("zatex-svg: render failed: {s} at offset {d}: {s}\n", .{ @errorName(e), diag.offset, diag.message });
+        return e;
+    };
+    const nbytes = svg.measureLayout(layout, ol, segs) catch |e| {
+        std.debug.print("zatex-svg: render failed: {s} at offset {d}: {s}\n", .{ @errorName(e), diag.offset, diag.message });
+        return e;
+    };
+    const out = try alloc.alloc(u8, nbytes);
+    defer alloc.free(out);
+    const doc = svg.renderLayout(layout, ol, segs, out) catch |e| {
         std.debug.print("zatex-svg: render failed: {s} at offset {d}: {s}\n", .{ @errorName(e), diag.offset, diag.message });
         return e;
     };
