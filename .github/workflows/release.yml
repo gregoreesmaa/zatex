@@ -12,8 +12,10 @@
 #   zatex ......... libzatex static + dynamic, zatex.h (+ zatex_fileprovider.h,
 #                   the blessed provider surface for source-build hosts)
 #   zatex-mathml .. libzatex_mathml static + dynamic, zatex_mathml.h
-#   zatex-svg ..... libzatex_svg static + dynamic, zatex-svg CLI (pure Zig
-#                   module: no C header exists to ship)
+#   zatex-svg ..... zatex-svg CLI only (pure Zig module with no C ABI:
+#                   no header exists and no library is installed, so
+#                   nothing linkable ships — Zig hosts take the module
+#                   via path dependency)
 #   zatex-png ..... zatex-png CLI (no library target in its build.zig)
 # The scripted test double (`zig build test-double`) and the `hello` /
 # `inspect` diagnostics stay source-built CI fixtures — never release assets.
@@ -86,12 +88,6 @@ jobs:
                 "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}-import.lib"
               cp "packages/zatex-mathml/zig-out/bin/zatex_mathml.dll" \
                 "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.dll"
-              cp "packages/zatex-svg/zig-out/lib/zatex_svg_static.lib" \
-                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}-static.lib"
-              cp "packages/zatex-svg/zig-out/lib/zatex_svg.lib" \
-                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}-import.lib"
-              cp "packages/zatex-svg/zig-out/bin/zatex_svg.dll" \
-                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.dll"
               cp "packages/zatex-svg/zig-out/bin/zatex-svg.exe" \
                 "$GITHUB_WORKSPACE/dist/zatex-svg-${TAG}-${T}.exe"
               ;;
@@ -104,10 +100,6 @@ jobs:
                 "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.a"
               cp "packages/zatex-mathml/zig-out/lib/libzatex_mathml.dylib" \
                 "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.dylib"
-              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.a" \
-                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.a"
-              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.dylib" \
-                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.dylib"
               cp "packages/zatex-svg/zig-out/bin/zatex-svg" \
                 "$GITHUB_WORKSPACE/dist/zatex-svg-${TAG}-${T}"
               ;;
@@ -120,10 +112,6 @@ jobs:
                 "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.a"
               cp "packages/zatex-mathml/zig-out/lib/libzatex_mathml.so" \
                 "$GITHUB_WORKSPACE/dist/libzatex_mathml-${TAG}-${T}.so"
-              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.a" \
-                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.a"
-              cp "packages/zatex-svg/zig-out/lib/libzatex_svg.so" \
-                "$GITHUB_WORKSPACE/dist/libzatex_svg-${TAG}-${T}.so"
               cp "packages/zatex-svg/zig-out/bin/zatex-svg" \
                 "$GITHUB_WORKSPACE/dist/zatex-svg-${TAG}-${T}"
               ;;

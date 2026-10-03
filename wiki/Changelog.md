@@ -127,8 +127,20 @@ for hosts building from source:
   action: `dlopen` the double in CI to cover OK and fallback paths
   without hand-rolled stubs (recipe in `docs/install.md`). Not an
   ABI change: the double is a separate artifact, never linked into
-  `libzatex` — the size gate is unaffected by construction
-  (it installs outside `zig-out/lib`).
+   `libzatex` — the size gate is unaffected by construction
+   (it installs outside `zig-out/lib`).
+- `zatex-svg` ships no library (withdrawn v0.0.0 hollow assets):
+  the package is a pure Zig module with no C ABI — the published
+  `libzatex_svg-*` archives (4.6 KB DLL exporting only CRT
+  boilerplate, 634-byte static archive) contain no linkable
+  symbols, so linking them was always a silent no-op. They are
+  removed from the release and no longer installed by
+  `packages/zatex-svg/build.zig` (CLI + tests unaffected). Host
+  action: if you vendored a `libzatex_svg` binary, delete it —
+  Zig hosts take the module via path dependency (see
+  `packages/zatex-svg/README.md`), everyone else uses the
+  `zatex-svg-<tag>-<target>` CLI. `libzatex` and
+  `libzatex_mathml` are real linkable libraries and keep shipping.
 
 ## 2026-09 — stride-safe run contract (issue #203, seeded entry)
 
