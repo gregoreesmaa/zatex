@@ -49,42 +49,14 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    // The installed distribution libraries ship ReleaseSmall, like the
-    // core: this is what hosts that only lay out stop paying by not
-    // linking SVG.
-    const dist_mod = b.addModule("zatex_svg_dist", .{
-        .root_source_file = b.path("src/zatex_svg.zig"),
-        .target = target,
-        .optimize = .ReleaseSmall,
-    });
-    dist_mod.addOptions("build_options", opts);
-    dist_mod.addImport("zatex", zatex_dep.module("zatex"));
-    dist_mod.addImport("otmath", zatex_dep.module("otmath"));
-    dist_mod.addImport("fontstack", zatex_dep.module("fontstack"));
-    dist_mod.addImport("cff", zatex_dep.module("cff"));
-
-    const lib = b.addLibrary(.{
-        .name = "zatex_svg",
-        .root_module = dist_mod,
-        .linkage = .static,
-    });
-    // Windows ships both the static archive and the DLL import
-    // library as `zatex_svg.lib` (core precedent in
-    // `packages/zatex/build.zig`), so the static archive takes the
-    // `_static` suffix there; the classic name holds everywhere else.
-    if (target.result.os.tag == .windows) {
-        const install_lib = b.addInstallArtifact(lib, .{ .dest_sub_path = "zatex_svg_static.lib" });
-        b.getInstallStep().dependOn(&install_lib.step);
-    } else {
-        b.installArtifact(lib);
-    }
-
-    const dylib = b.addLibrary(.{
-        .name = "zatex_svg",
-        .root_module = dist_mod,
-        .linkage = .dynamic,
-    });
-    b.installArtifact(dylib);
+    // No installed libraries: this package exposes no C ABI (pure
+    // Zig module — `zatex_svg.zig` has no `export`ed symbols, so a
+    // `libzatex_svg` archive would be a hollow shell with nothing to
+    // link). Zig consumers take the module via path dependency (see
+    // README.md); binary consumers take the `zatex-svg` CLI above.
+    // The `libzatex_svg-*` release assets shipped by mistake in
+    // v0.0.0 were empty shells with no linkable symbols and have
+    // been withdrawn from the release.
 
     const test_mod = b.addModule("zatex_svg_tests", .{
         .root_source_file = b.path("src/zatex_svg.zig"),

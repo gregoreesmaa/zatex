@@ -28,7 +28,9 @@ fonts). The core's header is `zatex-<tag>.h`; `zatex_mathml-<tag>.h`
 goes with `libzatex_mathml`; `zatex_fileprovider-<tag>.h` documents
 the blessed provider surface for hosts building the bridge from
 source (`packages/zatex/build.zig` `hello` step). `zatex-svg` is a
-pure Zig module plus CLI, so it ships libraries but no C header.
+pure Zig module plus CLI: it ships no library and no C header
+(there is no C ABI to link — Zig hosts take the module via path
+dependency, everyone else uses the CLI below).
 
 | Target | `libzatex` static | `libzatex` dynamic |
 | --- | --- | --- |
@@ -36,9 +38,9 @@ pure Zig module plus CLI, so it ships libraries but no C header.
 | `x86_64-macos` / `aarch64-macos` | `libzatex-vX.Y.Z-<target>.a` | `libzatex-vX.Y.Z-<target>.dylib` |
 | `x86_64-windows` / `aarch64-windows` | `libzatex-vX.Y.Z-<target>-static.lib` | `libzatex-vX.Y.Z-<target>.dll` + `libzatex-vX.Y.Z-<target>-import.lib` |
 
-`libzatex_mathml` and `libzatex_svg` follow the same shape with
-their own infix (`libzatex_mathml-vX.Y.Z-<target>.{a,so,dylib}`,
-`...-static.lib` / `.dll` + `-import.lib` on Windows).
+`libzatex_mathml` follows the same shape with its own infix
+(`libzatex_mathml-vX.Y.Z-<target>.{a,so,dylib}`, `...-static.lib` /
+`.dll` + `-import.lib` on Windows).
 
 On Windows link either the static archive or the DLL's import
 library — never both in one binary (duplicate symbols). The import

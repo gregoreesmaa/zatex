@@ -7,8 +7,9 @@
 # The workflow exists; only the first `v*` tag is still missing. This
 # gate fails loudly if the three surfaces ever disagree again:
 #   - .github/workflows/release.yml publishes on `v*` tags with
-#     versioned libzatex-<tag>-<target> assets (plus mathml/svg libs,
-#     both CLI tools, headers) + SHA256SUMS,
+#     versioned libzatex-<tag>-<target> assets (plus the mathml lib,
+#     both CLI tools, headers — never libzatex_svg: pure Zig module,
+#     no C ABI, nothing to link) + SHA256SUMS,
 #   - docs/install.md names those same assets and states the same
 #     first-tag trigger plus the until-then source-pin recipe,
 #   - CHANGELOG.md states #259 closed / first-tag trigger,
@@ -37,8 +38,14 @@ HEADER=packages/zatex/src/zatex.h
 need "$WF" 'tags: ["v*"]'
 need "$WF" 'libzatex-${TAG}-${T}'
 need "$WF" 'libzatex_mathml-${TAG}-${T}'
-need "$WF" 'libzatex_svg-${TAG}-${T}'
 need "$WF" 'zatex-png-${TAG}-${T}'
+# zatex-svg ships no library (pure Zig module, no C ABI): the
+# hollow libzatex_svg-* assets published by mistake under v0.0.0
+# must never come back.
+if grep -qF 'libzatex_svg' "$WF"; then
+  echo "FAIL: $WF stages libzatex_svg (no C ABI — nothing to link)"
+  fail=1
+fi
 need "$WF" 'zatex-svg-${TAG}-${T}'
 need "$WF" 'SHA256SUMS'
 need "$INSTALL" 'libzatex-<tag>-<target>'
