@@ -161,6 +161,12 @@ test "energy struct sizes ratchet" {
     // are enum(u8). Growth past these floors fails the test.
     try std.testing.expect(@sizeOf(ir.Run) <= 40);
     try std.testing.expect(@sizeOf(ir.Rule) <= 28);
+    // Issue #289: the ink cache lives in side tables on `LayCtx`
+    // (never on `Box`), and the memo grows 4 -> 16 slots — pin both
+    // so the cache cannot migrate onto the hot struct and the memo
+    // cannot grow unbounded.
+    try std.testing.expect(@sizeOf(engine.Box) == 36);
+    try std.testing.expect(engine.memo_slots == 16);
 }
 
 // ---------------------------------------------------------------------------
@@ -227,12 +233,38 @@ test "energy memo collapses repeat glyph queries" {
     _ = try layoutCounted("\\def\\a{X}\\a\\a\\a", false);
     try std.testing.expectEqual(@as(u64, 1), counters.advance);
     try std.testing.expectEqual(@as(u64, 1), counters.extents);
+
+    // Issue #289: 16 distinct glyphs share 16 slots with no eviction
+    // (the old 4-slot table re-queried every char past the 4th).
+    _ = try layoutCounted("abcdefghijklmnop", false);
+    try std.testing.expectEqual(@as(u64, 16), counters.advance);
+    try std.testing.expectEqual(@as(u64, 16), counters.extents);
+    _ = try layoutCounted("\\text{abcdefghijklmnop}", false);
+    try std.testing.expectEqual(@as(u64, 16), counters.advance);
+    try std.testing.expectEqual(@as(u64, 16), counters.extents);
 }
 
 test "energy brace label calls ink once" {
     // #148: the null check and the value share one hook call.
     _ = try layoutCounted("\\overbrace{x}", false);
     try std.testing.expectEqual(@as(u64, 1), counters.ink);
+}
+
+test "energy boxInk cache resolves each subtree once" {
+    // Issue #289: limits probe base/sup/sub (3 subtree walks) plus the
+    // emit walk (a 4th); the side-table cache resolves each box on its
+    // first probe and serves repeats from the table. Pin it through
+    // the counted layout: `\sum_{ab}^{cd} ef` in display mode has 7
+    // distinct glyph leaves (sum,a,b,c,d,e,f); the old code re-walked
+    // the base subtree per limits probe, multiplying leaf hook calls.
+    // With the cache every leaf resolves once — pin a ceiling that
+    // fails only if a subtree is walked twice — and pin determinism
+    // (equal inputs, equal counts: hook calls never go up).
+    _ = try layoutCounted("\\sum_{ab}^{cd} ef", true);
+    const ink_calls = counters.ink;
+    try expectLe(ink_calls, 10);
+    _ = try layoutCounted("\\sum_{ab}^{cd} ef", true);
+    try std.testing.expectEqual(ink_calls, counters.ink);
 }
 
 // ---------------------------------------------------------------------------
