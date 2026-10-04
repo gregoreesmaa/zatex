@@ -41,6 +41,45 @@ defaults; `LayoutError` variants are added, never removed;
 Hard caps are named constants (`max_input_len`, `max_nesting_depth`,
 `max_expand`). Call-site shape is frozen; only additive growth.
 
+## Host layout-cache guidance (issue #290)
+
+The engine is zero-alloc and reentrant, but it always replays the
+full parse+layout pipeline per call — an animation or resize loop
+pays full price every frame (layout is ~50% of short-formula time).
+Hosts that re-render the same formulas cache at the layout level;
+the engine stays cache-free (no shared mutable state per
+`docs/threading.md`), so the cache is host-owned.
+
+**Cache key.** The layout output is a pure function of exactly:
+
+1. the source bytes (`tex_bytes`),
+2. the full `LayoutOptions` (`display_mode`, `leqno`, `fleqn`,
+   `min_rule_thickness_milli_em`, `strict`, `global_group`, and the
+   `macros` preset list — `strict: err` rejects inputs `warn`
+   accepts, and presets/`globalGroup` change expansion),
+3. the provider identity: `provider_version` plus a hash of the font
+   files (or shaper state) behind the `MetricsProvider` — metrics
+   are the only font truth the core sees,
+4. the engine version (bump on upgrade).
+
+Hash all four (`hash(tex_bytes, options, provider_version,
+font_file_hashes, engine_version)`); on any miss, re-layout.
+
+**Cached value.** Deep-copy the `Layout` scalar (`width`,
+`height_above`, `depth_below`) plus the `runs` / `rules` arrays and
+the `glyphs` backing store into host memory (the caller's buffers
+are borrowed — see `docs/threading.md` — so the copy must own its
+bytes), plus whatever the host derives downstream (viewport shifts,
+atlas uploads, bitmap/SVG bytes). Cap the map (LRU, bounded count
+or bytes); layout output is deterministic, so entries never go
+stale except by key change.
+
+**What reuses the cache.** Resize/pan/zoom reuses the layout entry:
+geometry is in integer font units (resolution-independent), so only
+the rasterization scale changes. A `display_mode` flip, an options
+change, a font swap, or a provider upgrade is a different key —
+never reuse across those.
+
 ## Provider exactness contract (host guide, issue #193)
 
 Every numeric provider value is in thousandths of an em (1000 units =
