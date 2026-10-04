@@ -752,37 +752,37 @@ test "issue37: rule dimensions and raise pin the IR rect" {
 test "issue35: color threads from parse to native runs and rules" {
     // KaTeX parity: `\color` paints its body (nested scopes win);
     // `\colorbox`/`\fcolorbox` paint background (and frame) rules.
-    // Colors ride IR runs/rules as 0xRRGGBBAA (null = ambient).
+    // Colors ride IR runs/rules as 0xRRGGBBAA (0 = ambient).
     var runs_buf: [16]ir.Run = undefined;
     var rules_buf: [16]ir.Rule = undefined;
     var glyphs_buf: [64]u16 = undefined;
     const r = try layoutOk("\\color{#f00}{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
-    try std.testing.expectEqual(@as(?u32, 0xFF0000FF), r.runs[0].color);
+    try std.testing.expectEqual(@as(u32, 0xFF0000FF), r.runs[0].color);
     const n = try layoutOk("\\color{red}{\\color{#0f0}{x}}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
-    try std.testing.expectEqual(@as(?u32, 0x00FF00FF), n.runs[0].color);
+    try std.testing.expectEqual(@as(u32, 0x00FF00FF), n.runs[0].color);
     const u = try layoutOk("x", .{}, &runs_buf, &rules_buf, &glyphs_buf);
-    try std.testing.expectEqual(@as(?u32, null), u.runs[0].color);
+    try std.testing.expectEqual(@as(u32, 0), u.runs[0].color);
     // `\color` scopes over the rest of the enclosing group (KaTeX:
     // `\color{blue}{a}b` paints `b` too), so one run covers both.
     const s = try layoutOk("\\color{blue}{a}b", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(usize, 1), s.runs.len);
-    try std.testing.expectEqual(@as(?u32, 0x0000FFFF), s.runs[0].color);
+    try std.testing.expectEqual(@as(u32, 0x0000FFFF), s.runs[0].color);
     // Color boundaries split runs (same font, different paint).
     const m = try layoutOk("\\color{blue}{a}\\color{red}{b}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expectEqual(@as(usize, 2), m.runs.len);
-    try std.testing.expectEqual(@as(?u32, 0x0000FFFF), m.runs[0].color);
-    try std.testing.expectEqual(@as(?u32, 0xFF0000FF), m.runs[1].color);
+    try std.testing.expectEqual(@as(u32, 0x0000FFFF), m.runs[0].color);
+    try std.testing.expectEqual(@as(u32, 0xFF0000FF), m.runs[1].color);
     // Boxes: background (+frame) rules carry their colors; the text
-    // inside keeps the ambient (null) paint.
+    // inside keeps the ambient (0) paint.
     const b = try layoutOk("\\colorbox{yellow}{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     try std.testing.expect(b.rules.len >= 1);
-    try std.testing.expectEqual(@as(?u32, 0xFFFF00FF), b.rules[0].color);
+    try std.testing.expectEqual(@as(u32, 0xFFFF00FF), b.rules[0].color);
     const f = try layoutOk("\\fcolorbox{red}{yellow}{x}", .{}, &runs_buf, &rules_buf, &glyphs_buf);
     var saw_frame = false;
     var saw_bg = false;
     for (f.rules) |rl| {
-        if (rl.color != null and rl.color.? == 0xFF0000FF) saw_frame = true;
-        if (rl.color != null and rl.color.? == 0xFFFF00FF) saw_bg = true;
+        if (rl.color == 0xFF0000FF) saw_frame = true;
+        if (rl.color == 0xFFFF00FF) saw_bg = true;
     }
     try std.testing.expect(saw_frame and saw_bg);
 }

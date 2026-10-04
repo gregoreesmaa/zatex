@@ -73,7 +73,7 @@ pub const CRun = extern struct {
     x_scale: u16 = 1000,
     /// Per-run paint in 0xRRGGBBAA (`\color` scope, issue #35, projected
     /// through this surface by issue #251); 0 is the ambient (host
-    /// default) paint and matches `ir.Run.color == null` exactly —
+    /// default) paint and matches `ir.Run.color == 0` exactly —
     /// resolved paints always carry opaque alpha, so 0 is unambiguous.
     /// Must match `zatex.h` `zatex_run_t.color`. Same stride rule as
     /// `x_scale`: written only when the host stride reaches past it
@@ -382,7 +382,14 @@ fn layoutUtf8Impl(
     // and copy to the caller buffer on success.
     var runs_tmp: [256]zatex.ir.Run = undefined;
     var rules_tmp: [64]zatex.ir.Rule = undefined;
-    var glyph_tmp: [2048]u16 = undefined;
+    // Energy (issue #287): one glyph per glyph box, so the need is
+    // bounded by `max_boxes` (448) — 1024 keeps 2x headroom over the
+    // old 2048. The runs/rules temps stay: they are the C-visible run
+    // ceiling (256) and rule ceiling (64), i.e. behavior caps, and the
+    // double-buffer itself is the #263 no-partial-writes contract
+    // (needs are only known after a full layout, so translating
+    // directly into caller slices could not report them honestly).
+    var glyph_tmp: [1024]u16 = undefined;
     var diag = zatex.Diag.empty();
     const l = zatex.layoutInner(src, .{ .display_mode = display_mode }, prov, &runs_tmp, &rules_tmp, &glyph_tmp, &diag) catch |e| {
         // Malformed input reports its true error even on a probe or an
@@ -478,9 +485,9 @@ fn layoutUtf8Impl(
             // Stretch factor (issue #197): without it C hosts draw
             // wide accents at natural size, off-span.
             .x_scale = r.x_scale,
-            // Paint (issue #251): 0 is ambient (`ir.Run.color == null`),
+            // Paint (issue #251): 0 is ambient (`ir.Run.color == 0`),
             // so unstylized formulas cross exactly as before.
-            .color = r.color orelse 0,
+            .color = r.color,
         };
         // One mechanism (issue #271): the field table decides what
         // lands — no per-field branches here.

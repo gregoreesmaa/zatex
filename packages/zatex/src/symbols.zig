@@ -10,7 +10,7 @@ const contract = @import("contract.zig");
 /// TeX atom classes. Spacing between adjacent atoms derives from the
 /// pair of classes (see `glueBetween`), matching TeX Book p.170 with
 /// KaTeX's observable behavior.
-pub const AtomClass = enum {
+pub const AtomClass = enum(u8) {
     Ord,
     Op,
     Bin,
