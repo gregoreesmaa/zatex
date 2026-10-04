@@ -72,8 +72,12 @@ pub fn build(b: *std.Build) void {
         .root_module = dist_mod,
         .linkage = .dynamic,
     });
-    // Same diet as the static dist lib (issue #288).
-    dylib.lto = .full;
+    // Same diet as the static dist lib (issue #288). LTO only
+    // where the linker supports it: Mach-O links without LLD by
+    // default, so `-flto=full` errors there ("LTO requires using
+    // LLD"); ELF/COFF go through LLD and link fine (verified:
+    // Windows `zig build` green with LTO on).
+    if (target.result.os.tag != .macos) dylib.lto = .full;
     b.installArtifact(dylib);
 
     const mod_tests = b.addTest(.{ .root_module = mod });
