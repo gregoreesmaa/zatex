@@ -22,11 +22,34 @@ pub fn renderLayout(
     out: []u8,
 ) zatex.LayoutError![]u8 {
     var w = W{ .buf = out };
+    return renderLayoutW(layout, ol, segs, &w);
+}
+
+/// Byte count the layout renders to: the same walk as
+/// `renderLayout` through a measuring writer, so the CLI allocates
+/// exactly what it writes instead of a fixed 1MB. Deterministic:
+/// same input + same faces measure and write identical bytes.
+pub fn measureLayout(
+    layout: zatex.ir.Layout,
+    ol: outlines_mod.Outlines,
+    segs: []cff.Seg,
+) zatex.LayoutError!usize {
+    var w = W{ .buf = &.{}, .measure = true };
+    _ = try renderLayoutW(layout, ol, segs, &w);
+    return w.total;
+}
+
+fn renderLayoutW(
+    layout: zatex.ir.Layout,
+    ol: outlines_mod.Outlines,
+    segs: []cff.Seg,
+    w: *W,
+) zatex.LayoutError![]u8 {
     // Per-render glyph cache (issue #282): the fused shift pass warms
     // it (one outline parse per distinct glyph), the runs loop reuses
     // it — repeat glyphs never re-parse. Stack-local, zero heap.
     var cache = GlyphCache{};
-    const sh = shiftUnits(ol, &cache, layout.runs, layout.rules, layout.width);
+    const sh = shiftUnits(ol, &cache, segs, layout.runs, layout.rules, layout.width);
     const total_w = satI32(@as(i64, layout.width) + @as(i64, sh.left) + @as(i64, sh.right));
     const box_h = satI32(@as(i64, layout.height_above) + @as(i64, layout.depth_below));
     // Vertical rule fit (issue #270 review): diagonal cancel strikes
@@ -51,7 +74,7 @@ pub fn renderLayout(
     for (layout.rules) |r| {
         if (r.diag == .none) emitRule(w, r);
     }
-    for (layout.runs) |run| emitRun(&w, ol, &cache, segs, run);
+    for (layout.runs) |run| emitRun(w, ol, &cache, segs, run);
     // Cancel strikes paint over the body (pinned 0.18.7 `enclose.ts`:
     // "Write the \cancel stroke on top of inner"); rect rules never
     // overlap ink and stay underneath (a colorbox background must not
@@ -359,7 +382,7 @@ const GlyphCache = struct {
     ///   (null or over-cap outlines skip the segment store and parse
     ///   per occurrence, as before; empty outlines store nothing —
     ///   a full parse would bbox to null and report zero ink too).
-    fn lookup(self: *GlyphCache, ol: outlines_mod.Outlines, g: u16) *CacheEntry {
+    fn lookup(self: *GlyphCache, ol: outlines_mod.Outlines, scratch: []cff.Seg, g: u16) *CacheEntry {
         const slot = @as(usize, g) % cache_slots;
         const e = &self.entries[slot];
         if (e.used and e.unified == g) return e;
@@ -367,7 +390,7 @@ const GlyphCache = struct {
         e.unified = g;
         e.adv = ol.advance1000(ol.ptr, g);
         e.upm = ol.upmOf(ol.ptr, g);
-        e.ink = ol.inkThou(ol.ptr, g);
+        e.ink = ol.inkThou(ol.ptr, g, scratch);
         e.has_segs = false;
         e.nsegs = 0;
         if (e.upm == 0) return e;
@@ -383,7 +406,7 @@ const GlyphCache = struct {
     }
 
     fn cachedSegs(self: *GlyphCache, ol: outlines_mod.Outlines, scratch: []cff.Seg, g: u16) ?[]const cff.Seg {
-        const e = self.lookup(ol, g);
+        const e = self.lookup(ol, scratch, g);
         if (e.has_segs) return e.segs[0..e.nsegs];
         return ol.glyphSegs(ol.ptr, g, scratch);
     }
@@ -434,7 +457,7 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, cache: *GlyphCache, scratch: []cff.
     var sub_x: f64 = 0;
     var sub_y: f64 = 0;
     for (run.glyphs) |g| {
-        const e = cache.lookup(ol, g);
+        const e = cache.lookup(ol, scratch, g);
         if (e.upm == 0) {
             x_units = stepPen(x_units, e.adv, run);
             continue;
@@ -530,19 +553,23 @@ fn emitRun(w: *W, ol: outlines_mod.Outlines, cache: *GlyphCache, scratch: []cff.
 fn shiftUnits(
     ol: outlines_mod.Outlines,
     cache: *GlyphCache,
+    scratch: []cff.Seg,
     runs: []const zatex.ir.Run,
     rules: []const zatex.ir.Rule,
     width: u32,
 ) struct { left: u32, right: u32 } {
     var left: i64 = 0;
+    var edge: i64 = width;
     for (rules) |r| {
         if (@as(i64, r.x) < left) left = @as(i64, r.x);
+        const rright: i64 = @as(i64, r.x) + @as(i64, r.w);
+        if (rright > edge) edge = rright;
     }
     for (runs) |run| {
         if (run.glyphs.len == 0) continue;
         var x_units: i64 = run.x;
         for (run.glyphs) |g| {
-            const e = cache.lookup(ol, g);
+            const e = cache.lookup(ol, scratch, g);
             const ink = e.ink;
             const ink_l: i64 = if (run.mirrored) ink[2] else ink[0];
             const ink_r: i64 = if (run.mirrored) -@as(i64, ink[0]) else ink[2];
@@ -907,7 +934,7 @@ const CountOutlines = struct {
         self.upm_calls += 1;
         return 1000;
     }
-    fn ink(ptr: *const anyopaque, g: u16) [4]i32 {
+    fn ink(ptr: *const anyopaque, g: u16, _: []cff.Seg) [4]i32 {
         const self: *CountOutlines = @ptrCast(@alignCast(@constCast(ptr)));
         self.ink_calls += 1;
         return if (g == 'x') .{ -50, 0, 550, 700 } else .{ 10, 0, 390, 0 };
@@ -967,7 +994,7 @@ test "energy cache bypass keeps hook ink and re-parses segs" {
         fn upm(_: *const anyopaque, _: u16) u16 {
             return 1000;
         }
-        fn ink(_: *const anyopaque, _: u16) [4]i32 {
+        fn ink(_: *const anyopaque, _: u16, _: []cff.Seg) [4]i32 {
             n_ink += 1;
             return .{ -50, 0, 550, 700 };
         }

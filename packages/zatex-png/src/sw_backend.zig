@@ -291,11 +291,15 @@ test "software extents agree with CoreText ink boxes" {
     // so investigate rather than tolerate. Skipped off-mac; the
     // dimension-equality corpus re-render covers determinism there.
     // The cg import lives inside the comptime branch so this test
-    // compiles off-Apple, but on Apple hosts the branch IS taken: the
-    // body is emitted in every test binary whose import chain reaches
-    // this file, so every such binary must link the Apple frameworks
-    // (see build.zig: the mod/sw/nmod test modules link them on Apple
-    // whatever -Dbackend selects).
+    // compiles off-Apple, but on Apple hosts the branch IS taken and
+    // the body is analyzed (hence emitted) in every test binary whose
+    // import chain analyzes this file — not just this file's own
+    // suite root. Zig analyzes an imported file's tests once its
+    // declarations are referenced (issue #106): the render suite
+    // reaches this file through renderToPng's backend.impl calls, so
+    // its binary runs this test too. Every such binary must link the
+    // Apple frameworks (see build.zig: the mod/render/sw/nmod test
+    // modules link them on Apple whatever -Dbackend selects).
     if (comptime @import("builtin").os.tag != .macos) return error.SkipZigTest;
     if (comptime @import("builtin").os.tag == .macos) {
         const cg = @import("cg_backend.zig");
@@ -353,7 +357,11 @@ test {
     // (the sw binary ran 8 = backend 4 + font 2 + raster 2, with the
     // `sw_png` round-trip absent). Reference every software-stack
     // module so this suite root runs their tests; the tests above run
-    // as the root file itself.
+    // as the root file itself. This block lives ONLY in suite roots
+    // (this file, main.zig): it forces the helpers' tests into
+    // analysis here. Other suite roots (render.zig) reach this file's
+    // tests through ordinary decl references (backend.impl calls),
+    // which is why they link the same frameworks (see build.zig).
     std.testing.refAllDecls(@import("cff"));
     std.testing.refAllDecls(@import("sw_raster.zig"));
     std.testing.refAllDecls(@import("sw_png.zig"));

@@ -800,6 +800,15 @@ test "canvas pool renders byte-identically, hit and miss" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
+    // NOTE (issue #284 backends fix): this test calls renderToPng,
+    // whose body resolves backend.impl — that forces analysis of
+    // sw_backend.zig, whose tests then execute in this suite (issue
+    // #106), including the CoreText cross-check. On Apple hosts that
+    // body emits CoreGraphics calls, so the render suite links the
+    // frameworks on Apple whatever -Dbackend selects (build.zig).
+    // Keep it that way: any render path that renders through
+    // backend.impl drags the whole software suite along.
+
     var runs_a: [256]zatex.ir.Run = undefined;
     var rules_a: [64]zatex.ir.Rule = undefined;
     var glyphs_a: [4096]u16 = undefined;
