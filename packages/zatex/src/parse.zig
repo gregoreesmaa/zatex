@@ -1399,7 +1399,8 @@ pub const engine_def_names: []const []const u8 = &.{
 fn engineDefName(i: usize) []const u8 {
     return engine_def_names[i];
 }
-const EngineDefSet = symbols.NameIndex(29, engine_def_names.len, engineDefName);
+var engine_def_idx: [29]u16 = .{0} ** 29;
+var EngineDefSet = symbols.Index{ .idx = engine_def_idx[0..], .count = engine_def_names.len, .nameOf = engineDefName, .built = false };
 
 fn isEngineDefName(name: []const u8) bool {
     // Hash dispatch over the canonical table (issue #283): same
@@ -1447,7 +1448,8 @@ pub const engine_ctrl_names: []const []const u8 = &.{
 fn engineCtrlName(i: usize) []const u8 {
     return engine_ctrl_names[i];
 }
-const EngineCtrlSet = symbols.NameIndex(281, engine_ctrl_names.len, engineCtrlName);
+var engine_ctrl_idx: [281]u16 = .{0} ** 281;
+var EngineCtrlSet = symbols.Index{ .idx = engine_ctrl_idx[0..], .count = engine_ctrl_names.len, .nameOf = engineCtrlName, .built = false };
 
 fn isEngineCtrlName(name: []const u8) bool {
     if (symbols.lookupAccentFast(name) != null) return true;
@@ -2231,7 +2233,8 @@ const bare_bad_names: []const []const u8 = &.{
 fn bareBadName(i: usize) []const u8 {
     return bare_bad_names[i];
 }
-const BareBadSet = symbols.NameIndex(191, bare_bad_names.len, bareBadName);
+var bare_bad_idx: [191]u16 = .{0} ** 191;
+var BareBadSet = symbols.Index{ .idx = bare_bad_idx[0..], .count = bare_bad_names.len, .nameOf = bareBadName, .built = false };
 
 /// The six integrals are KaTeX's only operator-class names with
 /// `allowedInArgument` (pinned 0.18.7 `op.ts`): `x_\int` accepts.
@@ -7072,7 +7075,8 @@ const prim_names: []const []const u8 = &.{
 fn primName(i: usize) []const u8 {
     return prim_names[i];
 }
-const PrimSet = symbols.NameIndex(211, prim_names.len, primName);
+var prim_idx: [211]u16 = .{0} ** 211;
+var PrimSet = symbols.Index{ .idx = prim_idx[0..], .count = prim_names.len, .nameOf = primName, .built = false };
 
 /// `\newcommand`-guard environments, hoisted as the canonical table
 /// for the hash dispatch below (same 22 names as the old scan).
@@ -7086,7 +7090,8 @@ const env_names: []const []const u8 = &.{
 fn envName(i: usize) []const u8 {
     return env_names[i];
 }
-const EnvSet = symbols.NameIndex(47, env_names.len, envName);
+var env_idx: [47]u16 = .{0} ** 47;
+var EnvSet = symbols.Index{ .idx = env_idx[0..], .count = env_names.len, .nameOf = envName, .built = false };
 
 /// `\newcommand`-guard primitives: hash dispatch over the canonical
 /// table (issue #283), no literal or branch duplication.

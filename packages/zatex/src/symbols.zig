@@ -814,54 +814,59 @@ const textord_map_len = 149;
 /// parser is single-threaded per ParseCtx so the lazy init is safe.
 /// `nameOf` maps a row number to its name for probe verification;
 /// duplicate names keep the FIRST row (linear-scan parity).
-pub fn NameIndex(
-    comptime size: usize,
-    comptime count: usize,
-    comptime nameOf: fn (usize) []const u8,
-) type {
-    return struct {
-        var idx: [size]u16 = .{0} ** size;
-        var built: bool = false;
+///
+/// One shared (non-generic) implementation: the four tables below
+/// are `Index` values differing only in data, so the probe/build
+/// per-probe `nameOf` indirect call is cold (probes verify by full
+/// name only on key hit). `parse.zig` routing sets reuse it too.
+pub const Index = struct {
+    idx: []u16,
+    count: usize,
+    nameOf: *const fn (usize) []const u8,
+    built: bool,
 
-        fn ensure() void {
-            if (built) return;
-            var i: usize = 0;
-            while (i < count) : (i += 1) {
-                var slot: usize = keyOf(nameOf(i)) % size;
-                while (true) {
-                    if (idx[slot] == 0) {
-                        idx[slot] = @intCast(i + 1);
-                        break;
-                    }
-                    // First-match-wins: a duplicate keeps the earlier row.
-                    if (eq(nameOf(idx[slot] - 1), nameOf(i))) break;
-                    slot = (slot + 1) % size;
+    fn ensure(self: *Index) void {
+        if (self.built) return;
+        const idx = self.idx;
+        const size = idx.len;
+        var i: usize = 0;
+        while (i < self.count) : (i += 1) {
+            var slot: usize = keyOf(self.nameOf(i)) % size;
+            while (true) {
+                if (idx[slot] == 0) {
+                    idx[slot] = @intCast(i + 1);
+                    break;
                 }
-            }
-            built = true;
-        }
-
-        /// Row number for `name`, or null (probes verify by full name,
-        /// so key collisions only cost probe steps, never correctness).
-        pub fn rowOf(name: []const u8) ?usize {
-            if (name.len == 0) return null;
-            ensure();
-            var slot: usize = keyOf(name) % size;
-            var i: usize = 0;
-            while (i < size) : (i += 1) {
-                const row = idx[slot];
-                if (row == 0) return null;
-                if (eq(nameOf(row - 1), name)) return row - 1;
+                // First-match-wins: a duplicate keeps the earlier row.
+                if (eq(self.nameOf(idx[slot] - 1), self.nameOf(i))) break;
                 slot = (slot + 1) % size;
             }
-            return null;
         }
+        self.built = true;
+    }
 
-        pub fn contains(name: []const u8) bool {
-            return rowOf(name) != null;
+    /// Row number for `name`, or null (probes verify by full name,
+    /// so key collisions only cost probe steps, never correctness).
+    pub fn rowOf(self: *Index, name: []const u8) ?usize {
+        if (name.len == 0) return null;
+        self.ensure();
+        const idx = self.idx;
+        const size = idx.len;
+        var slot: usize = keyOf(name) % size;
+        var i: usize = 0;
+        while (i < size) : (i += 1) {
+            const row = idx[slot];
+            if (row == 0) return null;
+            if (eq(self.nameOf(row - 1), name)) return row - 1;
+            slot = (slot + 1) % size;
         }
-    };
-}
+        return null;
+    }
+
+    pub fn contains(self: *Index, name: []const u8) bool {
+        return self.rowOf(name) != null;
+    }
+};
 
 fn symName(i: usize) []const u8 {
     return all_symbols[i].name;
@@ -876,10 +881,14 @@ fn textordName(i: usize) []const u8 {
     return textord_names[i];
 }
 
-const SymIndex = NameIndex(sym_map_len, all_symbols.len, symName);
-const DelimIndex = NameIndex(delim_map_len, delims.len, delimName);
-const AccentIndex = NameIndex(accent_map_len, accents.len, accentName);
-const TextordIndex = NameIndex(textord_map_len, textord_names.len, textordName);
+var sym_idx: [sym_map_len]u16 = .{0} ** sym_map_len;
+var delim_idx: [delim_map_len]u16 = .{0} ** delim_map_len;
+var accent_idx: [accent_map_len]u16 = .{0} ** accent_map_len;
+var textord_idx: [textord_map_len]u16 = .{0} ** textord_map_len;
+var SymIndex = Index{ .idx = sym_idx[0..], .count = all_symbols.len, .nameOf = symName, .built = false };
+var DelimIndex = Index{ .idx = delim_idx[0..], .count = delims.len, .nameOf = delimName, .built = false };
+var AccentIndex = Index{ .idx = accent_idx[0..], .count = accents.len, .nameOf = accentName, .built = false };
+var TextordIndex = Index{ .idx = textord_idx[0..], .count = textord_names.len, .nameOf = textordName, .built = false };
 
 const textord_names = [_][]const u8{
     "Box",          "Delta",        "Diamond",      "Finv",
