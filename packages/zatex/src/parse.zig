@@ -1396,9 +1396,17 @@ pub const engine_def_names: []const []const u8 = &.{
     "futurelet", "let",
 };
 
+fn engineDefName(i: usize) []const u8 {
+    return engine_def_names[i];
+}
+var engine_def_idx: [29]u16 = .{0} ** 29;
+var EngineDefSet = symbols.Index{ .idx = engine_def_idx[0..], .count = engine_def_names.len, .nameOf = engineDefName, .built = false };
+
 fn isEngineDefName(name: []const u8) bool {
-    for (engine_def_names) |d| if (tokNameEq(name, d)) return true;
-    return false;
+    // Hash dispatch over the canonical table (issue #283): same
+    // 13-name accept set as the old serial scan, no literal or branch
+    // duplication.
+    return EngineDefSet.contains(name);
 }
 
 /// `parseCtrl`-chain commands. Predicate families reuse the dispatch
@@ -1437,12 +1445,19 @@ pub const engine_ctrl_names: []const []const u8 = &.{
     "tag", "message", "errmessage", "show",
 };
 
+fn engineCtrlName(i: usize) []const u8 {
+    return engine_ctrl_names[i];
+}
+var engine_ctrl_idx: [281]u16 = .{0} ** 281;
+var EngineCtrlSet = symbols.Index{ .idx = engine_ctrl_idx[0..], .count = engine_ctrl_names.len, .nameOf = engineCtrlName, .built = false };
+
 fn isEngineCtrlName(name: []const u8) bool {
-    if (symbols.lookupAccent(name) != null) return true;
+    if (symbols.lookupAccentFast(name) != null) return true;
     if (parseOverName(name) != null) return true;
     if (isBigName(name)) return true;
-    for (engine_ctrl_names) |c| if (tokNameEq(name, c)) return true;
-    return false;
+    // Hash dispatch over the canonical table (issue #283): same accept
+    // set as the old serial scan, no literal or branch duplication.
+    return EngineCtrlSet.contains(name);
 }
 
 /// `begingroup` opens a scope like `{` but closable only by
@@ -2175,47 +2190,73 @@ fn bareFnInArg(name: []const u8) bool {
     // predicate (every spelling but the KaTeX-unknown `\angl`
     // extension is a reject-class function there).
     if (parseOverName(name)) |kind| return kind != .angl;
-    const bad = [_][]const u8{
-        // Old-style declarations (rest-of-group in formula position
-        // only — issue #94).
-        "rm", "sf", "tt", "bf", "it", "cal",
-        "boldsymbol", "bm", "pmb",
-        "sqrt",
-        "color", "textcolor", "href", "url", "rule", "hbox",
-        "kern", "mkern", "mskip", "hskip",
-        "vcenter", "mathchoice", "smash", "raisebox", "fbox",
-        "phantom", "vphantom", "mathllap", "mathrlap", "mathclap",
-        "cancel", "bcancel", "sout", "textcircled",
-        "htmlClass", "htmlId", "htmlStyle", "htmlData",
-        "operatornamewithlimits",
-        "mathinner", "mathop", "mathrel", "mathpunct",
-        "mathbin", "mathclose", "mathopen", "mathord",
-        // Definition/prefix primitives: KaTeX's entry check fires
-        // before any handler, so no side effect leaks.
-        "newcommand", "renewcommand", "providecommand",
-        "def", "gdef", "edef", "xdef",
-        "global", "long", "noexpand", "expandafter", "futurelet", "let",
-        "nonumber", "notag", "tag",
-        // Macro-class: KaTeX rejects via the expansion.
-        "boxed", "dotsi", "substack", "hphantom",
-        "llap", "rlap", "clap", "hspace", "bmod", "operatorname",
-        "minuso", "underbar",
-        // Spacing-emulation arms (KaTeX macros expanding to
-        // `\mskip`/`\hskip`).
-        "quad", "qquad", "enskip",
-        "thinspace", "medspace", "thickspace",
-        "negthinspace", "negmedspace", "negthickspace", "enspace",
-    };
-    for (bad) |b| if (tokNameEq(b, name)) return true;
-    return false;
+    // Hash dispatch over the canonical reject table (issue #283):
+    // same accept set as the old serial scan, no literal or branch
+    // duplication.
+    return BareBadSet.contains(name);
 }
+
+/// KaTeX functions WITHOUT `allowedInArgument` (pinned 0.18.7),
+/// hoisted as the canonical table for the hash dispatch above.
+const bare_bad_names: []const []const u8 = &.{
+    // Old-style declarations (rest-of-group in formula position
+    // only — issue #94).
+    "rm", "sf", "tt", "bf", "it", "cal",
+    "boldsymbol", "bm", "pmb",
+    "sqrt",
+    "color", "textcolor", "href", "url", "rule", "hbox",
+    "kern", "mkern", "mskip", "hskip",
+    "vcenter", "mathchoice", "smash", "raisebox", "fbox",
+    "phantom", "vphantom", "mathllap", "mathrlap", "mathclap",
+    "cancel", "bcancel", "sout", "textcircled",
+    "htmlClass", "htmlId", "htmlStyle", "htmlData",
+    "operatornamewithlimits",
+    "mathinner", "mathop", "mathrel", "mathpunct",
+    "mathbin", "mathclose", "mathopen", "mathord",
+    // Definition/prefix primitives: KaTeX's entry check fires
+    // before any handler, so no side effect leaks.
+    "newcommand", "renewcommand", "providecommand",
+    "def", "gdef", "edef", "xdef",
+    "global", "long", "noexpand", "expandafter", "futurelet", "let",
+    "nonumber", "notag", "tag",
+    // Macro-class: KaTeX rejects via the expansion.
+    "boxed", "dotsi", "substack", "hphantom",
+    "llap", "rlap", "clap", "hspace", "bmod", "operatorname",
+    "minuso", "underbar",
+    // Spacing-emulation arms (KaTeX macros expanding to
+    // `\mskip`/`\hskip`).
+    "quad", "qquad", "enskip",
+    "thinspace", "medspace", "thickspace",
+    "negthinspace", "negmedspace", "negthickspace", "enspace",
+};
+
+fn bareBadName(i: usize) []const u8 {
+    return bare_bad_names[i];
+}
+var bare_bad_idx: [191]u16 = .{0} ** 191;
+var BareBadSet = symbols.Index{ .idx = bare_bad_idx[0..], .count = bare_bad_names.len, .nameOf = bareBadName, .built = false };
 
 /// The six integrals are KaTeX's only operator-class names with
 /// `allowedInArgument` (pinned 0.18.7 `op.ts`): `x_\int` accepts.
+/// Length dispatch (issue #283): same accept set, no serial scan.
 fn isScriptIntegral(name: []const u8) bool {
-    const ints = [_][]const u8{ "int", "iint", "iiint", "oint", "oiint", "oiiint" };
-    for (ints) |o| if (tokNameEq(o, name)) return true;
-    return false;
+    if (name.len == 0) return false;
+    return switch (name[0]) {
+        'i' => switch (name.len) {
+            3 => tokNameEq(name, "int"),
+            4 => tokNameEq(name, "iint") or tokNameEq(name, "oint"),
+            5 => tokNameEq(name, "iiint") or tokNameEq(name, "oiint"),
+            6 => tokNameEq(name, "oiiint"),
+            else => false,
+        },
+        'o' => switch (name.len) {
+            4 => tokNameEq(name, "oint") or tokNameEq(name, "iint"),
+            5 => tokNameEq(name, "oiint"),
+            6 => tokNameEq(name, "oiiint"),
+            else => false,
+        },
+        else => false,
+    };
 }
 
 fn parseGroupOrAtom(ctx: *ParseCtx, depth: u8) Error!Idx {
@@ -2311,8 +2352,8 @@ fn parseScriptAtom(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!
                 if (bareFnInArg(name)) return scriptFnFail(ctx, t.pos, mode);
                 // Accent names live in the symbol table too, but KaTeX
                 // parses the accent functions first — so does this.
-                if (symbols.lookupAccent(name) != null) return scriptFnFail(ctx, t.pos, mode);
-                if (symbols.lookup(name)) |sym| {
+                if (symbols.lookupAccentFast(name) != null) return scriptFnFail(ctx, t.pos, mode);
+                if (symbols.lookupFast(name)) |sym| {
                     // Every operator-class symbol is a KaTeX function
                     // (integrals were allowed above); plain symbols
                     // parse as atoms.
@@ -2321,7 +2362,7 @@ fn parseScriptAtom(ctx: *ParseCtx, depth: u8, mode: ArgMode, op_pos: u32) Error!
                     if (r == null) continue;
                     return r.?;
                 }
-                if (symbols.lookupDelim(name) != null) {
+                if (symbols.lookupDelimFast(name) != null) {
                     const r = try parseSingle(ctx, depth + 1);
                     if (r == null) continue;
                     return r.?;
@@ -4281,7 +4322,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     if (isBigName(name)) {
         return parseBig(ctx, name, t);
     }
-    const accent = symbols.lookupAccent(name);
+    const accent = symbols.lookupAccentFast(name);
     if (accent) |a| {
         const nuc = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .accent = .{ .cp = a.cp, .wide = a.wide, .nucleus = nuc } });
@@ -4298,7 +4339,7 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
         const body = try parseGroupOrAtom(ctx, depth);
         return ctx.allocNode(.{ .font = .{ .fam = fam, .body = body } });
     }
-    if (symbols.lookup(name)) |sym| {
+    if (symbols.lookupFast(name)) |sym| {
         if (sym.large_op or sym.func) {
             const text: []const u8 = if (sym.func) name else "";
             const cp: u21 = if (sym.func) 0 else sym.cp;
@@ -4311,9 +4352,9 @@ fn parseCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
                 .text = text,
             } });
         }
-        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextord(name) } });
+        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextordFast(name) } });
     }
-    if (symbols.lookupDelim(name)) |d| {
+    if (symbols.lookupDelimFast(name)) |d| {
         // Bare delimiter (no `\left`): fixed-size atom in the
         // delimiter's own class (KaTeX symbol-table group).
         return ctx.allocNode(.{ .atom = .{ .class = d.cls, .font = .rm, .cp = d.cp } });
@@ -4369,8 +4410,8 @@ fn parseSingleCharCtrl(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
     }
     // Single-letter named symbols (`\S`, `\aa`, ...) live in the same
     // table as multi-letter names (KaTeX parity).
-    if (symbols.lookup(t.name)) |sym| {
-        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextord(t.name) } });
+    if (symbols.lookupFast(t.name)) |sym| {
+        return ctx.allocNode(.{ .atom = .{ .class = sym.class, .font = .rm, .cp = sym.cp, .textord = symbols.isTextordFast(t.name) } });
     }
     return ctx.fail(t.pos, "undefined control sequence");
 }
@@ -4479,53 +4520,72 @@ pub fn precompose(acc: u21, base: u21) ?u21 {
 // ---------------------------------------------------------------------------
 
 fn isStyleName(name: []const u8) bool {
-    return tokNameEq(name, "displaystyle") or tokNameEq(name, "textstyle") or
-        tokNameEq(name, "scriptstyle") or tokNameEq(name, "scriptscriptstyle");
+    // Length dispatch (issue #283): same accept set, no serial scan.
+    // (`textstyle` 9, `scriptstyle` 11, `displaystyle` 12,
+    // `scriptscriptstyle` 17.)
+    return switch (name.len) {
+        9 => tokNameEq(name, "textstyle"),
+        11 => tokNameEq(name, "scriptstyle"),
+        12 => tokNameEq(name, "displaystyle"),
+        17 => tokNameEq(name, "scriptscriptstyle"),
+        else => false,
+    };
 }
 
 fn styleFor(name: []const u8) Style {
-    if (tokNameEq(name, "displaystyle")) return .D;
-    if (tokNameEq(name, "textstyle")) return .T;
-    if (tokNameEq(name, "scriptstyle")) return .S;
-    return .SS;
+    // Length dispatch (issue #283): same mapping, no serial scan.
+    return switch (name.len) {
+        9 => .T,
+        11 => .S,
+        12 => .D,
+        else => .SS,
+    };
 }
 
 /// Font-size declarations (KaTeX `sizeFuncs` order, index 1–11;
-/// per-mille multipliers from `sizeMultipliers`).
+/// per-mille multipliers from `sizeMultipliers`). First-byte + length
+/// dispatch (issue #283): one switch on the hot path instead of 11
+/// serial compares; arms keep KaTeX order and exact accept set.
 fn sizeMultFor(name: []const u8) ?u16 {
-    if (tokNameEq(name, "tiny")) return 500;
-    if (tokNameEq(name, "sixptsize")) return 600;
-    if (tokNameEq(name, "scriptsize")) return 700;
-    if (tokNameEq(name, "footnotesize")) return 800;
-    if (tokNameEq(name, "small")) return 900;
-    if (tokNameEq(name, "normalsize")) return 1000;
-    if (tokNameEq(name, "large")) return 1200;
-    if (tokNameEq(name, "Large")) return 1440;
-    if (tokNameEq(name, "LARGE")) return 1728;
-    if (tokNameEq(name, "huge")) return 2074;
-    if (tokNameEq(name, "Huge")) return 2488;
-    return null;
+    if (name.len == 0) return null;
+    return switch (name[0]) {
+        't' => if (tokNameEq(name, "tiny")) 500 else null,
+        's' => switch (name.len) {
+            5 => if (tokNameEq(name, "small")) @as(?u16, 900) else null,
+            9 => if (tokNameEq(name, "sixptsize")) @as(?u16, 600) else null,
+            10 => if (tokNameEq(name, "scriptsize")) @as(?u16, 700) else null,
+            else => null,
+        },
+        'f' => if (tokNameEq(name, "footnotesize")) @as(?u16, 800) else null,
+        'n' => if (tokNameEq(name, "normalsize")) @as(?u16, 1000) else null,
+        'l' => if (tokNameEq(name, "large")) @as(?u16, 1200) else null,
+        'L' => switch (name.len) {
+            5 => if (tokNameEq(name, "Large")) @as(?u16, 1440) else if (tokNameEq(name, "LARGE")) @as(?u16, 1728) else null,
+            else => null,
+        },
+        'h' => if (tokNameEq(name, "huge")) @as(?u16, 2074) else null,
+        'H' => if (tokNameEq(name, "Huge")) @as(?u16, 2488) else null,
+        else => null,
+    };
 }
 
 fn fontFamFor(name: []const u8) ?FontFam {
     // Math-mode families take math arguments (`\mathbf{\alpha}`).
-    if (tokNameEq(name, "mathrm") or tokNameEq(name, "rm")) return .rm;
-    if (tokNameEq(name, "mathit") or tokNameEq(name, "it") or
-        tokNameEq(name, "mathnormal")) return .mathit;
-    if (tokNameEq(name, "mathbf") or tokNameEq(name, "bf") or
-        tokNameEq(name, "bold")) return .bold;
-    if (tokNameEq(name, "mathsf") or tokNameEq(name, "sf")) return .sans;
-    // `\mathsfit` sans-serif italic (issue #137, KaTeX `font.ts` +
-    // `buildMathML.ts` `sans-serif-italic`). Core like `\mathsf`.
-    if (tokNameEq(name, "mathsfit")) return .sansitalic;
-    if (tokNameEq(name, "mathtt") or tokNameEq(name, "tt")) return .tt;
-    if (tokNameEq(name, "mathfrak") or tokNameEq(name, "frak")) return .frak;
-    if (tokNameEq(name, "mathscr")) return .script;
-    if (tokNameEq(name, "mathbb") or tokNameEq(name, "Bbb")) return .bb;
-    if (tokNameEq(name, "mathcal") or tokNameEq(name, "cal")) return .cal;
-    // `\bm` bold-italic (issue #73, KaTeX `mathvariant="bold-italic"`).
-    if (tokNameEq(name, "bm")) return .bolditalic;
-    return null;
+    // First-byte dispatch (issue #283); arms keep the accept set.
+    if (name.len == 0) return null;
+    return switch (name[0]) {
+        'r' => if (tokNameEq(name, "rm")) .rm else null,
+        'm' => if (tokNameEq(name, "mathrm")) .rm else if (tokNameEq(name, "mathit") or
+            tokNameEq(name, "mathnormal")) .mathit else if (tokNameEq(name, "mathbf")) .bold else if (tokNameEq(name, "mathsf")) .sans else if (tokNameEq(name, "mathsfit")) .sansitalic else if (tokNameEq(name, "mathtt")) .tt else if (tokNameEq(name, "mathfrak")) .frak else if (tokNameEq(name, "mathscr")) .script else if (tokNameEq(name, "mathbb")) .bb else if (tokNameEq(name, "mathcal")) .cal else null,
+        'i' => if (tokNameEq(name, "it")) .mathit else null,
+        'b' => if (tokNameEq(name, "bf") or tokNameEq(name, "bold")) .bold else if (tokNameEq(name, "bm")) .bolditalic else null,
+        'B' => if (tokNameEq(name, "Bbb")) .bb else null,
+        's' => if (tokNameEq(name, "sf")) .sans else null,
+        't' => if (tokNameEq(name, "tt")) .tt else null,
+        'f' => if (tokNameEq(name, "frak")) .frak else null,
+        'c' => if (tokNameEq(name, "cal")) .cal else null,
+        else => null,
+    };
 }
 
 /// Old-style declarations: the six names KaTeX parses with zero
@@ -4533,73 +4593,45 @@ fn fontFamFor(name: []const u8) ?FontFam {
 /// the enclosing group instead of taking one group-or-atom. Every
 /// other `fontFamFor` name (`\mathbf`, `\mathcal`, `\bm`, ...) keeps
 /// its single argument (parseCtrl arm above stays for those and for
-/// single-atom nests like scripts).
+/// single-atom nests like scripts). First-byte dispatch (#283).
 fn oldStyleDeclFam(name: []const u8) ?FontFam {
-    if (tokNameEq(name, "rm")) return .rm;
-    if (tokNameEq(name, "it")) return .mathit;
-    if (tokNameEq(name, "bf")) return .bold;
-    if (tokNameEq(name, "sf")) return .sans;
-    if (tokNameEq(name, "tt")) return .tt;
-    if (tokNameEq(name, "cal")) return .cal;
-    return null;
+    if (name.len == 0) return null;
+    return switch (name[0]) {
+        'r' => if (tokNameEq(name, "rm")) .rm else null,
+        'i' => if (tokNameEq(name, "it")) .mathit else null,
+        'b' => if (tokNameEq(name, "bf")) .bold else null,
+        's' => if (tokNameEq(name, "sf")) .sans else null,
+        't' => if (tokNameEq(name, "tt")) .tt else null,
+        'c' => if (tokNameEq(name, "cal")) .cal else null,
+        else => null,
+    };
 }
 
 /// Text-mode families take text arguments (`\textbf{a+b}` is an
 /// `mtext`, and `\textbf{\alpha}` is a KaTeX error). `\textsl` is
-/// absent: KaTeX rejects it as undefined.
+/// absent: KaTeX rejects it as undefined. First-byte dispatch (#283).
 fn textFontFamFor(name: []const u8) ?FontFam {
-    if (tokNameEq(name, "textrm") or tokNameEq(name, "textup") or
-        tokNameEq(name, "textnormal") or tokNameEq(name, "textmd")) return .rm;
-    if (tokNameEq(name, "textit") or tokNameEq(name, "emph")) return .mathit;
-    if (tokNameEq(name, "textbf")) return .bold;
-    if (tokNameEq(name, "textsf")) return .sans;
-    if (tokNameEq(name, "texttt")) return .tt;
-    return null;
+    if (name.len == 0) return null;
+    return switch (name[0]) {
+        't' => if (tokNameEq(name, "textrm") or tokNameEq(name, "textup") or
+            tokNameEq(name, "textnormal") or tokNameEq(name, "textmd")) .rm else if (tokNameEq(name, "textit")) .mathit else if (tokNameEq(name, "textbf")) .bold else if (tokNameEq(name, "textsf")) .sans else if (tokNameEq(name, "texttt")) .tt else null,
+        'e' => if (tokNameEq(name, "emph")) .mathit else null,
+        else => null,
+    };
 }
 
 fn parseOverName(name: []const u8) ?OverKind {
-    if (tokNameEq(name, "overline")) return .overline;
-    if (tokNameEq(name, "underline")) return .underline;
-    if (tokNameEq(name, "overbrace")) return .overbrace;
-    if (tokNameEq(name, "underbrace")) return .underbrace;
-    if (tokNameEq(name, "overbracket")) return .overbracket;
-    if (tokNameEq(name, "underbracket")) return .underbracket;
-    if (tokNameEq(name, "overleftarrow")) return .overleft;
-    if (tokNameEq(name, "overrightarrow")) return .overright;
-    if (tokNameEq(name, "overleftrightarrow")) return .overboth;
-    if (tokNameEq(name, "underleftarrow")) return .underleft;
-    if (tokNameEq(name, "underrightarrow")) return .underright;
-    if (tokNameEq(name, "underleftrightarrow")) return .underboth;
-    if (tokNameEq(name, "xleftarrow")) return .xleft;
-    if (tokNameEq(name, "xrightarrow")) return .xright;
-    if (tokNameEq(name, "xleftrightarrow")) return .xboth;
-    if (tokNameEq(name, "xhookleftarrow")) return .xhookleft;
-    if (tokNameEq(name, "xhookrightarrow")) return .xhookright;
-    if (tokNameEq(name, "xmapsto")) return .xmapsto;
-    if (tokNameEq(name, "xtwoheadleftarrow")) return .xtwoheadleft;
-    if (tokNameEq(name, "xtwoheadrightarrow")) return .xtwoheadright;
-    if (tokNameEq(name, "angl")) return .angl;
-    if (tokNameEq(name, "overgroup")) return .overgroup;
-    if (tokNameEq(name, "undergroup")) return .undergroup;
-    if (tokNameEq(name, "overlinesegment")) return .overlinesegment;
-    if (tokNameEq(name, "underlinesegment")) return .underlinesegment;
-    if (tokNameEq(name, "overleftharpoon")) return .overleftharpoon;
-    if (tokNameEq(name, "overrightharpoon")) return .overrightharpoon;
-    if (tokNameEq(name, "Overrightarrow")) return .overRightarrow;
-    if (tokNameEq(name, "underbar")) return .underbar;
-    if (tokNameEq(name, "utilde")) return .utilde;
-    if (tokNameEq(name, "xLeftarrow")) return .xdoubleleft;
-    if (tokNameEq(name, "xLeftrightarrow")) return .xdoubleboth;
-    if (tokNameEq(name, "xRightarrow")) return .xdoubleright;
-    if (tokNameEq(name, "xleftharpoondown")) return .xleftharpoondown;
-    if (tokNameEq(name, "xleftharpoonup")) return .xleftharpoonup;
-    if (tokNameEq(name, "xleftrightharpoons")) return .xleftrightharpoons;
-    if (tokNameEq(name, "xlongequal")) return .xlongequal;
-    if (tokNameEq(name, "xrightharpoondown")) return .xrightharpoondown;
-    if (tokNameEq(name, "xrightharpoonup")) return .xrightharpoonup;
-    if (tokNameEq(name, "xrightleftharpoons")) return .xrightleftharpoons;
-    if (tokNameEq(name, "xtofrom")) return .xtofrom;
-    return null;
+    // First-byte + length dispatch (issue #283): the 40-name serial
+    // chain becomes one switch; arms keep exact accept set and order.
+    if (name.len == 0) return null;
+    return switch (name[0]) {
+        'o' => if (tokNameEq(name, "overline")) .overline else if (tokNameEq(name, "overbrace")) .overbrace else if (tokNameEq(name, "overbracket")) .overbracket else if (tokNameEq(name, "overleftarrow")) .overleft else if (tokNameEq(name, "overrightarrow")) .overright else if (tokNameEq(name, "overleftrightarrow")) .overboth else if (tokNameEq(name, "overgroup")) .overgroup else if (tokNameEq(name, "overlinesegment")) .overlinesegment else if (tokNameEq(name, "overleftharpoon")) .overleftharpoon else if (tokNameEq(name, "overrightharpoon")) .overrightharpoon else null,
+        'u' => if (tokNameEq(name, "underline")) .underline else if (tokNameEq(name, "underbrace")) .underbrace else if (tokNameEq(name, "underbracket")) .underbracket else if (tokNameEq(name, "underleftarrow")) .underleft else if (tokNameEq(name, "underrightarrow")) .underright else if (tokNameEq(name, "underleftrightarrow")) .underboth else if (tokNameEq(name, "undergroup")) .undergroup else if (tokNameEq(name, "underlinesegment")) .underlinesegment else if (tokNameEq(name, "underbar")) .underbar else if (tokNameEq(name, "utilde")) .utilde else null,
+        'x' => if (tokNameEq(name, "xleftarrow")) .xleft else if (tokNameEq(name, "xrightarrow")) .xright else if (tokNameEq(name, "xleftrightarrow")) .xboth else if (tokNameEq(name, "xhookleftarrow")) .xhookleft else if (tokNameEq(name, "xhookrightarrow")) .xhookright else if (tokNameEq(name, "xmapsto")) .xmapsto else if (tokNameEq(name, "xtwoheadleftarrow")) .xtwoheadleft else if (tokNameEq(name, "xtwoheadrightarrow")) .xtwoheadright else if (tokNameEq(name, "xLeftarrow")) .xdoubleleft else if (tokNameEq(name, "xLeftrightarrow")) .xdoubleboth else if (tokNameEq(name, "xRightarrow")) .xdoubleright else if (tokNameEq(name, "xleftharpoondown")) .xleftharpoondown else if (tokNameEq(name, "xleftharpoonup")) .xleftharpoonup else if (tokNameEq(name, "xleftrightharpoons")) .xleftrightharpoons else if (tokNameEq(name, "xlongequal")) .xlongequal else if (tokNameEq(name, "xrightharpoondown")) .xrightharpoondown else if (tokNameEq(name, "xrightharpoonup")) .xrightharpoonup else if (tokNameEq(name, "xrightleftharpoons")) .xrightleftharpoons else if (tokNameEq(name, "xtofrom")) .xtofrom else null,
+        'a' => if (tokNameEq(name, "angl")) .angl else null,
+        'O' => if (tokNameEq(name, "Overrightarrow")) .overRightarrow else null,
+        else => null,
+    };
 }
 
 fn parseOver(ctx: *ParseCtx, depth: u8, t: Tok, kind: OverKind) Error!Idx {
@@ -4721,7 +4753,7 @@ fn parseDelimSpec(ctx: *ParseCtx, middle_quirk: bool) Error!u21 {
                 }
             }
             if (middle_quirk and tokNameEq(t.name, "vert")) return '|';
-            if (symbols.lookupDelim(t.name)) |d| return d.cp;
+            if (symbols.lookupDelimFast(t.name)) |d| return d.cp;
             return ctx.fail(t.pos, "expected delimiter");
         },
         else => return ctx.fail(t.pos, "expected delimiter"),
@@ -4742,8 +4774,27 @@ fn parseLeftRight(ctx: *ParseCtx, depth: u8, t: Tok) Error!Idx {
 }
 
 fn isBigName(name: []const u8) bool {
-    const prefixes = [_][]const u8{ "bigl", "bigm", "bigr", "Bigl", "Bigm", "Bigr", "biggl", "biggm", "biggr", "Biggl", "Biggm", "Biggr", "big", "Big", "bigg", "Bigg" };
-    for (prefixes) |p| if (tokNameEq(name, p)) return true;
+    // Fixed-shape dispatch (issue #283): `big`/`Big`/`bigg`/`Bigg`
+    // + optional l/m/r suffix — exact same accept set, no 16-compare
+    // scan. Lengths: 3-5 for `big`/`Big`, 4-6 for `bigg`/`Bigg`.
+    if (name.len < 3 or name.len > 6) return false;
+    if (name[0] != 'b' and name[0] != 'B') return false;
+    if (name[1] != 'i' or name[2] != 'g') return false;
+    var rest = name[3..];
+    if (rest.len > 0 and rest[0] == 'g') {
+        // `bigg`/`Bigg`: second g required (so `biglX` can't take
+        // this path, and `Bigl` can't be misread as `Big`+`g`+`l`).
+        rest = rest[1..];
+    } else if (name.len > 5 and name[0] == 'b') {
+        return false;
+    } else if (name.len > 4 and name[0] == 'B' and !(rest.len == 2 and rest[1] == 'g')) {
+        // `Biggl`/`Biggm`/`Biggr`: the only len-5/6 `Big` forms with
+        // a non-g fourth byte; anything else that long is foreign.
+        return false;
+    }
+    if (rest.len == 0) return true;
+    if (rest.len == 1) return rest[0] == 'l' or rest[0] == 'm' or rest[0] == 'r';
+    if (rest.len == 2) return rest[0] == 'g' and (rest[1] == 'l' or rest[1] == 'm' or rest[1] == 'r');
     return false;
 }
 
@@ -4788,7 +4839,7 @@ fn parseBig(ctx: *ParseCtx, name: []const u8, t: Tok) Error!Idx {
                     else => return ctx.fail(dt.pos, "expected delimiter"),
                 };
             }
-            break :blk (symbols.lookupDelim(dt.name) orelse return ctx.fail(dt.pos, "expected delimiter")).cp;
+            break :blk (symbols.lookupDelimFast(dt.name) orelse return ctx.fail(dt.pos, "expected delimiter")).cp;
         },
         else => return ctx.fail(dt.pos, "expected delimiter"),
     };
@@ -6573,7 +6624,7 @@ fn singleDelimArg(ctx: *ParseCtx, r: Range, pos: u32) Error!u21 {
                     else => return ctx.fail(tk.pos, "expected delimiter"),
                 }
             }
-            if (symbols.lookupDelim(tk.name)) |d| return d.cp;
+            if (symbols.lookupDelimFast(tk.name)) |d| return d.cp;
             return ctx.fail(tk.pos, "expected delimiter");
         },
         else => return ctx.fail(tk.pos, "expected delimiter"),
@@ -6980,45 +7031,78 @@ fn parseFuturelet(ctx: *ParseCtx, cmd: Tok) Error!void {
 fn isBuiltin(name: []const u8) bool {
     // Every engine command counts as defined (KaTeX `\newcommand`
     // refuses them, `\renewcommand` accepts them); consulting the
-    // engine tables keeps this in sync for free.
+    // engine tables keeps this in sync for free. Single hash/switch
+    // consult per family (issue #283) instead of dozens of failed
+    // compares before the tables are even reached.
     if (isEngineCtrlName(name)) return true;
     if (isEngineDefName(name)) return true;
-    if (symbols.lookup(name) != null) return true;
-    if (symbols.lookupDelim(name) != null) return true;
-    if (symbols.lookupAccent(name) != null) return true;
+    if (symbols.lookupFast(name) != null) return true;
+    if (symbols.lookupDelimFast(name) != null) return true;
+    if (symbols.lookupAccentFast(name) != null) return true;
     if (isStyleName(name)) return true;
     if (fontFamFor(name) != null) return true;
     if (parseOverName(name) != null) return true;
     if (isBigName(name)) return true;
-    const prims: []const []const u8 = &.{
-        "frac", "dfrac", "tfrac", "cfrac", "binom", "dbinom", "genfrac",
-        "sqrt", "left", "right", "middle", "begin", "end", "hline", "cr",
-        "bgroup", "egroup",
-        "text", "mbox", "boldsymbol", "pmb", "vcenter", "color", "href", "url", "includegraphics",
-        "htmlClass",
-        "htmlId", "htmlStyle", "htmlData", "operatorname", "substack",
-        "mathchoice", "smash", "raisebox", "rule", "boxed", "fbox",
-        "KaTeX", "LaTeX", "TeX", "operatornamewithlimits", "mathstrut",
-        "bra", "ket", "Bra", "Ket", "braket", "Braket",
-        "set", "Set", "nonumber", "notag",
-        "phantom", "hphantom", "vphantom", "llap", "rlap", "clap",
-        "cancel", "bcancel", "sout", "phase", "textcircled", "quad", "qquad", "enskip", "hspace", "vspace",
-        "kern", "mkern", "mskip", "hskip", "newcommand", "renewcommand",
-        "providecommand", "def", "gdef", "edef", "xdef", "global", "long", "relax",
-        "allowbreak", "nobreak", "nobreakspace", "space", "noexpand", "expandafter",
-        "futurelet", "let", "over", "atop", "choose", "brace",
-        "brack", "limits", "nolimits", "not", "overset", "underset", "stackrel",
-        "tag",
-    };
-    for (prims) |p| if (tokNameEq(p, name)) return true;
-    const envs: []const []const u8 = &.{
-        "matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix",
-        "smallmatrix", "array", "aligned", "alignedat", "cases", "dcases",
-        "drcases", "rcases", "gathered", "subarray",
-        "align", "alignat", "equation", "gather", "split", "CD",
-    };
-    for (envs) |e| if (tokNameEq(e, name)) return true;
+    if (isPrimName(name)) return true;
+    if (isEnvName(name)) return true;
     return false;
+}
+
+/// `\newcommand`-guard primitives, hoisted as the canonical table
+/// for the hash dispatch below (same members as the old serial
+/// scan; the dispatch test pins every name).
+const prim_names: []const []const u8 = &.{
+    "frac", "dfrac", "tfrac", "cfrac", "binom", "dbinom", "genfrac",
+    "sqrt", "left", "right", "middle", "begin", "end", "hline", "cr",
+    "bgroup", "egroup",
+    "text", "mbox", "boldsymbol", "pmb", "vcenter", "color", "href", "url", "includegraphics",
+    "htmlClass",
+    "htmlId", "htmlStyle", "htmlData", "operatorname", "substack",
+    "mathchoice", "smash", "raisebox", "rule", "boxed", "fbox",
+    "KaTeX", "LaTeX", "TeX", "operatornamewithlimits", "mathstrut",
+    "bra", "ket", "Bra", "Ket", "braket", "Braket",
+    "set", "Set", "nonumber", "notag",
+    "phantom", "hphantom", "vphantom", "llap", "rlap", "clap",
+    "cancel", "bcancel", "sout", "phase", "textcircled", "quad", "qquad", "enskip", "hspace", "vspace",
+    "kern", "mkern", "mskip", "hskip", "newcommand", "renewcommand",
+    "providecommand", "def", "gdef", "edef", "xdef", "global", "long", "relax",
+    "allowbreak", "nobreak", "nobreakspace", "space", "noexpand", "expandafter",
+    "futurelet", "let", "over", "atop", "choose", "brace",
+    "brack", "limits", "nolimits", "not", "overset", "underset", "stackrel",
+    "tag",
+};
+
+fn primName(i: usize) []const u8 {
+    return prim_names[i];
+}
+var prim_idx: [211]u16 = .{0} ** 211;
+var PrimSet = symbols.Index{ .idx = prim_idx[0..], .count = prim_names.len, .nameOf = primName, .built = false };
+
+/// `\newcommand`-guard environments, hoisted as the canonical table
+/// for the hash dispatch below (same 22 names as the old scan).
+const env_names: []const []const u8 = &.{
+    "matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix",
+    "smallmatrix", "array", "aligned", "alignedat", "cases", "dcases",
+    "drcases", "rcases", "gathered", "subarray",
+    "align", "alignat", "equation", "gather", "split", "CD",
+};
+
+fn envName(i: usize) []const u8 {
+    return env_names[i];
+}
+var env_idx: [47]u16 = .{0} ** 47;
+var EnvSet = symbols.Index{ .idx = env_idx[0..], .count = env_names.len, .nameOf = envName, .built = false };
+
+/// `\newcommand`-guard primitives: hash dispatch over the canonical
+/// table (issue #283), no literal or branch duplication.
+fn isPrimName(name: []const u8) bool {
+    return PrimSet.contains(name);
+}
+
+/// `\newcommand`-guard environments: hash dispatch over the canonical
+/// table (issue #283), no literal or branch duplication.
+fn isEnvName(name: []const u8) bool {
+    return EnvSet.contains(name);
 }
 
 // ---------------------------------------------------------------------------
@@ -9167,4 +9251,77 @@ test "engine command tables feed isBuiltin" {
     // silently stop being builtin.
     for (engine_def_names) |n| try std.testing.expect(isEngineDefName(n));
     for (engine_ctrl_names) |c| try std.testing.expect(isEngineCtrlName(c));
+}
+
+test "dispatch predicates agree on every routing name (issue #283)" {
+    // The first-byte/length dispatch rewrites (sizeMultFor,
+    // fontFamFor, oldStyleDeclFam, textFontFamFor, parseOverName,
+    // isBigName, isStyleName, styleFor, isScriptIntegral) must keep
+    // their exact accept sets: every name any predicate accepts, plus
+    // near-miss spellings that must keep rejecting (the rewrite bugs
+    // caught here: 11-vs-12 style lengths, Bbb under 'b', LARGE
+    // under len != 5).
+    const style_cases = [_]struct { name: []const u8, style: ?Style }{
+        .{ .name = "displaystyle", .style = .D },
+        .{ .name = "textstyle", .style = .T },
+        .{ .name = "scriptstyle", .style = .S },
+        .{ .name = "scriptscriptstyle", .style = .SS },
+        .{ .name = "display", .style = null },
+        .{ .name = "text", .style = null },
+        .{ .name = "script", .style = null },
+        .{ .name = "displaystyleX", .style = null },
+    };
+    for (style_cases) |c| {
+        try std.testing.expectEqual(c.style != null, isStyleName(c.name));
+        if (c.style) |s| try std.testing.expectEqual(s, styleFor(c.name));
+    }
+    const size_cases = [_][]const u8{ "tiny", "sixptsize", "scriptsize", "footnotesize", "small", "normalsize", "large", "Large", "LARGE", "huge", "Huge" };
+    for (size_cases) |n| try std.testing.expect(sizeMultFor(n) != null);
+    try std.testing.expect(sizeMultFor("largeX") == null);
+    try std.testing.expect(sizeMultFor("Larg") == null);
+    const fam_cases = [_][]const u8{ "mathrm", "rm", "mathit", "it", "mathnormal", "mathbf", "bf", "bold", "mathsf", "sf", "mathsfit", "mathtt", "tt", "mathfrak", "frak", "mathscr", "mathbb", "Bbb", "mathcal", "cal", "bm" };
+    for (fam_cases) |n| try std.testing.expect(fontFamFor(n) != null);
+    try std.testing.expect(fontFamFor("BbbX") == null);
+    try std.testing.expect(fontFamFor("mathbfX") == null);
+    const text_cases = [_][]const u8{ "textrm", "textup", "textnormal", "textmd", "textit", "emph", "textbf", "textsf", "texttt" };
+    for (text_cases) |n| try std.testing.expect(textFontFamFor(n) != null);
+    try std.testing.expect(textFontFamFor("textsl") == null);
+    const big_cases = [_][]const u8{ "bigl", "bigm", "bigr", "Bigl", "Bigm", "Bigr", "biggl", "biggm", "biggr", "Biggl", "Biggm", "Biggr", "big", "Big", "bigg", "Bigg" };
+    for (big_cases) |n| try std.testing.expect(isBigName(n));
+    try std.testing.expect(!isBigName("bigX"));
+    try std.testing.expect(!isBigName("biggg"));
+    try std.testing.expect(isBigName("Big"));
+    const int_cases = [_][]const u8{ "int", "iint", "iiint", "oint", "oiint", "oiiint" };
+    for (int_cases) |n| try std.testing.expect(isScriptIntegral(n));
+    try std.testing.expect(!isScriptIntegral("in"));
+    try std.testing.expect(!isScriptIntegral("intX"));
+    // Every over name still routes (spot-check across groups).
+    for ([_][]const u8{ "overline", "underline", "overbrace", "underbrace", "xleftarrow", "xrightarrow", "xtofrom", "Overrightarrow", "underbar", "utilde", "angl" }) |n| {
+        try std.testing.expect(parseOverName(n) != null);
+    }
+    try std.testing.expect(parseOverName("overlin") == null);
+    try std.testing.expect(parseOverName("xleftarro") == null);
+    // The script-argument reject set keeps every member (issue #111):
+    // the hash rewrite of `bareFnInArg` must accept each canonical
+    // table entry.
+    for (bare_bad_names) |n| try std.testing.expect(bareFnInArg(n));
+    // Near-misses keep the allow path.
+    for ([_][]const u8{ "ruleX", "mathordX", "smashX", "sqrtX", "tagX", "quadX", "hrefX", "urll", "hboxX" }) |n| {
+        try std.testing.expect(!bareFnInArg(n));
+    }
+    // The `\newcommand`-guard tables keep every member (issue #283):
+    // the hash rewrite of `isPrimName`/`isEnvName` must accept each
+    // canonical table entry.
+    for (prim_names) |n| {
+        try std.testing.expect(isPrimName(n));
+        try std.testing.expect(isBuiltin(n));
+    }
+    for (env_names) |n| {
+        try std.testing.expect(isEnvName(n));
+        try std.testing.expect(isBuiltin(n));
+    }
+    for ([_][]const u8{ "fracX", "beginX", "matrixX", "alignX", "equationX", "CDX" }) |n| {
+        try std.testing.expect(!isPrimName(n));
+        try std.testing.expect(!isEnvName(n));
+    }
 }
