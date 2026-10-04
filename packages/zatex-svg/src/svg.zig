@@ -7,7 +7,6 @@ const std = @import("std");
 const zatex = @import("zatex");
 const cff = @import("cff");
 const outlines_mod = @import("outlines.zig");
-const golden_ids = @import("golden_ids.zig");
 
 /// Walk `layout` into a standalone SVG document in `out`: shift-fit
 /// the viewport, `skeletonHead`, rules loop, runs loop, `</svg>`.
@@ -1486,7 +1485,11 @@ test "goldens byte-match" {
     var glyphs: [4096]u16 = undefined;
     var segs: [512]cff.Seg = undefined;
     var diag = zatex.Diag.empty();
-    inline for (golden_ids.ids) |id| {
+    // Test-only id list, imported inside the test fn (issue #288):
+    // `golden_ids` is regen metadata, never library code — a
+    // top-level import would link its strings into every consumer of
+    // this module (including the CLI exe).
+    inline for (@import("golden_ids.zig").ids) |id| {
         const want = @embedFile("goldens/" ++ id ++ ".svg");
         const src = lookup(corpus, id);
         // regen renders with `--display` iff the id ends in `-d`;

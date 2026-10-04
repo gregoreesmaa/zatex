@@ -32,6 +32,12 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/zatex.zig"),
         .target = target,
         .optimize = .ReleaseSmall,
+        // Dist libs ship stripped (issue #288): ReleaseSmall implies
+        // -fstrip off-archives only via PDB suppression — the object
+        // debug info still rides the static archive — so set strip
+        // explicitly for the shipped artifact. Tests keep the user's
+        // chosen `optimize` via the unshrunk `mod` above.
+        .strip = true,
     });
     dist_mod.addOptions("build_options", cabi_options);
 
@@ -40,6 +46,11 @@ pub fn build(b: *std.Build) void {
         .root_module = dist_mod,
         .linkage = .static,
     });
+    // No LTO on the static dist lib (issue #288): on COFF/Windows
+    // LTO embeds LLVM bitcode alongside codegen and ~2.4x'd the
+    // archive (263KB -> 627KB measured); the size gate counts raw
+    // archive bytes, so LTO on statics is a size regression, not a
+    // diet. Strip (above) is the static diet.
     // On Windows the DLL import library and the static archive both
     // install as `zatex.lib` (one clobbers the other in zig-out/lib —
     // the release workflow ships both), so the static archive takes
@@ -61,6 +72,12 @@ pub fn build(b: *std.Build) void {
         .root_module = dist_mod,
         .linkage = .dynamic,
     });
+    // Same diet as the static dist lib (issue #288). LTO only
+    // where the linker supports it: Mach-O links without LLD by
+    // default, so `-flto=full` errors there ("LTO requires using
+    // LLD"); ELF/COFF go through LLD and link fine (verified:
+    // Windows `zig build` green with LTO on).
+    if (target.result.os.tag != .macos) dylib.lto = .full;
     b.installArtifact(dylib);
 
     const mod_tests = b.addTest(.{ .root_module = mod });
