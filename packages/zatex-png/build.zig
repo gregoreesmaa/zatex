@@ -117,7 +117,17 @@ pub fn build(b: *std.Build) void {
 
     // Coordinate-mapping tests for the portable mapping in
     // `render.zig`. Separate root (per core convention) so they run
-    // under the same `test` step; needs the same frameworks to link.
+    // under the same `test` step. Links the Apple frameworks on Apple
+    // hosts whatever `-Dbackend` selects (same rule as mod/sw/nmod):
+    // the pool test calls renderToPng, whose body resolves
+    // backend.impl and forces analysis of sw_backend.zig — and an
+    // imported file's tests execute once its declarations are
+    // analyzed (issue #106), so the CoreText cross-check test body
+    // runs in this suite too. On Apple hosts that body is taken and
+    // emits CoreGraphics calls, which only link with the frameworks.
+    // The shipped exe module (`mod` above) stays libc-only under
+    // software so cross-compiles link without an SDK; only test
+    // modules take frameworks (mod_test_mod precedent).
     const render_mod = b.addModule("zatex_png_render", .{
         .root_source_file = b.path("src/render.zig"),
         .target = target,
@@ -130,7 +140,7 @@ pub fn build(b: *std.Build) void {
     render_mod.addImport("fontstack", zatex_dep.module("fontstack"));
     render_mod.addImport("cff", zatex_dep.module("cff"));
     render_mod.addImport("fileprovider", zatex_dep.module("fileprovider"));
-    if (backend_is_cg) {
+    if (apple) {
         render_mod.linkFramework("CoreGraphics", .{});
         render_mod.linkFramework("CoreText", .{});
         render_mod.linkFramework("ImageIO", .{});

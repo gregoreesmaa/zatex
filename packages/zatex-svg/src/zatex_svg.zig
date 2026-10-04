@@ -4,6 +4,7 @@ const std = @import("std");
 pub const svg = @import("svg.zig");
 pub const outlines = @import("outlines.zig");
 pub const renderLayout = svg.renderLayout;
+pub const measureLayout = svg.measureLayout;
 pub const render = svg.render;
 
 test {

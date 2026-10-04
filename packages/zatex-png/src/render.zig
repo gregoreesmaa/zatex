@@ -14,6 +14,52 @@ pub const Error = error{
     PngWrite,
 };
 
+/// Single-slot canvas cache for batch renders (issue #284): creating
+/// a canvas allocates pixels plus the fixed scratch (512 segs, 8192
+/// lines, row coverage) per image; a corpus batch renders hundreds of
+/// images and frees each one. The pool keeps the last canvas and
+/// reuses it whenever the next image has exactly the same dimensions
+/// (same formula shape at the same `--px`); on a size mismatch it
+/// closes the cached canvas and creates a fresh one — identical to
+/// the unpooled path. Reuse is pixel-exact: every render fills the
+/// full canvas (background rect over w x h) before drawing, so no
+/// stale pixel can survive a hit. Backend-generic (over
+/// `backend.impl.Canvas`): backends without scratch (CoreGraphics)
+/// still save the context alloc on a hit.
+pub const CanvasPool = struct {
+    cached: ?backend.impl.Canvas = null,
+    w: usize = 0,
+    h: usize = 0,
+
+    pub fn deinit(self: *CanvasPool) void {
+        if (self.cached) |*c| c.close();
+        self.cached = null;
+    }
+
+    fn take(self: *CanvasPool, w: usize, h: usize) error{RenderInit}!backend.impl.Canvas {
+        if (self.cached) |c| {
+            if (self.w == w and self.h == h) {
+                self.cached = null;
+                return c;
+            }
+            var old = c;
+            old.close();
+            self.cached = null;
+        }
+        const fresh = try backend.impl.Canvas.create(w, h);
+        self.w = w;
+        self.h = h;
+        return fresh;
+    }
+
+    fn give(self: *CanvasPool, canvas: backend.impl.Canvas, w: usize, h: usize) void {
+        std.debug.assert(self.cached == null);
+        self.cached = canvas;
+        self.w = w;
+        self.h = h;
+    }
+};
+
 /// Render `layout` (laid out with `font`'s provider, so advances agree)
 /// to `out_path` at `px_per_em` pixels per em with `pad_px` padding.
 /// Black on white, 8-bit RGBA PNG.
@@ -23,6 +69,21 @@ pub fn renderToPng(
     px_per_em: u32,
     pad_px: u32,
     out_path: []const u8,
+) Error!void {
+    return renderToPngPooled(font, layout, px_per_em, pad_px, out_path, null);
+}
+
+/// `renderToPng` through a batch canvas pool (null disables pooling —
+/// the single-render path). Pool hits render byte-identically: the
+/// canvas is fully repainted every render, and a size mismatch
+/// recreates instead of reusing.
+pub fn renderToPngPooled(
+    font: *const Font,
+    layout: zatex.ir.Layout,
+    px_per_em: u32,
+    pad_px: u32,
+    out_path: []const u8,
+    pool: ?*CanvasPool,
 ) Error!void {
     const s: f64 = @as(f64, @floatFromInt(px_per_em)) / 1000.0;
     const pad: f64 = @floatFromInt(pad_px);
@@ -56,8 +117,10 @@ pub fn renderToPng(
     const h: usize = @max(1, ceilU((@as(f64, @floatFromInt(layout.height_above)) +
         @as(f64, @floatFromInt(layout.depth_below))) * s + 2 * pad + top_px + bot_px));
 
-    var canvas = try backend.impl.Canvas.create(w, h);
-    defer canvas.close();
+    var canvas = if (pool) |p| try p.take(w, h) else try backend.impl.Canvas.create(w, h);
+    defer {
+        if (pool) |p| p.give(canvas, w, h) else canvas.close();
+    }
 
     // White background, black ink. The software canvas allocates
     // pre-cleared white (issue #285), so the explicit clear below is
@@ -718,4 +781,84 @@ test "rules share the glyph H-y mapping" {
     try std.testing.expectEqual(394.0, den_row);
     try std.testing.expectEqual(169.0, bar_top);
     try std.testing.expect(num_row < bar_top and bar_top < den_row);
+}
+
+fn readPoolFile(alloc: std.mem.Allocator, path: []const u8) ![]u8 {
+    var threaded = std.Io.Threaded.init(alloc, .{});
+    defer threaded.deinit();
+    return std.Io.Dir.cwd().readFileAlloc(threaded.io(), path, alloc, .limited(32 * 1024 * 1024));
+}
+
+test "canvas pool renders byte-identically, hit and miss" {
+    // Pooled renders must be pixel-exact: same-size reuse (hit) fully
+    // repaints, and size mismatch (miss) recreates — both compare
+    // byte-for-byte against the unpooled path. Unique scratch dir per
+    // run (sw_png precedent: test binaries run concurrently).
+    const alloc = std.testing.allocator;
+    var font = try Font.load(alloc, @import("build_options").fixture_font);
+    defer font.close();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    // NOTE (issue #284 backends fix): this test calls renderToPng,
+    // whose body resolves backend.impl — that forces analysis of
+    // sw_backend.zig, whose tests then execute in this suite (issue
+    // #106), including the CoreText cross-check. On Apple hosts that
+    // body emits CoreGraphics calls, so the render suite links the
+    // frameworks on Apple whatever -Dbackend selects (build.zig).
+    // Keep it that way: any render path that renders through
+    // backend.impl drags the whole software suite along.
+
+    var runs_a: [256]zatex.ir.Run = undefined;
+    var rules_a: [64]zatex.ir.Rule = undefined;
+    var glyphs_a: [4096]u16 = undefined;
+    var runs_b: [256]zatex.ir.Run = undefined;
+    var rules_b: [64]zatex.ir.Rule = undefined;
+    var glyphs_b: [4096]u16 = undefined;
+    var diag = zatex.Diag.empty();
+    // Separate buffers per layout: run glyph slices borrow the glyph
+    // buffer, so sharing would clobber the first layout.
+    const la = try zatex.layoutDiag("x^2+\\frac{a}{b}", .{}, font.provider(), &runs_a, &rules_a, &glyphs_a, &diag);
+    // A tiny layout: its canvas differs from `la`'s in both dimensions,
+    // so the pool path below exercises a real size miss, not a hit.
+    const lb = try zatex.layoutDiag("x", .{}, font.provider(), &runs_b, &rules_b, &glyphs_b, &diag);
+
+    var pool = CanvasPool{};
+    defer pool.deinit();
+    var pn: [5][256]u8 = undefined;
+    const names = [_][]const u8{ "pool_a.png", "pool_b.png", "pool_c.png", "pool_d.png", "pool_e.png" };
+    var paths: [5][]const u8 = undefined;
+    for (names, 0..) |nm, i| {
+        paths[i] = try std.fmt.bufPrint(&pn[i], ".zig-cache/tmp/{s}/{s}", .{ tmp.sub_path, nm });
+    }
+
+    // Unpooled baseline, then two pooled renders of the same layout
+    // (miss then hit: both canvases are cached-and-returned).
+    try renderToPng(&font, la, 48, 16, paths[0]);
+    try std.testing.expect(pool.cached == null);
+    try renderToPngPooled(&font, la, 48, 16, paths[1], &pool);
+    try std.testing.expect(pool.cached != null);
+    try renderToPngPooled(&font, la, 48, 16, paths[2], &pool);
+    try std.testing.expect(pool.cached != null);
+
+    // A different-size layout misses (recreates), then the first
+    // layout misses again — both still byte-identical. The dimension
+    // asserts prove these were real misses, not accidental hits.
+    try renderToPngPooled(&font, lb, 48, 16, paths[3], &pool);
+    const mw = pool.w;
+    const mh = pool.h;
+    try renderToPngPooled(&font, la, 48, 16, paths[4], &pool);
+    try std.testing.expect(pool.w != mw or pool.h != mh);
+
+    const ba = try readPoolFile(alloc, paths[0]);
+    defer alloc.free(ba);
+    const bb = try readPoolFile(alloc, paths[1]);
+    defer alloc.free(bb);
+    const bc = try readPoolFile(alloc, paths[2]);
+    defer alloc.free(bc);
+    const be = try readPoolFile(alloc, paths[4]);
+    defer alloc.free(be);
+    try std.testing.expectEqualSlices(u8, ba, bb);
+    try std.testing.expectEqualSlices(u8, ba, bc);
+    try std.testing.expectEqualSlices(u8, ba, be);
 }
