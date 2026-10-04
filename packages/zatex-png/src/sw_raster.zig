@@ -116,13 +116,12 @@ const Xsect = struct { x: f32, dir: i32 };
 /// Source-over blend of `col` at effective alpha `a` onto RGBA pixel `p`.
 fn blendPixel(p: *[4]u8, col: Color, a: f64) void {
     if (a <= 0) return;
-    if (a >= opaque_cutoff) {
-        // Opaque store (issue #285): at full coverage the majority of
-        // stem/bar pixels paid 3x float mul/add/clamp + a destination
-        // read for a blend that reproduces the color exactly. Store the
-        // precomputed source directly — same bytes, no float math, no
-        // `p` read (the `+ 0.5` round survives: `q*255` is already the
-        // rounded byte below).
+    if (a == 1) {
+        // Opaque store (issue #285): at `a == 1` the float blend below
+        // reduces to `q*255 + 0.5` per channel — the store below
+        // computes exactly those bytes, so skip the float math and
+        // the `p` read. Any `a < 1` takes the blend: near-opaque
+        // alphas can round a different byte (pinned by the test).
         const s = opaqueBytes(col);
         p[0] = s[0];
         p[1] = s[1];
@@ -137,11 +136,6 @@ fn blendPixel(p: *[4]u8, col: Color, a: f64) void {
     p[1] = @intFromFloat(@max(0, @min(255, col.g * 255 * a + g * ia + 0.5)));
     p[2] = @intFromFloat(@max(0, @min(255, col.b * 255 * a + b * ia + 0.5)));
 }
-
-/// Effective alpha at/above which blending reproduces the source
-/// color within half a byte step: `|dst - q*255| * (1 - a) <= 0.5`
-/// holds for every dst in 0..255 when `a >= 1 - 0.5/255`.
-const opaque_cutoff: f64 = 1 - 0.5 / @as(f64, 255);
 
 /// Source color as stored bytes (`+ 0.5` matches `blendPixel`'s round).
 fn opaqueBytes(col: Color) [3]u8 {
@@ -185,11 +179,12 @@ pub fn fillLines(pixels: []u8, cw: usize, ch: usize, lines: []const Line, col: C
     const ry1: usize = @intFromFloat(@ceil(fy1));
 
     var xs: [MAX_XSECT]Xsect = undefined;
-    // Opaque fast path (issue #285): when the paint is opaque, fully
-    // covered pixels store the color directly (same bytes as blending
-    // at `a == 1` — `col.a * cov >= opaque_cutoff` iff `cov == 1`,
-    // since `cov <= 1`). Precompute the store bytes once per glyph.
-    const opaque_fill = col.a >= opaque_cutoff;
+    // Opaque fast path (issue #285): when the paint is opaque
+    // (`col.a == 1`) and the pixel fully covered (`cov == 1`), the
+    // effective alpha is exactly 1, so `blendPixel` would store —
+    // store here directly with the precomputed bytes. Anything else
+    // (translucent paint, fringe coverage) blends the old way.
+    const opaque_fill = col.a == 1;
     const solid = opaqueBytes(col);
     var row = ry0;
     while (row < ry1) : (row += 1) {
@@ -238,7 +233,7 @@ pub fn fillLines(pixels: []u8, cw: usize, ch: usize, lines: []const Line, col: C
         while (px < rx1) : (px += 1) {
             const cov = @min(1, row_cov[px]);
             if (cov <= 0) continue;
-            if (opaque_fill and cov >= opaque_cutoff) {
+            if (opaque_fill and cov == 1) {
                 // `a == 1` floats store exactly (see `blendPixel`),
                 // so coverage 1 stores the color: same bytes as the
                 // old float path for stems and bar interiors.
@@ -569,6 +564,15 @@ test "fillLines fills a triangle with nonzero winding" {
 }
 
 test "opaque fast paths store byte-identical pixels (issue #285)" {
+    // The opaque store fires if and only if `a == 1`: at exactly 1
+    // the float blend reproduces the source byte, so storing skips
+    // identical math. Any `a < 1` blends, even just below 1 — the
+    // float path can round a different byte there (gray 0.5 over
+    // black at a=0.9981 blends to 127, storing would print 128).
+    const gray_half: Color = .{ .r = 0.5, .g = 0.5, .b = 0.5, .a = 1 };
+    var near_opaque: [4]u8 = .{ 0, 0, 0, 255 };
+    blendPixel(&near_opaque, gray_half, 0.9981);
+    try std.testing.expectEqual([4]u8{ 127, 127, 127, 255 }, near_opaque);
     // `blendPixel` at full coverage stores the source color: the
     // fast-path store must agree with the float blend exactly, even
     // off-white and off-black.
@@ -582,15 +586,8 @@ test "opaque fast paths store byte-identical pixels (issue #285)" {
     const dsts = [_][4]u8{ .{ 0, 0, 0, 255 }, .{ 255, 255, 255, 255 }, .{ 13, 200, 77, 255 }, .{ 1, 2, 3, 255 } };
     for (cols) |col| {
         for (dsts) |d| {
-            var via_blend = d;
-            // Force the float path by ducking just under the cutoff.
-            blendPixel(&via_blend, col, opaque_cutoff - 1e-9);
             var via_store: [4]u8 = d;
             blendPixel(&via_store, col, 1);
-            for (via_blend[0..3], via_store[0..3]) |vb, vs| {
-                const diff = if (vb > vs) vb - vs else vs - vb;
-                try std.testing.expect(diff <= 1);
-            }
             // True opaque always rounds to the source byte exactly.
             const s = opaqueBytes(col);
             try std.testing.expectEqual(s[0], via_store[0]);
@@ -600,14 +597,13 @@ test "opaque fast paths store byte-identical pixels (issue #285)" {
         }
     }
     // Integer `fillRect` stores the same bytes as the fringe path:
-    // an integer rect on a dirty canvas must equal a 4x4-pixel mosaic
-    // of unit fills (each unit fill takes the fringe path's exact
-    // center, `fx*fy == 1`, through the same `blendPixel`).
+    // an integer rect on a dirty canvas must equal the pre-#285
+    // float loop (`fillRectRef` below) over the same geometry.
     const cw: usize = 7;
     const ch: usize = 5;
     var whole: [7 * 5 * 4]u8 = undefined;
-    var mosaic: [7 * 5 * 4]u8 = undefined;
-    for ([_]*[7 * 5 * 4]u8{ &whole, &mosaic }) |buf| {
+    var refbuf: [7 * 5 * 4]u8 = undefined;
+    for ([_]*[7 * 5 * 4]u8{ &whole, &refbuf }) |buf| {
         var i: usize = 0;
         while (i < buf.len) : (i += 1) buf[i] = @intCast((i * 31 + 7) & 0xFF);
         // Alpha must survive untouched (canvas stays opaque).
@@ -616,14 +612,62 @@ test "opaque fast paths store byte-identical pixels (issue #285)" {
     }
     const col: Color = .{ .r = 0.9, .g = 0.1, .b = 0.4, .a = 1 };
     fillRect(&whole, cw, ch, 1, 1, 4, 3, col);
-    var y: usize = 1;
-    while (y < 4) : (y += 1) {
-        var x: usize = 1;
-        while (x < 5) : (x += 1) {
-            fillRect(&mosaic, cw, ch, @floatFromInt(x), @floatFromInt(y), 1, 1, col);
+    fillRectRef(&refbuf, cw, ch, 1, 1, 4, 3, col);
+    try std.testing.expectEqualSlices(u8, &refbuf, &whole);
+}
+
+/// Pre-#285 `fillRect` body: pure float fringe loop, no integer fast
+/// path. Test-only reference for the equivalence test above; the
+/// shipped path never calls it.
+fn fillRectRef(pixels: []u8, cw: usize, ch: usize, x: f64, y: f64, w: f64, h: f64, col: Color) void {
+    if (!(w > 0) or !(h > 0) or col.a <= 0) return;
+    const cwf: f64 = @floatFromInt(cw);
+    const chf: f64 = @floatFromInt(ch);
+    const x0 = @max(0, @min(cwf, x));
+    const y0 = @max(0, @min(chf, y));
+    const x1 = @max(0, @min(cwf, x + w));
+    const y1 = @max(0, @min(chf, y + h));
+    if (x1 <= x0 or y1 <= y0) return;
+    const ix0: usize = @min(cw, @as(usize, @intFromFloat(@floor(x0))));
+    var iy0: usize = @min(ch, @as(usize, @intFromFloat(@floor(y0))));
+    const ix1: usize = @min(cw, @as(usize, @intFromFloat(@ceil(x1))));
+    const iy1: usize = @min(ch, @as(usize, @intFromFloat(@ceil(y1))));
+    while (iy0 < iy1) : (iy0 += 1) {
+        const lo_y = @max(y0, @as(f64, @floatFromInt(iy0)));
+        const hi_y = @min(y1, @as(f64, @floatFromInt(iy0 + 1)));
+        const fy = hi_y - lo_y;
+        if (fy <= 0) continue;
+        var ix = ix0;
+        while (ix < ix1) : (ix += 1) {
+            const lo_x = @max(x0, @as(f64, @floatFromInt(ix)));
+            const hi_x = @min(x1, @as(f64, @floatFromInt(ix + 1)));
+            const fx = hi_x - lo_x;
+            if (fx <= 0) continue;
+            const prow = ch - 1 - iy0;
+            blendPixel(pixels[prow * cw * 4 + ix * 4 ..][0..4], col, col.a * fx * fy);
         }
     }
-    try std.testing.expectEqualSlices(u8, &mosaic, &whole);
+}
+
+test "fillLines near-opaque paint blends, never stores (issue #285)" {
+    // A translucent `col.a < 1` at full coverage must run the float
+    // blend, not the opaque store: gray 0.5 at a=0.999 over black
+    // blends to 127, storing would print 128.
+    const cw: usize = 11;
+    const ch: usize = 11;
+    var px: [11 * 11 * 4]u8 = .{0} ** (11 * 11 * 4);
+    var i: usize = 3;
+    while (i < px.len) : (i += 4) px[i] = 255;
+    var cov: [11]f32 = undefined;
+    const tri = [_]Line{
+        .{ .x0 = 0, .y0 = 0, .x1 = 11, .y1 = 0 },
+        .{ .x0 = 11, .y0 = 0, .x1 = 5, .y1 = 11 },
+        .{ .x0 = 5, .y0 = 11, .x1 = 0, .y1 = 0 },
+    };
+    const translucent: Color = .{ .r = 0.5, .g = 0.5, .b = 0.5, .a = 0.999 };
+    fillLines(&px, cw, ch, &tri, translucent, &cov);
+    // Centroid pixel (5,3) is fully covered: must hold the blend.
+    try std.testing.expectEqual([4]u8{ 127, 127, 127, 255 }, px[(ch - 1 - 3) * cw * 4 + 5 * 4 ..][0..4].*);
 }
 
 test "strokeLine diagonals match the unclipped path (issue #285)" {
