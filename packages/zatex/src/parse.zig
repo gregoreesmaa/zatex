@@ -807,6 +807,12 @@ pub const ParseCtx = struct {
     /// Seeded preset count: scopes restore down to (never below)
     /// this base, so presets survive every group close.
     preset_base: u8 = 0,
+    /// An active-character preset is seeded (issue #290): char defs
+    /// come only from `LayoutOptions.macros` single-codepoint names
+    /// (`seedPresets` is the sole `is_char` installer), so when this
+    /// is clear no char def can exist and `findCharDef` returns null
+    /// on one branch instead of scanning the table per character.
+    has_char_defs: bool = false,
     /// Tag placement (`leqno`) and flush-left display (`fleqn`)
     /// flow to the layout core through the context (set by
     /// `parseWith`; the core reads them off `LayCtx.pctx`).
@@ -1014,8 +1020,13 @@ pub const ParseCtx = struct {
 
     /// Innermost active-character definition for `cp` (`name` holds
     /// the codepoint's UTF-8 bytes). Null when no char preset is
-    /// seeded, so plain math pays one branch, not a table scan.
+    /// seeded, so plain math pays one branch, not a table scan
+    /// (issue #290: `has_char_defs` is set only by `seedPresets`,
+    /// the sole `is_char` installer, and char presets are global so
+    /// they survive every scope close — the flag stays valid for the
+    /// whole parse).
     fn findCharDef(self: *ParseCtx, cp: u21) ?*Def {
+        if (!self.has_char_defs) return null;
         // Codepoints decode once at seed time (`char_cp`), so the
         // hot math path pays one integer compare per char def.
         var i: u8 = self.ndefs;
@@ -1500,6 +1511,9 @@ fn seedPresets(self: *ParseCtx, presets: []const contract.PresetMacro) Error!voi
         }
         const name_cp = singleCp(name);
         const is_char = name_cp != null and !backslashed;
+        // Char presets seed the active-character namespace (the sole
+        // `is_char` installer — see `has_char_defs`).
+        if (is_char) self.has_char_defs = true;
         // High-byte names must be exactly one codepoint (anything
         // else can never match lexer output); ASCII names are
         // control words.
@@ -4412,6 +4426,9 @@ fn applyTextAccent(ctx: *ParseCtx, pos: u32, acc: u21, arg: Idx) Error!Idx {
 }
 
 pub fn precompose(acc: u21, base: u21) ?u21 {
+    // (Issue #290 measured per-accent row dispatch here and rejected
+    // it: +~200 bytes against the `size_gate.sh` ceiling for a
+    // text-accent-only lookup — the flat scan stays.)
     const Key = struct { acc: u21, base: u21, cp: u21 };
     const table: []const Key = &.{
         .{ .acc = 0x0301, .base = 'a', .cp = 0x00E1 }, .{ .acc = 0x0301, .base = 'e', .cp = 0x00E9 },
@@ -5782,6 +5799,9 @@ const named_colors = [_]struct { name: []const u8, rgb: u32 }{
 /// (case-insensitive). Other bare words are valid per KaTeX (the
 /// browser resolves them) but have no native value here — null means
 /// the host renders its ambient paint.
+/// (Issue #290 measured a first-byte dispatch here and rejected it:
+/// +724 bytes against the `size_gate.sh` ceiling for a per-node
+/// one-shot lookup — the 20-name scan stays.)
 pub fn resolveColorSpec(pc: *const ParseCtx, r: Range) ?u32 {
     const toks = pc.toks[r.start .. r.start + r.len];
     if (toks.len == 0) return null;
@@ -8468,6 +8488,103 @@ test "color specs follow the KaTeX validity rule" {
     var ctx = ParseCtx.init("\\color{red green}{x}");
     _ = parse(&ctx, false) catch {};
     try std.testing.expectEqual(@as(u32, 6), ctx.err_pos);
+}
+
+test "named colors resolve case-insensitively to opaque paint (issue #290)" {
+    // Exhaustive over the keyword table: the first-byte dispatch must
+    // return exactly the table value (lower, upper, and mixed case),
+    // and near-misses/unknown words stay ambient (null).
+    const cases = [_]struct { name: []const u8, rgb: u32 }{
+        .{ .name = "black", .rgb = 0x000000 }, .{ .name = "silver", .rgb = 0xC0C0C0 },
+        .{ .name = "gray", .rgb = 0x808080 }, .{ .name = "grey", .rgb = 0x808080 },
+        .{ .name = "white", .rgb = 0xFFFFFF }, .{ .name = "maroon", .rgb = 0x800000 },
+        .{ .name = "red", .rgb = 0xFF0000 }, .{ .name = "purple", .rgb = 0x800080 },
+        .{ .name = "fuchsia", .rgb = 0xFF00FF }, .{ .name = "magenta", .rgb = 0xFF00FF },
+        .{ .name = "green", .rgb = 0x008000 }, .{ .name = "lime", .rgb = 0x00FF00 },
+        .{ .name = "olive", .rgb = 0x808000 }, .{ .name = "yellow", .rgb = 0xFFFF00 },
+        .{ .name = "navy", .rgb = 0x000080 }, .{ .name = "blue", .rgb = 0x0000FF },
+        .{ .name = "teal", .rgb = 0x008080 }, .{ .name = "aqua", .rgb = 0x00FFFF },
+        .{ .name = "cyan", .rgb = 0x00FFFF }, .{ .name = "orange", .rgb = 0xFFA500 },
+    };
+    var spell: [16]u8 = undefined;
+    for (cases) |c| {
+        // Lower, upper, and capitalized folds of the same word.
+        for ([_]u8{ 0, 1, 2 }) |fold| {
+            for (c.name, 0..) |ch, i| {
+                spell[i] = switch (fold) {
+                    0 => ch,
+                    1 => std.ascii.toUpper(ch),
+                    else => if (i == 0) std.ascii.toUpper(ch) else ch,
+                };
+            }
+            const word = spell[0..c.name.len];
+            var src: [32]u8 = undefined;
+            const tex = try std.fmt.bufPrint(&src, "\\color{{{s}}}{{x}}", .{word});
+            var ctx = ParseCtx.init(tex);
+            const root = try parse(&ctx, false);
+            const kids = kidsOf(&ctx, nodeAt(&ctx, root).group);
+            const spec = nodeAt(&ctx, kids[0]).color.spec;
+            try std.testing.expectEqual(@as(?u32, (c.rgb << 8) | 0xFF), resolveColorSpec(&ctx, spec));
+        }
+    }
+    for ([_][]const u8{ "redd", "blu", "gren", "notacolor", "reddish", "orang" }) |word| {
+        var src: [32]u8 = undefined;
+        const tex = try std.fmt.bufPrint(&src, "\\color{{{s}}}{{x}}", .{word});
+        var ctx = ParseCtx.init(tex);
+        const root = try parse(&ctx, false);
+        const kids = kidsOf(&ctx, nodeAt(&ctx, root).group);
+        const spec = nodeAt(&ctx, kids[0]).color.spec;
+        try std.testing.expectEqual(@as(?u32, null), resolveColorSpec(&ctx, spec));
+    }
+}
+
+test "char-def early-out flag tracks preset seeding (issue #290)" {
+    // No presets: the flag is clear, so plain math pays one branch.
+    var plain = ParseCtx.init("x+y");
+    _ = try parse(&plain, false);
+    try std.testing.expect(!plain.has_char_defs);
+    // A single-codepoint preset seeds the active-character namespace.
+    var seeded = ParseCtx.init("~");
+    _ = try parseWith(&seeded, .{ .macros = &.{.{ .name = "~", .body = "X" }} });
+    try std.testing.expect(seeded.has_char_defs);
+    // A control-word preset does not set it.
+    var words = ParseCtx.init("\\foo");
+    _ = try parseWith(&words, .{ .macros = &.{.{ .name = "foo", .body = "X" }} });
+    try std.testing.expect(!words.has_char_defs);
+}
+
+test "accent tables cover every entry (issue #290)" {
+    // mathTextAccentCp: all 12 control chars map, others miss.
+    // (Indexed dispatch was measured here and rejected: +~240 bytes
+    // against the `size_gate.sh` ceiling — the scan stays, pinned by
+    // this test.)
+    const accents = [_]struct { c: u8, cp: u21 }{
+        .{ .c = '\'', .cp = 0x02CA }, .{ .c = '`', .cp = 0x02CB },
+        .{ .c = '^', .cp = 0x02C6 }, .{ .c = '"', .cp = 0x00A8 },
+        .{ .c = '~', .cp = 0x02DC }, .{ .c = '=', .cp = 0x02C9 },
+        .{ .c = '.', .cp = 0x02D9 }, .{ .c = 'u', .cp = 0x02D8 },
+        .{ .c = 'v', .cp = 0x02C7 }, .{ .c = 'H', .cp = 0x02DD },
+        .{ .c = 'c', .cp = 0x00B8 }, .{ .c = 'r', .cp = 0x02DA },
+    };
+    for (accents) |a| try std.testing.expectEqual(@as(?u21, a.cp), mathTextAccentCp(a.c));
+    for ([_]u8{ 't', 'd', 'b', 'x', ' ', 'a' }) |c| try std.testing.expect(mathTextAccentCp(c) == null);
+    // precompose: spot-check each accent row plus misses.
+    try std.testing.expectEqual(@as(?u21, 0x00E1), precompose(0x0301, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x00E0), precompose(0x0300, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x00E2), precompose(0x0302, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x00E4), precompose(0x0308, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x00E3), precompose(0x0303, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x00E5), precompose(0x030A, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x00E7), precompose(0x0327, 'c'));
+    try std.testing.expectEqual(@as(?u21, 0x010D), precompose(0x030C, 'c'));
+    try std.testing.expectEqual(@as(?u21, 0x0103), precompose(0x0306, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x0101), precompose(0x0304, 'a'));
+    try std.testing.expectEqual(@as(?u21, 0x017C), precompose(0x0307, 'z'));
+    try std.testing.expectEqual(@as(?u21, 0x0151), precompose(0x030B, 'o'));
+    try std.testing.expectEqual(@as(?u21, 0x1EA0), precompose(0x0323, 'a'));
+    try std.testing.expect(precompose(0x0301, 'z') == null);
+    try std.testing.expect(precompose(0x0300, 'z') == null);
+    try std.testing.expect(precompose(0xFFFF, 'a') == null);
 }
 
 
