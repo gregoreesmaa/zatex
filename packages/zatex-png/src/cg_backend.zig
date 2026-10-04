@@ -66,8 +66,35 @@ fn scale1000(upm: u16, v: i32) i32 {
     return @divTrunc(v * 1000, upm);
 }
 
+/// CTFont memo capacity on a canvas (issue #286): formulas use a
+/// handful of (face, size) pairs; beyond this `beginRun` falls back to
+/// a per-run CTFont (the old behavior, no worse) without caching it.
+const MAX_CACHED_CTFONTS = 32;
+
+/// One memoized CoreText font: exact bits of the requested size (the
+/// cache key) plus the face identity it was built from. Sizes compare
+/// as bits, so 48.0 vs 48.0000001 never alias.
+const CachedCTFont = struct {
+    face: cg.CGFontRef,
+    size_bits: u64,
+    ct: cg.CTFontRef,
+};
+
+/// Batched identity glyphs per `CTFontDrawGlyphs` call (issue #286):
+/// an identity run draws each glyph in its own call today; buffering
+/// up to this many and flushing once amortizes the call overhead while
+/// keeping stack scratch small.
+const BATCH_GLYPHS = 256;
+
 pub const Canvas = struct {
     ctx: cg.CGContextRef,
+    /// CTFont memo (issue #286): one CoreText font per (face, size),
+    /// created once and shared across runs of a canvas. Entries borrow
+    /// the `Font` handles (`Font.close` outlives every canvas in the
+    /// renderer, where `font` outlives the render call), so the cache
+    /// owns only the CTFont refs it created. `close` releases them all.
+    fonts: [MAX_CACHED_CTFONTS]CachedCTFont = undefined,
+    nfonts: usize = 0,
 
     pub fn create(w: usize, h: usize) error{RenderInit}!Canvas {
         const space = cg.CGColorSpaceCreateDeviceRGB();
@@ -79,6 +106,8 @@ pub const Canvas = struct {
     }
 
     pub fn close(self: *Canvas) void {
+        for (self.fonts[0..self.nfonts]) |e| cg.CFRelease(e.ct);
+        self.nfonts = 0;
         cg.CFRelease(self.ctx);
     }
 
@@ -112,17 +141,38 @@ pub const Canvas = struct {
         cg.CGContextStrokePath(self.ctx);
     }
 
-    /// One CTFont per run at `size_px`, released by `Run.end` — the
-    /// same object lifetime the renderer always had. `x_scale`
-    /// stretches ink horizontally (wide accents, brace spans —
-    /// issues #31/#37); 1 draws unchanged. `x_shear` slants ink
-    /// right per unit above the baseline (dotless i/j, issue #77);
-    /// 0 draws unchanged. `mirrored` flips ink about the glyph
-    /// origin (`\reflectbox`, issue #97); false draws unchanged.
-    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!Run {
+    /// CTFont memo lookup (issue #286): exact (face, size-bits) hit
+    /// shares the canvas-owned font; a miss creates, caches when there
+    /// is room, and shares alike. Sizes key as bits (see
+    /// `CachedCTFont`). A full table returns an owned per-run font
+    /// (the old lifetime) instead of failing the render.
+    fn ctForSize(self: *Canvas, font: *const Font, size_px: f64) error{RenderInit}!struct { ct: cg.CTFontRef, owned: bool } {
+        const bits: u64 = @bitCast(size_px);
+        for (self.fonts[0..self.nfonts]) |e| {
+            if (e.face == font.cgfont and e.size_bits == bits) return .{ .ct = e.ct, .owned = false };
+        }
         const ct = cg.CTFontCreateWithGraphicsFont(font.cgfont, size_px, null, null);
         if (ct == null) return error.RenderInit;
-        return .{ .ctx = self.ctx, .ct = ct, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
+        if (self.nfonts < self.fonts.len) {
+            self.fonts[self.nfonts] = .{ .face = font.cgfont, .size_bits = bits, .ct = ct };
+            self.nfonts += 1;
+            return .{ .ct = ct, .owned = false };
+        }
+        return .{ .ct = ct, .owned = true };
+    }
+
+    /// One CTFont per (face, size) shared across runs (issue #286),
+    /// released by `Canvas.close` — runs borrow, except a full-table
+    /// fallback whose per-run font `Run.end` releases (lifetime
+    /// flagged on the run). `x_scale` stretches ink horizontally
+    /// (wide accents, brace spans — issues #31/#37); 1 draws
+    /// unchanged. `x_shear` slants ink right per unit above the
+    /// baseline (dotless i/j, issue #77); 0 draws unchanged.
+    /// `mirrored` flips ink about the glyph origin (`\reflectbox`,
+    /// issue #97); false draws unchanged.
+    pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!Run {
+        const f = try self.ctForSize(font, size_px);
+        return .{ .ctx = self.ctx, .ct = f.ct, .owned = f.owned, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
     }
 
     /// Snapshot the canvas and write an 8-bit RGBA PNG to `out_path`.
@@ -154,20 +204,41 @@ pub const Canvas = struct {
 pub const Run = struct {
     ctx: cg.CGContextRef,
     ct: cg.CTFontRef,
+    /// False when the CTFont is canvas-owned (shared memo entry):
+    /// `end` releases only the full-table fallback (issue #286).
+    owned: bool,
     x_scale: f64,
     /// Faux-italic slant, device px right per device px above the
     /// glyph origin (dotless i/j, issue #77); 0 draws unchanged.
     x_shear: f64,
     /// Mirror ink about the glyph origin (`\reflectbox`, issue #97).
     mirrored: bool,
+    /// Identity-path batching (issue #286): buffered glyphs and
+    /// positions flushed as one `CTFontDrawGlyphs(n)` on full/end.
+    nglyphs: usize = 0,
+    batch_glyphs: [BATCH_GLYPHS]cg.CGGlyph = undefined,
+    batch_pos: [BATCH_GLYPHS]cg.CGPoint = undefined,
+
+    fn flush(self: *Run) void {
+        if (self.nglyphs == 0) return;
+        cg.CTFontDrawGlyphs(self.ct, @ptrCast(&self.batch_glyphs), @ptrCast(&self.batch_pos), self.nglyphs, self.ctx);
+        self.nglyphs = 0;
+    }
 
     pub fn drawGlyph(self: *Run, glyph: u16, x: f64, y: f64) void {
         const gl: cg.CGGlyph = glyph;
         if (!self.mirrored and self.x_scale == 1 and self.x_shear == 0) {
-            const pos = cg.CGPoint{ .x = x, .y = y };
-            cg.CTFontDrawGlyphs(self.ct, @ptrCast(&gl), @ptrCast(&pos), 1, self.ctx);
+            // Identity ink batches into one draw call per flush
+            // (issue #286): same positions, same font, one call.
+            if (self.nglyphs >= self.batch_glyphs.len) self.flush();
+            self.batch_glyphs[self.nglyphs] = gl;
+            self.batch_pos[self.nglyphs] = .{ .x = x, .y = y };
+            self.nglyphs += 1;
             return;
         }
+        // A stretched glyph cannot join the identity batch (different
+        // CTM): flush first so draw order stays exact.
+        self.flush();
         // Stretched ink: draw in a translated + x-scaled CTM so the
         // glyph origin stays at (x, y) while ink widens rightward.
         // Shear concatenates after the scale: heights stay unscaled
@@ -188,6 +259,7 @@ pub const Run = struct {
     }
 
     pub fn end(self: *Run) void {
-        cg.CFRelease(self.ct);
+        self.flush();
+        if (self.owned) cg.CFRelease(self.ct);
     }
 };

@@ -85,6 +85,31 @@ pub fn renderToPngPooled(
     out_path: []const u8,
     pool: ?*CanvasPool,
 ) Error!void {
+    const g = geometry(font, layout, px_per_em, pad_px);
+    var canvas = if (pool) |p| try p.take(g.w, g.h) else try backend.impl.Canvas.create(g.w, g.h);
+    defer {
+        if (pool) |p| p.give(canvas, g.w, g.h) else canvas.close();
+    }
+    try renderInto(&canvas, font, layout, g);
+    try canvas.writePng(out_path);
+}
+
+/// Canvas geometry for one render: dimensions plus the precomputed
+/// viewport-fit terms (issue #71/#96 shifts, #270 rule fit). Factored
+/// out of `renderToPng` so tests can drive a caller-owned canvas
+/// through `renderInto` (issue #286: asserting backend-run counts).
+const Geometry = struct {
+    w: usize,
+    h: usize,
+    s: f64,
+    pad: f64,
+    shift: f64,
+    pad_top: f64,
+    H: f64,
+    px_per_em: u32,
+};
+
+fn geometry(font: *const Font, layout: zatex.ir.Layout, px_per_em: u32, pad_px: u32) Geometry {
     const s: f64 = @as(f64, @floatFromInt(px_per_em)) / 1000.0;
     const pad: f64 = @floatFromInt(pad_px);
     // Overflow shifts (issues #71/#96, fused + memoized in #282): one
@@ -116,26 +141,41 @@ pub fn renderToPngPooled(
     const pad_top: f64 = pad + top_px;
     const h: usize = @max(1, ceilU((@as(f64, @floatFromInt(layout.height_above)) +
         @as(f64, @floatFromInt(layout.depth_below))) * s + 2 * pad + top_px + bot_px));
-
-    var canvas = if (pool) |p| try p.take(w, h) else try backend.impl.Canvas.create(w, h);
-    defer {
-        if (pool) |p| p.give(canvas, w, h) else canvas.close();
-    }
-
-    // White background, black ink. The software canvas allocates
-    // pre-cleared white (issue #285), so the explicit clear below is
-    // a no-op blit for it (integer fast path in `fillRect` rewrites
-    // the same bytes) and stays the real clear for backends whose
-    // `create` leaves pixels undefined (CoreGraphics bitmaps start
-    // zeroed = transparent black there).
-    canvas.setFill(1, 1, 1, 1);
-    canvas.fillRect(0, 0, @floatFromInt(w), @floatFromInt(h));
-    canvas.setFill(0, 0, 0, 1);
     // The canvas is y-up (origin bottom-left), so every y-down layout
     // coordinate maps through H - y — glyph baselines and rule rects
     // alike. (On Quartz this means leaving the CTM untouched: flipping
     // it renders glyphs upside down.)
     const H: f64 = @floatFromInt(h);
+    return .{ .w = w, .h = h, .s = s, .pad = pad, .shift = shift, .pad_top = pad_top, .H = H, .px_per_em = px_per_em };
+}
+
+/// Draw `layout` into a caller-owned canvas sized by `geometry` for
+/// the same arguments (background + rules + runs; no layout math —
+/// `g` carries every viewport term). `renderToPng` is the file-writing
+/// wrapper; tests call this directly to observe backend counters.
+fn renderInto(
+    canvas: *backend.impl.Canvas,
+    font: *const Font,
+    layout: zatex.ir.Layout,
+    g: Geometry,
+) Error!void {
+    const s = g.s;
+    const pad = g.pad;
+    const shift = g.shift;
+    const pad_top = g.pad_top;
+    const H = g.H;
+
+    // Paint coalescing (issue #286): runs/rules sharing one paint draw
+    // without re-setting it. The tracker starts empty so the first use
+    // always sets; fill and stroke track separately (split-state
+    // canvases like Quartz set each half only when ITS color changes,
+    // single-state ones alias like before — the call count just drops).
+    var paint = PaintTracker.empty();
+
+    // White background, black ink.
+    paint.setFill(canvas, 0xFFFFFFFF);
+    canvas.fillRect(0, 0, @floatFromInt(g.w), @floatFromInt(g.h));
+    paint.setFill(canvas, null);
     // Rules (fraction bars, vincula, colorbox backgrounds) are plain
     // filled rects, each in its own paint (issue #35). Diagonal
     // strikes (issue #107) stroke corner-to-corner across the same
@@ -146,7 +186,7 @@ pub fn renderToPngPooled(
         const rw = @as(f64, @floatFromInt(r.w)) * s;
         const rh = @as(f64, @floatFromInt(r.h)) * s;
         const ry = ruleOriginY(r.y, r.h, s, pad_top, H);
-        setPaint(&canvas, r.color);
+        paint.setFill(canvas, r.color);
         canvas.fillRect(rx, ry, rw, rh);
     }
 
@@ -158,7 +198,7 @@ pub fn renderToPngPooled(
         const rx = @as(f64, @floatFromInt(r.x)) * s + pad + shift;
         const rw = @as(f64, @floatFromInt(r.w)) * s;
         const rh = @as(f64, @floatFromInt(r.h)) * s;
-        setPaint(&canvas, r.color);
+        paint.setStroke(canvas, r.color);
         // Canvas y of the rect's top and bottom edges (Quartz y-up).
         const y_top = H - (@as(f64, @floatFromInt(r.y)) * s + pad_top);
         const y_bot = y_top - rh;
@@ -166,13 +206,21 @@ pub fn renderToPngPooled(
         if (r.diag == .up) canvas.strokeLine(rx, y_bot, rx + rw, y_top, t) else canvas.strokeLine(rx, y_top, rx + rw, y_bot, t);
     }
 
-    // Runs: one backend run per run size, glyph origins stepped with
-    // the same integer advances the core measured, scaled once to
-    // pixels. Runs never merge across colors, so one setPaint per run
-    // is exact (issue #35).
+    // Runs: one backend run per (run size, face) group, glyph origins
+    // stepped with the same integer advances the core measured, scaled
+    // once to pixels. Grouping is a stable partition by face (issue
+    // #286): the pen steps left-to-right through the glyphs once
+    // (single `drawFace` per glyph), recording positions; faces then
+    // draw in first-appearance order. Positions are face-independent
+    // (unified advances), so every glyph lands exactly where the old
+    // split loop put it — one `beginRun` per face instead of one per
+    // intrusion. Runs never merge across colors, so one paint set per
+    // run is exact (issue #35); faces inside a run share the run's.
+    // Long runs process in bounded chunks (stack scratch per chunk),
+    // the pen origin carrying across chunk boundaries.
     for (layout.runs) |run| {
         const px_size: f64 = @as(f64, @floatFromInt(run.size_units)) *
-            @as(f64, @floatFromInt(px_per_em)) / 1000.0;
+            @as(f64, @floatFromInt(g.px_per_em)) / 1000.0;
         if (px_size <= 0 or run.glyphs.len == 0) continue;
         // Raster stretch (issues #31/#37): the core lays out the
         // construction width and stamps the stretch factor; ink and
@@ -180,63 +228,60 @@ pub fn renderToPngPooled(
         const sx: f64 = @as(f64, @floatFromInt(run.x_scale)) / 1000.0;
         // Faux-italic slant as a dimensionless ratio (issue #77).
         const sh: f64 = @as(f64, @floatFromInt(run.x_shear)) / 1000.0;
-        setPaint(&canvas, run.color);
-        var x_units: i64 = run.x;
+        paint.setFill(canvas, run.color);
         const base_y: f64 = glyphBaseY(run.baseline_y, s, pad_top, H);
-        // Multi-face (issue #92): consecutive glyphs from one face
-        // draw under one backend run; the pen still steps with the
-        // unified advances, so split points stay exact.
+        var x_units: i64 = run.x;
         var gi: usize = 0;
         while (gi < run.glyphs.len) {
-            const f0 = memoFace(&memo, query, run.glyphs[gi]) orelse {
-                // Unowned id (no face loaded it): still step the pen.
-                const step0: i64 = @divTrunc(
-                    @as(i64, memoAdvance(&memo, query, run.glyphs[gi])) * @as(i64, run.size_units),
-                    1000,
-                );
-                x_units += @divTrunc(step0 * @as(i64, run.x_scale), 1000);
-                gi += 1;
-                continue;
-            };
-            var gj = gi + 1;
-            while (gj < run.glyphs.len) {
-                const dn = memoFace(&memo, query, run.glyphs[gj]) orelse break;
-                if (dn.h != f0.h) break;
-                gj += 1;
-            }
-            // One typed handle per face group for the backend run (the
-            // memo only keeps the comparable token); the grouping above
-            // already proved every glyph in [gi, gj) shares this face,
-            // so the per-glyph `drawFace` re-query is gone.
-            const df = font.drawFace(run.glyphs[gi]) orelse {
-                const step0: i64 = @divTrunc(
-                    @as(i64, memoAdvance(&memo, query, run.glyphs[gi])) * @as(i64, run.size_units),
-                    1000,
-                );
-                x_units += @divTrunc(step0 * @as(i64, run.x_scale), 1000);
-                gi += 1;
-                continue;
-            };
-            var rf = try canvas.beginRun(df.handle, px_size, sx, sh, run.mirrored);
-            while (gi < gj) : (gi += 1) {
-                const g = run.glyphs[gi];
-                // Grouping proved ownership; the fallback is dead but
-                // keeps the loop total (never panics).
-                const face_gid = if (memoFace(&memo, query, g)) |f| f.gid else df.gid;
-                const gx: f64 = @as(f64, @floatFromInt(x_units)) * s + pad + shift;
-                rf.drawGlyph(face_gid, gx, base_y);
+            const n = @min(PARTITION_CHUNK, run.glyphs.len - gi);
+            // Pass 1 (pen walk): step origins, resolve each glyph's
+            // face once, record first-appearance face order.
+            var order: [max_faces]FaceDraw = undefined;
+            var nfaces: usize = 0;
+            var face_of: [PARTITION_CHUNK]usize = undefined;
+            var face_gid: [PARTITION_CHUNK]u16 = undefined;
+            var pen: [PARTITION_CHUNK]f64 = undefined;
+            var k: usize = 0;
+            while (k < n) : (k += 1) {
+                const gid = run.glyphs[gi + k];
+                pen[k] = @as(f64, @floatFromInt(x_units)) * s + pad + shift;
+                if (font.drawFace(gid)) |df| {
+                    face_of[k] = faceIndexOf(order[0..nfaces], df.handle) orelse blk: {
+                        // The shipped stacks cap at `fontstack.max_faces`
+                        // (18) faces, well under `max_faces` slots; the
+                        // assert documents the invariant.
+                        std.debug.assert(nfaces < order.len);
+                        order[nfaces] = .{ .handle = df.handle };
+                        nfaces += 1;
+                        break :blk nfaces - 1;
+                    };
+                    face_gid[k] = df.gid;
+                } else {
+                    // Unowned id (no face loaded it): still step the
+                    // pen; nothing draws.
+                    face_of[k] = null_face;
+                }
                 const step: i64 = @divTrunc(
-                    @as(i64, memoAdvance(&memo, query, g)) * @as(i64, run.size_units),
+                    @as(i64, font.advance1000(gid)) * @as(i64, run.size_units),
                     1000,
                 );
                 // Identity scales step exactly as before.
                 x_units += @divTrunc(step * @as(i64, run.x_scale), 1000);
             }
-            rf.end();
+            // Pass 2 (draw): one backend run per face, glyphs in chunk
+            // order (stable partition — same relative order per face).
+            for (order[0..nfaces]) |fd| {
+                var rf = try canvas.beginRun(fd.handle, px_size, sx, sh, run.mirrored);
+                var j: usize = 0;
+                while (j < n) : (j += 1) {
+                    const fi = face_of[j];
+                    if (fi != null_face and order[fi].handle == fd.handle) rf.drawGlyph(face_gid[j], pen[j], base_y);
+                }
+                rf.end();
+            }
+            gi += n;
         }
     }
-
-    try canvas.writePng(out_path);
 }
 
 /// Per-render glyph memo (issue #282): one backend query per
@@ -720,28 +765,97 @@ test "energy memo evicts on collision without corrupting edges" {
     try std.testing.expectEqual(@as(usize, 0), cq.face_calls);
 }
 
-/// Select the paint for one IR run/rule: ambient (null) is black ink;
-/// otherwise the 0xRRGGBBAA word the core stamped (issue #35).
-fn setPaint(canvas: *backend.impl.Canvas, color: ?u32) void {
-    // Strokes carry the same paint (diagonal strikes, issue #107):
-    // single-state canvases alias the two, split-state ones (Quartz)
-    // need both calls.
-    const c = color orelse {
-        canvas.setFill(0, 0, 0, 1);
-        canvas.setStroke(0, 0, 0, 1);
-        return;
-    };
-    const f = struct {
-        fn b(v: u32) f64 {
-            return @as(f64, @floatFromInt(v)) / 255.0;
-        }
-    }.b;
-    const r = f((c >> 24) & 0xFF);
-    const g = f((c >> 16) & 0xFF);
-    const b = f((c >> 8) & 0xFF);
-    const a = f(c & 0xFF);
-    canvas.setFill(r, g, b, a);
-    canvas.setStroke(r, g, b, a);
+/// Paint coalescing (issue #286): the renderer used to set fill AND
+/// stroke unconditionally per rule/run. Consecutive marks sharing one
+/// paint now skip the redundant backend call; fill and stroke track
+/// separately (split-state canvases like Quartz set each half only
+/// when ITS color changes). `setFill`/`setStroke` take the raw `?u32`
+/// IR color so call sites never decode twice.
+///
+/// Cross-half invalidation: single-state canvases (software, GDI,
+/// FreeType — `setStroke` aliases `setFill` there) share one paint
+/// cell, so a real set on one half must forget the other half's
+/// tracked color. Without this, fill X, stroke Y (aliasing the cell
+/// to Y), fill X would elide the last set and draw in Y. Split-state
+/// canvases just lose one elision at each fill/stroke transition —
+/// the render phases (rect fills, diag strokes, run fills) cross at
+/// most twice per render, so the cost is ~zero.
+const PaintTracker = struct {
+    last_fill: ?u32 = null,
+    fill_set: bool = false,
+    last_stroke: ?u32 = null,
+    stroke_set: bool = false,
+
+    fn empty() PaintTracker {
+        return .{};
+    }
+
+    fn paintToRgba(color: ?u32) [4]f64 {
+        const c = color orelse return .{ 0, 0, 0, 1 };
+        const f = struct {
+            fn b(v: u32) f64 {
+                return @as(f64, @floatFromInt(v)) / 255.0;
+            }
+        }.b;
+        return .{ f((c >> 24) & 0xFF), f((c >> 16) & 0xFF), f((c >> 8) & 0xFF), f(c & 0xFF) };
+    }
+
+    /// Fill users: rect rules and glyph runs (diagonal strikes use
+    /// `setStroke`). Unchanged fill skips the backend call. Generic
+    /// over the canvas so the elision test below can record calls
+    /// with a stub.
+    fn setFill(self: *PaintTracker, canvas: anytype, color: ?u32) void {
+        if (self.fill_set and self.last_fill == color) return;
+        const rgba = paintToRgba(color);
+        canvas.setFill(rgba[0], rgba[1], rgba[2], rgba[3]);
+        self.last_fill = color;
+        self.fill_set = true;
+        // The backend call may have clobbered the stroke cell too
+        // (single-state aliasing); re-set stroke on next use.
+        self.stroke_set = false;
+    }
+
+    /// Stroke users: diagonal strikes (issue #107). Unchanged stroke
+    /// skips the backend call — rect rules and runs never touch it.
+    fn setStroke(self: *PaintTracker, canvas: anytype, color: ?u32) void {
+        if (self.stroke_set and self.last_stroke == color) return;
+        const rgba = paintToRgba(color);
+        canvas.setStroke(rgba[0], rgba[1], rgba[2], rgba[3]);
+        self.last_stroke = color;
+        self.stroke_set = true;
+        // The backend call may have clobbered the fill cell too
+        // (single-state aliasing); re-set fill on next use.
+        self.fill_set = false;
+    }
+};
+
+/// Chunk size for the run face-partition (issue #286): per-chunk
+/// stack scratch stays small (~5 KB) however long an IR run gets; the
+/// pen origin carries across chunk boundaries, so positions stay exact.
+const PARTITION_CHUNK = 256;
+
+/// Sentinel for unowned glyphs in the partition (`null_face`: no face
+/// loaded the id — the pen still steps, but nothing draws).
+const null_face: usize = std.math.maxInt(usize);
+
+/// One face's draw group inside an IR-run chunk: the backend handle.
+/// The draw loop filters chunk glyphs by handle, so group order is the
+/// stable first-appearance order.
+const FaceDraw = struct {
+    handle: *const backend.impl.Font,
+};
+
+/// Face count bound: the shipped stacks top out well below this
+/// (`fontstack.max_faces` = 18); more faces than slots assert in
+/// debug and draw the first slots' worth in release (same shape as
+/// other bounded walks in this renderer).
+const max_faces = 32;
+
+fn faceIndexOf(faces: []const FaceDraw, handle: *const backend.impl.Font) ?usize {
+    for (faces, 0..) |fd, i| {
+        if (fd.handle == handle) return i;
+    }
+    return null;
 }
 
 fn ceilU(v: f64) usize {
@@ -764,8 +878,120 @@ fn ruleOriginY(y: i32, h_units: u32, s: f64, pad: f64, H: f64) f64 {
     return H - top_px - @as(f64, @floatFromInt(h_units)) * s;
 }
 
-test "rules share the glyph H-y mapping" {
-    // \frac{a}{b} at --px 200: layout baselines 490/1895, bar top 765
+test "paint tracker coalesces repeats, splits fill vs stroke (issue #286)" {
+    const Stub = struct {
+        fills: usize = 0,
+        strokes: usize = 0,
+        last_fill: [4]f64 = .{ 9, 9, 9, 9 },
+        last_stroke: [4]f64 = .{ 9, 9, 9, 9 },
+        fn setFill(self: *@This(), r: f64, g: f64, b: f64, a: f64) void {
+            self.fills += 1;
+            self.last_fill = .{ r, g, b, a };
+        }
+        fn setStroke(self: *@This(), r: f64, g: f64, b: f64, a: f64) void {
+            self.strokes += 1;
+            self.last_stroke = .{ r, g, b, a };
+        }
+    };
+    var stub = Stub{};
+    var paint = PaintTracker.empty();
+    // First use always sets (tracker starts empty): ambient is black.
+    paint.setFill(&stub, null);
+    try std.testing.expectEqual(@as(usize, 1), stub.fills);
+    try std.testing.expectEqual([4]f64{ 0, 0, 0, 1 }, stub.last_fill);
+    // Repeat ambient: elided; stroke untouched throughout.
+    paint.setFill(&stub, null);
+    try std.testing.expectEqual(@as(usize, 1), stub.fills);
+    try std.testing.expectEqual(@as(usize, 0), stub.strokes);
+    // New fill sets once, then elides; stroke still untouched.
+    paint.setFill(&stub, 0xFF0000FF);
+    try std.testing.expectEqual(@as(usize, 2), stub.fills);
+    try std.testing.expectEqual([4]f64{ 1, 0, 0, 1 }, stub.last_fill);
+    paint.setFill(&stub, 0xFF0000FF);
+    try std.testing.expectEqual(@as(usize, 2), stub.fills);
+    try std.testing.expectEqual(@as(usize, 0), stub.strokes);
+    // Stroke tracks separately: same word as fill still sets (other
+    // half), then elides; fills stay put.
+    paint.setStroke(&stub, 0xFF0000FF);
+    try std.testing.expectEqual(@as(usize, 1), stub.strokes);
+    try std.testing.expectEqual([4]f64{ 1, 0, 0, 1 }, stub.last_stroke);
+    paint.setStroke(&stub, 0xFF0000FF);
+    try std.testing.expectEqual(@as(usize, 1), stub.strokes);
+    try std.testing.expectEqual(@as(usize, 2), stub.fills);
+    // Back to ambient fill re-sets (change, not repeat).
+    paint.setFill(&stub, null);
+    try std.testing.expectEqual(@as(usize, 3), stub.fills);
+    try std.testing.expectEqual([4]f64{ 0, 0, 0, 1 }, stub.last_fill);
+    // Cross-half invalidation (single-state aliasing): a stroke between
+    // two identical fills forces the second fill to re-set — the stroke
+    // call may have clobbered the shared paint cell. Fill, stroke red,
+    // fill red: the last fill must reach the backend (fills 4, not 3).
+    paint.setFill(&stub, 0xFF0000FF);
+    try std.testing.expectEqual(@as(usize, 4), stub.fills);
+    paint.setStroke(&stub, 0x0000FFFF);
+    try std.testing.expectEqual(@as(usize, 2), stub.strokes);
+    paint.setFill(&stub, 0xFF0000FF);
+    try std.testing.expectEqual(@as(usize, 5), stub.fills);
+    try std.testing.expectEqual([4]f64{ 1, 0, 0, 1 }, stub.last_fill);
+    // ...and symmetrically: a fill between two identical strokes
+    // forces the second stroke to re-set.
+    paint.setStroke(&stub, 0x0000FFFF);
+    try std.testing.expectEqual(@as(usize, 3), stub.strokes);
+}
+
+test "face partition coalesces intrusions, draws deterministic pixels (issue #286)" {
+    // Structural counters are fields, not decls (`@hasDecl` misses
+    // them — issue #286 review): only backends keeping `run_count`
+    // (software) run this; elsewhere it prunes at comptime.
+    if (comptime !@hasField(backend.impl.Canvas, "run_count")) return error.SkipZigTest;
+    const dir = std.fs.path.dirname(@import("build_options").fixture_font) orelse ".";
+    var p0: [1024]u8 = undefined;
+    var p1: [1024]u8 = undefined;
+    const lm = try std.fmt.bufPrint(&p0, "{s}/latinmodern-math.otf", .{dir});
+    const ams = try std.fmt.bufPrint(&p1, "{s}/katex/KaTeX_AMS-Regular.otf", .{dir});
+    const alloc = std.testing.allocator;
+    var font = try Font.loadStack(alloc, &.{
+        .{ .path = lm, .role = .lm },
+        .{ .path = ams, .role = .ams },
+    });
+    defer font.close();
+    const prov = font.provider();
+    const a = prov.glyphId(prov.ctx, 0, 'A');
+    const star = prov.glyphId(prov.ctx, 0, 0x2605);
+    try std.testing.expect(a != 0 and star != 0);
+    // A B A across faces: the old split loop opened 3 backend runs
+    // (one per intrusion); the stable partition opens 2 (one per face).
+    const glyphs = [_]u16{ a, star, a };
+    const runs = [_]zatex.ir.Run{
+        .{ .font_id = 0, .size_units = 1000, .x = 0, .baseline_y = 600, .glyphs = &glyphs },
+    };
+    const layout = zatex.ir.Layout{
+        .width = 2000,
+        .height_above = 800,
+        .depth_below = 300,
+        .runs = &runs,
+        .rules = &.{},
+    };
+    const g = geometry(&font, layout, 48, 16);
+    var c1 = try backend.impl.Canvas.create(g.w, g.h);
+    defer c1.close();
+    try renderInto(&c1, &font, layout, g);
+    try std.testing.expectEqual(@as(u64, 2), c1.run_count);
+    // Cold-vs-cold determinism: a second canvas draws identical pixels.
+    var c2 = try backend.impl.Canvas.create(g.w, g.h);
+    defer c2.close();
+    try renderInto(&c2, &font, layout, g);
+    try std.testing.expectEqualSlices(u8, c1.pixels, c2.pixels);
+    // Memo-hot determinism: re-rendering into the same canvas (all
+    // glyph outlines memoized) matches the cold pixels exactly.
+    @memset(c1.pixels, 255);
+    c1.run_count = 0;
+    try renderInto(&c1, &font, layout, g);
+    try std.testing.expectEqualSlices(u8, c1.pixels, c2.pixels);
+    try std.testing.expectEqual(@as(u64, 2), c1.run_count);
+}
+
+test "rules share the glyph H-y mapping" {    // \frac{a}{b} at --px 200: layout baselines 490/1895, bar top 765
     // with h=40, canvas 446 px tall with 16 px padding. The bar must
     // land on the same top-left-origin rows the canvas was sized for
     // (169..177), strictly between the two glyph baselines.

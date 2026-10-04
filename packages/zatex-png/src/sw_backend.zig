@@ -28,6 +28,47 @@ const sw_png = @import("sw_png.zig");
 const SCRATCH_SEGS = 512;
 const SCRATCH_LINES = 8192;
 
+/// Glyph outline memo (issue #286): `drawGlyph` re-parses (`cff.outline`)
+/// every glyph occurrence, so repeated glyphs re-pay the full CFF
+/// charstring execution per occurrence. Entries memoize the parsed
+/// FONT-UNIT segments (position- and transform-free — the interpreter
+/// output depends only on the glyph), flattening and filling still run
+/// per occurrence through the exact old code path, so pixels are
+/// bit-identical with or without a hit. (Flattened device lines are
+/// NOT memoized: curve subdivision rounds translation-dependently, so
+/// translate-on-use would drift coverage by ulps.)
+///
+/// Bounded: at most `MAX_CACHED_GLYPHS` entries of at most
+/// `MAX_CACHED_SEGS` segments each; further distinct glyphs evict the
+/// oldest slot (ring) and re-parse on each use (old behavior, no worse).
+/// Invalidated by construction on font/provider change: the cache lives
+/// on the canvas, and a new font means a new render's canvas.
+const MAX_CACHED_GLYPHS = 256;
+const MAX_CACHED_SEGS = 2048;
+
+const GlyphKey = struct {
+    face: usize, // the `*const Font` identity (pointer bits)
+    gid: u16,
+};
+
+/// Identity-hash context over the packed key bytes: the bits are
+/// already the full comparison identity, so they hash raw.
+const GlyphKeyCtx = struct {
+    pub fn hash(_: GlyphKeyCtx, k: GlyphKey) u64 {
+        var h = std.hash.Wyhash.init(0);
+        h.update(std.mem.asBytes(&k.face));
+        h.update(std.mem.asBytes(&k.gid));
+        return h.final();
+    }
+    pub fn eql(_: GlyphKeyCtx, a: GlyphKey, b: GlyphKey) bool {
+        return a.face == b.face and a.gid == b.gid;
+    }
+};
+
+const CachedGlyph = struct {
+    segs: []cff.Seg, // owned, font-unit outline segments
+};
+
 pub const Font = struct {
     alloc: std.mem.Allocator,
     bytes: []u8,
@@ -79,6 +120,20 @@ pub const Canvas = struct {
     segs: []cff.Seg,
     lines: []sw_raster.Line,
     row_cov: []f32,
+    /// Glyph outline memo (issue #286): parsed font-unit segments per
+    /// (face, gid), owned by the canvas. Entries are written on first
+    /// draw; the table starts empty so canvases that never draw glyphs
+    /// (rules-only formulas) pay nothing but the empty table header.
+    glyphs: std.HashMap(GlyphKey, CachedGlyph, GlyphKeyCtx, 80),
+    glyph_order: [MAX_CACHED_GLYPHS]GlyphKey = undefined,
+    nglyphs: usize = 0,
+    /// Counting hooks for the miss/hit test below (`parse_count`
+    /// increments on every `cff.outline`, including uncached sizes).
+    parse_count: u64 = 0,
+    hit_count: u64 = 0,
+    /// Backend-run count for the face-partition test in `render.zig`
+    /// (one `beginRun` per face group, not per intrusion).
+    run_count: u64 = 0,
 
     pub fn create(w: usize, h: usize) error{RenderInit}!Canvas {
         const alloc = std.heap.c_allocator;
@@ -106,10 +161,14 @@ pub const Canvas = struct {
             .segs = segs,
             .lines = lines,
             .row_cov = row_cov,
+            .glyphs = std.HashMap(GlyphKey, CachedGlyph, GlyphKeyCtx, 80).init(alloc),
         };
     }
 
     pub fn close(self: *Canvas) void {
+        var it = self.glyphs.iterator();
+        while (it.next()) |e| self.alloc.free(e.value_ptr.segs);
+        self.glyphs.deinit();
         self.alloc.free(self.pixels);
         self.alloc.free(self.segs);
         self.alloc.free(self.lines);
@@ -136,6 +195,7 @@ pub const Canvas = struct {
     }
 
     pub fn beginRun(self: *Canvas, font: *const Font, size_px: f64, x_scale: f64, x_shear: f64, mirrored: bool) error{RenderInit}!Run {
+        self.run_count += 1;
         return .{ .canvas = self, .font = font, .size_px = size_px, .x_scale = x_scale, .x_shear = x_shear, .mirrored = mirrored };
     }
 
@@ -164,11 +224,45 @@ pub const Run = struct {
         const c = self.canvas;
         const scale = self.size_px / @as(f64, @floatFromInt(self.font.upm));
         if (scale <= 0) return;
-        const segs = cff.outline(&self.font.outlines, glyph, c.segs) catch return;
-        if (segs.len == 0) return;
         // Shear is a dimensionless ratio (device px shift per device
         // px above the baseline), so it passes through unscaled.
         const mx: f64 = if (self.mirrored) -1 else 1;
+        // Memo lookup (issue #286): parsed font-unit segments keyed by
+        // (face, gid). On a hit the segments come from the cache;
+        // flatten + fill below run unchanged, so hit pixels equal
+        // fresh pixels bit for bit.
+        const key = GlyphKey{ .face = @intFromPtr(self.font), .gid = glyph };
+        const segs = if (c.glyphs.get(key)) |hit| blk: {
+            c.hit_count += 1;
+            break :blk hit.segs;
+        } else blk: {
+            c.parse_count += 1;
+            const fresh = cff.outline(&self.font.outlines, glyph, c.segs) catch return;
+            if (fresh.len == 0) return;
+            if (fresh.len > MAX_CACHED_SEGS) {
+                // Too large to memoize: draw uncached exactly like
+                // before (deterministic blank-or-draw, no cache shed).
+                break :blk fresh;
+            }
+            const owned = c.alloc.dupe(cff.Seg, fresh) catch break :blk fresh;
+            // Oldest-slot ring eviction when the table is full: free
+            // the victim's segments before reusing its key slot.
+            if (c.glyphs.count() >= MAX_CACHED_GLYPHS) {
+                const victim = c.glyph_order[c.nglyphs % MAX_CACHED_GLYPHS];
+                if (c.glyphs.fetchRemove(victim)) |kv| c.alloc.free(kv.value.segs);
+            }
+            c.glyphs.put(key, .{ .segs = owned }) catch {
+                // Memo skipped (OOM): free the dupe and still draw
+                // from `fresh` — the cache only skips work, never
+                // gates drawing.
+                c.alloc.free(owned);
+                break :blk fresh;
+            };
+            c.glyph_order[c.nglyphs % MAX_CACHED_GLYPHS] = key;
+            c.nglyphs += 1;
+            break :blk owned;
+        };
+        if (segs.len == 0) return;
         const lines = sw_raster.flatten(segs, mx * scale * self.x_scale, scale, x, y, mx * self.x_shear, c.lines);
         sw_raster.fillLines(c.pixels, c.w, c.h, lines, c.fill, c.row_cov);
     }
@@ -186,6 +280,91 @@ pub fn fixtureBytes(alloc: std.mem.Allocator) ![]u8 {
     var threaded = std.Io.Threaded.init(alloc, .{});
     defer threaded.deinit();
     return std.Io.Dir.cwd().readFileAlloc(threaded.io(), path, alloc, .limited(32 * 1024 * 1024));
+}
+
+// The glyph memo (issue #286) caches parsed font-unit segments:
+// repeated draws of the same (face, gid) must skip `cff.outline`
+// across positions, sizes, mirrors, and shears (the cached segments
+// are transform-free), distinct glyphs must miss, and the cached path
+// must draw the same pixels as the fresh path.
+test "glyph memo hits on repeats across transforms" {
+    const alloc = std.testing.allocator;
+    const bytes = try fixtureBytes(alloc);
+    defer alloc.free(bytes);
+    var font = Font{ .alloc = alloc, .bytes = bytes, .outlines = try cff.load(bytes), .upm = 1000 };
+    var cv = try Canvas.create(64, 64);
+    defer cv.close();
+
+    // Find a drawable glyph.
+    var gid: u16 = 1;
+    while (gid < font.outlines.num_glyphs) : (gid += 1) {
+        const segs = cff.outline(&font.outlines, gid, cv.segs) catch continue;
+        if (segs.len > 0) break;
+    }
+    try std.testing.expect(gid < font.outlines.num_glyphs);
+
+    var run = try cv.beginRun(&font, 24, 1, 0, false);
+    const p0 = cv.parse_count;
+    run.drawGlyph(gid, 8, 32);
+    try std.testing.expectEqual(p0 + 1, cv.parse_count);
+    // Repeat at another position: memo hit, no new parse.
+    run.drawGlyph(gid, 24, 32);
+    try std.testing.expectEqual(p0 + 1, cv.parse_count);
+    try std.testing.expectEqual(@as(u64, 1), cv.hit_count);
+    // Mirrors, sizes, and shears share the entry: the cached segments
+    // are transform-free, only flatten inputs change.
+    var mir = try cv.beginRun(&font, 24, 1, 0, true);
+    mir.drawGlyph(gid, 40, 32);
+    try std.testing.expectEqual(p0 + 1, cv.parse_count);
+    mir.end();
+    var run2 = try cv.beginRun(&font, 48, 1, 0, false);
+    run2.drawGlyph(gid, 8, 32);
+    try std.testing.expectEqual(p0 + 1, cv.parse_count);
+    var run3 = try cv.beginRun(&font, 24, 1, 0.25, false);
+    run3.drawGlyph(gid, 8, 32);
+    try std.testing.expectEqual(p0 + 1, cv.parse_count);
+    try std.testing.expectEqual(@as(u64, 4), cv.hit_count);
+    // A distinct glyph misses.
+    run.drawGlyph(gid + 1, 8, 32);
+    try std.testing.expectEqual(p0 + 2, cv.parse_count);
+    run.end();
+    run2.end();
+    run3.end();
+}
+
+test "glyph memo draws hit pixels identical to fresh pixels" {
+    const alloc = std.testing.allocator;
+    const bytes = try fixtureBytes(alloc);
+    defer alloc.free(bytes);
+    var font = Font{ .alloc = alloc, .bytes = bytes, .outlines = try cff.load(bytes), .upm = 1000 };
+    var fresh = try Canvas.create(96, 96);
+    defer fresh.close();
+    var memo = try Canvas.create(96, 96);
+    defer memo.close();
+
+    var gid: u16 = 1;
+    while (gid < font.outlines.num_glyphs) : (gid += 1) {
+        const segs = cff.outline(&font.outlines, gid, fresh.segs) catch continue;
+        if (segs.len > 0) break;
+    }
+    try std.testing.expect(gid < font.outlines.num_glyphs);
+
+    // Fresh path: flatten-at-position (memo disabled by clearing the
+    // table before each draw so every draw re-parses).
+    var fr = try fresh.beginRun(&font, 32, 1, 0, false);
+    const xs = [_]f64{ 6, 22, 38, 54 };
+    for (xs) |x| {
+        fresh.glyphs.clearRetainingCapacity();
+        fresh.nglyphs = 0;
+        fr.drawGlyph(gid, x, 48);
+    }
+    fr.end();
+    // Memo path: first draw parses, the rest hit.
+    var mr = try memo.beginRun(&font, 32, 1, 0, false);
+    for (xs) |x| mr.drawGlyph(gid, x, 48);
+    mr.end();
+    try std.testing.expectEqual(@as(u64, 3), memo.hit_count);
+    try std.testing.expectEqualSlices(u8, fresh.pixels, memo.pixels);
 }
 
 // Lives here (not in sw_raster.zig) because only this file's tests
