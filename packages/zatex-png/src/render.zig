@@ -175,7 +175,7 @@ fn renderInto(
     // White background, black ink.
     paint.setFill(canvas, 0xFFFFFFFF);
     canvas.fillRect(0, 0, @floatFromInt(g.w), @floatFromInt(g.h));
-    paint.setFill(canvas, null);
+    paint.setFill(canvas, 0);
     // Rules (fraction bars, vincula, colorbox backgrounds) are plain
     // filled rects, each in its own paint (issue #35). Diagonal
     // strikes (issue #107) stroke corner-to-corner across the same
@@ -769,8 +769,11 @@ test "energy memo evicts on collision without corrupting edges" {
 /// stroke unconditionally per rule/run. Consecutive marks sharing one
 /// paint now skip the redundant backend call; fill and stroke track
 /// separately (split-state canvases like Quartz set each half only
-/// when ITS color changes). `setFill`/`setStroke` take the raw `?u32`
-/// IR color so call sites never decode twice.
+/// when ITS color changes). `setFill`/`setStroke` take the raw `u32`
+/// IR color word so call sites never decode twice; 0 is the ambient
+/// sentinel (`ir.no_color`, issue #287) and decodes to opaque black,
+/// matching `svg.paintOf` — resolved paints always carry opaque alpha
+/// so 0 is unambiguous there too.
 ///
 /// Cross-half invalidation: single-state canvases (software, GDI,
 /// FreeType — `setStroke` aliases `setFill` there) share one paint
@@ -781,17 +784,18 @@ test "energy memo evicts on collision without corrupting edges" {
 /// the render phases (rect fills, diag strokes, run fills) cross at
 /// most twice per render, so the cost is ~zero.
 const PaintTracker = struct {
-    last_fill: ?u32 = null,
+    last_fill: u32 = 0,
     fill_set: bool = false,
-    last_stroke: ?u32 = null,
+    last_stroke: u32 = 0,
     stroke_set: bool = false,
 
     fn empty() PaintTracker {
         return .{};
     }
 
-    fn paintToRgba(color: ?u32) [4]f64 {
-        const c = color orelse return .{ 0, 0, 0, 1 };
+    fn paintToRgba(color: u32) [4]f64 {
+        if (color == 0) return .{ 0, 0, 0, 1 };
+        const c = color;
         const f = struct {
             fn b(v: u32) f64 {
                 return @as(f64, @floatFromInt(v)) / 255.0;
@@ -804,7 +808,7 @@ const PaintTracker = struct {
     /// `setStroke`). Unchanged fill skips the backend call. Generic
     /// over the canvas so the elision test below can record calls
     /// with a stub.
-    fn setFill(self: *PaintTracker, canvas: anytype, color: ?u32) void {
+    fn setFill(self: *PaintTracker, canvas: anytype, color: u32) void {
         if (self.fill_set and self.last_fill == color) return;
         const rgba = paintToRgba(color);
         canvas.setFill(rgba[0], rgba[1], rgba[2], rgba[3]);
@@ -817,7 +821,7 @@ const PaintTracker = struct {
 
     /// Stroke users: diagonal strikes (issue #107). Unchanged stroke
     /// skips the backend call — rect rules and runs never touch it.
-    fn setStroke(self: *PaintTracker, canvas: anytype, color: ?u32) void {
+    fn setStroke(self: *PaintTracker, canvas: anytype, color: u32) void {
         if (self.stroke_set and self.last_stroke == color) return;
         const rgba = paintToRgba(color);
         canvas.setStroke(rgba[0], rgba[1], rgba[2], rgba[3]);
@@ -896,11 +900,11 @@ test "paint tracker coalesces repeats, splits fill vs stroke (issue #286)" {
     var stub = Stub{};
     var paint = PaintTracker.empty();
     // First use always sets (tracker starts empty): ambient is black.
-    paint.setFill(&stub, null);
+    paint.setFill(&stub, 0);
     try std.testing.expectEqual(@as(usize, 1), stub.fills);
     try std.testing.expectEqual([4]f64{ 0, 0, 0, 1 }, stub.last_fill);
     // Repeat ambient: elided; stroke untouched throughout.
-    paint.setFill(&stub, null);
+    paint.setFill(&stub, 0);
     try std.testing.expectEqual(@as(usize, 1), stub.fills);
     try std.testing.expectEqual(@as(usize, 0), stub.strokes);
     // New fill sets once, then elides; stroke still untouched.
@@ -919,7 +923,7 @@ test "paint tracker coalesces repeats, splits fill vs stroke (issue #286)" {
     try std.testing.expectEqual(@as(usize, 1), stub.strokes);
     try std.testing.expectEqual(@as(usize, 2), stub.fills);
     // Back to ambient fill re-sets (change, not repeat).
-    paint.setFill(&stub, null);
+    paint.setFill(&stub, 0);
     try std.testing.expectEqual(@as(usize, 3), stub.fills);
     try std.testing.expectEqual([4]f64{ 0, 0, 0, 1 }, stub.last_fill);
     // Cross-half invalidation (single-state aliasing): a stroke between
@@ -937,6 +941,17 @@ test "paint tracker coalesces repeats, splits fill vs stroke (issue #286)" {
     // forces the second stroke to re-set.
     paint.setStroke(&stub, 0x0000FFFF);
     try std.testing.expectEqual(@as(usize, 3), stub.strokes);
+}
+
+test "paint tracker maps ambient word 0 to opaque black (issue #287)" {
+    // The u32 IR color (issue #287) uses 0 for ambient; decoding the
+    // word as 0xRRGGBBAA would give transparent black. The tracker
+    // must map 0 to opaque black like `svg.paintOf` — a regression
+    // here renders every ambient rule/run invisible (24/24 screenshot
+    // drift in CI).
+    try std.testing.expectEqual([4]f64{ 0, 0, 0, 1 }, PaintTracker.paintToRgba(0));
+    try std.testing.expectEqual([4]f64{ 1, 1, 1, 1 }, PaintTracker.paintToRgba(0xFFFFFFFF));
+    try std.testing.expectEqual([4]f64{ 1, 0, 0, 1 }, PaintTracker.paintToRgba(0xFF0000FF));
 }
 
 test "face partition coalesces intrusions, draws deterministic pixels (issue #286)" {
